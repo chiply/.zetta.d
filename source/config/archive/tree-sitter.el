@@ -1,2 +1,0 @@
-(use-package tree-sitter)
-

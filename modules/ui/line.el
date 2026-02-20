@@ -24,7 +24,7 @@
                   'face 'focus-focused)))
         " "
         ;;(:eval (if (string= (symbol-name major-mode) "magit-status-mode") (parrot-create)))
-        (:eval (spinner-print spinner-current))
+        (:eval (when (fboundp 'spinner-print) (spinner-print spinner-current)))
         " "
         (:eval
          (let ((path (abbreviate-file-name default-directory)))
@@ -53,7 +53,7 @@
                (equal major-mode 'yaml-mode))
            (concat (jpt-yaml-path-to-point)))
           ;; fallback to imenu breadcrumbs
-          (t (breadcrumb-imenu-crumbs))
+          (t (when (fboundp 'breadcrumb-imenu-crumbs) (breadcrumb-imenu-crumbs)))
           ))))
 
 

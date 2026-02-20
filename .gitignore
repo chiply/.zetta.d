@@ -1,0 +1,80 @@
+# Build artifacts
+eaf
+tree-sitter
+
+# Package manager caches
+elpaca/builds/
+elpaca/repos/
+elpaca/cache/
+source/straight/build/
+source/straight/repos/
+source/straight/build-cache.el
+build-cache.
+eln-cache/
+
+# Generated/runtime files
+detached/
+var/
+request/
+url/
+config/tangled/
+transient/
+eshell/
+.cache/
+org-persist
+
+# User data
+bookmarks
+projects
+projectile-bookmarks.eld
+projectile.cache
+recentf
+history
+tramp
+.lsp-session*
+network-security.data
+.org-id-locations
+org-roam.db
+forge-database.sqlite
+dtache.db
+eww-bookmarks
+.emacs.desktop*
+.sx
+
+# Docs and snippets
+devdocs/*
+snippets/
+keybindings.org
+.snippets.org
+.snippets.html
+
+# Private/sensitive
+private.el
+notes.txt
+
+# Misc
+elfeed.stats
+logview-cache.extmap
+.dap-breakpoints
+read.html
+.4mn_code*
+ \*Minibuf*
+
+# Logs
+fetch_*.log
+
+# Python
+__pycache__/
+
+# org-roam
+org-roam/*.org
+org-roam/image/
+org-roam/private/
+org-roam/daily/2*
+org-roam/daily/agenda.org
+org-roam/daily/agenda.org_archive
+org-roam/daily/sprint.org
+org-roam/daily/sprint.org_archive
+
+# Hypothesis
+.hypothesis/

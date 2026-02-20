@@ -1,0 +1,48 @@
+* TODO
+;; LEFTOFF -- group name and actually perform an action with the returned candidate
+
+* Issues
+;; NOTE can't get marginalia in regular completion using marginalia registry
+
+;; NOTE can't add history this way
+;;(defvar consult-demo-async-history nil "History for `consult-demo-async'.")
+;;(consult-customize consult-demo-async :history 'consult-demo-async-history)
+
+;; GOTCHA big drawback -- cannot define history as input for the individual sources inside of a consult-multi -- would need to run consult--read for each source separately.  This actually cannot be fixed with consult--omni because consult omni still relies on sources.
+
+;; NOTE embark needs the category to be defined in the source data as
+;; a property on the string (see above)... If this step is skipped,
+;; embark won't recognize the type
+
+;; for embark, command type actions can only take strings as their targets (no text properties).... this is an issue because you can't define an embark action that has a universal arg (interactive) and also requires the text properties of the completion candidate
+
+* Notes
+completion candidate structure: propertized strings with ='category= and ='multidata= properties.
+
+for an async function, NOTE this exact interface is required for async, can't use
+;; completion function interface, also can't make input optional
+
+#+begin_src emacs-lisp
+(defun demo-list-completion-function-async (input)
+  (progn
+    ;; sleep for a random time between 0.5 and 1.5 seconds
+    (sleep-for (+ 0.5 (random 1)))
+    ;; NOTE this is a filter for the initial list of candidates pulled
+    ;; into the minibuffer
+    (-filter (lambda (x) (string-prefix-p input x)) demo-list-with-data)))
+#+end_src
+
+- with async completion functions, the initial string in the orderless set of patterns is the input to the dynamic function.
+
+- need to use cl-defun for omni :request value
+
+- NOTE you need :category in consult source if you want annotations or category data -- doesn't use the category provided in the source data This is unfortuntae but necessary use of redundancy
+
+- ;; NOTE name is required for grouping in consult source
+
+- consult-omni allows for complex grouping function
+
+
+    
+
+

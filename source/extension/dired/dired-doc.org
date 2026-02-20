@@ -1,0 +1,392 @@
+#+TITLE: Documentation for /Users/charles.baker/.zetta.d/source/extension/dired.el
+#+OPTIONS: toc:nil
+* Variables
+* Functions
+
+** dired-ace-find-file 
+Documentation: Use ace window to select a window for opening a file from dired.
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  "Use ace window to select a window for opening a file from dired."
+  (interactive)
+  (let ((file (dired-get-file-for-visit)))
+    (if (file-directory-p (dired-get-file-for-visit)) (dired-find-file)
+      (if (> (length (aw-window-list)) 1) (aw-select "FOOBAR" #'(lambda (window)
+                                                                  (aw-switch-to-window window)
+                                                                  (find-file file)))
+        (find-file-other-window file)))))
+
+#+END_SRC
+** dired-ace-find-file-hor 
+Documentation: Use ace window to select a window (to split horizontatlly) for opening a file from dired.
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  "Use ace window to select a window (to split horizontatlly) for opening a file from dired."
+  (interactive)
+  (let ((file (dired-get-file-for-visit)))
+    (if (file-directory-p (dired-get-file-for-visit)) (dired-find-file)
+      (if (> (length (aw-window-list)) 1) (aw-select "" #'(lambda (window)
+                                                            (aw-switch-to-window window)
+                                                            (split-window-right)
+                                                            (windmove-right)
+                                                            (find-file file)))
+        (find-file-other-window file)))))
+
+#+END_SRC
+** dired-ace-find-file-vert 
+Documentation: Use ce window to select a window (to split vertically) for opening a file from dired.
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  "Use ce window to select a window (to split vertically) for opening a file from dired."
+  (interactive)
+  (let ((file (dired-get-file-for-visit)))
+    (if (file-directory-p (dired-get-file-for-visit)) (dired-find-file)
+      (if (> (length (aw-window-list)) 1) (aw-select "" #'(lambda (window)
+                                                            (aw-switch-to-window window)
+                                                            (split-window-below)
+                                                            (windmove-down)
+                                                            (find-file file)))
+        (find-file-other-window file)))))
+
+#+END_SRC
+** dired-ace-new-file 
+Documentation: Use ace window to select a window for opening a file from dired.
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  "Use ace window to select a window for opening a file from dired."
+  (interactive)
+  (if (not (dired-get-file-for-visit)) (message "foo")))
+
+#+END_SRC
+** dired-ace-new-file-hor 
+Documentation: Use ace window to select a window for opening a file from dired.
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  "Use ace window to select a window for opening a file from dired."
+  (interactive)
+  (let* ((file (z-dired-dir-at-point)))
+    (if (file-directory-p (dired-get-file-for-visit)) (dired-find-file)
+      (if (> (length (aw-window-list)) 1) (aw-select "" #'(lambda (window)
+                                                            (aw-switch-to-window window)
+                                                            (split-window-right)
+                                                            (windmove-right)
+                                                            (find-file
+                                                             (read-file-name "Enter a file name: " file))))
+        (find-file-other-window file)))))
+
+#+END_SRC
+** dired-ace-new-file-vert 
+Documentation: Use ace window to select a window for opening a file from dired.
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  "Use ace window to select a window for opening a file from dired."
+  (interactive)
+  (let* ((file (z-dired-dir-at-point)))
+    (if (file-directory-p (dired-get-file-for-visit)) (dired-find-file)
+      (aw-select "" #'(lambda (window)
+                        (aw-switch-to-window window)
+                        (split-window-below)
+                        (windmove-down)
+                        (find-file (read-file-name "Enter a file name: " file)))))))
+
+#+END_SRC
+** xah-open-in-external-app (&optional @fname)
+Documentation: Open the current file or dired marked files in external app.
+The app is chosen from your OS’s preference.
+
+When called in emacs lisp, if @fname is given, open that.
+
+URL ‘http://ergoemacs.org/emacs/emacs_dired_open_file_in_ext_apps.html’
+Version 2019-11-04
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda (&optional @fname)
+  "Open the current file or dired marked files in external app.
+The app is chosen from your OS's preference.
+
+When called in emacs lisp, if @fname is given, open that.
+
+URL `http://ergoemacs.org/emacs/emacs_dired_open_file_in_ext_apps.html'
+Version 2019-11-04"
+  (interactive)
+  (let* (($file-list (if @fname (progn
+                                  (list @fname))
+                       (if (string-equal major-mode "dired-mode") (dired-get-marked-files)
+                         (list (buffer-file-name))))) ($do-it-p (if (<= (length $file-list) 5) t
+                       (y-or-n-p "Open more than 5 files? "))))
+    (if $do-it-p (progn
+                   (cond ((string-equal system-type "windows-nt") (mapc #'(lambda ($fpath)
+                                                                            (w32-shell-execute "open" $fpath))
+                                                                        $file-list))
+                         ((string-equal system-type "darwin") (mapc #'(lambda ($fpath)
+                                                                        (shell-command (concat "open "
+
+                                                                                               (shell-quote-argument
+                                                                                                $fpath))))
+                                                                    $file-list))
+                         ((string-equal system-type "gnu/linux") (mapc #'(lambda ($fpath)
+                                                                           (let ((process-connection-type nil))
+                                                                             (start-process "" nil "xdg-open"
+                                                                                            $fpath)))
+                                                                       $file-list)))))))
+
+#+END_SRC
+** z-dired-ag 
+Documentation: Convenient helm ag for directory at point in dired buffers
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  "Convenient helm ag for directory at point in dired buffers"
+  (interactive)
+  (let ((dir (if (file-directory-p (dired-get-file-for-visit)) (dired-get-file-for-visit)
+               (file-name-directory (dired-get-file-for-visit)))))
+    (helm-ag dir)))
+
+#+END_SRC
+** z-dired-create-directory 
+Documentation: Performs delete and reverts buffer
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  "Performs delete and reverts buffer"
+  (interactive)
+  (call-interactively #'dired-create-directory)
+  (if (file-remote-p default-directory) ()
+    (revert-buffer)))
+
+#+END_SRC
+** z-dired-dir-at-point 
+Documentation: nil
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  (interactive)
+  (let ((thing (dired-get-file-for-visit)))
+    (if (file-directory-p thing) (message thing)
+      (file-name-directory thing))))
+
+#+END_SRC
+** z-dired-do-copy 
+Documentation: Performs copy and reverts buffer
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  "Performs copy and reverts buffer"
+  (interactive)
+  (dired-do-copy)
+  (if (file-remote-p default-directory) ()
+    (revert-buffer)))
+
+#+END_SRC
+** z-dired-do-delete 
+Documentation: Performs delete and reverts buffer
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  "Performs delete and reverts buffer"
+  (interactive)
+  (dired-do-delete)
+  (if (file-remote-p default-directory) ()
+    (revert-buffer)))
+
+#+END_SRC
+** z-dired-do-flagged-delete 
+Documentation: Performs delete and reverts buffer
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  "Performs delete and reverts buffer"
+  (interactive)
+  (dired-do-flagged-delete)
+  (if (file-remote-p default-directory) ()
+    (revert-buffer)))
+
+#+END_SRC
+** z-dired-do-rename 
+Documentation: Performs delete and reverts buffer
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  "Performs delete and reverts buffer"
+  (interactive)
+  (dired-do-rename)
+  (if (file-remote-p default-directory) ()
+    (revert-buffer)))
+
+#+END_SRC
+** z-dired-file-peak 
+Documentation: 
+A docstring
+
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  "
+A docstring
+"
+  (interactive)
+  (let* ((file (dired-get-file-for-visit)) (buf (find-file-noselect file)))
+    (z-indirect-buffer buf)))
+
+#+END_SRC
+** z-dired-open-in-chrome 
+Documentation: nil
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  (interactive)
+  (let ((file (dired-get-file-for-visit)))
+    (shell-command (concat "open -a \"Google Chrome\" " file))))
+
+#+END_SRC
+** z-dired-ranger-copy 
+Documentation: nil
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  (interactive)
+  (call-interactively 'dired-ranger-copy)
+  (if (file-remote-p default-directory) ()
+    (revert-buffer)))
+
+#+END_SRC
+** z-dired-ranger-move 
+Documentation: nil
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  (interactive)
+  (call-interactively 'dired-ranger-move)
+  (if (file-remote-p default-directory) ()
+    (revert-buffer)))
+
+#+END_SRC
+** z-dired-ranger-paste 
+Documentation: nil
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  (interactive)
+  (call-interactively 'dired-ranger-paste)
+  (if (file-remote-p default-directory) ()
+    (revert-buffer)))
+
+#+END_SRC
+** z-dired-subtree-cycle 
+Documentation: nil
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  (interactive)
+  (dired-subtree-cycle 10)
+  (if (file-remote-p default-directory) ()
+    (revert-buffer)))
+
+#+END_SRC
+** z-dired-subtree-toggle 
+Documentation: nil
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda ()
+  (interactive)
+  (dired-subtree-toggle)
+  (if (file-remote-p default-directory) ()
+    (revert-buffer))
+  (file-remote-p default-directory))
+
+#+END_SRC
+** z-docs-from-extension (ext)
+Documentation: nil
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda (ext)
+  (let* ((fname (expand-file-name (format "source/extension/%s.el" ext) user-emacs-directory)) (elements
+                                                                                                (cdr
+
+                                                                                                 (assoc
+                                                                                                  fname
+
+                                                                                                  load-history)))
+         (vars (-filter 'symbolp elements)) (funcons (-filter #'(lambda (x)
+                                                                  (and (consp x) (eq 'defun (car x))))
+                                                              elements)) (funcs (mapcar 'cdr funcons)))
+    (switch-to-buffer "*org-doc*")
+    (erase-buffer)
+    (insert (format "#+TITLE: Documentation for %s\n#+OPTIONS: toc:nil\n" fname))
+    (insert "* Variables\n")
+    (let ((--dolist-tail-- (sort vars 'string-lessp))
+          var)
+      (while --dolist-tail--
+        (setq var (car --dolist-tail--))
+        (insert (format "** %s\nDocumentation: %s\n\n" var (documentation-property var 'variable-documentation)))
+        (setq --dolist-tail-- (cdr --dolist-tail--))))
+    (insert "* Functions\n\n")
+    (let ((--dolist-tail-- (sort funcs 'string-lessp))
+          funcs)
+      (while --dolist-tail--
+        (setq funcs (car --dolist-tail--))
+        (progn
+          (insert (format "** %s %s\nDocumentation: %s\n\nCode:\n#+BEGIN_SRC emacs-lisp\n%s\n#+END_SRC\n" funcs
+                          (or (help-function-arglist funcs) "")
+                          (documentation funcs)
+                          (z-foobar funcs))))
+        (setq --dolist-tail-- (cdr --dolist-tail--))))
+    (org-mode)
+    (write-file (format "%s-doc.org" ext))
+    (kill-buffer (format "%s-doc.org" ext))))
+
+#+END_SRC
+** z-soda-create-and-display-dired (&optional buf-or-mode-name)
+Documentation: nil
+
+Code:
+#+BEGIN_SRC emacs-lisp
+(lambda (&optional buf-or-mode-name)
+  (if (cdr (project-current nil)) (let ((buf (current-buffer)))
+                               (dired (concat (if (not (string= "" (4mn-get-tramp-remote-part)))
+                                                  (concat "/"
+                                                          (4mn-get-tramp-remote-part)
+                                                          ":")
+                                                "")
+                                              (if (string-match ":" (project-root (project-current nil default-directory))) (nth 0 (last
+
+
+                                                                                                       (split-string
+                                                                                                        (project-root (project-current nil default-directory))
+                                                                                                        ":")))
+                                                (project-root (project-current nil default-directory)))))
+                               (select-window (get-buffer-window buf)))
+    (if buffer-file-name (let ((buf (current-buffer)))
+                           (dired (file-name-directory (or load-file-name buffer-file-name)))
+                           (select-window (get-buffer-window buf)))
+      (call-interactively 'find-file))))
+
+#+END_SRC

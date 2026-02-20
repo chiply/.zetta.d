@@ -1,0 +1,3 @@
+(("~/.files/.zetta.d/source/config/annotate.el" ((770 967 "foobar" "  ;; `annotation-file` variable per directory (can be done via
+  ;; dir-locals.el - note logseq doesn't sync the dir-locals or
+  ;; annotations flie.  Need to explicitly set the .dir-locals on each" 1 nil)) "37cb60688509ca5c8558dc4fc4c016d5"))

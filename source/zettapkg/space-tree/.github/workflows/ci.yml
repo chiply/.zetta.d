@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        emacs-version:
+          - 28.2
+          - 29.4
+          - 30.2
+          - snapshot
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Nix store
+        if: runner.os != 'Windows'
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Set up Emacs
+        uses: jcs090218/setup-emacs@master
+        with:
+          version: ${{ matrix.emacs-version }}
+
+      - name: Set up Eask
+        uses: emacs-eask/setup-eask@master
+        with:
+          version: 'snapshot'
+
+      - name: Cache Eask dependencies
+        uses: actions/cache@v4
+        with:
+          path: .eask
+          key: eask-${{ runner.os }}-${{ matrix.emacs-version }}-${{ hashFiles('Eask') }}
+
+      - name: Install dependencies
+        run: eask install-deps
+
+      - name: Byte compile
+        run: eask compile
+
+      - name: Run tests
+        run: eask test ert test/space-tree-test.el
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Nix store
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Set up Emacs
+        uses: jcs090218/setup-emacs@master
+        with:
+          version: 29.4
+
+      - name: Set up Eask
+        uses: emacs-eask/setup-eask@master
+        with:
+          version: 'snapshot'
+
+      - name: Cache Eask dependencies
+        uses: actions/cache@v4
+        with:
+          path: .eask
+          key: eask-lint-${{ hashFiles('Eask') }}
+
+      - name: Install dependencies
+        run: eask install-deps
+
+      - name: Package lint
+        run: eask lint package
+        continue-on-error: true
+
+      - name: Checkdoc
+        run: eask lint checkdoc
+        continue-on-error: true

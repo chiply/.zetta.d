@@ -93,6 +93,7 @@
 
 
   (setq tab-line-switch-cycling t tab-line-close-button-show t)
+  (setq tab-line-exclude-modes '(minibuffer-mode minibuffer-inactive-mode))
 
   (defun tab-line-close-tab-1 ()
     "Close the selected tab.

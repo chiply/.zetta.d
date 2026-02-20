@@ -344,12 +344,27 @@ cmd_ci_test() {
     echo "$output"
 
     # Check for success marker
-    if echo "$output" | grep -q "ZETTA-OK"; then
-        _ok "Config loaded successfully"
-        echo "$output" | grep "ZETTA-OK"
-    else
+    if ! echo "$output" | grep -q "ZETTA-OK"; then
         _error "Config failed to load (exit code: $exit_code)"
         echo "$output" | grep -iE "error|wrong-type|void-function" | head -20
+        return 1
+    fi
+
+    _ok "Config loaded successfully"
+    echo "$output" | grep "ZETTA-OK"
+
+    # Check for serious errors (void-function, wrong-type-argument, debug-early)
+    # These indicate real bugs even if the config loaded to completion.
+    # "Cannot load" errors from use-package are expected on fresh installs.
+    local errors
+    errors=$(echo "$output" \
+        | grep -iE "void-function|wrong-type-argument|debug-early" \
+        | grep -v "use-package" \
+        || true)
+
+    if [[ -n "$errors" ]]; then
+        _error "Serious errors detected:"
+        echo "$errors"
         return 1
     fi
 }

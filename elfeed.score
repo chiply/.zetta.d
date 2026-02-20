@@ -1,0 +1,55 @@
+;;; Elfeed score file                                     -*- lisp -*-
+
+;; NOTE example
+;;(("title"
+;;(:text "OPEN THREAD" :value -1000 :type S)
+;;(:text "raymond c\\(hen\\)?" :value 250 :type r :tags (t . @dev))
+;;("content"
+;;(:text "type erasure" :value 500 :type s))
+;;("title-or-content"
+;;(:text "california" :title-value 150 :content-value 100 :type s)
+;;(:text "china" :title-value 150 :content-value 100 :type w))
+;;("feed"
+;;(:text "Essays in Idleness" :value 250 :type S :attr t)
+;;(:text "Irreal" :value 250 :type S :attr t)
+;;(:text "Julia Evans" :value 100 :type s :attr t)
+;;(:text "National Weather Service" :value 400 :type S :attr t)
+;;(:text "emacs-news – sacha chua" :value 350 :type S :attr t :comment "Essential!"))
+;;("authors"
+;;(:text "Jim Geraghty" :value 500 :type s))
+;;("tag"
+;;(:tags (t . reddit-question)
+;;:value 750
+;;:comment "Add 750 points to any entry with a tag of reddit-question"))
+;;(mark -2500))
+
+;; NOTE mainly trying to use tags as this to me is the easiest to
+;; control, only use other sublists when there is an edge case
+;; NOTE keep my use case to basic sorting, try not to get too complex
+(
+ ("tag"
+  (:tags (t . myblog) :value 1000)
+  (:tags (t . xkcd) :value 110)
+  (:tags (t . emacs-news) :value 110)
+  (:tags (t . emacs) :value 100)
+  (:tags (t . podcast) :value 95)
+  (:tags (t . youtube) :value 95)
+  (:tags (t . data) :value 90)
+  (:tags (t . dataengineering) :value 90)
+  (:tags (t . ai) :value 89)
+  (:tags (t . faangblog) :value 80)
+  (:tags (t . reddit) :value 79)
+  (:tags (t . hackernews) :value 78)
+  (:tags (t . arxiv) :value 70)
+  (:tags (t . medarxiv) :value 70)
+  (:tags (t . research) :value 60)
+  (:tags (t . science) :value 59)
+  (:tags (t . technology) :value 59)
+  (:tags (t . news) :value 50)
+
+  ;; NOTE setting this to a low negative number as so they are below
+  ;; unscored (bottom of the list, but this won't penalize things that
+  ;; have higher value scores, like emacs tagged feeds)
+  (:tags (t . githubtrending) :value -1)
+  )
+ )

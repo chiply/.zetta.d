@@ -1,0 +1,13 @@
+{%- for environment_variable in config.environment_variables %}
+# {{ environment_variable[0] }}={{ environment_variable[1] }}
+{%- endfor %}
+# working_directory = {{ config.working_directory }}
+# file_name = {{ config.file_name }}
+# executable = {{ config.executable.value }}
+
+
+{%- for environment_variable in config.environment_variables %}
+{{ environment_variable[0] }}={{ environment_variable[1] }} \
+{%- endfor %}
+cd {{ config.working_directory }} && \
+{{ config.executable.value }} {{ config.file_name }}

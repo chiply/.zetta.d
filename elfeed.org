@@ -1,0 +1,202 @@
+* Feeds                                                              :elfeed:
+
+** [[https://rss.app/feeds/OYDPQ8NQR3NOVLJ1.xml][Arianna Huffington (@Gartner_inc) / Twitter]] :twitter:
+** [[https://rss.app/feeds/zCyaqj9XE4J27bvN.xml][#dataengineering - Twitter Search / Twitter]] :twitter:dataengineering:data:
+** [[https://rss.app/feeds/4jZWL4flfzgi1oyX.xml][Mickey Petersen (@mickeynp) / Twitter]] :twitter:
+** [[https://rss.app/feeds/QzriqACyiEobEdLw.xml][Google News - Search]]
+** [[https://www.nejm.org/trends/cited/recent?viewType=Rss][Most Cited: NEJM Most Cited Articles - Recent]] :science:research:
+** [[https://www.nejm.org/trends/viewed/last1Week?viewType=Rss][Most Viewed: NEJM Most Viewed Articles - Week]] :science:research:
+** [[https://netflixtechblog.com/feed][netflix technical blog]] :faangblog:
+** [[https://towardsdatascience.com/feed/tagged/data-engineering][towards data science: dataengineering]] :dataengineering:data:medium:
+** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCYO_jab_esuFRV4b17AJtAw][3Blue1Brown]] :youtube:
+** [[https://allinchamathjason.libsyn.com/rss][all-in]] :podcast:
+** [[https://feeds.npr.org/2025/rss.xml][NPR: Video Games]] :npr:fun:news:
+** [[http://export.arxiv.org/api/query?search_query=cat:q-bio.LG&start=0&max_results=300&sortBy=submittedDate&sortOrder=descending][ArXiv Query: search_query=cat:q-bio.LG&id_list=&start=0&max_results=300]] :arxiv:
+** [[http://export.arxiv.org/api/query?search_query=cat:stat.LG&start=0&max_results=300&sortBy=submittedDate&sortOrder=descending][ArXiv Query: search_query=cat:stat.LG&id_list=&start=0&max_results=300]] :arxiv:
+** [[https://humansofdata.atlan.com/feed/][Atlan | Humans of Data]] :data:
+** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCd6MoB9NC6uYN2grvUNT-Zg][aws]] :youtube:
+** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCraiFqWi0qSIxXxXN4IHFBQ][be a better dev]] :youtube:
+** [[https://www.youtube.com/feeds/videos.xml?channel_id=UC9-y-6csu5WGm29I7JiwpnA][Computerphile]] :youtube:
+** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCVhQ2NnY5Rskt6UjCUkJ_DA][arjan codes]] :youtube:
+** [[https://css-tricks.com/feed/][css-tricks]] :webdev:
+** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCfLnv9X8jyHTe6gJ4hVBo9Q][dagster]] :youtube:dagster:
+** [[https://www.databricks.com/feed][databricks blog]] :dataengineering:data:
+** [[https://www.reddit.com/r/dataengineering/.rss?][Data Engineering]] :dataengineering:data:reddit:
+** [[https://dataskeptic.libsyn.com/rss][data skeptic]] :data:
+** [[https://dnascience.plos.org/feed/][DNA Science]] :science:
+** [[https://duckdb.org/feed][duckdb blog]] :data:database:
+** [[https://embeddedartistry.com/feed/][Embedded Artistry]]
+** [[https://engineering.fb.com/feed/][facebook engineering blog]] :faangblog:
+** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCP4bf6IHJJQehibu6ai__cg][fireship]]
+** [[https://fivethirtyeight.com/economics/feed/][fivethirtyeight: economics]] :fivethirtyeight:
+** [[https://fivethirtyeight.com/life/feed/][fivethirtyeight: life]] :fivethirtyeight:
+** [[https://fivethirtyeight.com/contributors/nate-silver/feed/][fivethirtyeight: nate silver]] :fivethirtyeight:
+** [[https://fivethirtyeight.com/science/feed/][fivethirtyeight: science]] :science:fivethirtyeight:
+** [[https://flowingdata.com/feed][FlowingData]] :data:dataviz:
+** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCJetJ7nDNLlEzDLXv7KIo0w][Gavin Freeborn]] :youtube:
+** [[https://www.google.com/alerts/feeds/13130175312220372401/9762467059344056332][Google Alert - genedx]] :googlealert:
+** [[https://feeds.feedburner.com/GoogleOpenSourceBlog][Google Open Source Blog]] :faangblog:opensource:
+** [[http://ftr.fivefilters.org/makefulltextfeed.php?url=https://news.ycombinator.com/rss][Hacker News]] :hackernews:
+** [[https://hnrss.org/best][Hacker News: Best]] :hackernews:
+** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCQp2VLAOlvq142YN3JO3y8w][John Kitchin Youtube]] :youtube:emacs:johnkitchin:
+** [[https://karthinks.com/index.xml][karthinks.com]] :emacs:
+** [[https://www.kdnuggets.com/feed][kdnuggets]] :data:ai:
+** [[https://kitchingroup.cheme.cmu.edu/blog/feed/index.xml][kitchin group]] :johnkitchin:
+** [[https://feeds.libsyn.com/419861/rss][kubernetes podcast from google]] :podcast:
+** [[https://lakefs.io/blog/feed/][lakefs blog]] :data:dataengineering:
+** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCJIfeSCssxSC_Dhc5s7woww][Lex Clips]] :podcast:
+** [[http://feeds.marketwatch.com/marketwatch/bulletins][market watch: bulletins]] :economy:
+** [[http://feeds.marketwatch.com/marketwatch/marketpulse/][market watch: market pulse]] :economy:
+** [[https://martinfowler.com/feed.atom][Martin Fowler Blog]] :systemarchitecture:
+** [[https://connect.medrxiv.org/news/feed.php][medRxiv News and Notes]] :science:research:medarxiv:
+** [[http://connect.medrxiv.org/medrxiv_xml.php?subject=Genetic_and_Genomic_Medicine][medrxiv Subject Collection: Genetic And Genomic Medicine]] :science:research:medarxiv:
+** [[http://connect.medrxiv.org/medrxiv_xml.php?subject=Health_Economics][medrxiv Subject Collection: Health Economics]] :science:research:medarxiv:
+** [[http://connect.medrxiv.org/medrxiv_xml.php?subject=Health_Informatics][medrxiv Subject Collection: Health Informatics]] :science:research:medarxiv:
+** [[http://connect.medrxiv.org/medrxiv_xml.php?subject=Health_Policy][medrxiv Subject Collection: Health Policy]] :science:research:medarxiv:
+** [[https://connect.medrxiv.org/medrxiv_xml.php?subject=infectious_diseases][medrxiv Subject Collection: Infectious Diseases]] :science:research:medarxiv:
+** [[https://connect.medrxiv.org/medrxiv_xml.php?subject=Oncology][medrxiv Subject Collection: Oncology]] :science:research:medarxiv:
+** [[http://connect.medrxiv.org/medrxiv_xml.php?subject=Orthopedics][medrxiv Subject Collection: Orthopedics]] :science:research:medarxiv:
+** [[http://connect.medrxiv.org/medrxiv_xml.php?subject=Pharmacology_and_Therapeutics][medrxiv Subject Collection: Pharmacology And Therapeutics]] :science:research:medarxiv:
+** [[https://connect.medrxiv.org/medrxiv_xml.php?subject=Public_and_Global_Health][medrxiv Subject Collection: Public And Global Health]] :science:research:medarxiv:
+** [[http://connect.medrxiv.org/medrxiv_xml.php?subject=Rehabilitation_Medicine_and_Physical_Therapy][medrxiv Subject Collection: Rehabilitation Medicine And Physical Therapy]] :science:research:medarxiv:
+** [[http://connect.medrxiv.org/medrxiv_xml.php?subject=Sexual_and_Reproductive_Health][medrxiv Subject Collection: Sexual And Reproductive Health]] :science:research:medarxiv:
+** [[https://feeds.transistor.fm/aws-morning-brief][morning brief]] :podcast:
+** [[https://www.nature.com/nature.rss][nature]] :science:research:
+** [[https://ncbiinsights.ncbi.nlm.nih.gov/feed/][ncbi]] :science:research:
+** [[https://podcast.nejm.org/nejm_audio_summaries.xml][nejm audio summaries]] :science:research:
+** [[https://podcast.nejm.org/nejm_audio_interview.xml][nejm audo interview]] :science:research:
+** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCoxcjq-8xIDTYp3uz647V5A][Numberphile]] :youtube:math:
+** [[https://www.reddit.com/r/orgmode/.rss?][Org-mode]] :emacs:org:reddit:
+** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCtESv1e7ntJaLJYKIO1FoYw][Periodic Videos]] :youtube:science:
+** [[https://pitchfork.com/rss/news/][pitchfork]] :music:
+** [[https://changelog.com/practicalai/feed][practical ai]] :data:ai:
+** [[https://www.precisely.com/feed][precicely blog]] :data:ai:
+** [[https://protesilaos.com/codelog.xml][prots blog]] :emacs:prot:
+** [[https://www.reddit.com/r/Python/.rss?][Python]] :python:reddit:
+** [[https://realpython.com/atom.xml][real python]] :python:
+** [[https://github.com/org-roam/org-roam/commits.atom][Recent Commits to org-roam:main]] :org:emacs:
+** [[https://github.com/org-roam/org-roam/releases.atom][Release notes from org-roam]] :org:emacs:
+** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCfzlCWGWYyIQ0aLC5w48gBQ][sentdex]] :youtube:ai:
+** [[https://snyk.io/blog/feed/][snyk blog]]
+** [[https://softwareengineeringdaily.com/category/podcast/feed/][software daily]] :podcast:
+** [[https://feeds.buzzsprout.com/186154.rss][Streaming Audio: Apache Kafka® & Real-Time Data]] :podcast:
+** [[https://feed.syntax.fm/rss][syntax]] :podcast:webdev:
+** [[https://github.com/org-roam/org-roam/tags.atom][Tags from org-roam]] :emacs:org:
+** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCAuUUnT6oDeKwE6v1NGQxug][ted]] :youtube:
+** [[https://onesearch-rss.nejm.org/api/specialty/rss?context=nejm&specialty=genetics][The New England Journal of Medicine: Search Results in Genetics]] :science:research:
+** [[https://onesearch-rss.nejm.org/api/specialty/rss?context=nejm&specialty=surgery][The New England Journal of Medicine: Search Results in Surgery]] :science:research:
+** [[https://www.theverge.com/rss/science/index.xml][The Verge -  Science Posts]] :science:
+** [[https://towardsdatascience.com/feed][towards data science]] :data:ai:medium:
+** [[https://www.trackawesomelist.com/rss.xml][Track Awesome List Updates Daily]] :awesomelist:
+** [[https://xkcd.com/rss.xml][xkcd]] :fun:comic:xkcd:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/daily/r.xml][GitHub R Daily Trending]] :githubtrending:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/monthly/r.xml][GitHub R Monthly Trending]] :githubtrending:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/weekly/r.xml][GitHub R Weekly Trending]] :githubtrending:
+** [[https://aws.amazon.com/blogs/architecture/feed/][AWS Architecture Blog]] :aws:
+** [[https://aws.amazon.com/blogs/big-data/feed/][AWS Big Data Blog]] :aws:
+** [[https://aws.amazon.com/blogs/enterprise-strategy/feed/][AWS Cloud Enterprise Strategy Blog]] :aws:
+** [[https://aws.amazon.com/blogs/mt/feed/][AWS Cloud Operations & Migrations Blog]] :aws:
+** [[https://aws.amazon.com/blogs/compute/feed/][AWS Compute Blog]] :aws:
+** [[https://aws.amazon.com/blogs/contact-center/feed/][AWS Contact Center]] :aws:
+** [[https://aws.amazon.com/blogs/database/feed/][AWS Database Blog]] :aws:database:data:
+** [[https://aws.amazon.com/blogs/developer/feed/][AWS Developer Tools Blog]] :aws:
+** [[https://aws.amazon.com/blogs/devops/feed/][AWS DevOps Blog]] :aws:
+** [[https://aws.amazon.com/blogs/gametech/feed/][AWS for Games Blog]] :aws:
+** [[https://aws.amazon.com/blogs/industries/feed/][AWS for Industries]] :aws:
+** [[https://aws.amazon.com/blogs/media/feed/][AWS for M&E Blog]] :aws:
+** [[https://aws.amazon.com/blogs/awsforsap/feed/][AWS for SAP]] :aws:
+** [[https://aws.amazon.com/blogs/hpc/feed/][AWS HPC Blog]] :aws:
+** [[https://aws.amazon.com/blogs/machine-learning/feed/][AWS Machine Learning Blog]] :aws:ai:data:
+** [[https://aws.amazon.com/blogs/awsmarketplace/feed/][AWS Marketplace]] :aws:
+** [[https://aws.amazon.com/blogs/messaging-and-targeting/feed/][AWS Messaging & Targeting Blog]] :aws:
+** [[https://aws.amazon.com/blogs/aws/feed/][AWS News Blog]] :aws:
+** [[https://aws.amazon.com/blogs/opensource/feed/][AWS Open Source Blog]] :aws:opensource:
+** [[https://aws.amazon.com/blogs/apn/feed/][AWS Partner Network (APN) Blog]] :aws:
+** [[https://aws.amazon.com/blogs/publicsector/feed/][AWS Public Sector Blog]] :aws:
+** [[https://aws.amazon.com/blogs/quantum-computing/feed/][AWS Quantum Technologies Blog]] :aws:
+** [[https://aws.amazon.com/blogs/robotics/feed/][AWS Robotics Blog]] :aws:
+** [[https://aws.amazon.com/blogs/security/feed/][AWS Security Blog]] :aws:
+** [[https://aws.amazon.com/blogs/startups/feed/][AWS Startups Blog]] :aws:
+** [[https://aws.amazon.com/blogs/storage/feed/][AWS Storage Blog]] :aws:
+** [[https://aws.amazon.com/blogs/training-and-certification/feed/][AWS Training and Certification Blog]] :aws:
+** [[https://aws.amazon.com/blogs/business-productivity/feed/][Business Productivity]] :aws:
+** [[https://aws.amazon.com/blogs/containers/feed/][Containers]] :aws:
+** [[https://aws.amazon.com/blogs/desktop-and-application-streaming/feed/][Desktop and Application Streaming]] :aws:
+** [[https://aws.amazon.com/blogs/mobile/feed/][Front-End Web & Mobile]] :aws:
+** [[https://aws.amazon.com/blogs/infrastructure-and-automation/feed/][Integration & Automation]] :aws:
+** [[https://aws.amazon.com/blogs/modernizing-with-aws/feed/][Microsoft Workloads on AWS]] :aws:
+** [[https://aws.amazon.com/blogs/networking-and-content-delivery/feed/][Networking & Content Delivery]] :aws:
+** [[https://aws.amazon.com/blogs/iot/feed/][The Internet of Things on AWS – Official Blog]] :aws:
+** [[https://d3gih7jbfe3jlq.cloudfront.net/aws-podcast.rss][AWS Podcast]] :podcast:aws:
+** [[https://aws.amazon.com/blogs/aws-cost-management/feed/][AWS Cost Management]] :aws:
+** [[https://github.com/dagster-io/dagster/commits.atom][Recent Commits to dagster:master]] :dagster:repo:
+** [[https://github.com/dagster-io/dagster/releases.atom][Release notes from dagster]] :dagster:repo:
+** [[https://github.com/dagster-io/dagster/tags.atom][Tags from dagster]] :dagster:repo:
+** [[https://sachachua.com/blog/category/emacs-news/feed/atom/][emacs-news]] :emacs:emacs-news:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/daily/emacs-lisp.xml][GitHub Emacs Lisp Daily Trending]] :emacs:githubtrending:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/monthly/emacs-lisp.xml][GitHub Emacs Lisp Monthly Trending]] :emacs:githubtrending:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/weekly/emacs-lisp.xml][GitHub Emacs Lisp Weekly Trending]] :emacs:githubtrending:
+** [[https://hnrss.org/newest?q=emacs][hn: emacs]] :emacs:hackernews:
+** [[https://planet.emacslife.com/atom.xml][planet emacslife]] :emacs:
+** [[https://www.reddit.com/r/DoomEmacs/.rss?][r/doomemacs]] :reddit:emacs:
+** [[https://www.reddit.com/r/emacs/.rss?][r/emacs]] :reddit:emacs:
+** [[https://github.com/great-expectations/great_expectations/commits.atom][Recent Commits to great_expectations:develop]] :greatexpectations:repo:data:dataengineering:
+** [[https://github.com/great-expectations/great_expectations/releases.atom][Release notes from great_expectations]] :greatexpectations:repo:data:dataengineering:
+** [[https://github.com/great-expectations/great_expectations/tags.atom][Tags from great_expectations]] :greatexpectations:repo:data:dataengineering:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/daily/javascript.xml][GitHub JavaScript Daily Trending]] :githubtrending:javascript:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/monthly/javascript.xml][GitHub JavaScript Monthly Trending]] :githubtrending:javascript:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/weekly/javascript.xml][GitHub JavaScript Weekly Trending]] :githubtrending:javascript:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/daily/jupyter-notebook.xml][GitHub Jupyter Notebook Daily Trending]] :githubtrending:jupyter:python:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/monthly/jupyter-notebook.xml][GitHub Jupyter Notebook Monthly Trending]] :githubtrending:jupyter:python:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/weekly/jupyter-notebook.xml][GitHub Jupyter Notebook Weekly Trending]] :githubtrending:jupyter:python:
+** [[https://feeds.npr.org/1039/rss.xml][NPR Topics: Music]] :news:music:
+** [[https://feeds.npr.org/1107/rss.xml][NPR Topics: Music Lists]] :news:music:
+** [[https://feeds.npr.org/1104/rss.xml][NPR Topics: Music Reviews]] :news:music:
+** [[https://feeds.npr.org/1108/rss.xml][NPR Topics: New Music]] :news:music:
+** [[https://feeds.npr.org/1134/rss.xml][NPR Topics: Fitness & Nutrition]] :news:
+** [[https://feeds.npr.org/1027/rss.xml][NPR Topics: Health Care]] :news:
+** [[https://feeds.npr.org/1001/rss.xml][NPR Topics: News]] :news:general:
+** [[https://feeds.npr.org/1004/rss.xml][NPR Topics: World]] :news:general:
+*** [[https://feeds.npr.org/1057/rss.xml][NPR Topics: Opinion]] :oped:
+*** [[https://feeds.npr.org/1007/rss.xml][NPR Topics: Science]] :science:
+*** [[https://feeds.npr.org/1146/rss.xml][NPR Topics: Strange News]] :fun:
+*** [[https://feeds.npr.org/1019/rss.xml][NPR Topics: Technology]] :technology:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/daily/python.xml][GitHub Python Daily Trending]] :githubtrending:python:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/monthly/python.xml][GitHub Python Monthly Trending]] :githubtrending:python:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/weekly/python.xml][GitHub Python Weekly Trending]] :githubtrending:python:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/daily/rust.xml][GitHub Rust Daily Trending]] :githubtrending:rust:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/monthly/rust.xml][GitHub Rust Monthly Trending]] :githubtrending:rust:
+** [[https://mshibanami.github.io/GitHubTrendingRSS/weekly/rust.xml][GitHub Rust Weekly Trending]] :githubtrending:rust:
+** [[https://www.reddit.com/r/archlinux/.rss?][r/archlinux]] :reddit:archlinux:linux:
+** [[https://www.reddit.com/r/aws/.rss?][r/aws]] :reddit:aws:
+** [[https://www.reddit.com/r/dataisbeautiful/.rss?][r/dataisbeautiful]] :reddit:data:dataviz:
+** [[https://www.reddit.com/r/datascience/.rss?][r/datascience]] :reddit:ai:
+** [[https://www.reddit.com/r/docker/.rss?][r/docker]] :reddit:docker:container:
+** [[https://www.reddit.com/r/Guitar/.rss?][r/Guitar]] :reddit:music:guitar:
+** [[https://www.reddit.com/r/guitarlessons/.rss?][r/guitarlessons]] :reddit:music:guitar:
+** [[https://www.reddit.com/r/healthIT/.rss?][r/healthIT]] :reddit:healthit:data:
+** [[https://www.reddit.com/r/javascript/.rss?][r/javascript]] :reddit:javascript:
+** [[https://www.reddit.com/r/jazzguitar/.rss?][r/jazzguitar]] :reddit:music:guitar:
+** [[https://www.reddit.com/r/jazztheory/.rss?][r/jazztheory]] :reddit:music:guitar:
+** [[https://www.reddit.com/r/jazzyhiphop/.rss?][r/jazzyhiphop]] :reddit:music:
+** [[https://www.reddit.com/r/KnowledgeGraph/.rss?][r/KnowledgeGraph]] :reddit:infomanagement:knowledgegraph:
+** [[https://www.reddit.com/r/MachineLearning/.rss?][r/MachineLearning]] :reddit:data:ai:
+** [[https://www.reddit.com/r/planetemacs/.rss?][r/planetemacs]] :reddit:emacs:
+** [[https://www.reddit.com/r/programming/.rss?][r/programming]] :reddit:technology:
+** [[https://www.reddit.com/r/SQL/.rss?][r/SQL]] :reddit:data:sql:
+** [[https://www.reddit.com/r/vim/.rss?][r/vim]] :reddit:vim:
+** [[https://www.reddit.com/r/visualization/.rss?][r/visualization]] :reddit:data:dataviz:
+** [[https://www.reddit.com/r/Watches/.rss?][r/Watches]] :reddit:watches:
+** [[https://www.reddit.com/r/webdev/.rss?][r/webdev]] :reddit:webdev:
+** [[https://feeds.simplecast.com/_IjaDYAj][Cal Newport Deep Questions]] :podcast:
+** [[https://calnewport.com/blog/feed/][Cal Newport Blog]] :blog:productivity:
+** [[https://feeds.megaphone.fm/hubermanlab][Huberman Lab]] :podcast:
+** [[https://feeds.megaphone.fm/thediaryofaceo][Diary of a CEO with Steven Bartlett]] :podcast:
+** [[https://feeds.megaphone.fm/ridehome][Techmeme Ride Home]] :podcast:technology:
+** [[https://podnews.net/podcast/iplq][Wall Street Breakfast]] :podcast:
+** [[https://lexfridman.com/feed/podcast/][Lex Fridman Podcast]] :podcast:
+** [[https://serve.podhome.fm/rss/c9abdd38-a5dc-5eb2-96fd-f833f93208a7][AI Engineering Podcast]] :podcast:data:ai:
+** [[https://serve.podhome.fm/rss/1c0357c0-6aba-5766-a2d5-2090d8dab6bc][Data Engineering Podcast]] :podcast:data:dataengineering:
+** [[https://peterattiadrive.libsyn.com/rss][Peter Attia The Drive]] :podcast:
+** [[https://www.reddit.com/r/eink/.rss?][r/eink]] :reddit:eink:
+** [[https://www.chiply.dev/rss.xml][Charlie Holland's Blog]] :myblog:

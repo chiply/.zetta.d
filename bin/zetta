@@ -10,6 +10,7 @@
 #   update    Pull all packages (backs up lockfile first)
 #   doctor    Diagnose environment and configuration
 #   test      Start a test daemon and verify startup
+#   ci-test   Batch-mode test for CI runners (no daemon)
 #   help      Show this help message
 
 set -euo pipefail
@@ -323,6 +324,37 @@ cmd_test() {
 }
 
 # ——————————————————————————————————————————
+# ci-test
+# ——————————————————————————————————————————
+cmd_ci_test() {
+    _info "Running CI test (batch mode)..."
+
+    # Create required files if missing
+    touch ~/.dir-locals.el
+    [[ -f ~/.private.el ]] || echo ";;" > ~/.private.el
+    [[ -f ~/.zetta.el ]] || cp "$ZETTA_DIR/templates/zetta.example.el" ~/.zetta.el
+
+    local output exit_code=0
+    output=$("$EMACS" --init-directory="$ZETTA_DIR" --batch \
+        -l "$ZETTA_DIR/init.el" \
+        --eval "(elpaca-wait)" \
+        --eval "(message \"ZETTA-OK packages=%d modules=%d\" (length (elpaca--queued)) (length user-files))" \
+        2>&1) || exit_code=$?
+
+    echo "$output"
+
+    # Check for success marker
+    if echo "$output" | grep -q "ZETTA-OK"; then
+        _ok "Config loaded successfully"
+        echo "$output" | grep "ZETTA-OK"
+    else
+        _error "Config failed to load (exit code: $exit_code)"
+        echo "$output" | grep -iE "error|wrong-type|void-function" | head -20
+        return 1
+    fi
+}
+
+# ——————————————————————————————————————————
 # help
 # ——————————————————————————————————————————
 cmd_help() {
@@ -337,6 +369,7 @@ cmd_help() {
     echo "  update           Pull all packages (backs up lockfile)"
     echo "  doctor           Diagnose environment and configuration"
     echo "  test             Start test daemon and verify startup"
+    echo "  ci-test          Batch-mode test for CI runners (no daemon)"
     echo "  help             Show this help message"
     echo ""
     echo "Environment:"
@@ -354,6 +387,7 @@ case "${1:-help}" in
     update)  cmd_update ;;
     doctor)  cmd_doctor ;;
     test)    cmd_test ;;
+    ci-test) cmd_ci_test ;;
     help|--help|-h) cmd_help ;;
     *)
         _error "Unknown command: $1"

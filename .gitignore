@@ -76,5 +76,9 @@ org-roam/daily/agenda.org_archive
 org-roam/daily/sprint.org
 org-roam/daily/sprint.org_archive
 
+# Runtime session data
+multisession/
+speed-type/
+
 # Hypothesis
 .hypothesis/

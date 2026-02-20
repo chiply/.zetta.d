@@ -1,0 +1,41 @@
+flowchart TD
+
+    A["`Default Template Values
+    _builtin_,custom`"] --inherited by--> B[Template Values]
+    C["`Dynamic Template Values
+    _directory_,point`"] --inherited by--> B
+    target_templates["`Templates
+    --
+    __build-targets__:
+    _makefile_, _tmuxinator_
+    tmuxp, justfile, taskfile,
+    bash scripts
+    __point-level context__: 
+    pytest
+    python-fire
+    `"] -- template input --> Renderer
+
+    B -- values input --> Renderer
+    Transient -- 3. modifies values --> B
+
+    Selector["`Selector
+    (entrypoint)`"] -- 1. pulls values from --> target_templates
+
+    Selector -- 2. opens --> Transient
+
+    Transient -- 4. renders commands with --> Renderer
+
+    Transient -- 5. sends commands to --> executor["`Executor
+    _vterm_,_detached_,_detached+_,
+    _async-shell-command_,
+    _async-shell-command+_,
+    _compile_,_detached-compile_,
+    eshell,eat,
+    term,shell,shell-command,`"]
+
+    Transient -- 5. pushes history to --> session_hist[Transient Session History]
+    Transient -- 5. pushes history to --> cross_session_hist[Transient Persistant History]
+    subgraph subgroup1
+        template_generator_configuration -- configures --> template_generator
+        template_generator -- generates --> target_templates
+    end

@@ -229,6 +229,7 @@
    "tools/alert.el"
    "tools/ddp.el"
    "tools/gnus.el"
+   "tools/gif-screencast.el"
 
    ;; app
    "app/pocket-reader.el"

@@ -1,2 +1,0 @@
-(use-package github-notifier
-  )

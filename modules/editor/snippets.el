@@ -7,6 +7,9 @@
   :hook (elpaca-after-init . yas-global-mode)
 
   :init
+  ;; Ensure snippet directories exist on first run
+  (make-directory (format "%ssource/snippets/snippets/test" user-emacs-directory) t)
+  (make-directory (format "%ssource/snippets/snippets/personal" user-emacs-directory) t)
 
   (setq yas-triggers-in-field t
         yas-indent-line 'fixed

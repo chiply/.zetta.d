@@ -31,9 +31,9 @@
 ;;.  
 
 (use-package pdf-tools
+  :init
+  (pdf-loader-install :no-query)
   :config
-  (pdf-tools-install :no-query)
-  (pdf-loader-install)
   (add-hook 'pdf-view-mode-hook 'pdf-view-fit-height-to-window)
 
   :general

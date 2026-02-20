@@ -1,6 +1,7 @@
 (use-package vterm
   :commands (vterm vterm-mode vterm-other-window)
   :init
+  (setq vterm-always-compile-module t)
 
   (defun zetta-soda-prompt-term-buffer ()
     (let ((mode-buffers (-map
@@ -100,8 +101,6 @@
     )
 
   :config
-  (setq vterm-always-compile-module t)
-
   (setq vterm-shell "zsh")
 
   ;; NOTE written by GPT-4

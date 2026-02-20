@@ -165,6 +165,10 @@
          ("M-*" . tempel-insert))
 
   :init
+  ;; Default tempel-path resolves to <user-emacs-directory>/templates which
+  ;; clashes with the existing templates/ directory (holds zetta.example.el).
+  ;; Point to a dedicated tempel templates file instead.
+  (setq tempel-path (expand-file-name "tempel-templates.eld" user-emacs-directory))
 
   ;; Setup completion at point
   (defun tempel-setup-capf ()

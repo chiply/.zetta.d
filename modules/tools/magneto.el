@@ -394,7 +394,7 @@
   (-map (lambda (x)
           (condition-case nil
               (progn (my/embark-bind-keys x))
-            (error (message (concat (symbol-name x) " didn't work")))))
+            (error nil)))
         embark-maps-list)
   )
 

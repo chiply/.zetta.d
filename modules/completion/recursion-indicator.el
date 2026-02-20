@@ -3,14 +3,11 @@
 
     :brushup
   (add-to-list 'brushup-styles
-               '(progn
+               '(when (facep 'recursion-indicator-general)
                   (set-face-attribute 'recursion-indicator-general nil
-                                      :height 0.8
-                                      )
+                                      :height 0.8)
                   (set-face-attribute 'recursion-indicator-minibuffer nil
-                                      :height 0.8
-                                      )
-                  ))
+                                      :height 0.8)))
 
 
   )

@@ -4,6 +4,8 @@
   :ensure (:host github :repo "chiply/repeatable-lite")
   :demand t)
 
-
+;; Block until repeatable-lite is installed — bootstrap-display and other
+;; downstream modules use `**` which must be available synchronously.
+(elpaca-wait)
 
 (provide 'bootstrap-repeatable-lite)

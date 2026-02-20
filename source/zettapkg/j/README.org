@@ -1,0 +1,30 @@
+
+* LEFT off
+- using multi compile to start with, will incrementatlly add functionality as needed
+* short term dev
+start w multi compile and executors, other systems can
+* tech
+** transient for ui
+- https://www.youtube.com/watch?v=w3krYEeqnyk&t=201s
+- https://gist.github.com/abrochard/dd610fc4673593b7cbce7a0176d897de
+
+default args
+- https://gist.github.com/abrochard/dd610fc4673593b7cbce7a0176d897de?permalink_comment_id=2983749#gistcomment-2983749
+- https://www.reddit.com/r/emacs/comments/ciyqib/how_to_set_transient_infix_params_default_values/
+
+- start process for things with logs (eg not tests or program runs)
+https://emacs.stackexchange.com/questions/299/how-can-i-run-an-async-process-in-the-background-without-popping-up-a-buffer#:~:text=Add%20a%20comment-,8,.%20Here%27s%20a%20modified%20example%20I%27m%20taking%20from%20my%20projector%20package%3A,-(set%2Dprocess
+
+* executors
+| executor                | interface                                                          | notes                                                                               |
+|                         |                                                                    | <10>                                                                                |
+|-------------------------+--------------------------------------------------------------------+-------------------------------------------------------------------------------------|
+| compile                 | (compile COMMAND &optional COMINT)                                 |                                                                                     |
+| recompile               | (recompile &optional EDIT-COMMAND)                                 |                                                                                     |
+| start-process           | (start-process NAME BUFFER PROGRAM &rest PROGRAM-ARGS)             |                                                                                     |
+| async-shell-command     | (async-shell-command COMMAND &optional OUTPUT-BUFFER ERROR-BUFFER) |                                                                                     |
+| vterm                   | (vterm &optional ARG)                                              |                                                                                     |
+| eshell                  | (eshell &optional ARG)                                             |                                                                                     |
+| (other shells not used) |                                                                    |                                                                                     |
+| detached-...            |                                                                    | has analgous commands for above, but runs w dtach and saves otuput to searchable db |
+

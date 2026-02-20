@@ -1,0 +1,76 @@
+* merits of the key-based language
+- can specify any number of arguments from 0 to all of them.  There are sensible defaults.  This makes common actions less verbose (fewer characers) than less common ones.  Because options can be specified in any order, users can be flexible with the semantics of certain combinatinos.  [examples]
+
+
+
+* Flow
+- invoke magneto (use s-m)
+- apply 0-n settings
+- invoke magneto (use s-m)
+- select a window for the action (if not already selected)
+
+* Options
+** source
+Description: controls what happens to the window from which
+magneto was invoked
+
+| value               | description                                                                                                | key |
+|---------------------+------------------------------------------------------------------------------------------------------------+-----|
+|                     | <11>                                                                                                       |     |
+|---------------------+------------------------------------------------------------------------------------------------------------+-----|
+| duplicate           | places a copy of the view into the location specified                                                      | c   |
+| move                | places a copy of the view into the location specified and deletes original window (DEFAULT)                | m   |
+| pull                | places a copy of the view into the location specified and switches previous window to it's previous buffer | p   |
+| swap (implemented?) | self explanatory                                                                                           | s   |
+
+
+** destination
+Description: describes the location of the  destination window
+
+lowercase for side windows is append
+
+| value                  | description | key |
+|------------------------+-------------+-----|
+| fill                   | DEFAULT     | .   |
+| split-horizontal-right |             | h   |
+| split-horizontal-left  |             | H   |
+| split-vertical-bottom  |             | v   |
+| split-vertical-top     |             | V   |
+| side-top-right         |             | t   |
+| side-top-left          |             | T   |
+| side-bottom-right      |             | b   |
+| side-bottom-left       |             | B   |
+| side-left-bottom       |             | l   |
+| side-left-top          |             | L   |
+| side-right-bottom      |             | r   |
+| side-right-top         |             | R   |
+
+
+** selection
+| value    | description | key |
+|----------+-------------+-----|
+| noselect |             | o   |
+| select   | DEFAULT     | O   |
+
+** action
+NOTE: here I'm starting to see the framework materialize around teh obvious default for this ('moving displays')
+| value                                                | description | key |
+|------------------------------------------------------+-------------+-----|
+| display buffer from window where magneto was invoked | DEFAULT     | w   |
+| execute command                                      | M-x         | x   |
+| [find file command of choice]                        |             | f   |
+| [switch buffer command of choice]                    |             | C-b |
+
+** not in hydra
+*** whether it is being called from embark (see karthiks functions for inspo on how to implement this)
+
+* Other shortcuts under the same hydra!
+- delete window (this window or another window)
+- delete other windows
+
+* Notes
+- in some situations, ace wont be involved
+- this should reimplement the hydra's functionality behind (?)
+
+
+- what combinations don't make sense?

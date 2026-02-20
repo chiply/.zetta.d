@@ -1,0 +1,26 @@
+sh-mode:
+  exec:
+    - sh
+    - bash
+    - zsh
+  # should be assumed from lsp if present
+  # this is more useful in situations like yaml-configuration files
+  # where it's possible that a special python environment will be used
+  python_vitual_environment: none
+  file_suffix:
+    - sh
+    - zsh
+  wrappers:
+  wrappper:
+  directory:
+  procname:
+  repl:
+  repl-p:
+  window-position:
+
+
+
+setters:
+  exec:
+  
+

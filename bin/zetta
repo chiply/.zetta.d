@@ -1,0 +1,364 @@
+#!/usr/bin/env bash
+# zetta — CLI wrapper for Zetta Emacs
+#
+# Usage: zetta <command> [args]
+#
+# Commands:
+#   install   Install packages and native-compile
+#   sync      Re-evaluate config, install new packages
+#   freeze    Write lockfile and optionally commit
+#   update    Pull all packages (backs up lockfile first)
+#   doctor    Diagnose environment and configuration
+#   test      Start a test daemon and verify startup
+#   help      Show this help message
+
+set -euo pipefail
+
+# Resolve the directory this script lives in
+ZETTA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOCK_FILE="$ZETTA_DIR/elpaca-lock.el"
+EMACS="${EMACS:-emacs}"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+_info()  { echo -e "${CYAN}::${NC} $*"; }
+_ok()    { echo -e "${GREEN}✓${NC} $*"; }
+_warn()  { echo -e "${YELLOW}!${NC} $*"; }
+_error() { echo -e "${RED}✗${NC} $*"; }
+
+# ——————————————————————————————————————————
+# install
+# ——————————————————————————————————————————
+cmd_install() {
+    _info "Installing Zetta Emacs packages..."
+
+    # Create required files
+    touch ~/.dir-locals.el
+    if [[ ! -f ~/.private.el ]]; then
+        _warn "Creating empty ~/.private.el (add your API keys here)"
+        echo ";; Private configuration — API keys, credentials, etc." > ~/.private.el
+        echo ";; See $ZETTA_DIR/.private.sample.el for required variables." >> ~/.private.el
+    fi
+
+    if [[ ! -f ~/.zetta.el ]]; then
+        _info "Copying default user config to ~/.zetta.el"
+        cp "$ZETTA_DIR/templates/zetta.example.el" ~/.zetta.el
+    fi
+
+    _info "Starting Emacs to install and build packages..."
+    "$EMACS" --init-directory="$ZETTA_DIR" --batch \
+        -l "$ZETTA_DIR/init.el" \
+        --eval "(elpaca-wait)" \
+        2>&1 | while IFS= read -r line; do
+            echo "  $line"
+        done
+
+    _ok "Package installation complete"
+
+    _info "Native-compiling packages (this may take a while)..."
+    "$EMACS" --init-directory="$ZETTA_DIR" --batch \
+        --eval "(native-compile-async \"$ZETTA_DIR/elpaca/builds\" 'recursively)" \
+        2>&1 | tail -5
+
+    _ok "Zetta Emacs installed successfully"
+    echo ""
+    _info "Next steps:"
+    echo "  1. Edit ~/.zetta.el to customize modules and settings"
+    echo "  2. Edit ~/.private.el to add API keys (see .private.sample.el)"
+    echo "  3. Start Emacs!"
+}
+
+# ——————————————————————————————————————————
+# sync
+# ——————————————————————————————————————————
+cmd_sync() {
+    _info "Syncing Zetta Emacs configuration..."
+
+    "$EMACS" --init-directory="$ZETTA_DIR" --batch \
+        -l "$ZETTA_DIR/init.el" \
+        --eval "(elpaca-wait)" \
+        --eval "(message \"Sync complete: %d packages queued\" (length (elpaca--queued)))" \
+        2>&1 | while IFS= read -r line; do
+            echo "  $line"
+        done
+
+    _ok "Sync complete"
+}
+
+# ——————————————————————————————————————————
+# freeze
+# ——————————————————————————————————————————
+cmd_freeze() {
+    _info "Generating lockfile..."
+
+    "$EMACS" --init-directory="$ZETTA_DIR" --batch \
+        -l "$ZETTA_DIR/init.el" \
+        --eval "(elpaca-wait)" \
+        --eval "(elpaca-write-lock-file \"$LOCK_FILE\")" \
+        --eval "(message \"Lock file written to %s\" \"$LOCK_FILE\")" \
+        2>&1 | while IFS= read -r line; do
+            echo "  $line"
+        done
+
+    if [[ -f "$LOCK_FILE" ]]; then
+        local count
+        count=$(wc -l < "$LOCK_FILE" | tr -d ' ')
+        _ok "Lockfile written ($count lines)"
+
+        # Optionally commit
+        if [[ "${1:-}" == "--commit" ]]; then
+            cd "$ZETTA_DIR"
+            git add elpaca-lock.el
+            git commit -m "chore: update elpaca lockfile"
+            _ok "Committed lockfile"
+        else
+            _info "Run 'zetta freeze --commit' to also commit the lockfile"
+        fi
+    else
+        _error "Failed to generate lockfile"
+        return 1
+    fi
+}
+
+# ——————————————————————————————————————————
+# update
+# ——————————————————————————————————————————
+cmd_update() {
+    # Backup lockfile
+    if [[ -f "$LOCK_FILE" ]]; then
+        cp "$LOCK_FILE" "${LOCK_FILE}.bak"
+        _info "Backed up lockfile to elpaca-lock.el.bak"
+    fi
+
+    _info "Pulling all packages..."
+
+    "$EMACS" --init-directory="$ZETTA_DIR" --batch \
+        -l "$ZETTA_DIR/init.el" \
+        --eval "(elpaca-wait)" \
+        --eval "(elpaca-pull-all)" \
+        --eval "(elpaca-wait)" \
+        --eval "(message \"Update complete\")" \
+        2>&1 | while IFS= read -r line; do
+            echo "  $line"
+        done
+
+    _ok "Packages updated"
+    _info "Run 'zetta freeze' to update the lockfile with new versions"
+}
+
+# ——————————————————————————————————————————
+# doctor
+# ——————————————————————————————————————————
+cmd_doctor() {
+    echo -e "${BOLD}Zetta Emacs Doctor${NC}"
+    echo ""
+
+    # Emacs version
+    local emacs_version
+    emacs_version=$("$EMACS" --version 2>/dev/null | head -1)
+    if [[ -n "$emacs_version" ]]; then
+        _ok "Emacs: $emacs_version"
+        # Check version >= 29
+        local major
+        major=$(echo "$emacs_version" | grep -oE '[0-9]+' | head -1)
+        if [[ "$major" -lt 29 ]]; then
+            _warn "Zetta requires Emacs 29+. You have Emacs $major."
+        fi
+    else
+        _error "Emacs not found"
+    fi
+
+    # Git
+    if command -v git &>/dev/null; then
+        _ok "Git: $(git --version | head -1)"
+    else
+        _error "Git not found (required)"
+    fi
+
+    # ripgrep
+    if command -v rg &>/dev/null; then
+        _ok "ripgrep: $(rg --version | head -1)"
+    else
+        _warn "ripgrep not found (recommended for consult-ripgrep)"
+    fi
+
+    # fd
+    if command -v fd &>/dev/null; then
+        _ok "fd: $(fd --version)"
+    else
+        _warn "fd not found (recommended for fast file search)"
+    fi
+
+    # Node.js (for LSP servers)
+    if command -v node &>/dev/null; then
+        _ok "Node.js: $(node --version)"
+    else
+        _warn "Node.js not found (needed for some LSP servers)"
+    fi
+
+    # Python
+    if command -v python3 &>/dev/null; then
+        _ok "Python: $(python3 --version)"
+    else
+        _warn "Python3 not found"
+    fi
+
+    echo ""
+
+    # Zetta directory
+    if [[ -d "$ZETTA_DIR" ]]; then
+        _ok "Zetta directory: $ZETTA_DIR"
+    else
+        _error "Zetta directory not found: $ZETTA_DIR"
+    fi
+
+    # Lockfile
+    if [[ -f "$LOCK_FILE" ]]; then
+        local lock_count
+        lock_count=$(wc -l < "$LOCK_FILE" | tr -d ' ')
+        _ok "Lockfile: $LOCK_FILE ($lock_count lines)"
+    else
+        _warn "No lockfile found (run 'zetta freeze' to generate)"
+    fi
+
+    # User config
+    if [[ -f ~/.zetta.el ]]; then
+        _ok "User config: ~/.zetta.el"
+    else
+        _warn "No ~/.zetta.el found (run 'zetta install' or copy from templates/)"
+    fi
+
+    # Private config
+    if [[ -f ~/.private.el ]]; then
+        _ok "Private config: ~/.private.el"
+    else
+        _warn "No ~/.private.el found (API keys will not be available)"
+    fi
+
+    # Elpaca directory
+    if [[ -d "$ZETTA_DIR/elpaca/builds" ]]; then
+        local pkg_count
+        pkg_count=$(ls -d "$ZETTA_DIR/elpaca/builds"/*/ 2>/dev/null | wc -l | tr -d ' ')
+        _ok "Installed packages: $pkg_count"
+    else
+        _warn "No packages installed (run 'zetta install')"
+    fi
+
+    # Modules directory
+    if [[ -d "$ZETTA_DIR/modules" ]]; then
+        local mod_count=0
+        for dir in "$ZETTA_DIR/modules"/*/; do
+            if [[ -d "$dir" ]]; then
+                ((mod_count++))
+            fi
+        done
+        _ok "Module categories: $mod_count"
+    else
+        _error "Modules directory not found"
+    fi
+
+    echo ""
+}
+
+# ——————————————————————————————————————————
+# test
+# ——————————————————————————————————————————
+cmd_test() {
+    local daemon_name="zetta-test-$$"
+
+    _info "Starting test daemon ($daemon_name)..."
+
+    local output
+    output=$("$EMACS" --init-directory="$ZETTA_DIR" --daemon="$daemon_name" 2>&1)
+
+    if echo "$output" | grep -q "Starting Emacs daemon"; then
+        _ok "Daemon started"
+    else
+        _error "Daemon failed to start"
+        echo "$output"
+        return 1
+    fi
+
+    # Check for errors (ignore known warnings)
+    local errors
+    errors=$(echo "$output" | grep -iE "error|wrong-type|void-function" \
+        | grep -v "corfu previously queued" \
+        | grep -v "listp" \
+        || true)
+
+    if [[ -n "$errors" ]]; then
+        _warn "Warnings detected:"
+        echo "$errors" | while IFS= read -r line; do
+            echo "  $line"
+        done
+    fi
+
+    # Verify responsiveness
+    local response
+    response=$(emacsclient -s "$daemon_name" -e '(message "Config OK")' 2>&1)
+    if [[ "$response" == '"Config OK"' ]]; then
+        _ok "Config loaded successfully"
+    else
+        _error "Config verification failed: $response"
+    fi
+
+    # Report stats
+    local pkg_count
+    pkg_count=$(emacsclient -s "$daemon_name" -e '(length (elpaca--queued))' 2>&1)
+    _info "Packages queued: $pkg_count"
+
+    local module_count
+    module_count=$(emacsclient -s "$daemon_name" -e '(length user-files)' 2>&1)
+    _info "Module files loaded: $module_count"
+
+    # Cleanup
+    emacsclient -s "$daemon_name" -e '(kill-emacs)' 2>/dev/null
+    _ok "Test daemon stopped"
+}
+
+# ——————————————————————————————————————————
+# help
+# ——————————————————————————————————————————
+cmd_help() {
+    echo -e "${BOLD}Zetta Emacs${NC} — CLI management tool"
+    echo ""
+    echo "Usage: zetta <command> [args]"
+    echo ""
+    echo "Commands:"
+    echo "  install          Install packages and native-compile"
+    echo "  sync             Re-evaluate config, install new packages"
+    echo "  freeze [--commit]  Write lockfile (optionally commit)"
+    echo "  update           Pull all packages (backs up lockfile)"
+    echo "  doctor           Diagnose environment and configuration"
+    echo "  test             Start test daemon and verify startup"
+    echo "  help             Show this help message"
+    echo ""
+    echo "Environment:"
+    echo "  EMACS            Path to Emacs binary (default: emacs)"
+    echo "  ZETTA_DIR        Path to Zetta config (default: auto-detected)"
+}
+
+# ——————————————————————————————————————————
+# Main dispatch
+# ——————————————————————————————————————————
+case "${1:-help}" in
+    install) cmd_install ;;
+    sync)    cmd_sync ;;
+    freeze)  cmd_freeze "${2:-}" ;;
+    update)  cmd_update ;;
+    doctor)  cmd_doctor ;;
+    test)    cmd_test ;;
+    help|--help|-h) cmd_help ;;
+    *)
+        _error "Unknown command: $1"
+        echo ""
+        cmd_help
+        exit 1
+        ;;
+esac

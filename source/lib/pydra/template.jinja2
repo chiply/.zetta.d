@@ -1,0 +1,4 @@
+{% for prop in schema['properties'] %}
+("sk" setterfunction "{{ prop }}" :exit t)
+{% endfor %}
+

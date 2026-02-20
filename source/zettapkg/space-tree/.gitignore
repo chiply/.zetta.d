@@ -1,0 +1,24 @@
+# Byte-compiled files
+*.elc
+
+# Eask artifacts
+.eask/
+dist/
+
+# Package archives
+*.tar
+
+# Backup files
+*~
+\#*\#
+.\#*
+
+# Auto-save files
+.saves-*
+
+# macOS
+.DS_Store
+
+# Editor directories
+.idea/
+.vscode/

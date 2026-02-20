@@ -1,0 +1,64 @@
+;; start to create a todo list and a plan to adopt.  for example,
+;; things like transient layouts, hidden parameters, etc... can wait,
+;; need to prioritize
+
+;; can start pre-emptivley refactoring things out as i create my tasks
+
+;; left off -- type and completers are likley next most important
+;; put some critical thought into the design of that -- what patterns will be used
+;; eg one stratefy (eg function) per type?
+
+;; test that the template works...  try this out with make unit_test
+;; in tx;; just make {{ x_foo }} one of the variables.. note the
+;; design will need some way to signal to the end user that a key word
+;; is being use
+
+;; invisible data -- eg key, command template, etc...
+
+;; general note -- this isn't a great way of doing things, the eval is
+;; making things slow to develop
+;; left off make cimpile command local
+;; add position setting
+
+
+
+
+;; todo -- do we need to build the transient with a new name each
+;; time?  Yes -- this helps manage data, eg state per transient
+
+
+;; BIG FEATURES:
+;;;; variables in configuration (as top level keys? yes and specify data type for everything)  the type of each key will actually point to a function that will specify the validation and prompt strategies
+;;;; variables overrideable from transient based on datatype (just use 2 datatypes)
+;;;; transient is built dynamically from variables and top level settings being merged.  transient shoudl basically allow any key in the ht to be replaced... keep the ht flat!
+;;;; transient to override template variables
+;;;; transient to override general settings (eg venv, program, etc...)
+;;;; keyword template variables similar to how multi-compile works
+;; syntax extension: variable references in the configuration to increase brevity
+;; jsonschema based utils -- eg snippet for creating a new target in cmds
+
+
+;; TODO:
+;;;; bring in any features from foreman into this spec
+;;;; DONE fully strip away multi compile (will involve setting this up in 
+;;;; the same way foreman is)
+;; other settings: display postiion
+
+
+
+;; Just an interest in general not about what's happening here. The continent of each top level key income is not Llamo is effectively and end-users description of how that command is used. This is actually what is getting used in Lou of a actual schema or usable man fileThat could be used to automate the production of transients. So the configuration is both a registry of commands, but it's also the data that's being used by the automatic transient production solution. It's going to be important as this gets built out to ensure that all the flexibility needed in the transient can be controlled by adding things to the come on start Yami.  Otherwise this won't be truly configuration driven, and adding functionality for let's say a new set of command line commands would be required changes to the code which is undesirable.  
+
+;; NYI maintaining a history of compile commands at the buffer level
+;; at different levels -- project?  for example, in foreman, there was
+;; a compule command bound to each buffer
+
+
+;; LEFT OFF:
+;;;; dynamically build transient
+;;;; why do i have to specify the env in the case of makefile being present? try to fix this
+
+
+
+
+;;(z-compile)
+

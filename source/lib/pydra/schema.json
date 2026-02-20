@@ -1,0 +1,96 @@
+{
+  "title": "SqlConfiguration",
+  "description": "Description",
+  "type": "object",
+  "properties": {
+    "major_mode": {
+      "$ref": "#/definitions/SupportedEmacsMajorModes"
+    },
+    "file_name": {
+      "title": "File Name",
+      "format": "file-path",
+      "type": "string"
+    },
+    "project_directory": {
+      "title": "Project Directory",
+      "format": "directory-path",
+      "type": "string"
+    },
+    "is_version_controlled": {
+      "title": "Is Version Controlled",
+      "default": false,
+      "type": "boolean"
+    },
+    "suffix": {
+      "title": "Suffix",
+      "description": "helloooo",
+      "default": "py",
+      "type": "string"
+    },
+    "executable": {
+      "description": "hello world",
+      "default": "",
+      "allOf": [
+        {
+          "$ref": "#/definitions/PythonExecutable"
+        }
+      ]
+    },
+    "environment_variables": {
+      "title": "Environment Variables",
+      "description": "hello worldddd",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "items": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "working_directory": {
+      "title": "Working Directory",
+      "description": "\n        Some description header.\n        <<SUGGESTER: emacs:read-working-directory>>\n        ",
+      "default": "/Users/REDACTED/projects/pydra",
+      "type": "string"
+    },
+    "wrapper": {
+      "title": "Wrapper",
+      "type": "string"
+    }
+  },
+  "required": [
+    "major_mode"
+  ],
+  "definitions": {
+    "SupportedEmacsMajorModes": {
+      "title": "SupportedEmacsMajorModes",
+      "description": "Emacs major-modes supported by this program",
+      "enum": [
+        "python-ts-mode",
+        "sql-mode",
+        "sh-mode",
+        "yaml-mode"
+      ],
+      "type": "string"
+    },
+    "PythonExecutable": {
+      "title": "PythonExecutable",
+      "description": "Some awesome description of the Python Executable",
+      "enum": [
+        "python3",
+        "python",
+        "ipython",
+        "pytest"
+      ],
+      "type": "string"
+    }
+  }
+}

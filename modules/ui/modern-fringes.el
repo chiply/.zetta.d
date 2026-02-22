@@ -1,9 +1,9 @@
 ;;; modern-fringes.el --- Configure modern-fringes -*- lexical-binding: t; -*-
 
 (use-package modern-fringes
-  :config 
+  :config
   (modern-fringes-mode 1)
-  (modern-fringes-invert-arrows) 
+  (modern-fringes-invert-arrows)
   :brushup
   (add-to-list 'brushup-styles
                '(set-face-attribute 'modern-fringes-arrows nil

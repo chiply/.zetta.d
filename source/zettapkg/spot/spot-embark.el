@@ -6,7 +6,6 @@
 (require 'spot-consult)
 (require 'spot-var)
 
-
 (defun spot-action--generic-show-data (item)
   (let ((buf (get-buffer-create "*spotify-search-result*")))
     (with-current-buffer buf
@@ -16,7 +15,6 @@
     (beginning-of-buffer)
     (yaml-mode)
     (yaml-pro-mode 1)))
-
 
 (defun spot-action--list-album-tracks (item)
   (let* ((table (get-text-property 0 'multi-data item))
@@ -28,20 +26,17 @@
       " "
       "artist:" artist-name " -- --type=track"))))
 
-
 (defun spot-action--list-artist-tracks (item)
   (let* ((table (get-text-property 0 'multi-data item))
          (artist-name (ht-get* table 'name)))
     (spot-consult-search
      (concat "artist:" artist-name " -- --type=track"))))
 
-
 (defun spot-action--list-playlist-tracks (item)
   (let* ((table (get-text-property 0 'multi-data item))
          (playlist-id (ht-get* table 'id)))
     (setq spot--selected-playlist-id playlist-id)
     (spot-consult-search-playlist-tracks)))
-
 
 (defun spot-action--generic-play-uri (item)
   (let* ((table (get-text-property 0 'multi-data item))
@@ -69,7 +64,6 @@
      :callback (lambda (_) (run-with-timer 2.0 nil 'spot--update-modeline-lighters))
      :data json)))
 
-
 (defun spot-action--add-track-to-playlist (item)
   (let* ((playlist (or spot--playlist-selected
                        (progn
@@ -90,7 +84,6 @@
      :url url
      :q-params (spot--base-q-params)
      :data json)))
-
 
 ;; keymaps
 (defvar-keymap embark-artist-keymap :parent embark-general-map)
@@ -113,7 +106,6 @@
 (add-to-list 'embark-keymap-alist '(current-user-playlists embark-current-user-playlists-keymap))
 (add-to-list 'embark-keymap-alist '(playlist-tracks embark-playlist-tracks-keymap))
 
-
 ;; bindings
 (general-define-key
  :keymaps '(
@@ -126,26 +118,20 @@
  "s" 'spot-action--generic-show-data
  "P" 'spot-action--generic-play-uri)
 
-
 (general-define-key
  :keymaps '(embark-track-keymap)
  "+" 'spot-action--add-track-to-playlist)
-
 
 (general-define-key
  :keymaps '(embark-album-keymap)
  "t" 'spot-action--list-album-tracks)
 
-
 (general-define-key
  :keymaps '(embark-artist-keymap)
  "t" 'spot-action--list-artist-tracks)
 
-
 (general-define-key
  :keymaps '(embark-playlist-keymap)
  "t" 'spot-action--list-playlist-tracks)
-
-
 
 (provide 'spot-embark)

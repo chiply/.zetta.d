@@ -21,11 +21,10 @@
   ;; interfering with other keybindings
   (setq evil-want-minibuffer t)
 
-
   ;; get emacs kbds in insert-mode
   (setcdr evil-insert-state-map nil)
   (define-key evil-insert-state-map (read-kbd-macro evil-toggle-key) 'evil-emacs-state)
-  (define-key evil-insert-state-map (kbd "<escape>") 'evil-force-normal-state)  
+  (define-key evil-insert-state-map (kbd "<escape>") 'evil-force-normal-state)
 
   ;; this stuff is destined for the respective
   ;; use-package calls
@@ -43,7 +42,7 @@
   (key-chord-define evil-visual-state-map "kj" 'evil-normal-state)
 
   :general
-  
+
   (
    :states '(normal visual)
    :keymaps 'override
@@ -58,8 +57,6 @@
    "C-k" (lambda () (interactive) (evil-scroll-line-up 1))
    )
   )
-
-
 
 (defalias 'use-package-handler/:evil 'use-package-handle-forms)
 (defalias 'use-package-normalize/:evil 'use-package-normalize-forms)

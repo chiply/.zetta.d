@@ -1,8 +1,7 @@
 ;;; face.el --- Configure face and frame settings -*- lexical-binding: t; -*-
 
-(add-to-list 'default-frame-alist '(fullscreen . maximized)) 
+(add-to-list 'default-frame-alist '(fullscreen . maximized))
 (setq initial-frame-alist (quote ((fullscreen . maximized))))
-
 
 ;;(defun my/set-transparency (frame)
   ;;(set-frame-parameter frame 'alpha 85))
@@ -14,8 +13,6 @@
   (interactive "nTransparency Value 0 - 100 opaque:")
   (set-frame-parameter (selected-frame) 'alpha value))
 (transparency 93)
-
-
 
 (defun zetta-theme-brushup ()
   (interactive)
@@ -39,7 +36,7 @@
 ;;:config
   ;;;;;;;;;;;;;;;; LEFT OFF - trying to get olivetti width settings
   ;;;;;;;;;;;;;;;; right, need to do this on a per mode basis if
-  ;;;;;;;;;;;;;;;; you want to override the default width - 
+  ;;;;;;;;;;;;;;;; you want to override the default width -
   ;;;;;;;;;;;;;;;; NOTE OLIVETT-BODY-WIDTH is buffer local, minimum is NOT
 ;;(defun zetta-generic-olivetti-mode ()
 ;;(interactive)
@@ -55,13 +52,6 @@
 ;;(add-hook 'web-mode-hook (lambda () (zetta-generic-olivetti-mode)))
 ;;(add-hook 'css-mode-hook (lambda () (zetta-generic-olivetti-mode)))
 ;;)
-
-
-
-
-
-
-
 
 ;; nott using for now, slows down window switchiing
 ;;(use-package pulsar
@@ -79,7 +69,6 @@
 ;;(pulsar-global-mode -11)
 ;;
 ;;)
-
 
 ;;(use-package solaire-mode
 ;;:config
@@ -115,9 +104,8 @@
 ;;:hook (
 ;;(treemacs-mode . solaire-mode)
 ;;(use-package--solaire--post-config . zetta-brushup)
-;;)  
 ;;)
-
+;;)
 
 (add-hook 'help-mode-hook (lambda () (text-scale-set -2)))
 ;;(add-hook 'shell-command-mode-hook (lambda () (text-scale-set -2)))

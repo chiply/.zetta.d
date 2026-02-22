@@ -1,7 +1,5 @@
 ;;; shell.el --- Configure shell -*- lexical-binding: t; -*-
 
-
-
 (setq read-process-output-max (* 64 1024 1024))
 (setq process-adaptive-read-buffering nil)
 ;; LEAVE THIS COMMENT HERE
@@ -31,7 +29,6 @@
                                                   zmc-async-shell-command-spinners-enable)
                                              (zetta-spinner-compile-spin)))))
   )
-
 
 (setq shell-file-name "zsh")
 (setq shell-command-switch "-c")

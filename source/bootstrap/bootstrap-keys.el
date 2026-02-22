@@ -20,18 +20,18 @@
      (eq 0 (window-parameter (selected-window) 'window-slot))
      (eq 'top (window-parameter (selected-window) 'window-side))
      ))
-  
+
   (setq which-key-popup-type 'custom)
   (defun which-key-custom-popup-max-dimensions-function (ignore)
     (cons
      (which-key--height-or-percentage-to-height
       which-key-side-window-max-height)
      (frame-width)))
-  
+
   (defun fit-horizonatally ()
     (let ((fit-window-to-buffer-horizontally t))
       (fit-window-to-buffer)))
-  
+
   (defun which-key-custom-show-popup-function (act-popup-dim)
     (let* ((alist `((window-width . fit-horizontally)
                     (window-height . fit-window-to-buffer)
@@ -41,20 +41,18 @@
                                ))
                     (slot . 0)
                     )))
-      
+
       (display-buffer-in-side-window which-key--buffer alist)
       (setq zetta-which-key-showing t)
       ;;(setq which-key-idle-delay 1000)
       (setq prefix-help-command 'which-key-C-h-dispatch)
       ))
 
-
   (defun which-key-custom-hide-popup-function ()
     (when (buffer-live-p which-key--buffer)
       (setq zetta-which-key-showing nil)
       (quit-windows-on which-key--buffer)
       ))
-
 
   (defun which-key--create-buffer-and-show
       (&optional prefix-keys from-keymap filter prefix-title)
@@ -86,8 +84,6 @@ Finally, show the buffer."
        "On prefix \"%s\" which-key took %.0f ms." prefix-desc
        (* 1000 (float-time (time-since start-time))))))
 
-
-
   (general-define-key
    :keymaps 'which-key-C-h-map
    "C-h" 'which-key-show-standard-help)
@@ -107,7 +103,6 @@ Finally, show the buffer."
    which-key-custom-hide-popup-function 'which-key-custom-hide-popup-function)
 
   (which-key-mode 1))
-
 
 (use-package meow
   :after key-chord
@@ -212,12 +207,8 @@ Finally, show the buffer."
   ;; TODO -- would this make more sense as C-x and to use it as the
   ;; launcher?  maybe but keep this around for now
   (setq meow-keypad-leader-dispatch "C-c")
-  
-  
+
   )
-
-
-
 
 (defun zetta-state-meow ()
   (interactive)
@@ -259,7 +250,6 @@ Finally, show the buffer."
 (defprefix launch-map menu-iedit-map "i")
 (defprefix launch-map menu-help-map "h")
 (defprefix launch-map menu-vc-map "g")
-
 
 ;; There are different key systems that can be used.  emacs, evil,
 ;; meow.  the issue is that evil and meow are modal editing systems

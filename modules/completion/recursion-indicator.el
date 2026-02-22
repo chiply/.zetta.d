@@ -11,6 +11,5 @@
                   (set-face-attribute 'recursion-indicator-minibuffer nil
                                       :height 0.8)))
 
-
   )
 ;;; recursion-indicator.el ends here

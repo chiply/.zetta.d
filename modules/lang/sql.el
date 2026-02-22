@@ -1,14 +1,11 @@
 ;;; sql.el --- Configure sql -*- lexical-binding: t; -*-
 
-
-
 (use-package sql
   :ensure nil
   :commands (sql-mode sql-interactive-mode sql-connect)
 
   :display
   ;;(zetta-side "^\\*sql--*" 'top)
-  
 
   :general
   (
@@ -28,7 +25,6 @@
 
   :hook (sql-mode . sqlind-minor-mode)
   )
-
 
 (use-package sqlup-mode
   ;; todo

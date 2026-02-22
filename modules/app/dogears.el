@@ -7,7 +7,7 @@
         '(
           ;; NOTHING -- eg only the manual dogears
           find-file
-          consult-buffer 
+          consult-buffer
           switch-buffer
           project-find-file
           consult-project-extra-find

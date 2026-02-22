@@ -18,7 +18,7 @@
   (setq popper-reference-buffers
         '(
           "\\*Messages\\*" "Output\\*$" "\\*Async Shell Command\\*"
-          help-mode helpful-mode dired-mode 
+          help-mode helpful-mode dired-mode
           magit-status-mode magit-process-mode
           ))
   ;; leave to display buffer alist, can set default side or other

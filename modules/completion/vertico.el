@@ -34,7 +34,6 @@
   ;; having trouble
   (add-to-list 'vertico-multiform-categories '(variable grid))
 
-
   (setq
    vertico-buffer-hide-prompt nil
    vertico-cycle t
@@ -89,12 +88,12 @@
              (string= major-mode "lisp-interaction-mode")
              (string= major-mode "lisp-mode")
              (string= major-mode "lisp-data-mode"))
-            (zetta-helpful-at-point) 
+            (zetta-helpful-at-point)
           (lsp-describe-thing-at-point-1))
         (progn (beginning-of-line) (kill-line))
         (progn (insert linetxt) (goto-char pt))
         (setq zetta-vertico-IS-help-flag nil)
-        (call-interactively 'vertico-repeat)) 
+        (call-interactively 'vertico-repeat))
       (when zetta-vertico-IS-find-flag
         (if (or
              (string= major-mode "emacs-lisp-mode")
@@ -104,7 +103,7 @@
             ;; LEFT OFF -- need to refine these functions
             ;; what if definition is in the same buffer... maybe the
             ;; way we use let will inform this
-            (evil-goto-definition-1) 
+            (evil-goto-definition-1)
           (lsp-find-definition-1))
         (zetta-vertico-IS-find)
         (progn (beginning-of-line) (kill-line))
@@ -125,7 +124,7 @@
   (:keymaps 'vertico-map
             ;; embark-select
             "C-SPC" 'embark-select
-            
+
             ;; intellisesne
             "C-S-h" 'zetta-vertico-IS-help
             "C-S-d" 'zetta-vertico-IS-find
@@ -138,7 +137,7 @@
             "s-j" 'vertico-next-group
             "s-k" 'vertico-previous-group
             ;; yanking
-            "C-y" 'yank 
+            "C-y" 'yank
             "<C-return>" 'vertico-exit-input
             ;; avy-like quick selection
             "C-'" 'vertico-quick-exit
@@ -188,7 +187,7 @@
    :keymaps zetta-modal-states-insert
    "<C-SPC>" 'zetta-vertico-IS
    )
-  
+
   :hook (
          ;; needed for vertico repeatt (and therefore the intellisense)
          (minibuffer-setup . vertico-repeat-save)

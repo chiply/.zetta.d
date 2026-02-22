@@ -17,7 +17,6 @@
      (verb . t)))
   )
 
-
 ;; by default, make inline images look like thumbnails.  If using
 ;; actual width of the image, then it takes up too much space in the
 ;; buffer
@@ -25,7 +24,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Flow / tasks
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  Super Agenda
-
 
 ;; export backends
 ;;(require 'ox-beamer)
@@ -51,7 +49,7 @@
 ;; convenient super bindinigs for organization
 (setq zetta-captured-from-win "")
 
-(general-define-key 
+(general-define-key
  :kemaps 'override
  "s-t" '(lambda () (interactive)
           (setq zetta-captured-from-win (selected-window))
@@ -72,7 +70,6 @@
 ;; for this first, so it displays in slot 2, not slot 1)
 ;;(zetta-side "^\\*org-roa*" 'right 2 0.20 0.30)
 
-
 ;;;;;;;;;;;;;;;;; Literature management
 ;;(zetta-side "bibliography.bib" 'right 2 0.30)
 
@@ -81,20 +78,17 @@
       org-ref-insert-ref-function 'org-ref-insert-ref-link
       org-ref-cite-onclick-function (lambda (_) (org-ref-citation-hydra/body)))
 
-
 (defun gpc/open-node-roam-ref-url ()
   "Open the URL in this node's ROAM_REFS property, if one exists"
   (interactive)
   (when-let ((ref-url (org-entry-get-with-inheritance "ROAM_REFS")))
     (browse-url ref-url)))
 
-
 (defun gpc/open-node-roam-ref-url-eww ()
   "Open the URL in this node's ROAM_REFS property, if one exists"
   (interactive)
   (when-let ((ref-url (org-entry-get-with-inheritance "ROAM_REFS")))
     (eww-browse-url ref-url)))
-
 
 ;;(add-hook 'org-mode-hook (lambda () (font-lock-add-keywords
 ;;nil
@@ -106,7 +100,6 @@
 
 (setq org-time-stamp-formats
       '("<%Y-%m-%d %a>" . "<%Y-%m-%d %a %H:%M:%S>"))
-
 
 (use-package ox
   :ensure nil
@@ -165,11 +158,6 @@
 
   )
 
-
-
-
-
-
 (defun org-babel-tangle--unbracketed-link (params)
   "Get a raw link to the src block at point, without brackets.
 
@@ -211,9 +199,6 @@ The PARAMS are the 3rd element of the info for the same src block."
                          (downcase heading)))
              (existing-id (org-entry-get nil "CUSTOM_ID")))
         (org-set-property "CUSTOM_ID" custom-id)))))
-
-
-
 
 (defvar my-org-treemap-temp-file "~/treemap.html") ; Firefox inside Snap can't access /tmp
 (defvar my-org-treemap-command "treemap" "Executable to generate a treemap.")

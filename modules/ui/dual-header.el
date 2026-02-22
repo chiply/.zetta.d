@@ -19,7 +19,7 @@
          (char-height-1 (+ font-size-1 0.0))
          (width-1       (* char-width-1 (window-width)))
          (height-1      (+ (* char-height-1 2) 7))
-         
+
          (char-width-2  (* font-size-2 0.88))
          (char-height-2 (+ font-size-2 0.0))
          (width-2       (* char-width-2 (window-width)))
@@ -27,7 +27,7 @@
 
          (width         (max width-1 width-2))
          (height        (max height-1 height-2))
-         
+
          (x1 (if left 0 (- width (* char-width-1 (+ (length line-1) .0)))))
          (x2 (if left 0 (- width (* char-width-2 (+ (length line-2) .0)))))
 
@@ -43,7 +43,7 @@
               :font-size font-size-1 :fill foreground-1
               :x x1 :y y1)
     (svg-text svg line-2
-              :font-family font-family-2  
+              :font-family font-family-2
               :font-size font-size-2 :fill foreground-2
               :x x2 :y y2)
     svg))
@@ -60,7 +60,7 @@
   ;;header-line-format
   '((:eval
      (mode-line-render
-      (format-mode-line 
+      (format-mode-line
        (propertize
         (make-string (window-width) 1)
         'display

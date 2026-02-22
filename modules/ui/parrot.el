@@ -50,7 +50,6 @@ ARGS is args for `magit-run-git-async'"
 Use `parrot-progress-finished' to stop."
     (zetta-animate-parrot))
 
-  
   :hook
   ((magit-status-mode . (lambda () (parrot-mode) (parrot-stop-animation)))
    (org-mode . (lambda () (parrot-mode) (parrot-stop-animation)))))

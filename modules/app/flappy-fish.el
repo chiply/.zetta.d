@@ -36,7 +36,6 @@
 
 ;;; Code:
 
-
 (defgroup fish nil
   "Scrolling Flappy Fish in the mode line."
   :group 'convenience)
@@ -174,14 +173,14 @@
   (interactive)
   (when fish--timer
     (cancel-timer fish--timer))
-  
+
   (setq fish--current-display-type (or display-type 'static))
   (setq fish--timer (run-at-time nil fish-update-period 'fish--next-frame))
-  
+
   (dolist (buf (buffer-list))
     (with-current-buffer buf
       (fish--update-display)))
-  
+
   (add-hook 'window-buffer-change-functions #'fish--update-on-buffer-change)
   (fish--update-display))
 
@@ -191,20 +190,19 @@
   (when fish--timer
     (cancel-timer fish--timer)
     (setq fish--timer nil))
-  
+
   (remove-hook 'window-buffer-change-functions #'fish--update-on-buffer-change)
-  
+
   (dolist (buf (buffer-list))
     (with-current-buffer buf
       (setq fish-mode-line-string "")))
-  
+
   (force-mode-line-update t))
 
 (add-to-list 'brushup-styles nil
              '(set-face-attribute 'fish-face nil
                                  :foreground brushup-fg-4
                                  :background brushup-bg))
-
 
 (fish-start-timer)
 

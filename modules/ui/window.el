@@ -26,7 +26,6 @@
   (interactive)
   (if (get-scroll-bar-mode) (set-scroll-bar-mode nil) (set-scroll-bar-mode 'left)))
 
-
 (general-define-key
  :keymaps 'menu-window-map
  "D" (** delete-window)
@@ -69,12 +68,10 @@
 (add-to-list 'window-persistent-parameters '(min-margins . writable))
 (add-to-list 'window-persistent-parameters '(quit-restore . writable))
 
-
 (general-define-key
  :keymaps 'menu-run-map
  "r" (** window-toggle-side-windows)
  )
-
 
 (defun zetta-async-blowup ()
   (interactive)
@@ -98,8 +95,6 @@
 (general-define-key
  :keymaps '(treemacs-mode-map)
  "C-p" 'zetta-async-blowup)
-
-
 
 (make-local-variable 'zetta-zen-disable)
 

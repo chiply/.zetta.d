@@ -52,8 +52,6 @@
   ;; tf just to avoid an error
   (add-to-list 'lsp-language-id-configuration '(terraform-mode . "terraform"))
 
-
-
   (setq lsp-terraform-server "terraform-ls")
   (setq lsp-terraform-ls-enable-show-reference t)
   (setq lsp-disabled-clients '(tfls))
@@ -64,10 +62,8 @@
 
   (setq lsp-terraform-ls-prefill-required-fields t)
 
-
   (setq lsp-sqls-server (expand-file-name "~/go/bin/sqls"))
   ;; lsp-sqls-connections set in ~/.private.el
-
 
   :config
   ;; Add ignored directories
@@ -202,15 +198,12 @@
   ;; for the lsp help buffers
   ;;(zetta-side "^\\*L: *" 'right)
 
-
-
   :hook ((python-ts-mode . (lambda ()
                              (lsp-deferred)))
          ((svelte-mode . (lambda ()
                           (lsp))))
          )
   )
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; Jumping to docs from point
 (defun zetta-jump-to-doc ()
@@ -226,7 +219,6 @@
   "Counts non side windows"
   (-filter (lambda (x) (not (zetta-side-window-p x))) (aw-window-list)))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;; Jumping to definition from point
 (defun zetta-jump-to-def ()
   (interactive)
@@ -239,7 +231,6 @@
                  ))
     )
   )
-
 
 (defun zetta-jump-to-def-vert ()
   (interactive)
@@ -284,8 +275,6 @@
     )
   )
 
-
-
 (defun zetta-jump-to-def-hor ()
   (interactive)
   (let ((buf (current-buffer)))
@@ -320,7 +309,6 @@
         (switch-to-buffer buf)
         (evil-goto-definition)))))
 
-
 (defun zetta-jump-to-def-side ()
   (interactive)
   (let ((buf (current-buffer)))
@@ -333,7 +321,6 @@
                                           (window-parameters . ((no-delete-other-windows . 1)))
                                           )))
     (evil-goto-definition)))
-
 
 (general-define-key
  :keymaps 'launch-map
@@ -406,7 +393,6 @@
                   )
                )
 
-  
   :hook
   (
    ;; NOTE imenu mode doesn't work in python, not sure why, but you

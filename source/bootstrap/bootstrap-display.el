@@ -62,7 +62,6 @@ being displayed, otherwise returns nil"
     (with-current-buffer buffer
       (string-match mode (symbol-name major-mode)))))
 
-
 (defun zetta-soda-count-windows ()
   (setq lst '())
   (while (not (member (selected-window) lst))
@@ -83,7 +82,6 @@ being displayed, otherwise returns nil"
 (setq zetta-side-display-default-width-left 0.2)
 (setq zetta-side-display-default-width-right 0.25)
 
-
 (defun zetta-side (&rest args)
   ;; delete old config
   (let ((regex (or (plist-get args :regex) (error "must supply regex")))
@@ -102,7 +100,7 @@ being displayed, otherwise returns nil"
           (equal (cdr (nth 0 (nth 1 (nth 0 elt)))) regex))
          (t nil)))
       display-buffer-alist))
-    
+
     ;; set height or width if side window
     (let ((height (cond
                    ((and size size2) size)
@@ -135,7 +133,6 @@ being displayed, otherwise returns nil"
        nil))
     ))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Soda drink, cao, and switch to buffer
 (defun zetta-soda-drink (func &optional buf-or-mode-name)
   (cond
@@ -165,13 +162,11 @@ being displayed, otherwise returns nil"
     ;; otherwise, do a buffer-based delete
     (zetta-soda-delete target)))
 
-
 (defun zetta-soda-create-and-display-messages (&optional buf-or-mode-name)
   (let ((buf (current-buffer)))
     (let ((newbuf (get-buffer-create "*Messages*")))
       (switch-to-buffer buf)
       (display-buffer newbuf))))
-
 
 (defun zetta-soda-drink-messages ()
   (interactive)

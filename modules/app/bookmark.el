@@ -18,7 +18,6 @@
   :evil
   (evil-set-initial-state 'bookmark-edit-annotation-mode 'normal)
 
-
   :general
   (
    :keymaps 'override

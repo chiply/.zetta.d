@@ -1,8 +1,6 @@
 ;;; -*- lexical-binding: t; -*-
 
-
 (require 'ht)
-
 
 (fset 'alist-get-chain 'alist-get)
 (defun alist-get-chain (symbols alist)
@@ -11,7 +9,6 @@
       (alist-get-chain (cdr symbols)
                        (assoc (car symbols) alist))
     (cdr alist)))
-
 
 (defun spot--alist-to-ht (alist)
   "Convert a JSON object to a hash table, handling nested structures."
@@ -29,10 +26,9 @@
    ;; Return primitive values as-is
    (t alist)))
 
-
 (defun spot--propertize-items (tables)
   (-map
-   (lambda (table) 
+   (lambda (table)
      (propertize
       (ht-get table 'name)
       ;; NOTE will be overridden anyway, could make this
@@ -43,15 +39,10 @@
       'multi-data table))
    tables))
 
-
 (defun spot--type-equals (cand type)
   (string= (ht-get (get-text-property 0 'multi-data cand) 'type) type))
-
 
 (defun spot--filter (candidates type)
   (-filter (lambda (cand) (spot--type-equals cand type)) candidates))
 
-
-
 (provide 'spot-util)
-

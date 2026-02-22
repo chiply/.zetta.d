@@ -9,5 +9,5 @@
   ;; ensure brushup styling is applied after theme loads
   (when (fboundp 'zetta-brushup)
     (zetta-brushup)))
-  
+
 ;;; ef-themes.el ends here

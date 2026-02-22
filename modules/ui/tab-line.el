@@ -30,21 +30,17 @@
     (and
      ;;(boundp 'projectile-mode)
      (cdr (project-current nil))
-     (or ;; need both conditions as they don't all add to 
+     (or ;; need both conditions as they don't all add to
       (member buffer (project-buffers (project-current nil default-directory)))
       (string-match
        ;; remove trailing / from project root
        (substring (project-root (project-current nil default-directory)) 0 -1)
        (with-current-buffer buffer default-directory)))))
 
-
   ;; CONDITIONS (for use in zetta-project-mode-buffers)
   (setq is-grep-or-occur '(is-grep is-occur))
   (setq is-magit-or-helpful '(is-magit is-helpful))
   (setq is-terminal-application '(is-terminal-application))
-
-
-
 
   ;; HELPERS
   (defun zetta-tab-line-test-buffer (buffer conditions)
@@ -93,7 +89,6 @@
       (set-window-parameter (selected-window) 'zetta-tab-line-scope
                             (intern (completing-read "Scope: " scopes)))))
 
-
   (setq tab-line-switch-cycling t tab-line-close-button-show t)
   (setq tab-line-exclude-modes '(minibuffer-mode minibuffer-inactive-mode))
 
@@ -126,10 +121,6 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
                    (ignore-errors (delete-window window)))))))
       (force-mode-line-update)))
 
-
-
-
-
   (defun zetta-tab-line-close-tab ()
     (interactive)
     (let ((closed-tabs (window-parameter (selected-window) 'closed-tabs)))
@@ -138,7 +129,6 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
        'closed-tabs
        (append closed-tabs (list (current-buffer))))
       (bury-buffer)))
-
 
   ;; so this configuration really should look like a list of groups,
   ;; with each group defined by a predicate
@@ -231,8 +221,6 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
                      bufnm)
                    'face '(:height 1.0)))))
 
-
-
   (setq tab-line-tab-name-function 'zetta-tab-line-tab-name-buffer)
   ;;(setq tab-line-tabs-function 'zetta-project-mode-buffers)
 
@@ -261,14 +249,13 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
       (set-face-attribute 'tab-line nil :box nil :inherit nil :background brushup-bg :foreground brushup-bg-3 :overline nil)
       ))
 
-
   :general
   (
    :keymaps 'override
    "C-<tab>" 'tab-line-switch-to-next-tab
    "C-S-<tab>" 'tab-line-switch-to-prev-tab
    )
-  
+
   ;; NOTE needs to be same as tab-line-tabs-function
   (
    :states '(normal visual)

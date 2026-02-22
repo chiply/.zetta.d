@@ -8,7 +8,6 @@
   (setq eww-bookmarks-directory (expand-file-name "data/eww" user-emacs-directory))
   (setq shr-max-image-proportion 1.0) ; Shrink images to 50% of their original size
 
-
   (setq shr-inhibit-images nil)
   (setq shr-folding-mode t)
 
@@ -48,7 +47,7 @@
   ;; This is how to set image settings conditionally per url
   (defun my-eww-inhibit-images-advice (orig-fun url &rest args)
     "Set shr-inhibit-images based on URL before calling eww."
-    (setq shr-inhibit-images 
+    (setq shr-inhibit-images
           (cond
            ((string-match-p "reddit\\.com\\|twitter\\.com\\|xkcd\\.com\\|github\\.com\\|wikipedia\\.org" url) nil)
            (t t)))

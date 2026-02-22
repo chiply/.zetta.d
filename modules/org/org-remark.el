@@ -12,7 +12,7 @@
 (use-package org-remark
   :demand t
   :after org
-  
+
   :config
   (require 'org-remark-global-tracking)
   (org-remark-global-tracking-mode +1)
@@ -111,7 +111,6 @@
   (defun org-remark-elfeed-highlight-link-to-source (filename _point)
     (when (equal major-mode 'elfeed-show-mode)
       (org-store-link nil)))
-
 
   ;; NOTE to appease logseq
   (defun my-org-remark-sanitize-notes-file-name (filename)
@@ -216,7 +215,7 @@
                     ((= (mod day 10) 3) "rd")
                     (t "th")))
            (month-year (format-time-string "%b, %Y"))
-           (date (format "%s %d%s, %s" 
+           (date (format "%s %d%s, %s"
                          (format-time-string "%b")
                          day
                          suffix

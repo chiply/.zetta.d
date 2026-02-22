@@ -5,7 +5,6 @@
 (require 'spot-util)
 (require 'spot-var)
 
-
 ;; Mutex and cache
 (defvar spot--mutex (make-mutex)
   "A mutex to ensure that only one search request is made at a time.")
@@ -36,13 +35,11 @@
         (list query (delq nil args)))
     (list input nil)))
 
-
 (defun spot--transform-alist-to-q-params (alist)
   "Transform an alist into a query string for URL parameters."
   (mapconcat
    'identity
    (-map (lambda (x) (concat "&" (car x) "=" (cdr x))) (car alist))))
-
 
 (defun spot--search-items (input)
   "Search for items on Spotify based on the input."
@@ -64,7 +61,6 @@
                  :parse-json t)))
     (spot--alist-to-ht alist)))
 
-
 (defun spot--union-search-items (table)
   (vconcat
    (when (ht-get* table 'albums) (ht-get* table 'albums 'items))
@@ -75,7 +71,6 @@
    (when (ht-get* table 'episodes) (ht-get* table 'episodes 'items))
    (when (ht-get* table 'audiobooks) (ht-get* table 'audiobooks 'items))))
 
-
 (defun spot--set-search-candidates (candidates)
   (setq spot--candidates-album (spot--filter candidates "album"))
   (setq spot--candidates-artist (spot--filter candidates "artist"))
@@ -84,7 +79,6 @@
   (setq spot--candidates-show (spot--filter candidates "show"))
   (setq spot--candidates-episode (spot--filter candidates "episode"))
   (setq spot--candidates-audiobook (spot--filter candidates "audiobook")))
-
 
 ;; Cached request
 (defun spot--search-cached (query cache)
@@ -96,11 +90,9 @@
   (setq search-results (ht-get cache query))
   (spot--set-search-candidates search-results))
 
-
 ;; Locked request
 (defun spot--search-cached-and-locked (query mutex cache)
   (with-mutex mutex
     (spot--search-cached query cache)))
-
 
 (provide 'spot-search)

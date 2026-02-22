@@ -12,6 +12,6 @@
    :keymaps '(sh-mode-map)
    "C-e" 'er/expand-region
    )
-  
+
   )
 ;;; sh-script.el ends here

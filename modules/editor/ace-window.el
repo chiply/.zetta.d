@@ -39,7 +39,7 @@
           "*Calc Trail*" " *LV*"
           )
         )
-  
+
   :general
   (
    :keymaps 'launch-map

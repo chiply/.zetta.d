@@ -71,7 +71,6 @@
 ;; autoformatting
 (use-package blacken)
 
-
 ;; not the greatest, but it's one of the better solutions that
 ;; actually supports type hinting
 (use-package numpydoc

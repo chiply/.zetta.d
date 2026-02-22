@@ -3,7 +3,6 @@
 (require 'ht)
 (require 'marginalia)
 
-
 ;; album
 (defun annotate-album (album)
   (concat
@@ -16,7 +15,6 @@
       ,(number-to-string (ht-get* (get-text-property 0 'multi-data album) 'total_tracks)))
     " || ")))
 
-
 ;; artist
 (defun annotate-artist (artist)
   (concat
@@ -28,11 +26,9 @@
       ,(number-to-string (ht-get* (get-text-property 0 'multi-data artist) 'followers 'total)))
     " || ")))
 
-
 ;; track
 (defun round-to-two-decimals (num)
   (/ (round (* num 100)) 100.0))
-
 
 (defun annotate-track (track)
   (concat
@@ -52,7 +48,6 @@
       ,(ht-get* (get-text-property 0 'multi-data track) 'album 'release_date))
     " || ")))
 
-
 ;; playlist
 (defun annotate-playlist (playlist)
   (concat
@@ -62,7 +57,6 @@
     `(,(ht-get* (get-text-property 0 'multi-data playlist) 'name)
       ,(number-to-string (ht-get* (get-text-property 0 'multi-data playlist) 'tracks 'total)))
     " || ")))
-
 
 ;; show
 (defun annotate-show (show)
@@ -76,7 +70,6 @@
       ,(number-to-string (ht-get* (get-text-property 0 'multi-data show) 'total_episodes))
       ,(ht-get* (get-text-property 0 'multi-data show) 'description))
     " || ")))
-
 
 ;; episode
 (defun annotate-episode (episode)
@@ -93,7 +86,6 @@
                            60000.0))))
     " || ")))
 
-
 ;; audiobook
 (defun annotate-audiobook (audiobook)
   (concat
@@ -107,7 +99,6 @@
       ,(string-replace "\n" " " (ht-get* (get-text-property 0 'multi-data audiobook) 'description)))
     " || ")))
 
-
 ;; register
 (add-to-list 'marginalia-annotator-registry '(album annotate-album))
 (add-to-list 'marginalia-annotator-registry '(artist annotate-artist))
@@ -116,6 +107,5 @@
 (add-to-list 'marginalia-annotator-registry '(show annotate-show))
 (add-to-list 'marginalia-annotator-registry '(episode annotate-episode))
 (add-to-list 'marginalia-annotator-registry '(audiobook annotate-audiobook))
-
 
 (provide 'spot-marginalia)

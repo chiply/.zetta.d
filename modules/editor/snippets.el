@@ -4,7 +4,6 @@
 ;;                                  yasnippet                                 ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-
 (use-package yasnippet
   :hook (elpaca-after-init . yas-global-mode)
 
@@ -22,8 +21,6 @@
           ,(format "%ssource/snippets/snippets/personal" user-emacs-directory)
           )
         )
-
-
 
   (defun zetta-snippet-file-displayed-p ()
     (interactive)
@@ -71,7 +68,7 @@
   ;; got from
   ;; https://emacs.stackexchange.com/questions/61108/make-tangle-dont-add-a-newline-at-the-end-of-the-file
   (defun zetta-zap-newline-at-eob ()
-    (let ((make-backup-files nil)) 
+    (let ((make-backup-files nil))
       (message "running zetta-zap-newline-at-eob")
       (goto-char (point-max))
       (when (equal (char-before) ?\n)
@@ -111,7 +108,7 @@
           (setq quit-flag nil)
           )
         )
-      ) 
+      )
     )
 
   :config
@@ -134,7 +131,6 @@
 
   :hook (snippet-mode . (lambda () (text-scale-set -2))))
 
-
 (use-package yasnippet-snippets)
 
 ;; not useful
@@ -145,13 +141,11 @@
 
 ;; numpydoc configured in python.el
 
-
 ;; excellent for discoverability.  like autocompletion, but at the top
 ;; level for all snippets a really great demo workflow is to open up a
 ;; buffer in an unfamiliar proigramming language and ismply search for
 ;; 'function', which will give you the syntax for a function.
 (use-package consult-yasnippet)
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                                   Tempel                                   ;

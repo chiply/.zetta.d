@@ -47,8 +47,6 @@ for quitting, and s-x for hide-showing the hint."
     (push name hydra-registry))
   (zetta-hydra-init "hydra-window")
 
-
-
   :config
   ;; redefining macro from hydra.el
   (defmacro defhydra+ (name body &optional docstring &rest heads)
@@ -67,8 +65,6 @@ Arguments are same as of `defhydra'."
           :key #'car
           :test #'equal)))
 
-
-
   :brushup
   (add-to-list 'brushup-styles
                '(progn
@@ -77,7 +73,6 @@ Arguments are same as of `defhydra'."
                                       :underline t)
                   (set-face-attribute 'hydra-face-blue nil
                                       :foreground brushup-fg-3)))
-  
 
   ;;:general
   ;;(
@@ -100,7 +95,6 @@ Arguments are same as of `defhydra'."
 
   :hook (use-package--hydra--post-config . zetta-brushup)
   )
-
 
 (defalias 'use-package-handler/:hydra 'use-package-handle-forms)
 (defalias 'use-package-normalize/:hydra 'use-package-normalize-forms)

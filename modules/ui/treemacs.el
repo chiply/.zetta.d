@@ -13,7 +13,6 @@
   ;;(expand-file-name ".data/treemacs/.cache/treemacs-persist"
   ;;user-emacs-directory))
 
-  
   :config
   ;; TODO factor out
   ;; NOTE tried with all the icons -- issue is that I use the svg
@@ -33,8 +32,6 @@
   ;; This is a hacky config because I'm targeting the goal of having
   ;; no icons, but I'm using a theme that has icons...
   (treemacs-load-theme "Idea")
-
-
 
   (treemacs-resize-icons
    ;; NOTE setting to nil allows to be arbitrarly small, otherwise

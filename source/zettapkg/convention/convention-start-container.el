@@ -7,13 +7,10 @@
 (defvar convention-container-config-dir ":/workdir/.config"
   "A string representing the config directory on the convention container")
 
-
 (defun convention-user-input-dir (dir-type)
   "Returns a string representing a user selected
    local DIR-TYPE directory"
   (ido-read-directory-name (concat "Local" " " dir-type " " "directory: ") ""))
-
-
 
 (defun convention-start-container-format-code-mount-frag ()
   "Returns a string representing the mount fragment for a local code directory"
@@ -39,12 +36,11 @@
       (concat "-p "
               (completing-read "Local port (the port on your machine): "
                                    ())
-              ":" 
+              ":"
               (completing-read "Remote port (the port in the container): "
                                    ())
               " ")
     ""))
-
 
 (defun convention-start-container-format-name-frag (image)
   "Returns a string representing a name fragment for a container"
@@ -60,22 +56,19 @@
              (concat "Name the container with " (string-trim name-prefix))
              ()))))
 
-
 (defun convention-prompt-for-db-password ()
   "Returns a string representing the password for a database
    specified by user input"
   (completing-read "Enter the database password: " ()))
 
-
 (defun convention-start-container-format-extra-frag (user-image-name)
   "Returns a string representing extra fragments for the docker start command"
   (let ((password (if (convention-is-sql user-image-name) (convention-prompt-for-db-password) (message "")))
-        (extra-frags (convention-query-lang-info user-image-name "extra-frags"))) 
+        (extra-frags (convention-query-lang-info user-image-name "extra-frags")))
     (if (convention-is-sql user-image-name)
         (s-format extra-frags
                   'aget `(("password" . ,password)))
-      ""))) 
-
+      "")))
 
 (defun convention-start-container-format-db-cmd (user-image-name)
   "Returns a string representing the command used to start a database"
@@ -83,14 +76,13 @@
       (convention-query-lang-info user-image-name "start-database-cmd")
     ""))
 
-
 (defun convention-format-start-container-cmd (&optional image-name)
   "Returns a string representing the docker start command.  The specifics in this
    command are determined in part by the the USER-IMAGE-NAME name"
   (let* ((user-image-name (or image-name (convention-prompt-for-image)))
          (name-frag (convention-start-container-format-name-frag user-image-name))
          (code-mount-frag (convention-start-container-format-code-mount-frag))
-         (data-mount-frag (convention-start-container-format-data-mount-frag)) 
+         (data-mount-frag (convention-start-container-format-data-mount-frag))
          (config-mount-frag (convention-start-container-format-config-mount-frag))
          (port-map-frag (convention-start-container-format-port-map-frag))
          (extra-frag (convention-start-container-format-extra-frag user-image-name))
@@ -105,15 +97,14 @@
                       ("user-image-name" . ,user-image-name)
                       ("db-cmd" . ,db-cmd)))))
 
-
 (defun convention-start-container ()
   "Starts a container"
-  (interactive)  
+  (interactive)
   (let ((cmd (convention-format-start-container-cmd)))
     (shell-command cmd)))
 
 (defun convention-start-container-from-docker-image-mode ()
-  (interactive)  
+  (interactive)
   (let ((cmd (convention-format-start-container-cmd (elt (tabulated-list-get-entry) 0))))
     (shell-command cmd)))
 

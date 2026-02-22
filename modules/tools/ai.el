@@ -20,7 +20,7 @@
   ;;;; face
   ;;(set-face-attribute 'copilot-overlay-face nil :foreground brushup-bg-5 :inherit nil)
   ;;(setq copilot-indent-offset-warning-disable t)
- ;; 
+ ;;
   ;;:general (:keymaps '(copilot-completion-map)
                      ;;"C-<return>" 'copilot-accept-completion
                      ;;"C-S-f" 'copilot-accept-completion-by-word
@@ -142,7 +142,6 @@
     (gptel-mcp-register-tool)
     (gptel-mcp-use-tool)))
 
-
 (use-package gptel
   :demand t
   :after mcp
@@ -157,7 +156,6 @@
   (setq gptel-include-reasoning t)
   (setq gptel-default-mode 'org-mode)
   (setq gptel-expert-commands t)
-
 
   (add-to-list
    'gptel-tools
@@ -203,7 +201,6 @@
   (gptel-prompts-update)
   (gptel-prompts-add-update-watchers))
 
-
 (use-package gptel-quick
   :ensure (gptel-quick :type git :host github :repo "karthink/gptel-quick")
   :demand t
@@ -211,7 +208,6 @@
   :config
   (keymap-set embark-general-map "?" #'gptel-quick)
   (setq gptel-quick-timeout 10000))
-
 
 (use-package elysium)
 

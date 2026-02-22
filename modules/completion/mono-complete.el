@@ -13,7 +13,7 @@
 ;;                   (set-face-attribute 'mono-complete-preview-face nil
 ;;                                       :background brushup-bg-1
 ;;                                       :foreground brushup-bg-5)))
-  
+
 ;;   :hook ((prog-mode) . mono-complete-mode)
 ;;   )
 ;;; mono-complete.el ends here

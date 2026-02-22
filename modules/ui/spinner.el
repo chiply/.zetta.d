@@ -46,7 +46,7 @@
 
   ;; Starting commenting out spinners that cause issues with the mode
   ;; or headerline
-  ;; 
+  ;;
   ;; copied from https://github.com/FGRibreau/spinners/blob/master/src/utils/spinners_data.rs
 
   ;; ideas for spinners -- fruit and veg, kind of like slot machine vibes
@@ -106,7 +106,7 @@
           ;;;;(Hearts . ("💛 " "💙 " "💜 " "💚 " "❤️ "))
           ;;(Clock . ("🕛 " "🕐 " "🕑 " "🕒 " "🕓 " "🕔 " "🕕 " "🕖 " "🕗 " "🕘 " "🕙 " "🕚 "))
           ;;(Earth . ("🌍 " "🌎 " "🌏 "))
-         ;; 
+         ;;
           ;;(Moon . ("🌑 " "🌒 " "🌓 " "🌔 " "🌕 " "🌖 " "🌗 " "🌘 "))
           ;;(Runner . ("🚶 " "🏃 "))
           ;;(Pong . ("▐⠂       ▌" "▐⠈       ▌" "▐ ⠂      ▌" "▐ ⠠      ▌"
@@ -160,7 +160,6 @@
                         ;;;;"▰▰▰▰▰▱▱" "▰▰▰▰▰▰▱" "▰▰▰▰▰▰▰" "▰▱▱▱▱▱▱"))
           ))
 
-
   (defun zetta-spinner-compile-spin (&optional _)
     (let* ((spinner (nth (random (length spinner-types)) spinner-types))
            (spinner-type-name (car spinner))
@@ -180,7 +179,6 @@
        ;; commands
        ;;1
        )))
-
 
   (add-hook 'compilation-start-hook 'zetta-spinner-compile-spin)
 

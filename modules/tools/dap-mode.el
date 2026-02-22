@@ -40,8 +40,6 @@
                 env-vars)
         )))
 
-
-  
   ;; TEMPLATES
   (defun dap-debug-python-pytest-at-point ()
     (interactive)

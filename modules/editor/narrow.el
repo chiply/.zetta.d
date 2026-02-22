@@ -15,10 +15,6 @@ of tap), then toggle the closest fold"
     (narrow-to-region beg-thing end-thing)
     ))
 
-
-
-
-
 (defun zetta-narrow-or-widen (p)
   ;; note that narrowing adds artifical space to beginning and end,
   ;; it's practical to be aware of the effects of this
@@ -75,8 +71,6 @@ of tap), then toggle the closest fold"
       )
     ))
   )
-
-
 
 (general-define-key
  :keymaps '(override)

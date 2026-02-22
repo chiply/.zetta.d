@@ -289,6 +289,5 @@
    "term/foreman_conf.el"
    "term/vterm.el"))
 
-
 (provide 'init-data)
 ;;; init-data.el ends here

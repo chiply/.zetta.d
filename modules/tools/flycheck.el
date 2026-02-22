@@ -15,7 +15,6 @@
   (add-to-list 'flycheck-checkers 'org-aspell-dynamic)
   )
 
-
 (use-package flycheck
   :config
   (setq flycheck-checker-error-threshold 5000)
@@ -55,13 +54,13 @@
            ;;:foreground "#453246"
            ;;:height 0.8
            ;;:weight normal)))
-    ;; 
+    ;;
      ;;'(flycheck-overlay-warning
        ;;((t :background "#DCA561"
            ;;:foreground "#331100"
            ;;:height 0.8
            ;;:weight normal)))
-    ;; 
+    ;;
      ;;'(flycheck-overlay-info
        ;;((t :background "#a8e3a9"
            ;;:foreground "#374243"
@@ -72,7 +71,6 @@
     ;;;;(defcustom flycheck-overlay-error-icon " " "Icon used for errors.")
     ;;)
 
-  
   ;;:brushup
   ;;(add-to-list 'brushup-styles
   ;;'(progn

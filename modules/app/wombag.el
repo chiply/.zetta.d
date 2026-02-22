@@ -32,8 +32,6 @@
      :follow #'wombag-link-open
      :store #'wombag-link-store-link))
 
-
-
   (general-define-key
    :keymaps 'wombag-search-mode-map
    "<return>" #'wombag-search-show-entry)

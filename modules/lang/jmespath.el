@@ -4,9 +4,7 @@
   python-ts-mode "JMESPath"
   "Major mode for hypertext.")
 
-
 (add-to-list 'auto-mode-alist '("\\.jp\\'" . jmespath-mode))
-
 
 (defun jmespath-query ()
   (interactive)

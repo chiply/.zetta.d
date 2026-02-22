@@ -12,7 +12,7 @@
           ("vue" . (ac-source-words-in-buffer ac-source-abbrev))
           ("html" . (ac-source-words-in-buffer ac-source-abbrev)))
         web-mode-enable-auto-closing t
-        web-mode-enable-auto-quoting t) 
+        web-mode-enable-auto-quoting t)
 
   :brushup
   (add-to-list 'brushup-styles

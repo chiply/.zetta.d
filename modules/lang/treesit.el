@@ -1,6 +1,5 @@
 ;;; treesit.el --- Configure treesit -*- lexical-binding: t; -*-
 
-
 ;; `M-x combobulate' (default: `C-c o o') to start using Combobulate
 (use-package treesit
   :ensure nil ;; its builtin to emacs

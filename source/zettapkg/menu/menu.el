@@ -5,7 +5,6 @@
 ;; TODO nested menus go back to the previous menu?  this could be a
 ;; complex feature....
 
-
 ;; NOTE interesting exercise in completely alternative implementation
 ;; drawback to this approach is not being able to 'escape' out of a
 ;; menu by pressing a key outside of it although there could be a way
@@ -24,7 +23,6 @@
 ;;(which-key-reload-key-sequence prefix))))
 ;;(general-define-key :keymaps 'override "C-c o m" (repeatable foo) "C-c o M" (repeatable bar))
 
-
 ;; NOTE on using repeat map we can see repeat mode does a similar
 ;; thing to menu -- once the repeat mode is active, the prefix is
 ;; tossed out... this contributes to similar issues with which-key:
@@ -34,7 +32,6 @@
 ;;(defun zfun2 () (interactive) (message "two"))
 ;;(defvar-keymap zetta-repeat-map :repeat t "1" 'zfun1 "2" 'zfun2)
 ;;(general-define-key :keymaps 'override "C-c @" zetta-repeat-map)
-
 
 ;; TODO document decision to not create hydra/transient helpers:
 ;; basically we already have which-key and completing read interface;
@@ -93,7 +90,6 @@
 ;; that's actually a binding in the keymap which nullified C-h (see
 ;; docs)... really need a different keymap for the versatile-C-h
 
-
 ;; TODO which-key issue, when calling which key from menu, can't use
 ;; C-h to dispatch which-key help (scroll, undo key etc...)
 
@@ -108,7 +104,7 @@
 ;; note that with my current config, which-key-undo isn't actually
 ;; working itself... not sure what's going on.  Also undo brings to
 ;; top level unconditionally, might be something to do with resetting
-;; the transient map... TODO 
+;; the transient map... TODO
 
 ;; TODO really need to strip back which key config and start
 ;; over... see if I can get undo key and other behavior
@@ -120,7 +116,6 @@
 ;; DONE which key isn't working in versatile-C-h, need to figure out
 ;; (it doesn't seem to activate the keymap). solved by adding to the
 ;; which key help function `(when km (set-transient-map km))`
-
 
 ;; DONE versatile-c-h which-key toggle is malfunctioning, especially
 ;; when quitting with C-g... maybe unwind protext would help?  unwind
@@ -185,7 +180,6 @@
 
 ;; CANCELLED add embark key prompter helper:
 ;; https://github.com/oantolin/embark/wiki/Additional-Actions#use-embark-like-a-leader-key
-
 
 (defvar-keymap menu--active-km)
 (defvar menu--indicator nil)
@@ -263,8 +257,6 @@ function weirdly leaves the map message in the echo area, not sure why")
       )
     ))
 
-
-
 (defun menu-prefix-help-command-embark (&optional km)
   (interactive)
   (if menu--embark-help-toggle
@@ -274,7 +266,6 @@ function weirdly leaves the map message in the echo area, not sure why")
     (progn
       (setq menu--embark-help-toggle t)
       (embark-bindings-in-keymap (or km menu--active-km)))))
-
 
 ;; Menu code starts here
 (defun menu-set-transient-map--on-exit ()
@@ -290,11 +281,9 @@ function weirdly leaves the map message in the echo area, not sure why")
   ;; (clear-transient-map): (quit)`
   (let ((which-key-inhibit t)) (which-key--hide-popup-ignore-command)))
 
-
 (defun menu-get-child-map (km)
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map km) map))
-
 
 (defun menu-set-transient-map (km)
   ;; NOTE subtle distinction between set-transient-map's on-exit
@@ -308,7 +297,6 @@ function weirdly leaves the map message in the echo area, not sure why")
    #'menu-set-transient-map--on-exit
    menu-set-transient-map-message))
 
-
 (defun menu-define-quitter-keys (km exit-function)
   (define-key km [remap keyboard-quit]
               (lambda () (interactive) (funcall exit-function)))
@@ -316,7 +304,6 @@ function weirdly leaves the map message in the echo area, not sure why")
               (lambda () (interactive) (funcall exit-function)))
   (define-key km [remap minibuffer-keyboard-quit]
               (lambda () (interactive) (funcall exit-function))))
-
 
 (defun menu-define-helpers (km)
   "Note these need to be called without arguments, they effectively need to
@@ -332,7 +319,6 @@ overriding bindings are set"
   ;; TODO doesn't work
   (define-key km (kbd "M-S-h") 'describe-prefix-bindings))
 
-
 ;; Workhorse function
 (defun menu (km)
   (let* ((transient-km (menu-get-child-map km))
@@ -345,7 +331,6 @@ overriding bindings are set"
     (menu-define-quitter-keys transient-km exit-function)
     (force-mode-line-update)))
 
-
 ;; Hooks
 (defun menu-suspend-transient-map ()
   (when menu--active-km
@@ -354,16 +339,13 @@ overriding bindings are set"
     ;; that's okay, just noting here
     (setq overriding-terminal-local-map nil)))
 
-
 (defun menu-restore-transient-map ()
   (setq menu--embark-help-toggle nil)
   (when (keymapp menu--minibuffer-km)
     (menu menu--minibuffer-km)))
 
-
 (add-hook 'minibuffer-setup-hook 'menu-suspend-transient-map)
 (add-hook 'minibuffer-exit-hook 'menu-restore-transient-map)
-
 
 ;; Macro
 (defmacro defmenu (function-name km-name)
@@ -372,7 +354,6 @@ overriding bindings are set"
      ;; TODO set variable for current keymap name for use in the
      ;; modeline and force-mode-line-update
      (defun ,function-name () (interactive) (menu ,km-name))))
-
 
 ;; Enhanced help
 (defun versatile-C-h ()
@@ -395,7 +376,7 @@ interface and access to on-the-fly menus)"
           ((eq key ?\M-h) (menu km))
           ;;((eq key ?\M-\S-h) (describe-prefix-bindings)) ;; TODO invalid seq
           (t (message "Invalid key"))))
-  
+
   )
 
 ;; TODO delete, this is here to test versatile-C-h
@@ -406,4 +387,3 @@ interface and access to on-the-fly menus)"
  )
 
 (provide 'menu)
-

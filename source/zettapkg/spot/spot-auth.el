@@ -7,7 +7,6 @@
 (require 'spot-var)
 (require 'spot-generic-query)
 
-
 (defun spot-authorize ()
   "Obtain access_ and refresh_ tokens for user account."
   (interactive)
@@ -30,7 +29,6 @@
                     ("Content-Length" . "0")
                     ("Authorization" . ,(concat "Basic " spot-b64-id-secret)))))
 
-
 (defun spot-refresh ()
   "Obtain access_ and refresh_ tokens for user account."
   (interactive)
@@ -47,7 +45,5 @@
    :extra-headers `(("Content-Type" . "application/x-www-form-urlencoded")
                     ("Content-Length" . "0")
                     ("Authorization" . ,(concat "Basic " spot-b64-id-secret)))))
-
-
 
 (provide 'spot-auth)

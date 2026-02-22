@@ -22,14 +22,13 @@
      ((string-prefix-p "!" pattern)
       `(orderless-without-literal . ,(substring pattern 1)))))
 
-
   ;; NOTE important for things like search candidates with whitespace
   ;; or annotations with whitespace -- note that if the default " " is
   ;; used, it's more difficult to match patterns that contain
   ;; spaces. "," is safe as it is rarely if ever used in search
   ;; strings
   (setq orderless-component-separator ",")
-  ;; orderless config 
+  ;; orderless config
   (setq orderless-matching-styles '(orderless-regexp)
         orderless-style-dispatchers '(my/orderless-dispatcher-initialism
                                       flex-if-twiddle

@@ -56,7 +56,6 @@
           (t (when (fboundp 'breadcrumb-imenu-crumbs) (breadcrumb-imenu-crumbs)))
           ))))
 
-
 ;; explain the syntax, why is (:eval) being used
 (setq default-line-align-left
       '(
@@ -87,7 +86,7 @@
                  (all-the-icons-icon-for-mode 'copilot-mode)))
         (:eval (when (zetta-side-window-p (selected-window)) " {S} "))
         " "
-        
+
         (:eval (let ((result (shell-command-to-string
                               "git rev-parse --is-inside-work-tree")))
                  (when (and result (string= result "true\n"))
@@ -145,16 +144,13 @@
         (:eval repeat-echo-mode-line-string)
         (:eval (when (eq major-mode 'magit-status-mode) (nyan-create)))))
 
-
 (setq default-line-align-middle '(""))
 (setq default-line-align-right '(""))
-
 
 (setq anzu-cons-mode-line-p nil)
 
 ;;(setq-default mode-line-format (zetta-get-line-format default-line-align-left "" ""))
 ;;(setq-default header-line-format (zetta-get-line-format default-line-align-left-devel-1 "" "" ))
-
 
 ;; for apps that strangely don't take the defaults
 (add-hook 'treemacs-mode-hook

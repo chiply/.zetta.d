@@ -6,8 +6,6 @@
 (require 'spot-var)
 (require 'spot-generic-query)
 
-
-
 (defun spot-add-current-track-to-playlist ()
   (interactive)
   (setq spot--playlist-selected nil)
@@ -20,7 +18,6 @@
         (spot-action--add-track-to-playlist track-uri)
       (message "No track currently playing.")))
   (setq spot--playlist-selected nil))
-
 
 (defun spot--player-action (action)
   (spot-request-async
@@ -37,13 +34,10 @@
                (lambda (_) (run-with-timer 2.0 nil 'spot--update-modeline-lighters)))
    :extra-headers `(("Content-Length" . "0"))))
 
-
 ;; commands
 (defun spot-player-play () (interactive) (spot--player-action "play"))
 (defun spot-player-pause () (interactive) (spot--player-action "pause"))
 (defun spot-player-next () (interactive) (spot--player-action "next"))
 (defun spot-player-previous () (interactive) (spot--player-action "previous"))
-
-
 
 (provide 'spot-generic-action)

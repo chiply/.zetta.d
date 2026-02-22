@@ -52,7 +52,7 @@
   (add-to-list 'corfu--frame-parameters '(alpha . (75 . 75)))
 
   :brushup
-  
+
   (add-to-list 'brushup-styles
                '(set-face-attribute 'corfu-default nil
                                     :foreground brushup-fg

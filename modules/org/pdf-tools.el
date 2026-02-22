@@ -5,7 +5,7 @@
 ;; also requires lots of patching to simply make annotations
 ;; work. although org-noter-pdf tools offers a buffer->pdf sync
 ;; option, it is buggy and also append only, so creates redundant
-;; garbage in the PDF's native annotations.  
+;; garbage in the PDF's native annotations.
 
 ;; key understanding is that annotations should be PDF native as so
 ;; they can be rendered on an iPad (which is where I do most of my
@@ -30,7 +30,7 @@
    ;;;; (extract-pdf-annotations "~/Downloads/patterns.pdf" "~/Downloads/patterns.txt")
 
 ;; actually, can use org-noter's skeleton function, it contains something that uses pdf-get-annots, would just need to customize this and create a bulk function out of it...  So can use interactively while in emacs to only pull annotations for the first time, then can run in bulk to refresh!  could look into making this part of a pdf save hook or something.
-;;.  
+;;.
 
 (use-package pdf-tools
   :init

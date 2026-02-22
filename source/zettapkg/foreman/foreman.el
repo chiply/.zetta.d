@@ -23,7 +23,6 @@ by TRAMP when inside of a remote buffer"
       (+ 1 (recursive-count regex string (match-end 0)))
     0))
 
-
 (defun 4mn-get-tramp-remote-part ()
   (interactive)
   (if (< 0 (recursive-count ":" default-directory 0))
@@ -85,8 +84,6 @@ by TRAMP when inside of a remote buffer"
     )
   )
 
-
-
 ;; Wrapper
 (defun 4mn-get-wrapper (nm)
   "Return nm's file content."
@@ -114,7 +111,6 @@ by TRAMP when inside of a remote buffer"
 ;;      "_"
 ;;      (symbol-name major-mode))))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Initialization
 (setq 4mn-conf (ht-create))
 
@@ -127,8 +123,6 @@ by TRAMP when inside of a remote buffer"
    ((not (buffer-file-name))
     (concat "mode:" (prin1-to-string major-mode) "___" (buffer-name)))
    ))
-
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; API to 4mn controls
 ;; get
@@ -145,8 +139,6 @@ by TRAMP when inside of a remote buffer"
   (let ((key (4mn-get-key))
         (mode (symbol-name major-mode)))
     (setf (ht-get* 4mn-conf key mode att) val)))
-
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Assemble commands
 (defun 4mn-get-inner-cmd (&optional emacs)
@@ -172,26 +164,19 @@ by TRAMP when inside of a remote buffer"
 ;;     (setq-local 4mn--local--outer-cmd
 ;;                 (cond ((not (tmux-session-exists-p))
 ;;                        ;; ... create new session + window
-;;                        (format tmux-new-session-command-template 
+;;                        (format tmux-new-session-command-template
 ;;                                session window session window))
-;;                       ((and (tmux-session-exists-p) (not (tmux-session-window-exists-p))) 
+;;                       ((and (tmux-session-exists-p) (not (tmux-session-window-exists-p)))
 ;;                        ;; ... create new window in session
-;;                        (format tmux-new-session-window-command-template 
+;;                        (format tmux-new-session-window-command-template
 ;;                                session window session window))
-;;                       ((and (tmux-session-exists-p) (tmux-session-window-exists-p)) 
+;;                       ((and (tmux-session-exists-p) (tmux-session-window-exists-p))
 ;;                        ;; ...so replace the session-window
 ;;                        ;; TODO logic to handle if session is live already - don't want to overwrite whatever is running
-;;                        (format tmux-replace-session-window-command-template 
+;;                        (format tmux-replace-session-window-command-template
 ;;                                session window window session window))))))
 
 ;; (defun 4mn--assemble-cmd ()
 ;;   (format "%s \"%s\" C-m" (4mn-get-outer-cmd) (4mn-get-inner-cmd)))
 
-
-
-
-
 (provide 'foreman)
-
-
-

@@ -32,6 +32,6 @@
    "M-&" 'zetta-async-shell-command
    "M-!" 'zetta-shell-command
    )
-  
+
   )
 ;;; simple.el ends here

@@ -30,7 +30,6 @@ key that is available in many contexts"
                            :prefix ","
                            ,key ',name)))
 
-
   ;; TODO why do these need to be defined here? and not elsewhere?
   ;; is it as so there is a keymap available for use elsewhere?
 

@@ -31,17 +31,15 @@
     (interactive)
     (elfeed-search-toggle-all mytag)))
 
-
 (use-package elfeed-protocol
   :ensure (elfeed-protocol :host github :repo "fasheng/elfeed-protocol")
   :after elfeed
   :demand t
   :config
-  
+
   (setq elfeed-protocol-fever-update-unread-only nil)
   (setq elfeed-protocol-fever-fetch-category-as-tag t)
   ;; elfeed-protocol-feeds set in ~/.private.el
-
 
   (setq elfeed-protocol-enabled-protocols '(fever))
   (elfeed-protocol-enable)
@@ -108,7 +106,6 @@ minibuffer with something like `exit-minibuffer'."
   (defun elfeed-search-format-date (date)
     (format-time-string "%Y-%m-%d %H:%M" (seconds-to-time date)))
 
-
   (defun elfeed-show-eww-open (&optional use-generic-p)
     "open with eww"
     (interactive "P")
@@ -158,9 +155,6 @@ minibuffer with something like `exit-minibuffer'."
 
   (general-unbind :states 'normal :keymaps 'elfeed-search-mode-map "f")
   (general-unbind :states 'normal :keymaps 'elfeed-search-mode-map "R")
-
-  
-
 
   :brushup
   (add-to-list 'brushup-styles

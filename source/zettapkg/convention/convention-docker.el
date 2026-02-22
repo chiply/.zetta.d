@@ -39,14 +39,12 @@
   "A pre-formatted string representing a docker cli command
    which removes an image")
 
-
 ;; container
 
 (defvar convention-docker-command-detect-all-containers
  "docker ps -a | grep convention | awk '{print $1}'"
  "A string representing a command that returns a list of all contianers
   (stopped or started) with convention in their name")
-
 
 (defvar convention-docker-command-detect-running-containers
   "docker ps | grep convention | awk '{print $1}'"
@@ -64,12 +62,10 @@
    "A pre-formatted string representing a docker cli command which returns a
     list of containers containing the string 'convention' in their name")
 
-
 (defvar convention-docker-command-list-running-containers
    "docker inspect --format='{{.Name}}' $(docker ps -q) | grep convention"
    "A pre-formatted string representing a docker cli command which returns a
     list of running containers containing the string 'convention' in their name")
-
 
 (defvar convention-docker-command-list-stopped-containers
   "docker inspect  --format={{.Name}} $(docker ps --filter \"status=exited\" | grep convention | awk '{print $1}')"
@@ -90,8 +86,6 @@
   "docker start ${container}"
   "A pre-formatted string representing a docker cli command which starts a
    convention container that has been stopped")
-
-
 
 (defvar convention-docker-start-container-command
   (concat
@@ -116,8 +110,6 @@
   "A pre-formatted string representing the a docker cli command which
    starts a container")
 
-
-
 (defvar convention-docker-process-buffer-name
   "*${container-name}-${container-name-user-postfix}*"
   "A pre-formatted string representing the name of the process
@@ -133,6 +125,5 @@
   "A pre-formatted string representing a command which copies a file named
    .tmp_code into a docker container and executes this code in the
    docker container")
-
 
 (provide 'convention-docker)

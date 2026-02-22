@@ -3,7 +3,7 @@
 (use-package undo-tree
   :init
   (setq undo-tree-enable-undo-in-region t)
-  
+
   ;; Prevent undo tree files from polluting your git repo.
   ;; This also ensures that undo data, whch could potentially contain
   ;; sensitive information, is not stored in the emacs directory
@@ -57,8 +57,6 @@
   ;;undo-tree-visualizer-lazy-drawing))))
   ;;(when undo-tree-visualizer-diff (undo-tree-visualizer-show-diff))
   ;;(let ((inhibit-read-only t)) (undo-tree-draw-tree undo-tree))))
-
-
 
   :config
   (global-undo-tree-mode)

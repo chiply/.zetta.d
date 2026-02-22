@@ -4,11 +4,9 @@
 ;; pkg imports
 (require 's)
 
-
 (defun convention-prompt-for-image-search-term-from-user-input ()
   "Returns a string representing a search term specified by user input"
   (read-string "Enter a search term for an image: "))
-
 
 (defun convention-prompt-for-image-search-term-from-preset ()
   "Returns a a string representing a search term selected from a
@@ -31,7 +29,6 @@
       (convention-prompt-for-image-search-term-from-preset)
     (convention-prompt-for-image-search-term-from-user-input)))
 
-
 (defun convention-search-base-image-names (from-preset)
   "Returns a list of search results based on user input using
    the docker search utility"
@@ -44,8 +41,6 @@
   "Returns a string representing a base image name based on user selection"
   (completing-read "Select a base-image-name: " (convention-search-base-image-names from-preset)))
 
-
-
 (defun convention-search-image-tags (base-image-name)
   "Returns a list of docker tags for a BASE-IMAGE-NAME"
   ;; need to set default directory because need to use the script shipped
@@ -56,12 +51,10 @@
                              'aget `(("convention-dir" . ,convention-dir)
                                      ("base-image-name" . ,base-image-name)))))))
 
-
 (defun convention-prompt-for-image-tag (base-image-name)
   "Returns a string representing a docker tag for a BASE-IMAGE-NAME
    based on user selection"
   (completing-read "Select a tag: " (convention-search-image-tags base-image-name)))
-
 
 (defun convention-format-image-name-and-tag (from-preset)
   "Returns a string representing an image:tag name"
@@ -71,13 +64,11 @@
               'aget `(("base-image-name" . ,base-image-name)
                       ("image-tag" . ,image-tag)))))
 
-
 (defun convention-format-base-layer (base-image-name-and-tag)
   "This function assembles the base layer for the Dockerfile given a BASE-IMAGE-NAME-AND-TAG"
   (let ((convention-layers-base (convention-query-layers '("base"))))
     (s-format convention-layers-base
               'aget `(("base-image-name-and-tag" . ,base-image-name-and-tag)))))
-
 
 (defun convention-prompt-for-user-image-postfix (base-image-name)
   "Returns a string representing a user specified name of an image.
@@ -90,7 +81,6 @@
                 (message base-image-name)
                 )))
     (completing-read (concat "Name the image with convention/" lang "-") ())))
-
 
 (defun convention-format-user-image-name (base-image-name)
   "Returns a string representing an image name based on user input. Note the presence of
@@ -105,14 +95,10 @@
               'aget `(("lang" . ,lang)
                       ("user-image-postfix" . ,user-image-postfix)))))
 
-
-
-
 (defun convention-prompt-for-requirements-file ()
   "Returns a string representing the location of a file containing the new-line separated
    names of third-party packages"
   (ido-read-file-name "Choose a requirements file: " ""))
-
 
 (defun convention-prompt-for-requirements-file-yn ()
   "Returns a yes or no indicating whether the user wants
@@ -136,14 +122,12 @@
        (function (lambda (x) (concat surround x surround)))
        (split-string (buffer-string) "\n" t) delim))))
 
-
 (defun convention-format-layer-req-sql (base-image-name-and-tag)
   "Rerturns a string representing the requirements layer for a container
    running a database engine with the appropriate DBCLI-PROGRAM"
   (let ((req-layer (convention-get-layer-req base-image-name-and-tag))
         (dbcli-program (convention-query-lang-info base-image-name-and-tag "dbcli-program")))
     (s-format req-layer 'aget `(("dbcli-program" . ,dbcli-program)))))
-
 
 (defun convention-format-layer-req-lang (base-image-name-and-tag)
   "Returns a string representing the requirements layer for a container
@@ -158,8 +142,6 @@
                                                                 ("cmd-line-util" . ,cmd-line-util)))
       "")))
 
-
-
 (defun convention-format-req-layer (base-image-name-and-tag)
   "Returns a string representing the requirements layer for a given IMAGE.
    Of note, there can be null requirements, or a list of requirements decsribed by a user
@@ -167,8 +149,6 @@
   (if (convention-is-sql base-image-name-and-tag)
       (convention-format-layer-req-sql base-image-name-and-tag)
     (convention-format-layer-req-lang base-image-name-and-tag)))
-
-
 
 (defun convention-format-build-command (from-preset)
   "Returns a string representing the docker build command."
@@ -182,7 +162,6 @@
                       ("base-layer" . ,base-layer)
                       ("req-layer" . ,req-layer)))))
 
-
 (defun convention-build-image (from-preset)
   "Build an image with the docker-build command"
   (let ((cmd (convention-format-build-command from-preset)))
@@ -190,7 +169,6 @@
     ;; changed to let this be used inside ssh
     (async-shell-command cmd)
     ))
-
 
 (defun convention-build-image-from-search-term ()
   (interactive)
@@ -202,9 +180,6 @@
   (interactive)
   (convention-build-image t))
 
-
-
-
 (defun convention-list-images ()
   "Returns a list of images with 'convention' in the name"
   (remove ""
@@ -212,12 +187,10 @@
            (shell-command-to-string convention-docker-command-list-images)
            "\n")))
 
-
 (defun convention-prompt-for-image ()
   "Returns a string representing an image name, based on a user selection"
-  (interactive) 
+  (interactive)
   (string-trim (concat (completing-read "Available images: " (convention-list-images)) " ")))
-
 
 (defun convention-format-remove-image-cmd ()
   "Returns a string represnting a docker cli command to remove
@@ -226,12 +199,9 @@
     (s-format convention-docker-command-remove-image
               'aget `(("user-image-name" . ,user-image-name)))))
 
-
-
 (defun convention-remove-image ()
   "Removes an image based on user selection"
   (interactive)
   (shell-command (convention-format-remove-image-cmd)))
-
 
 (provide 'convention-image)

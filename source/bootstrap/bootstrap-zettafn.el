@@ -82,18 +82,16 @@ With a non-nil prefix ARG only show bindings in active maps."
     )
   )
 
-
 ;; build docs
 (defun zetta-build-docs ()
   (interactive)
   (with-current-buffer (find-file-noselect (expand-file-name "read.org" user-emacs-directory))
-    (org-babel-execute-buffer) 
+    (org-babel-execute-buffer)
     (save-buffer)
     (org-open-file (org-html-export-to-html))
     (kill-buffer)
     )
   )
-
 
 (defun zetta-foobar (func)
   (with-current-buffer (get-buffer-create "*zetta-tmp-autodoc*")
@@ -109,8 +107,6 @@ With a non-nil prefix ARG only show bindings in active maps."
   (kill-buffer "*zetta-tmp-autodoc*")
   elisp-code
   )
-
-
 
 (defun zetta-docs-from-extension (ext)
   (let* ((fname (expand-file-name
@@ -137,13 +133,13 @@ With a non-nil prefix ARG only show bindings in active maps."
 Documentation: %s\n\n" var  (documentation-property var 'variable-documentation))))
 
     (insert "* Functions\n\n")
-    
+
     (dolist (funcs (sort funcs 'string-lessp))
-      
+
       ;;(kill-buffer "*zetta-tmp-autodoc*")
 
       (progn
-        
+
         (insert (format "** %s %s
 Documentation: %s
 
@@ -164,7 +160,6 @@ Code:
                                         ;(org-latex-compile "jmax-bibtex-doc.tex")
     (kill-buffer (format "%s-doc.org" ext))
     ))
-
 
 ;;(setq hi-lock-use-overlays t)
 
@@ -224,7 +219,7 @@ Code:
   (highlight-phrase "500" 'modus-themes-intense-red)
 
   (highlight-phrase "422" 'modus-themes-subtle-magenta)
-  
+
   (highlight-phrase "200" 'modus-themes-subtle-green)
   (highlight-phrase "201" 'modus-themes-subtle-green)
 
@@ -246,8 +241,6 @@ Code:
   ;; highlight case insensitive occurneces of "token"
   (highlight-phrase "token" 'modus-themes-subtle-blue)
   )
-
-
 
 (defun zetta-touch-maybe (path)
   "Create file or directory at PATH if it doesn't already exist.
@@ -279,7 +272,6 @@ If PATH has an extension, creates a file; otherwise creates a directory."
       (lambda (s) (if (> (length s) 1) (substring s 0 2) s))
       path-split "/")
      "/" leaf-dir-name)))
-
 
 (defun zetta-create-scratch-buffer (mode)
   "Create a new scratch buffer to work in. (could be any mode)"

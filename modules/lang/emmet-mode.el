@@ -9,11 +9,11 @@
   (
    :keymaps '(sgml-mode web-mode css-mode rjsx-mode js2-mode)
    "C-<" 'emmet-prev-edit-point
-   "C->" 'emmet-next-edit-point 
-   )                                  
+   "C->" 'emmet-next-edit-point
+   )
 
   :hook (
-         ((sgml-mode web-mode css-mode rjsx-mode js2-mode) . emmet-mode) 
+         ((sgml-mode web-mode css-mode rjsx-mode js2-mode) . emmet-mode)
          (rjsx-mode . (lambda () (setq-local emmet-expand-jsx-className? t)))
          (web-mode . (lambda () (setq-local emmet-expand-jsx-className? nil)))
          )

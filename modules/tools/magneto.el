@@ -44,8 +44,6 @@
                     (throw 'done (cdr tree))))
             (funcall avy-handler-function char)))))))
 
-
-
 ;; Adapted from aw-select
 (defun magneto-ace-get-window (initial-input)
   (interactive)
@@ -63,8 +61,6 @@
                                      aw--remove-leading-chars-fn))))
     win))
 
-
-
 ;; Defaults
 (setq magneto-default-source-action "move"
       magneto-default-destination-action "f"
@@ -74,14 +70,12 @@
       magneto-default-embark-candidate nil
       magneto-default-embark-action nil)
 
-
 (defun magneto-make-indirect ()
   (interactive)
   (switch-to-buffer
    (clone-indirect-buffer
     (format "*indirect--%s*" (buffer-name (current-buffer)))
     nil)))
-
 
 (defun magneto-restore-defaults ()
   (interactive)
@@ -120,7 +114,6 @@
     (consult-buffer)))
   (selected-window))
 
-
 (defun magneto-select-win-dest-ace (buf-orig)
   (if magneto-destination-window
       ;; if a window was specified already...
@@ -132,7 +125,6 @@
                (lambda (window)
                  (aw-switch-to-window window)
                  (magneto-move-after-select buf-orig)))))
-
 
 (defun magneto-select-win-dest-side (buf-orig)
   (let ((side (cond
@@ -157,7 +149,6 @@
        (slot . ,slot)
        (window-parameters . ((no-delete-other-windows . 1)))))))
 
-
 (defun magneto-select-win-dest (buf-orig)
   (cond
    ((member magneto-destination-action '("f" "V" "v" "H" "h"))
@@ -166,7 +157,6 @@
     ;; Note: returns the window
     (magneto-select-win-dest-side buf-orig))))
 
-
 (defun magneto-process-source (win-orig)
   ;; temporarily switch to a different buffer in win-orig.  we should create this buffer
   (cond
@@ -174,12 +164,10 @@
    ((string= magneto-source-action "pull") (switch-to-prev-buffer win-orig))
    ((string= magneto-source-action "copy") nil)))
 
-
 (defun magneto-process-select (win-orig win-dest)
   (cond
    ((string= magneto-select-action "o") (select-window win-dest))
    ((string= magneto-select-action "O") (select-window win-orig))))
-
 
 (defun magneto-move (&optional repeat)
   (interactive)
@@ -192,7 +180,6 @@
     ;;;; PLACE-CURSOR
     (magneto-process-select win-orig win-dest))
   (magneto-restore-defaults))
-
 
 (defun magneto-set-magneto-source-action (setting)
   (interactive)
@@ -213,7 +200,6 @@
 (defun magneto-set-magneto-destination-window (setting)
   (interactive)
   (setq magneto-destination-window (magneto-ace-get-window setting)))
-
 
 (define-prefix-command 'magneto-map)
 (general-define-key
@@ -256,7 +242,6 @@
  "s" (** (lambda () (interactive) (magneto-set-magneto-destination-window "s")))
  "d" (** (lambda () (interactive) (magneto-set-magneto-destination-window "d"))))
 
-
 ;;(defhydra+ hydra-magneto ()
 ;;"
 ;;%s(concat magneto-source-action \"-\"
@@ -264,7 +249,7 @@
 ;;magneto-select-action \"-\"
 ;;magneto-action-action)
 ;;"
-  ;;;; run the exit function, eg execute the move specifed by 
+  ;;;; run the exit function, eg execute the move specifed by
 ;;("s-m" magneto-move)
 ;;("<return>" magneto-move :exit t)
 ;;
@@ -303,7 +288,6 @@
 ;;("s" (magneto-set-magneto-destination-window "s") "select window")
 ;;("d" (magneto-set-magneto-destination-window "d") "select window"))
 
-
 ;; embark integration
 (defun my/embark-magneto-action (keymap action key-sequence)
   ;; define a functions and bind it to a key
@@ -326,16 +310,13 @@
                            (symbol-name function-name)
                            " didn't work")))))))
 
-
 (defun magneto-embark-export ()
   (interactive)
   (call-interactively 'embark-export)
   (hydra-magneto/body))
 
-
 ;; embark general map
 (general-define-key :keymaps 'override "s-m" 'magneto-map)
-
 
 ;;;;;; experimenting with getting keymap data:
 (defun parse-keymap (keymap &optional prefix)
@@ -354,7 +335,6 @@
      keymap)
     (nreverse result)))
 
-
 ;;;; filter out digit arguments
 ;;;; filter out magneto actoins
 (defun my/embark-bind-keys (keymap)
@@ -372,7 +352,7 @@
         (s-contains? "consult-bookmark" (symbol-name (car x)))
         (s-contains? "goto-grep" (symbol-name (car x)))
         )
-       ;; avoid rebinding digit arg / my/embark 
+       ;; avoid rebinding digit arg / my/embark
        (not (or
              (s-contains? "digit-arg" (symbol-name (car x)))
              ;; TODO collect and export should work
@@ -384,10 +364,6 @@
        )
       )
     (parse-keymap (eval keymap)))))
-
-
-
-
 
 (defun zetta-embark-bind-keys ()
   (setq embark-maps-list (-map (lambda (x) (if (listp (cdr x)) (car (cdr x)) (cdr x))) embark-keymap-alist))

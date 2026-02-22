@@ -5,7 +5,7 @@
   :hook (elpaca-after-init . global-display-fill-column-indicator-mode)
 
   :brushup
-  
+
   (add-to-list 'brushup-styles
                '(progn
                   ;; provides subtlety, but still keeps it visible on

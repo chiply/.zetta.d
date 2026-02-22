@@ -8,7 +8,6 @@
        (cdr key-tuple)
        (cdr (assoc key alist))))))
 
-
 (defun convention-is-sql (image-or-container-name)
   "Returns a boolean indicating whether the LANG corresponds
    to a database engine"
@@ -17,7 +16,6 @@
                    "mysql"
                    "mssql"
                    "mariadb"))))
-
 
 (defun convention-local-async-shell-command (cmd)
   "Runs async command in the home directory of the emacs host (ie
@@ -40,7 +38,4 @@ computer"
   (let ((default-directory "~/"))
     (shell-command-to-string cmd)))
 
-
-
 (provide 'convention-utils)
-

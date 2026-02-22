@@ -9,7 +9,6 @@
   ;; etc... instead
   (setq symbol-overlay-map (make-sparse-keymap))
 
-
   ;; keybindings
   (global-set-key (kbd "M-i") 'symbol-overlay-put)
   (global-set-key (kbd "M-n") 'symbol-overlay-switch-forward)
@@ -45,7 +44,7 @@
       ]
      ]
     )
-  
+
   (global-set-key (kbd "s-.") 'symbol-overlay-transient)
 
   ;; modes

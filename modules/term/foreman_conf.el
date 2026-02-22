@@ -13,8 +13,6 @@
 ;; 5: ensure that 4mn is initialized by adding a hook to the relevant mode
 ;; 6. finally update the exec function, although I'm looking for a way around this
 
-
-
 ;; available commands
 (setq 4mn-executable-registry
       '(
@@ -27,8 +25,6 @@
         "sh"
         )
       )
-
-
 
 ;; initializes config by creating a buffer-local hash table
 (defun 4mn-init-conf ()
@@ -156,10 +152,9 @@
                           ("pos" "t0")
                           ("suppress-output" "yes")
                           ))
-      )) 
+      ))
     )
   )
-
 
 ;; Modes with 4mn controls
 ;; (add-hook 'python-ts-mode-hook '4mn-init-conf)
@@ -168,8 +163,6 @@
 ;; (add-hook 'sh-mode-hook '4mn-init-conf)
 ;; (add-hook 'yaml-mode-hook '4mn-init-conf)
 ;; (add-hook 'dockerfile-mode-hook '4mn-init-conf)
-
-
 
 ;;;; Set functions
 (defun 4mn-set-suppress-output ()
@@ -197,7 +190,7 @@
          )
     (if (file-exists-p sqlite3dbpath)
         sqlite3dbpath
-      ":memory:" 
+      ":memory:"
       )
     )
   )
@@ -208,7 +201,7 @@
     (s "wrap" (ht-get* (g "wraps") (g "wrapnm")))
     (if (string= wrapnm "sqlite3")
         (s "sqlite3dbpath" (4mn-get-sqlite3dbpath))
-      (s "sqlite3dbpath" nil) 
+      (s "sqlite3dbpath" nil)
       )
     )
   )
@@ -220,7 +213,7 @@
       (if (string= (file-name-extension dbpath) "db")
           (s "sqlite3dbpath" dbpath)
         (message "not a dbfile")
-        ) 
+        )
       )
     )
   )
@@ -262,16 +255,12 @@
   (interactive)
   (s "json_file" (read-file-name "select a file")))
 
-
-
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  Exec function
 (defun 4mn-exec (&optional thing)
   (interactive)
   (let* (
          (innercmd (4mn-get-inner-cmd))
-         (thing (format "%s\n" (string-trim (zetta-get-thing thing)))) 
+         (thing (format "%s\n" (string-trim (zetta-get-thing thing))))
          (code (format
                 "%s\n"
                 (string-trim
@@ -331,17 +320,11 @@
              (detached-shell-command
               (4mn-get-inner-cmd t)
               (if (string= (g 'suppress-output) "yes") t nil))
-             (message (concat "executed \n\n" innercmd "\n\natdir " default-directory)) 
+             (message (concat "executed \n\n" innercmd "\n\natdir " default-directory))
              ))
           )
     )
   )
-
-
-
-
-
-
 
 (let ((modes '(
                python-ts-mode-map sh-mode-map js2-mode-map ruby-mode-map
@@ -356,8 +339,7 @@
    "<C-return>" '4mn-exec
    "<S-return>" '(lambda () (interactive) (4mn-exec 'buf))
 
-
    )
-  
+
   )
 ;;; foreman_conf.el ends here

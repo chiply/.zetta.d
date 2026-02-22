@@ -4,8 +4,7 @@
 ;; TODO inputting multiple searhc strings
 ;; what are the other patterns... let's say we wanted multiple for... realistically we want a logical or for the styyle dispathers
 ;; som limited ability per command... we have regexes at our disposal, so an individual regex can have the logical or (\|)
-;; another pattern to this could be that we typically don't want to do this, and if we done, then create mutliple export buffers?  
-
+;; another pattern to this could be that we typically don't want to do this, and if we done, then create mutliple export buffers?
 
 ;; TODO flat has issues with going to next, want scroll margin
 ;; TODO right click to embark act on item
@@ -31,8 +30,6 @@
         (beg (save-excursion (sh-beginning-of-command))))
     (when (and beg (> end beg))
       (bash-completion-dynamic-complete-nocomint beg end t))))
-
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;; CAP
 ;;;;;;;;;;; FILENAMES
@@ -96,7 +93,7 @@ TODO -- usage of arg to control 1 fo two pathways... ispell for
 example, this probably warrents implementation will be that prefix arg
 use brings up a menu where we can chose some non-default (ispell,
 tempel expand?)
-"  
+"
   (interactive "P")
   (let ((completion-in-region-function 'consult-completion-in-region))
     (or ;; the or causes this to exit when the first condition is matched
@@ -163,11 +160,6 @@ tempel expand?)
            (completion-at-point))
        (message "[ispell]"))
      )))
-
-
-
-
-
 
 (general-define-key
  :states '(insert)

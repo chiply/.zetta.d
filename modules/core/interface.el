@@ -44,18 +44,12 @@
 
 (setq enable-local-variables :all)
 
-;;(defhydra+ hydra-window ()
-;;("C-S" zetta-scratch :exit t)
-;;("C-S-<backspace>" zetta-server-shutdown-save-desktop))
-
 (general-define-key :keymaps 'menu-window-keymap
                     "C-S" 'zetta-scratch
                     "C-S-<backspace>" 'zetta-server-shutdown-save-desktop)
 
 (setq-default left-margin-width 2)
 (setq-default right-margin-width 2)
-;;(setq-default left-fringe-width 5)
-;;(setq-default right-fringe-width 5)
 
 (defun zetta-tab-bar-hydra ()
   (let ((icon (zetta-line-hydra-indicator-icon))) (when icon "H")))
@@ -75,9 +69,7 @@
   (interactive)
   (setq pom (not pom)))
 
-;; some comment
 (defun pom-ind ()
-  ;; comment
   (when pom "🍅 "))
 
 (defun tab-bar-keycast ()
@@ -85,9 +77,6 @@
     (when str
       (set-text-properties 0 (length str) nil str))
     `((keycast menu-item ,(or str "") ignore))))
-
-;;(defun repeat-indicator-icon ()
-;;(if (and (boundp 'menu--indicator) menu--indicator) "** " "__ "))
 
 (defun zetta-pyvenv-activate-poetry-modeline ()
   (and (boundp 'zetta-pyvenv-virtual-env)

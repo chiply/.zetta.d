@@ -4,7 +4,7 @@
 (use-package general :demand t :ensure (:wait t))
 
 ;; for key "chords", although a better thought of as "melodies",
-;; becuase they involve sequential presses of keys
+;; because they involve sequential presses of keys
 (use-package key-chord
   :config
   (setq key-chord-two-keys-delay .05 key-chord-one-key-delay .05 key-chord-one-key-min-delay 0.5)
@@ -275,7 +275,7 @@ Finally, show the buffer."
 ;; not only for easing migration, but as a general feature of my
 ;; configuration. Can almost consider this as a meta state.  Maybe
 ;; 'modal state'.  And the idea would be to live in meow MOST of the
-;; time, while only swithcing to evil or emacs when necessary.
+;; time, while only switching to evil or emacs when necessary.
 
 ;; EXPLANATION: a prefix command needs to be defined (here it is the
 ;; symbol 'launch-map).  A key is also defined that will be used to

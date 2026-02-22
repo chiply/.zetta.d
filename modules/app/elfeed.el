@@ -1,23 +1,7 @@
 ;;; elfeed.el --- Configure elfeed -*- lexical-binding: t; -*-
 
-;; LEFTOFF -- pull the huge payload and test if it occusr succesfully
-;; and whetherr it tags stuff accurrately
-
-;; TODO elfeed: minflux category turns into tag, but can only apply
-;; one -- elfeed autotag to get around this?
-;; https://github.com/paulelms/elfeed-autotag
-
-;; TODO elfeed: practical alternative to filter on multiple tags?
-
-;; DONE elfeed: cleanup feeds -- seeking alpha -- anything super high
-;; traffic
-
-;; TODO elfeed: often have to 're-init' to get latest feeds
-
-;; TODO elfeed: elfeed embark?
-
-;; TODO not sure why, but these need to be ouotside of the use package
-;; since they're used in the general definiti.
+;; These need to be outside of the use-package since they're used in
+;; the general definitions.
 (defun my-elfeed-filter (filter-string)
   "Set and apply a custom elfeed search filter."
   (lambda () (interactive)

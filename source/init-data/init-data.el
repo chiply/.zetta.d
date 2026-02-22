@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; init-data.el --- Configure initialization data -*- lexical-binding: t; -*-
 
 (setq zetta-files-that-need-creating '("~/.dir-locals.el" "~/.private.el"))
 
@@ -291,3 +291,4 @@
 
 
 (provide 'init-data)
+;;; init-data.el ends here

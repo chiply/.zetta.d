@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; bootstrap-modules.el --- Configure module loading system -*- lexical-binding: t; -*-
 
 ;; Module system for zetta.d
 ;; Provides `zetta-modules!' macro for declaring which modules to load.
@@ -243,3 +243,4 @@ Examples:
      (setq user-files (zetta--resolve-all-modules zetta-modules))))
 
 (provide 'bootstrap-modules)
+;;; bootstrap-modules.el ends here

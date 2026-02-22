@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; bootstrap-utils.el --- Configure utility packages -*- lexical-binding: t; -*-
 
 (use-package dash)
 (use-package dash-docs :ensure (:wait t) :demand t
@@ -11,3 +11,4 @@
 (use-package f)
 
 (provide 'bootstrap-utils)
+;;; bootstrap-utils.el ends here

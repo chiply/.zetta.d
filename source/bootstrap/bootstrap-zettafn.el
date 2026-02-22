@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; bootstrap-zettafn.el --- Configure zetta utility functions -*- lexical-binding: t; -*-
 
 (defun zetta-load-extension-file (file)
   (interactive)
@@ -311,6 +311,4 @@ enjoy using a lot.
     `(s-format ,fmt 'aget (list ,@agetter))))
 
 (provide 'bootstrap-zettafn)
-
-
-
+;;; bootstrap-zettafn.el ends here

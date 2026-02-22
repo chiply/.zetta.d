@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; bootstrap-display.el --- Configure display utilities -*- lexical-binding: t; -*-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Core functions / utils
 (defun zetta-soda-get-buffer-window (buf-name)
@@ -198,5 +198,4 @@ being displayed, otherwise returns nil"
 (add-to-list 'use-package-keywords :display t)
 
 (provide 'bootstrap-display)
-
-
+;;; bootstrap-display.el ends here

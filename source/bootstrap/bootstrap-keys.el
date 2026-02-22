@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; bootstrap-keys.el --- Configure key binding utilities -*- lexical-binding: t; -*-
 
 ;; for binding keys
 (use-package general :demand t :ensure (:wait t))
@@ -351,3 +351,4 @@ Finally, show the buffer."
 ;;                 pairs)))))
 
 (provide 'bootstrap-keys)
+;;; bootstrap-keys.el ends here

@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; bootstrap.el --- Configure bootstrap loader -*- lexical-binding: t; -*-
 
 (require 'bootstrap-elpaca)
 (require 'bootstrap-utils)
@@ -12,3 +12,4 @@
 (require 'bootstrap-zettafn)
 
 (provide 'bootstrap)
+;;; bootstrap.el ends here

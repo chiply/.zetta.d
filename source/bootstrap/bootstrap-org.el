@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; bootstrap-org.el --- Configure org-mode bootstrap -*- lexical-binding: t; -*-
 
 (use-package org
   :ensure nil
@@ -386,14 +386,4 @@ Wraps `org-schedule' to detect when there was no previous schedule."
 (advice-add 'org-schedule :around #'zetta-org-schedule-log-initial-a)
 
 (provide 'bootstrap-org)
-
-
-
-
-
-
-
-
-
-
-
+;;; bootstrap-org.el ends here

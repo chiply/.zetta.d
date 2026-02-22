@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; bootstrap-config.el --- Configure straight.el bootstrap -*- lexical-binding: t; -*-
 
 (defvar bootstrap-version)
 
@@ -21,3 +21,4 @@
 
 
 (provide 'bootstrap-config)
+;;; bootstrap-config.el ends here

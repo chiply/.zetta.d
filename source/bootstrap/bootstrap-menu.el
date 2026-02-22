@@ -1,4 +1,4 @@
-;;; -*- lexical-binding: t -*-
+;;; bootstrap-menu.el --- Configure menu system -*- lexical-binding: t; -*-
 
 (use-package menu
   :ensure nil
@@ -61,3 +61,4 @@ key that is available in many contexts"
   )
 
 (provide 'bootstrap-menu)
+;;; bootstrap-menu.el ends here

@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; bootstrap-evil.el --- Configure evil-mode bootstrap -*- lexical-binding: t; -*-
 
 (use-package evil
   :ensure (:wait t)
@@ -67,4 +67,4 @@
 (add-to-list 'use-package-keywords :evil t)
 
 (provide 'bootstrap-evil)
-
+;;; bootstrap-evil.el ends here

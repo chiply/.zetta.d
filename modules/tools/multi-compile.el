@@ -320,7 +320,7 @@ async-shell-command"
    ;; installations (which typically come with complex spinners that
    ;; don't render all the way in async-shell-command)
    ((string= build-file-type "shell script") "vterm")
-   ;; becuase of the ridiculous spinner
+   ;; because of the ridiculous spinner
    ))
 
 ;; TODO is there a difference bt build-file-name and build-file-type

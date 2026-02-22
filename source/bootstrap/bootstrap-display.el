@@ -16,7 +16,7 @@
 (defun zetta-soda-list-displaying-buffers ()
   "Lists the buffers that are being displayed in the current
 frame.  This is done by looping through each displaying window
-and storing the buf-or-mode-name of the buffer being sdisplayed in that
+and storing the buf-or-mode-name of the buffer being displayed in that
 window to the buffer list that gets returned."
   (interactive)
   (let ((lst '()))
@@ -73,7 +73,7 @@ being displayed, otherwise returns nil"
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Display buffer alist (leverages soda functions)
 ;; left top right bottom
 (setq window-sides-slots '(3 3 3 4))
-;; tryign this ou for now
+;; trying this out for now
 (setq window-sides-vertical t)
 
 ;; note you need to reevaluate the zetta-side function

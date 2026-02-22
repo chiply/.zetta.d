@@ -13,7 +13,7 @@
 
   ;; fixing themes
   ;; TODO mayybe more efficient way to just add a face to this
-  ;; Somehow this gets araound teh size problem
+  ;; Somehow this gets around the size problem
   (setq all-the-icons-mode-icon-alist
         (-remove
          (lambda (x)

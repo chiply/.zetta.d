@@ -101,6 +101,7 @@ cmd_freeze() {
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
         -l "$ZETTA_DIR/init.el" \
         --eval "(elpaca-wait)" \
+        --eval "(setq elpaca-lock-file-functions (list (lambda (_e) t)))" \
         --eval "(elpaca-write-lock-file \"$LOCK_FILE\")" \
         --eval "(message \"Lock file written to %s\" \"$LOCK_FILE\")" \
         2>&1 | while IFS= read -r line; do

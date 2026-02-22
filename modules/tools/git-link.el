@@ -1,3 +1,5 @@
+;;; git-link.el --- Configure git-link -*- lexical-binding: t; -*-
+
 (use-package git-link
   :config
   (defun git-link-diffrent-branch (branch)
@@ -17,5 +19,4 @@ branch than the one you're currently working on."
       (setq current-prefix-arg nil)
       (call-interactively 'git-link)
       (setq git-link-default-branch git-link-current-branch-setting))))
-
-
+;;; git-link.el ends here

@@ -1,3 +1,5 @@
+;;; sqlite.el --- Configure SQLite support -*- lexical-binding: t; -*-
+
 (defun zetta-sql-set-engine (arg)
   (interactive "P")
   (let ((engine (if (or arg
@@ -42,3 +44,4 @@
                   (cons (point-at-bol) `(,(point-at-eol))))))
     (write-region (nth 0 bounds) (nth 1 bounds) "./.tmp_code.sql" nil)
     (async-shell-command (s-format zetta-python-exec-sqlite-sql 'aget `(("db" . ,zetta-sqlite-dbfile))) zetta-output-buffer-for-buffer)))
+;;; sqlite.el ends here

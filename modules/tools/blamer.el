@@ -1,3 +1,5 @@
+;;; blamer.el --- Configure blamer -*- lexical-binding: t; -*-
+
 (use-package blamer
   :ensure t
   :custom
@@ -7,3 +9,4 @@
   ;;:config
   ;;(global-blamer-mode 1)
 )
+;;; blamer.el ends here

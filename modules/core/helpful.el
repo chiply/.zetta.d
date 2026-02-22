@@ -1,3 +1,5 @@
+;;; helpful.el --- Configure helpful -*- lexical-binding: t; -*-
+
 (use-package helpful
   :commands (helpful-callable helpful-function helpful-variable helpful-key
              helpful-command helpful-at-point helpful-symbol)
@@ -38,5 +40,4 @@
 
   :hook (helpful-mode . (lambda () (text-scale-set -2)))
   )
-
-
+;;; helpful.el ends here

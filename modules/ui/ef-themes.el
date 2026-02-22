@@ -1,3 +1,5 @@
+;;; ef-themes.el --- Configure ef-themes -*- lexical-binding: t; -*-
+
 (use-package ef-themes
   ;; set ef theme to ef-light
   :config
@@ -8,3 +10,4 @@
   (when (fboundp 'zetta-brushup)
     (zetta-brushup)))
   
+;;; ef-themes.el ends here

@@ -1,3 +1,5 @@
+;;; narrow.el --- Configure narrowing -*- lexical-binding: t; -*-
+
 (defun zetta-narrow-to-fold-dwim ()
   "If fold exists within tap, then toggle, otherwise create fold
 around tap.  If region active, then fold in this region.  If active
@@ -80,10 +82,4 @@ of tap), then toggle the closest fold"
  :keymaps '(override)
  "s-n" 'zetta-narrow-or-widen
  )
-
-
-
-
-
-
-
+;;; narrow.el ends here

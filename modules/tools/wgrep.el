@@ -1,3 +1,5 @@
+;;; wgrep.el --- Configure wgrep -*- lexical-binding: t; -*-
+
 (use-package wgrep
   :config
   (setq wgrep-auto-save-buffer t)
@@ -8,3 +10,4 @@
    "<C-return>" 'wgrep-finish-edit
    )
   )
+;;; wgrep.el ends here

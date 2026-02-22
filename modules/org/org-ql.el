@@ -1,3 +1,5 @@
+;;; org-ql.el --- Configure org-ql -*- lexical-binding: t; -*-
+
 (use-package org-ql
   :config
   (setq org-ql-view-display-buffer-action
@@ -10,3 +12,4 @@
           )
         )
   )
+;;; org-ql.el ends here

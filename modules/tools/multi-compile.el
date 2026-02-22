@@ -1,3 +1,5 @@
+;;; multi-compile.el --- Configure multi-compile -*- lexical-binding: t; -*-
+
 ;; TODO
 ;; display buffer function
 ;; replacement logic -- lay out all the different use casces and options
@@ -770,4 +772,4 @@ CACHE: 1. latest/local transient 2. ~/.zmc-cache)"
     ("program" "vterm")))
   ;; TODO add tmuxinator-targets-extra and history targets -- need an extra config that says if this is a getter
   ))
-
+;;; multi-compile.el ends here

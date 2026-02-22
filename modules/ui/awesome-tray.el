@@ -1,3 +1,5 @@
+;;; awesome-tray.el --- Configure mode-line styles -*- lexical-binding: t; -*-
+
 (use-package celestial-mode-line)
 (use-package awesome-tray
   :ensure (awesome-tray :type git :host github :repo "manateelazycat/awesome-tray")
@@ -26,4 +28,4 @@
   ;; TODO may interfere with which key help
   ;;(awesome-tray-mode 1)
   )
-
+;;; awesome-tray.el ends here

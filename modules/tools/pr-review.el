@@ -1,3 +1,5 @@
+;;; pr-review.el --- Configure pr-review -*- lexical-binding: t; -*-
+
 (use-package pr-review
 
   :config
@@ -25,3 +27,4 @@
    "M-<tab>" 'st-go-to-last-space
    )
   )
+;;; pr-review.el ends here

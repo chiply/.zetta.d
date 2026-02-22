@@ -1,3 +1,5 @@
+;;; olivetti.el --- Configure olivetti -*- lexical-binding: t; -*-
+
 (use-package olivetti
   :config
   ;; NOTE -- with fancy style, you get stuff in the fringe with a big
@@ -18,3 +20,4 @@
     "s-e" 'olivetti-mode
    )
   )
+;;; olivetti.el ends here

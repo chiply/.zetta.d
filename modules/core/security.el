@@ -1,3 +1,5 @@
+;;; security.el --- Configure security settings -*- lexical-binding: t; -*-
+
 ;; from the following article https://glyph.twistedmatrix.com/2015/11/editor-malware.html
 ;; note this code was copy pasted from https://gitlab.com/buildfunthings/emacs-config/blob/master/loader.org
 (require 'cl)
@@ -19,3 +21,4 @@
                  (if (eq window-system 'w32) ".exe" "") trustfile)))
   (setq gnutls-verify-error t)
   (setq gnutls-trustfiles (list trustfile)))
+;;; security.el ends here

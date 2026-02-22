@@ -1,3 +1,5 @@
+;;; tap.el --- Configure tap -*- lexical-binding: t; -*-
+
 ;; focus is a package that allows us to easily and constantly visualize things at point
 ;; it is a useful UI boost for focused programming, but is also a great development tool
 ;; in the context of working with tap
@@ -257,3 +259,4 @@ used to override thing at point for whatever reason"
       )
     )
   )
+;;; tap.el ends here

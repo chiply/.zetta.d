@@ -1,3 +1,5 @@
+;;; consult-gh.el --- Configure consult-gh -*- lexical-binding: t; -*-
+
 (use-package consult-gh
   :ensure (consult-gh
            :host github
@@ -73,4 +75,4 @@ STYLE defaults to `consult-async-split-style'."
   :after consult-gh
   :config
   (consult-gh-forge-mode +1))
-
+;;; consult-gh.el ends here

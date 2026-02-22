@@ -1,3 +1,5 @@
+;;; vterm.el --- Configure vterm -*- lexical-binding: t; -*-
+
 (use-package vterm
   :commands (vterm vterm-mode vterm-other-window)
   :init
@@ -186,3 +188,4 @@ Prompt for a vterm buffer and store it as a buffer-local variable."
          ((vterm-mode shell-command-mode) . tab-line-mode))
 
   )
+;;; vterm.el ends here

@@ -1,3 +1,5 @@
+;;; volatile-highlights.el --- Configure volatile-highlights -*- lexical-binding: t; -*-
+
 (use-package volatile-highlights
   :config
   (vhl/define-extension 'evil 'evil-paste-after 'evil-paste-before
@@ -7,3 +9,4 @@
   (vhl/install-extension 'undo-tree)
   (volatile-highlights-mode t)
   )
+;;; volatile-highlights.el ends here

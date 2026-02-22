@@ -1,3 +1,5 @@
+;;; graphviz-dot-mode.el --- Configure graphviz-dot-mode -*- lexical-binding: t; -*-
+
 (use-package graphviz-dot-mode
   :config
   (defun extract-requires (file)
@@ -28,4 +30,4 @@
     ;; (directory-files "~/.emacs.d/lisp" t "\\.el$"))
     )
   )
-
+;;; graphviz-dot-mode.el ends here

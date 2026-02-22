@@ -1,3 +1,5 @@
+;;; vc.el --- Configure vc -*- lexical-binding: t; -*-
+
 (use-package vc
   :ensure nil
   :commands vc-refresh-state
@@ -11,7 +13,4 @@
   (evil-set-initial-state 'git-blame-mode 'emacs)
   (evil-set-initial-state 'git-commit-mode 'insert)
   (evil-set-initial-state 'magit-log-edit-mode 'insert))
-
-
-
-
+;;; vc.el ends here

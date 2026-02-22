@@ -1,3 +1,5 @@
+;;; spinner.el --- Configure spinner -*- lexical-binding: t; -*-
+
 ;; Left off, was able to get this working the issues that some of the
 ;; spinner types actually change the height of the line as they're
 ;; spinning, and I couldn't figure out a way to do this even with
@@ -192,3 +194,4 @@
   (add-to-list 'compilation-finish-functions 'zetta-compile-spin-stop)
 
   )
+;;; spinner.el ends here

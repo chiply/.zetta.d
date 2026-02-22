@@ -1,3 +1,5 @@
+;;; erc.el --- Configure erc -*- lexical-binding: t; -*-
+
 (use-package erc
   :ensure nil
   :config
@@ -17,3 +19,4 @@
 
   (setq erc-track-position-in-mode-line t)
   )
+;;; erc.el ends here

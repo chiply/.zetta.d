@@ -1,3 +1,5 @@
+;;; browse-url.el --- Configure browse-url -*- lexical-binding: t; -*-
+
 (use-package browse-url
   :ensure nil
   :commands browse-url
@@ -17,5 +19,4 @@
      ;;("." . eww-browse-url)
      ;;))
   )
-
-
+;;; browse-url.el ends here

@@ -1,3 +1,5 @@
+;;; replace.el --- Configure replace -*- lexical-binding: t; -*-
+
 (use-package replace
   :ensure nil
 
@@ -11,3 +13,4 @@
    "e" 'occur-edit-mode
    )
   )
+;;; replace.el ends here

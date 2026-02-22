@@ -1,3 +1,5 @@
+;;; face.el --- Configure face and frame settings -*- lexical-binding: t; -*-
+
 (add-to-list 'default-frame-alist '(fullscreen . maximized)) 
 (setq initial-frame-alist (quote ((fullscreen . maximized))))
 
@@ -121,3 +123,4 @@
 ;;(add-hook 'shell-command-mode-hook (lambda () (text-scale-set -2)))
 (add-hook 'Info-mode-hook (lambda () (text-scale-set -2)))
 (add-hook 'calendar-mode-hook (lambda () (text-scale-set 2)))
+;;; face.el ends here

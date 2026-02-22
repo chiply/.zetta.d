@@ -1,3 +1,5 @@
+;;; svelte.el --- Configure svelte-mode -*- lexical-binding: t; -*-
+
 (use-package svelte-mode
   :mode "\\.svelte\\'"
   :general
@@ -14,3 +16,4 @@
 ;;:config
 ;;(add-to-list 'treesit-language-source-alist svelte-ts-mode-language-source-alist)
 ;;(add-to-list 'auto-mode-alist '("\\.svelte\\'" . svelte-ts-mode)))
+;;; svelte.el ends here

@@ -249,7 +249,6 @@
    "app/spot4e.el"
    "app/elfeed.el"
    ;;"app/elfeed-protocol.el"
-   ;;;;"app/elfeed-score.el"
    ;;"app/elfeed-org.el"
    "app/wombag.el"
    "app/whisper.el"

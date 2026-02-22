@@ -1,6 +1,7 @@
 ;;; gif-screencast.el --- Configure gif-screencast -*- lexical-binding: t; -*-
 
 (use-package gif-screencast
+  :if (executable-find "convert")
   :config
   ;; Use png + Emacs-internal capture (no screencapture permission needed,
   ;; and macOS screencapture doesn't support ppm despite what the docs say).

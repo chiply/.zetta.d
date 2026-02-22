@@ -2,9 +2,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Core functions / utils
 (defun zetta-soda-get-buffer-window (buf-name)
-  (get-buffer-window (if (get-buffer buf-name)
-                         (get-buffer buf-name)
-                       (message "fooobar"))))
+  (get-buffer-window (get-buffer buf-name)))
 
 (defun zetta-soda-buffer-displayed-p (buf-name)
   (window-live-p (zetta-soda-get-buffer-window buf-name)))
@@ -27,16 +25,16 @@ window to the buffer list that gets returned."
 
 (defun zetta-soda-sidewindow-p (buf)
   (if (window-parameter (get-buffer-window buf) 'window-slot)
-      (message "yes")
-    (message "no")))
+      t
+    nil))
 
 (defun zetta-soda-list-displaying-side-windows ()
   (interactive)
   (let (
         (bufs (zetta-soda-list-displaying-buffers))
         )
-    (when (member "yes" (mapcar 'zetta-soda-sidewindow-p bufs))
-      (message "foo"))))
+    (when (cl-some #'identity (mapcar 'zetta-soda-sidewindow-p bufs))
+      t)))
 
 (defun zetta-soda-get-mode (buffer)
   (with-current-buffer buffer major-mode))

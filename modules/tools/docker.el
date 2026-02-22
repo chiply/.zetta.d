@@ -1,6 +1,7 @@
 ;;; docker.el --- Configure docker -*- lexical-binding: t; -*-
 
 (use-package docker
+  :if (executable-find "docker")
   ;; there will inevitably be integration with convention.
   ;; the docker package makes working with containers easy
   ;; viewing, modifying, running etc...

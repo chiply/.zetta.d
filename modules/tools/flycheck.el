@@ -1,6 +1,7 @@
 ;;; flycheck.el --- Configure flycheck -*- lexical-binding: t; -*-
 
 (use-package flycheck-aspell
+  :if (executable-find "aspell")
   :config
   ;;(setq ispell-dictionary "your_default_dictionary")
   (setq ispell-program-name "aspell")
@@ -43,7 +44,8 @@
 
   ;; this is necessary!  eg run proselint after org-aspell-dynamic
   ;; from here https://github.com/flycheck/flycheck/issues/186
-  (flycheck-add-next-checker 'org-aspell-dynamic 'proselint)
+  (when (bound-and-true-p flycheck-aspell)
+    (flycheck-add-next-checker 'org-aspell-dynamic 'proselint))
 
   ;;(use-package flycheck-overlay
     ;;:ensure (flycheck-overlay :type git :host github :repo "konrad1977/flycheck-overlay")

@@ -1,3 +1,5 @@
+;;; text-manipulation.el --- Configure text manipulation -*- lexical-binding: t; -*-
+
 (defun split-region-by-periods (start end)
   "Replace periods and any trailing whitespace in the region with period followed by two newlines."
   (interactive "r")
@@ -9,3 +11,4 @@
 
 
 (general-define-key :states 'visual :keymaps 'override "s-/" 'split-region-by-periods)
+;;; text-manipulation.el ends here

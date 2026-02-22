@@ -1,3 +1,5 @@
+;;; keys.el --- Configure keybindings -*- lexical-binding: t; -*-
+
 (general-define-key
  :keymaps 'override
  "C-s" 'save-buffer)
@@ -32,5 +34,4 @@
   :states '(normal visual)
   :keymaps '(web-mode-map)
   "C-e")
-
-
+;;; keys.el ends here

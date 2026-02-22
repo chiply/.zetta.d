@@ -1,3 +1,5 @@
+;;; iedit.el --- Configure iedit -*- lexical-binding: t; -*-
+
 (use-package iedit
   :init
   (defun zetta-iedit-initiate ()
@@ -39,3 +41,4 @@
 
   :hook (use-package--iedit--post-config . zetta-brushup)
   )
+;;; iedit.el ends here

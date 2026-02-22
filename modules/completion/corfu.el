@@ -1,3 +1,5 @@
+;;; corfu.el --- Configure corfu -*- lexical-binding: t; -*-
+
 (use-package corfu
   :hook (elpaca-after-init . global-corfu-mode)
   ;; Optional customizations
@@ -79,3 +81,4 @@
   :after corfu
   :config
   (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
+;;; corfu.el ends here

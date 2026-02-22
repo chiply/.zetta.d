@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; line-utils.el --- Configure line utilities -*- lexical-binding: t; -*-
 
 ;;;;;; Utils
 (defvar ml-selected-window nil)
@@ -164,6 +164,4 @@
    line-align-right
    )
   )
-
-
-
+;;; line-utils.el ends here

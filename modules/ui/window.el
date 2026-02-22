@@ -1,3 +1,5 @@
+;;; window.el --- Configure window management -*- lexical-binding: t; -*-
+
 (require 'window)
 
 ;; NOTE this makes them look almost invisible, better than disabling
@@ -163,3 +165,4 @@
           ;; and reset to (global) default size
           (text-scale-adjust 0))
  )
+;;; window.el ends here

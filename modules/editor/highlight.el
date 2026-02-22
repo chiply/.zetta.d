@@ -1,3 +1,5 @@
+;;; highlight.el --- Configure highlight -*- lexical-binding: t; -*-
+
 (use-package highlight
   :config
   (setq hlt-use-overlays-flag t)
@@ -7,4 +9,4 @@
    )
   
   )
-
+;;; highlight.el ends here

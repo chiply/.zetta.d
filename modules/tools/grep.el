@@ -1,3 +1,5 @@
+;;; grep.el --- Configure grep -*- lexical-binding: t; -*-
+
 (use-package grep
   :ensure nil
   :after embark
@@ -12,4 +14,4 @@
    "g r" 'embark-rerun-collect-or-export
    )
   )
-
+;;; grep.el ends here

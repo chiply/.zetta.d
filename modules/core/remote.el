@@ -1,3 +1,5 @@
+;;; remote.el --- Configure remote editing -*- lexical-binding: t; -*-
+
 (setq tramp-default-method "ssh")
 (setq tramp-shell-prompt-pattern "\\(?:^\\|\r\\)[^]#$%>\n]*#?[]#$%>].* *\\(^[\\[[0-9;]*[a-zA-Z] *\\)*")
 
@@ -34,3 +36,4 @@
     (process-send-string nm cmd)
     ) 
   )
+;;; remote.el ends here

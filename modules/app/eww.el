@@ -1,3 +1,5 @@
+;;; eww.el --- Configure eww -*- lexical-binding: t; -*-
+
 (use-package eww
   :ensure nil
   :commands (eww eww-browse-url)
@@ -77,3 +79,4 @@
    :keymaps 'menu-lookup-map
    "e" 'eww
    ))
+;;; eww.el ends here

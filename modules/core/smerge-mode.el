@@ -1,3 +1,5 @@
+;;; smerge-mode.el --- Configure smerge-mode -*- lexical-binding: t; -*-
+
 (use-package smerge-mode
   :ensure nil
 
@@ -22,3 +24,4 @@
    "k" (** smerge-kill-current))
 
   )
+;;; smerge-mode.el ends here

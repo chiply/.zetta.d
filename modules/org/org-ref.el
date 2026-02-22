@@ -1,3 +1,5 @@
+;;; org-ref.el --- Configure org-ref -*- lexical-binding: t; -*-
+
 (use-package org-ref
   :demand t
   :config
@@ -37,3 +39,4 @@
    ;;"s-u" 'org-ref-bibtex-hydra/body
    ;;)
   )
+;;; org-ref.el ends here

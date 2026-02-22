@@ -1,3 +1,5 @@
+;;; treesit.el --- Configure treesit -*- lexical-binding: t; -*-
+
 
 ;; `M-x combobulate' (default: `C-c o o') to start using Combobulate
 (use-package treesit
@@ -70,3 +72,4 @@
     ;; Amend this to the directory where you keep Combobulate's source
     ;; code.
     ))
+;;; treesit.el ends here

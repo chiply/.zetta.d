@@ -1,3 +1,5 @@
+;;; minimap.el --- Configure minimap -*- lexical-binding: t; -*-
+
 ;; NOTE revisited on May 9th.  Basically the minimap doesn't work well
 ;; wiht spacetree.  Tried all different settings to get around this,
 ;; but best thing to do is simply not use the interactive version.
@@ -201,15 +203,4 @@
    "s-}" 'zetta-toggle-minimap-follow
    )
   )
-
-
-
-
-
-
-
-
-
-
-
-
+;;; minimap.el ends here

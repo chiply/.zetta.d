@@ -1,3 +1,5 @@
+;;; whisper.el --- Configure whisper -*- lexical-binding: t; -*-
+
 (use-package whisper
   :ensure (whisper :type git :host github :repo "natrys/whisper.el")
   :config
@@ -81,7 +83,4 @@ If `DEVICE-NAME' is provided, it will be used instead of prompting the user."
    "s-;" 'whisper-run
    )
   )
-
-
-
-
+;;; whisper.el ends here

@@ -1,3 +1,5 @@
+;;; emmet-mode.el --- Configure emmet-mode -*- lexical-binding: t; -*-
+
 (use-package emmet-mode
   :after (web-mode js2-mode rjsx-mode)
   :config
@@ -16,3 +18,4 @@
          (web-mode . (lambda () (setq-local emmet-expand-jsx-className? nil)))
          )
   )
+;;; emmet-mode.el ends here

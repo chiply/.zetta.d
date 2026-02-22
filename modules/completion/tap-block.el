@@ -1,9 +1,9 @@
+;;; tap-block.el --- Configure tap block navigation -*- lexical-binding: t; -*-
+
 ;; TODO:
 ;; block titles -- just maker sure the reggex works
 ;; naming convention: tap-[thing]-
 ;; functiton to surround selection witth block open and block end
-
-
 
 
 
@@ -57,7 +57,7 @@
 
 (defun block-forward-block (&optional arg)
   (interactive "p")
-  (setq arg (or arg 1)) 
+  (setq arg (or arg 1))
   (while (and (> arg 0) (not (eobp)) (block-next-block))
     (setq arg (1- arg)))
   (while (and (< arg 0) (not (bobp)) (block-backward-block))
@@ -115,7 +115,4 @@
 
 (put 'block 'bounds-of-thing-at-point 'block-bounds-of-block-at-point)
 
-
-
-
-
+;;; tap-block.el ends here

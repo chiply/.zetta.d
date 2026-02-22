@@ -1,3 +1,5 @@
+;;; citar.el --- Configure citar -*- lexical-binding: t; -*-
+
 (use-package citar
   :after all-the-icons
   :config
@@ -28,4 +30,4 @@
   :after citar embark
   :no-require
   :config (citar-embark-mode))
-
+;;; citar.el ends here

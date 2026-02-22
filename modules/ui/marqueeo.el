@@ -1,3 +1,5 @@
+;;; marqueeo.el --- Configure marqueeo -*- lexical-binding: t; -*-
+
 ;;(use-package marqueeo
   ;;:after magit
   ;;:ensure (marqueeo :type git :host github :repo "progfolio/marqueeo"
@@ -39,9 +41,4 @@
 ;;
   ;;(marqueeo--maybe-advise-magit-push)
   ;;)
-
-
-
-
-
-
+;;; marqueeo.el ends here

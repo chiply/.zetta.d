@@ -1,3 +1,5 @@
+;;; symbol-overlay.el --- Configure symbol-overlay -*- lexical-binding: t; -*-
+
 (use-package symbol-overlay
   :after transient
   :config
@@ -51,3 +53,4 @@
                    jsonian-mode json-mode web-mode shell-command-mode sh-mode grep-mode
                    lark-mode makefile-mode helpful-mode org-mode terraform-mode) .
                    symbol-overlay-mode))
+;;; symbol-overlay.el ends here

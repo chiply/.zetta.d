@@ -1,3 +1,5 @@
+;;; foreman_conf.el --- Configure foreman process manager -*- lexical-binding: t; -*-
+
 ;; this file represents config space for 4mn.  This is what an end user will interact with to
 ;; add their programming language of choice
 
@@ -358,18 +360,4 @@
    )
   
   )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+;;; foreman_conf.el ends here

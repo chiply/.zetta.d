@@ -1,3 +1,5 @@
+;;; ace-window.el --- Configure ace-window -*- lexical-binding: t; -*-
+
 (use-package ace-window
   :demand t
   :commands (ace-window ace-select-window ace-delete-window ace-swap-window)
@@ -46,3 +48,4 @@
 
   :hook (use-package--ace-window--post-config . zetta-brushup)
   )
+;;; ace-window.el ends here

@@ -1,3 +1,5 @@
+;;; mw-thesaurus.el --- Configure mw-thesaurus -*- lexical-binding: t; -*-
+
 (use-package mw-thesaurus
   :general
   (
@@ -6,3 +8,4 @@
    "S" 'mw-thesaurus-lookup
    )
   )
+;;; mw-thesaurus.el ends here

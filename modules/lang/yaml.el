@@ -1,3 +1,5 @@
+;;; yaml.el --- Configure yaml -*- lexical-binding: t; -*-
+
 (use-package yaml
   :ensure (yaml :host github :repo "zkry/yaml.el"))
 
@@ -42,3 +44,4 @@
 (eval-after-load 'yaml-mode
   '(progn
      (define-key yaml-mode-map (kbd "C-x p") 'jpt-yaml-show-path-to-point)))
+;;; yaml.el ends here

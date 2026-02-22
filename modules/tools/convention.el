@@ -1,3 +1,5 @@
+;;; convention.el --- Configure convention -*- lexical-binding: t; -*-
+
 ;;(use-package convention
   ;;:straight nil
   ;;:load-path (expand-file-name "source/zettapkg/convention" user-emacs-directory)
@@ -43,3 +45,4 @@
    ;;"d" 'hydra-convention/body
    ;;)
   ;;)
+;;; convention.el ends here

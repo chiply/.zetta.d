@@ -1,3 +1,5 @@
+;;; python.el --- Configure pyvenv -*- lexical-binding: t; -*-
+
 ;; write a function that finds the first parent directory with a pyproject.toml
 ;; the function should return nil if no such directory is found
 (defun zetta-find-poetry-project-root ()
@@ -77,4 +79,4 @@
   (setq numpydoc-insertion-style nil)
   :bind (:map python-ts-mode-map
               ("C-c C-n" . numpydoc-generate)))
-
+;;; python.el ends here

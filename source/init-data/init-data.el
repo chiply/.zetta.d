@@ -70,7 +70,6 @@
    "ui/default-text-scale.el"
    "ui/hl-line.el"
    ;;"ui/lin.el"
-   "ui/hide-mode-line.el"
    "ui/all-the-icons.el"
    "ui/minimalize.el"
    "ui/treemacs.el"
@@ -104,7 +103,6 @@
    "ui/awesome-tray.el"
    "ui/telephone-line.el"
    "ui/keycast.el"
-   "ui/marqueeo.el"
    "ui/ef-themes.el"
    "ui/doric-themes.el"
    "ui/adaptive-wrap.el"
@@ -115,7 +113,6 @@
 
    ;; editor
    "editor/super-save.el"
-   "editor/repeatable-lite.el"
    "editor/editing.el"
    "editor/smartparens.el"
    "editor/hungry-delete.el"

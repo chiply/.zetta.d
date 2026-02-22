@@ -1,6 +1,7 @@
 ;;; graphviz-dot-mode.el --- Configure graphviz-dot-mode -*- lexical-binding: t; -*-
 
 (use-package graphviz-dot-mode
+  :if (executable-find "dot")
   :config
   (defun extract-requires (file)
     "Extract require statements from elisp FILE."

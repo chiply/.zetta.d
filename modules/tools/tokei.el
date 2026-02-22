@@ -1,6 +1,7 @@
 ;;; tokei.el --- Configure tokei -*- lexical-binding: t; -*-
 
 (use-package tokei
+  :if (executable-find "tokei")
   :config
   ;; overwriting the tokei function to allow for display buffer
   (defun tokei ()

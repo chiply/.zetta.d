@@ -1,6 +1,7 @@
 ;;; consult-gh.el --- Configure consult-gh -*- lexical-binding: t; -*-
 
 (use-package consult-gh
+  :if (executable-find "gh")
   :ensure (consult-gh
            :host github
            :repo "armindarvish/consult-gh"
@@ -64,12 +65,14 @@ STYLE defaults to `consult-async-split-style'."
   )
 
 (use-package consult-gh-embark
+  :if (executable-find "gh")
   :ensure t
   :after consult-gh
   :config
   (consult-gh-embark-mode +1))
 
 (use-package consult-gh-forge
+  :if (executable-find "gh")
   :ensure t
   :after consult-gh
   :config

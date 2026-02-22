@@ -15,7 +15,7 @@
 (global-auto-revert-mode 1) ;; you might not want this
 (setq auto-revert-verbose nil) ;; or this
 
-;; need t turn his on per mode, causes oo many issues
+;; need to turn this on per mode, causes too many issues
 (global-visual-line-mode -1)
 
 (pixel-scroll-precision-mode 1)
@@ -224,7 +224,7 @@
 (setq read-extended-command-predicate #'command-completion-default-include-p)
 
 ;; note can change the minibuffer font in this way.  not doing this
-;; for now because the echo area height is determined by teh default
+;; for now because the echo area height is determined by the default
 ;; font size.  so when there is a short default font and the font set
 ;; here is taller, then the minibuffer resizes whenever it gets used,
 ;; causign jitter in the interface

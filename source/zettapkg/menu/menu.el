@@ -70,11 +70,6 @@
 ;; manner (another TODO).  The main todo for now is to make which key
 ;; work from menu
 
-;; LEFTOFF - mostly working, but C-h doesn't work in which key from
-;; menu... also, even when i can get the which key help up things like
-;; toggle docstrings doesn't work because it goes back to the SEQUENCE
-;; which is top level, not the keymap... another reason why maybe
-;; which key shouldn't really be integrated as a helper here...
 ;; potential design choice would be to keep which key for versatile
 ;; c-h and abandon for menu...  justifiable -- value in which key
 ;; interface is being able to explore keymaps... not really as
@@ -240,8 +235,6 @@ function weirdly leaves the map message in the echo area, not sure why")
               ;; ,wh is a full key chord -- ,w sets the new transient
               ;; map, of which h is a part
 
-              ;; LEFTOFF TODO C-h doesn't trigger, but I think it's because it
-              ;; isn't bound when displaying which-key this way
               (progn
                 (which-key--create-buffer-and-show nil menu--active-km)
                 ;;(setq zetta-which-key-showing t)

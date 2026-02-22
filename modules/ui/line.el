@@ -1,14 +1,5 @@
 ;;; line.el --- Configure mode-line -*- lexical-binding: t; -*-
 
-;; REFACTOR!
-;; separate modeline functions
-;; this will make it read much much clearner and make it easier to
-;; test these functions which is important as these functions need to
-;; be very efficient
-;; zetta-line-...
-
-;; TODO
-;; need 1 per line
 (setq default-line-align-left-devel-1
       '(
         ;; leaving this out for now as its easy to see what it is with a command

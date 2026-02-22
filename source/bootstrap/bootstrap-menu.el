@@ -51,11 +51,6 @@ key that is available in many contexts"
   ;;(defmenu+ menu-org menu-org-keymap "O")
   ;;(defmenu+ menu-theme menu-theme-keymap "t")
 
-  ;; TODO move to magit -- not used here
-  ;;(defmenu+ menu-vc menu-vc-keymap "g")
-
-  ;; TODO this somehow gets overwritten elsewhere whatever overwrites
-  ;; this actually doesn't work at all (doesn't show any kind of help)
   (setq prefix-help-command 'versatile-C-h)
   )
 

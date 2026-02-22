@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; early-init.el --- Configure early initialization -*- lexical-binding: t; -*-
 
 ;; Disable built-in package manager (using Elpaca instead)
 (setq package-enable-at-startup nil)
@@ -31,3 +31,4 @@
 (setq-default bidi-display-reordering 'left-to-right
               bidi-paragraph-direction 'left-to-right)
 (setq bidi-inhibit-bpa t)
+;;; early-init.el ends here

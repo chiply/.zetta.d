@@ -1,4 +1,4 @@
-;;; -*- lexical-binding: t -*-
+;;; bootstrap-hydra.el --- Configure hydra menus -*- lexical-binding: t; -*-
 
 (setq shouldnt-load nil)
 
@@ -107,7 +107,4 @@ Arguments are same as of `defhydra'."
 (add-to-list 'use-package-keywords :hydra t)
 
 (provide 'bootstrap-hydra)
-
-
-
-
+;;; bootstrap-hydra.el ends here

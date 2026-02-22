@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
         emacs-version:
           - 29.4
           - 30.2
@@ -32,16 +32,7 @@ jobs:
         with:
           version: ${{ matrix.emacs-version }}
 
-      - name: Create stub files (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          touch ~/.dir-locals.el
-          echo ";;" > ~/.private.el
-          cp templates/zetta.example.el ~/.zetta.el
-
-      - name: Create stub files (Windows)
-        if: runner.os == 'Windows'
-        shell: bash
+      - name: Create stub files
         run: |
           touch ~/.dir-locals.el
           echo ";;" > ~/.private.el

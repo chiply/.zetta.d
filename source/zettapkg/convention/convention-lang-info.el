@@ -92,7 +92,7 @@
                        ("default-cli-program" . "psql ")
                        ("connection-string" .  "postgres://${username}:${password}@localhost:${port}")
                        ("run-lang-cmd" . "psql postgres://${username}:${password}@localhost:${port} -f ")
-                       
+
                        ))
         ("mysql" . (
                        ("extra-frags" .,(concat
@@ -118,8 +118,6 @@
                        ))
         ))
 
-
-
 (defun convention-list-supported-langs ()
   "Returns a list representing languages supported by convention"
   (mapcar 'car convention-language-info-alist))
@@ -127,7 +125,7 @@
 (defun convention-guess-lang-from-image-or-container-name (image-or-container-name)
   "Returns a string representing the language associated with an image or
    container based on the image name or container name, respectively"
-  (nth 0 (seq-filter (function (lambda (x) (string-match-p (regexp-quote x) image-or-container-name))) 
+  (nth 0 (seq-filter (function (lambda (x) (string-match-p (regexp-quote x) image-or-container-name)))
               (convention-list-supported-langs)) ))
 
 (defun convention-query-lang-info (image-or-container-name label)
@@ -141,7 +139,5 @@
    and returns the element specified by the given LABEL for a given LANG"
   (let ((lang (convention-guess-lang-from-image-or-container-name image-or-container-name)))
     (convention-util-recursive-assoc-cdr `(,lang "install-info" ,label) convention-language-info-alist)))
-
-
 
 (provide 'convention-lang-info)

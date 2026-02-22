@@ -16,27 +16,27 @@ URL should be a Reddit permalink or comments URL."
     (cond
      ;; Already a JSON URL
      ((string-match-p "\\.json$" url) url)
-     
+
      ;; Reddit permalink or comments URL
      ((string-match "reddit\\.com/r/[^/]+/comments/[^/?]+" url)
       (let ((clean-url (replace-regexp-in-string "\\?.*" "" url)))
         (if (string-suffix-p "/" clean-url)
             (concat clean-url ".json")
           (concat clean-url "/.json"))))
-     
+
      ;; Old reddit format
      ((string-match "old\\.reddit\\.com" url)
       (md4rd--convert-to-json-url (replace-regexp-in-string "old\\." "" url)))
-     
-     ;; Mobile reddit format  
+
+     ;; Mobile reddit format
      ((string-match "m\\.reddit\\.com" url)
       (md4rd--convert-to-json-url (replace-regexp-in-string "m\\." "" url)))
-     
+
      ;; www.reddit format
      ((string-match "www\\.reddit\\.com" url)
       (md4rd--convert-to-json-url (replace-regexp-in-string "www\\." "" url)))
-     
-     (t 
+
+     (t
       (message "Invalid Reddit URL format: %s" url)
       nil)))
 
@@ -74,7 +74,6 @@ URL should be a Reddit permalink or comments URL."
       (t :background unspecified :foreground "#90a959"))
     "Face for rendering greentexts."
     :group 'md4rd)
-
 
   ;; NOTE buggy
   ;;(add-hook 'md4rd-mode-hook 'md4rd-indent-all-the-lines)

@@ -1,7 +1,7 @@
 ;;; project.el --- Configure project -*- lexical-binding: t; -*-
 
 (use-package project
-  :ensure nil ;; builtin 
+  :ensure nil ;; builtin
   :after consult
   :demand t
   :config
@@ -29,7 +29,7 @@
                               :prompt "Project: "
                               :category 'project)))
       (call-interactively 'magit)))
-  
+
   (general-define-key
    :keymaps 'menu-project-map
    ;; TODO see if this works

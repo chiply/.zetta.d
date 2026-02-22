@@ -32,7 +32,6 @@
 (defun spot--consult-completion-function-consult-audiobook (query)
   (spot--search-cached-and-locked query spot--mutex spot--cache) spot--candidates-audiobook)
 
-
 ;; histories
 (setq spot--history-sourceAlbum nil)
 (setq spot--history-sourceArtist nil)
@@ -41,7 +40,6 @@
 (setq spot--history-sourceShow nil)
 (setq spot--history-sourceEpisode nil)
 (setq spot--history-sourceAudiobook nil)
-
 
 ;; sources
 (setq spot--consult-source-album
@@ -54,7 +52,6 @@
         :category album
         :history spot--history-sourceAlbum))
 
-
 (setq spot--consult-source-artist
       `(
         :async ,(consult--dynamic-collection
@@ -64,7 +61,6 @@
         :narrow ?A
         :category artist
         :history spot--history-sourceArtist))
-
 
 (setq spot--consult-source-playlist
       `(
@@ -76,7 +72,6 @@
         :category playlist
         :history spot--history-sourcePlaylist))
 
-
 (setq spot--consult-source-track
       `(
         :async ,(consult--dynamic-collection
@@ -86,7 +81,6 @@
         :narrow ?t
         :category track
         :history spot--history-sourceTrack))
-
 
 (setq spot--consult-source-show
       `(
@@ -98,7 +92,6 @@
         :category show
         :history spot--history-sourceShow))
 
-
 (setq spot--consult-source-episode
       `(
         :async ,(consult--dynamic-collection
@@ -108,7 +101,6 @@
         :narrow ?e
         :category episode
         :history spot--history-sourceEpisode))
-
 
 (setq spot--consult-source-audiobook
       `(
@@ -120,7 +112,6 @@
         :category audiobook
         :history spot--history-sourceAudiobook))
 
-
 (setq search-sources
       '(
         spot--consult-source-album spot--consult-source-artist
@@ -128,10 +119,8 @@
         spot--consult-source-show spot--consult-source-episode
         spot--consult-source-audiobook))
 
-
 ;; multi
 (setq spot--consult-search-search-history nil)
-
 
 (defun spot-consult-search (&optional initial)
   (interactive)
@@ -141,7 +130,6 @@
    search-sources
    :history '(:input spot--consult-search-search-history)
    :initial initial))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; current user playlists
@@ -158,9 +146,7 @@
       :parse-json t))
     'items)))
 
-
 (setq spot--history-sourceCurrentUserPlaylists nil)
-
 
 (setq spot--consult-source-current-user-playlists
       `(
@@ -172,9 +158,7 @@
         :category current-user-playlists
         :history spot--history-sourceCurrentUserPlaylists))
 
-
 (setq spot--consult-search-current-user-playlists-history nil)
-
 
 (defun spot-consult-search-current-user-playlists ()
   "NOTE this doesn't actually query the backend to filter playlists,rather
@@ -184,7 +168,6 @@ SPC and comma to filter the output"
   (consult--multi
    '(spot--consult-source-current-user-playlists)
    :history '(:input spot--consult-search-current-user-playlists-history)))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; playlist tracks
@@ -203,9 +186,7 @@ SPC and comma to filter the output"
        :parse-json t))
      'items))))
 
-
 (setq spot--history-sourcePlaylistTracks nil)
-
 
 (setq spot--consult-source-playlists-tracks
       `(
@@ -217,9 +198,7 @@ SPC and comma to filter the output"
         :category playlist-tracks
         :history spot--history-sourcePlaylistTracks))
 
-
 (setq spot--consult-search-playlist-tracks-history nil)
-
 
 (defun spot-consult-search-playlist-tracks ()
   "NOTE this doesn't actually query the backend to filter playlists,rather
@@ -229,7 +208,5 @@ SPC and comma to filter the output"
   (consult--multi
    '(spot--consult-source-playlists-tracks)
    :history '(:input spot--consult-search-playlist-tracks-history)))
-
-
 
 (provide 'spot-consult)

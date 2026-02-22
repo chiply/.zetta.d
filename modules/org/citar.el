@@ -20,11 +20,9 @@
    citar-library-paths (list (expand-file-name "pdf" zetta-literature-dir))
    )
 
-
   :custom
   (citar-bibliography (list (expand-file-name "bibliography.bib" zetta-literature-dir)))
   )
-
 
 (use-package citar-embark
   :after citar embark

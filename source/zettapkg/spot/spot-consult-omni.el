@@ -7,8 +7,6 @@
 (require 'spot-var)
 (require 'spot-search)
 
-
-
 ;;; Completion functions
 ;; album
 ;; TODO -- can async re-use this function?
@@ -20,7 +18,6 @@
     (funcall callback annotated-results)
     annotated-results))
 
-
 ;; artist
 (cl-defun spot--omni-request-artist (query &rest args &key callback &allow-other-keys)
   (let ((annotated-results
@@ -29,7 +26,6 @@
                 spot--candidates-artist)))
     (funcall callback annotated-results)
     annotated-results))
-
 
 ;; playlist
 (cl-defun spot--omni-request-playlist (query &rest args &key callback &allow-other-keys)
@@ -91,7 +87,6 @@
     (funcall callback annotated-results)
     annotated-results))
 
-
 ;; playlist tracks
 (cl-defun spot--omni-request-playlist-tracks (query &rest args &key callback &allow-other-keys)
   (let ((annotated-results
@@ -109,11 +104,9 @@
     (funcall callback annotated-results)
     annotated-results))
 
-
 ;;; consult-omni
 (defun spot--omni-group-function (sources cand transform &optional group-by)
   (ht-get (get-text-property 0 'multi-data cand) 'type))
-
 
 ;; artist
 (consult-omni-define-source
@@ -124,7 +117,6 @@
  :interactive consult-omni-intereactive-commands-type
  :enabled t)
 
-
 ;; album
 (consult-omni-define-source
  "album"
@@ -133,7 +125,6 @@
  :group #'spot--omni-group-function
  :interactive consult-omni-intereactive-commands-type
  :enabled t)
-
 
 ;; playlist
 (consult-omni-define-source
@@ -144,7 +135,6 @@
  :interactive consult-omni-intereactive-commands-type
  :enabled t)
 
-
 ;; track
 (consult-omni-define-source
  "track"
@@ -153,7 +143,6 @@
  :group #'spot--omni-group-function
  :interactive consult-omni-intereactive-commands-type
  :enabled t)
-
 
 ;; show
 (consult-omni-define-source
@@ -164,7 +153,6 @@
  :interactive consult-omni-intereactive-commands-type
  :enabled t)
 
-
 ;; episode
 (consult-omni-define-source
  "episode"
@@ -173,7 +161,6 @@
  :group #'spot--omni-group-function
  :interactive consult-omni-intereactive-commands-type
  :enabled t)
-
 
 ;; audiobook
 (consult-omni-define-source
@@ -184,7 +171,6 @@
  :interactive consult-omni-intereactive-commands-type
  :enabled t)
 
-
 ;; current-user-playlists
 (consult-omni-define-source
  "current-user-playlists"
@@ -193,7 +179,6 @@
  :group #'spot--omni-group-function
  :interactive consult-omni-intereactive-commands-type
  :enabled t)
-
 
 ;; MULTI
 (setq
@@ -204,6 +189,5 @@
   (interactive "P")
   (let ((sources (or sources consult-omni-spot-sources)))
     (consult-omni-multi initial prompt sources no-callback 1 args)))
-
 
 (provide 'spot-consult-omni)

@@ -23,7 +23,6 @@
    :keymaps 'menu-run-map
    "H" (** zetta-soda-cap-help))
 
-
   :general
   (
    :keymaps 'menu-help-map

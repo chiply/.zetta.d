@@ -1,6 +1,5 @@
 ;;; x.el --- x -*- lexical-binding: t -*-
 
-
 ;; notes
 
 ;; step 1: get hello world template to render
@@ -9,7 +8,6 @@
 ;; step 4:
 
 (require use-package)
-
 
 (use-package multi-compile
   :config
@@ -27,11 +25,6 @@
                    ("goodbye" "echo bye" default-directory)
                    ))
    ))
-
-
-
-
-
 
 (provide 'x)
 ;;; x.el ends here

@@ -16,7 +16,6 @@
 (if debug-on-error
     (toggle-debug-on-error))
 
-
 (general-unbind :keymaps 'minibuffer-local-map "C-r" nil)
 
 (defun consult-selection-history-prompt (&optional history index bol)
@@ -69,8 +68,6 @@
 (add-to-list 'savehist-additional-variables 'elfeed-search-filter-history)
 (add-to-list 'savehist-additional-variables 'transient-history)
 (add-to-list 'savehist-additional-variables 'bookmark-view-history)
-
-
 
 ;; needed to load savehist data since initializing the package
 ;; overwrites the history

@@ -8,7 +8,6 @@
     "Thing is a quoted symbol"
     (setq-local focus-current-thing thing))
 
-
   :brushup
   (add-to-list
    'brushup-styles
@@ -24,13 +23,11 @@
 
   (add-to-list 'focus-mode-to-thing '(python-ts-mode . lsp-folding-range))
 
-
   :general
   (
    :keymaps 'menu-window-map
    "C-f" (** focus-mode)
    )
-
 
   ;;:hook (((prog-mode) . (lambda () (focus-mode)))
          ;;(emacs-lisp-mode . (lambda () (zetta-focus-mode 'defun)))

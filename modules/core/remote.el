@@ -3,7 +3,6 @@
 (setq tramp-default-method "ssh")
 (setq tramp-shell-prompt-pattern "\\(?:^\\|\r\\)[^]#$%>\n]*#?[]#$%>].* *\\(^[\\[[0-9;]*[a-zA-Z] *\\)*")
 
-
 ;; stuff to speed up tramp
 ;; probably doesn't have a significant affect
 (setq remote-file-name-inhibit-cache nil)
@@ -13,7 +12,6 @@
               tramp-file-name-regexp))
 (setq tramp-verbose 1)
 
-
 (defun zetta-ssh ()
   "A function to conveniently ssh into a server"
   (interactive)
@@ -21,7 +19,7 @@
                                                       "som")))
          (default-directory (concat "/ssh:" host ":/")))
     (call-interactively 'find-file)
-    ) 
+    )
   )
 
 (defun zetta-ssh-shell ()
@@ -34,6 +32,6 @@
          )
     (vterm nm)
     (process-send-string nm cmd)
-    ) 
+    )
   )
 ;;; remote.el ends here

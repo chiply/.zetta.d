@@ -1,6 +1,5 @@
 ;; change make process to make repl
 
-
 ;; pkg imports
 (require 's)
 
@@ -20,7 +19,6 @@
 (defvar convention-dir (expand-file-name "source/zettapkg/convention/" user-emacs-directory)
   "Absolute path of the directory containing convention code on the end user's machine")
 
-
 ;;;;;;;;;;;;;; display
 (add-to-list 'display-buffer-alist
              `("^\\*convention*"
@@ -30,8 +28,6 @@
                (slot . 2)
                (window-parameters . ((no-delete-other-windows . 1)))
                ))
-
-
 
 ;; provide
 (provide 'convention)

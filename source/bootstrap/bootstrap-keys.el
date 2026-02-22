@@ -44,7 +44,6 @@
 
       (display-buffer-in-side-window which-key--buffer alist)
       (setq zetta-which-key-showing t)
-      ;;(setq which-key-idle-delay 1000)
       (setq prefix-help-command 'which-key-C-h-dispatch)
       ))
 
@@ -316,29 +315,6 @@ Finally, show the buffer."
 
 ;; then actually edit code to use direct general bindings instead of my custom function
 ;; define code for easily switching between modes -- use whatever is bound to c-z but make it cylce through
-
-;; NOTE general-chord doesn't work anymore
-;; not used, but may be used in the future if general chord will be used
-;; (defun define-launch-key (pairs)
-;;   "Creates opinionated set of general-define-key forms for defining
-;;   the keybindings provided in PAIRS to evil-mode and meow-mode.  Each
-;;   of these modes requires separate keybindings in insert and
-;;   non-insert modes, which is made possible by general-chord.  So to
-;;   define a complete set of global keybindings for, let's say
-;;   find-file, one would need to create 4 separate forms per set of
-;;   PAIRS, which is impractical.  This function offers syntactic sugar."
-;;   (eval
-;;    `(progn
-;;       ;; non-insert
-;;       ,(append '(general-define-key) '(:keymaps 'launch-map) pairs)
-;;       ;; insert
-;;       ,(append '(general-define-key)
-;;                '(:keymaps zetta-modal-states-insert)
-;;                (mapcar
-;;                 (lambda (x)
-;;                   (if (eq (mod (seq-position pairs x) 2) 1)
-;;                       x `(general-chord ,(concat launch-key x))))
-;;                 pairs)))))
 
 (provide 'bootstrap-keys)
 ;;; bootstrap-keys.el ends here

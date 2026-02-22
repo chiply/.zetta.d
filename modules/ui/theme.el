@@ -1,3 +1,5 @@
+;;; theme.el --- Configure modus-themes -*- lexical-binding: t; -*-
+
 (use-package modus-themes
   :init
   (load-theme zetta-theme t))
@@ -28,3 +30,4 @@
 
 (message "chocolate-theme")
 (use-package chocolate-theme)
+;;; theme.el ends here

@@ -1,3 +1,5 @@
+;;; git-gutter.el --- Configure diff-hl -*- lexical-binding: t; -*-
+
 ;; nicer alternative, but doesn't seem to work in the margins
 ;; fringe mode is nicer, but overlaps with too much other stuff
 (use-package diff-hl)
@@ -39,3 +41,4 @@
 
   :hook (use-package--git-gutter--post-config . zetta-brushup)
   )
+;;; git-gutter.el ends here

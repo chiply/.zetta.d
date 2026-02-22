@@ -1,3 +1,5 @@
+;;; dogears.el --- Configure dogears -*- lexical-binding: t; -*-
+
 (use-package dogears
   :config
   ;; function
@@ -38,4 +40,4 @@
 
   :hook (dogears-list-mode . (lambda () (text-scale-set 0))) ;; to appease tablist mode
   )
-
+;;; dogears.el ends here

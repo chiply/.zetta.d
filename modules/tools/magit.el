@@ -1,3 +1,5 @@
+;;; magit.el --- Configure magit -*- lexical-binding: t; -*-
+
 (use-package compat :ensure nil :demand t)
 
 (use-package ghub
@@ -106,4 +108,4 @@
    )
 
   )
-
+;;; magit.el ends here

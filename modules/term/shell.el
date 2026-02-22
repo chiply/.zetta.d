@@ -1,3 +1,5 @@
+;;; shell.el --- Configure shell -*- lexical-binding: t; -*-
+
 
 
 (setq read-process-output-max (* 64 1024 1024))
@@ -33,3 +35,4 @@
 
 (setq shell-file-name "zsh")
 (setq shell-command-switch "-c")
+;;; shell.el ends here

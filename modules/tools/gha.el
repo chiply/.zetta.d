@@ -1,3 +1,5 @@
+;;; gha.el --- Configure GitHub Actions support -*- lexical-binding: t; -*-
+
 (setq zetta-gh-list-run-command-for-watch "gh run list --json conclusion,databaseId,displayTitle,event,headBranch,name,startedAt,status,updatedAt,workflowDatabaseId --jq ' [.[] | select(.updatedAt > (now - ( 0.1 * 86400))) ]'")
 (setq zetta-gh-run-watch-command "gh run watch -i 10 %s; osascript -e 'display notification \"%s %s\" with title \"%s || %s\" sound name \"Frog\"'")
 (setq zetta-gh-list-run-command-for-view "gh run list --json conclusion,databaseId,displayTitle,event,headBranch,name,startedAt,status,updatedAt,workflowDatabaseId --jq ' [.[]| select(.updatedAt > (now-( 30 * 86400)))]'")
@@ -74,4 +76,4 @@
  :keymaps 'magit-mode-map
  "g a w" 'zetta-gh-run-watch-interact
  "g a l" 'zetta-gh-run-view-log-interact)
-
+;;; gha.el ends here

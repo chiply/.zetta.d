@@ -1,3 +1,5 @@
+;;; highlight-indent-guides.el --- Configure highlight-indent-guides -*- lexical-binding: t; -*-
+
 (use-package highlight-indent-guides
 
   ;; a surprisingl useful package
@@ -60,3 +62,4 @@
          ;;highlight-indent-guides-mode
          ;;)
   )
+;;; highlight-indent-guides.el ends here

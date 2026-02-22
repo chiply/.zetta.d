@@ -1,3 +1,5 @@
+;;; parrot.el --- Configure parrot -*- lexical-binding: t; -*-
+
 (use-package parrot
   :commands (parrot-mode parrot-start-animation)
   :ensure (parrot :type git :host github :repo "positron-solutions/parrot")
@@ -52,5 +54,4 @@ Use `parrot-progress-finished' to stop."
   :hook
   ((magit-status-mode . (lambda () (parrot-mode) (parrot-stop-animation)))
    (org-mode . (lambda () (parrot-mode) (parrot-stop-animation)))))
-
-
+;;; parrot.el ends here

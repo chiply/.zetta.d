@@ -1,3 +1,5 @@
+;;; hl-line.el --- Configure hl-line -*- lexical-binding: t; -*-
+
 (use-package hl-line
   :ensure nil
   :init
@@ -14,5 +16,4 @@
                   (set-face-attribute 'hl-line nil
                                       :background 'unspecified
                                       :underline `(:color ,brushup-bg-5)))))
-
-
+;;; hl-line.el ends here

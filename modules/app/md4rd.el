@@ -1,3 +1,5 @@
+;;; md4rd.el --- Configure md4rd -*- lexical-binding: t; -*-
+
 (use-package md4rd
   :config
   (defun md4rd-load-comments-from-url (url)
@@ -77,3 +79,4 @@ URL should be a Reddit permalink or comments URL."
   ;; NOTE buggy
   ;;(add-hook 'md4rd-mode-hook 'md4rd-indent-all-the-lines)
   )
+;;; md4rd.el ends here

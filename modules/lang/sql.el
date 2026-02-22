@@ -1,3 +1,5 @@
+;;; sql.el --- Configure sql -*- lexical-binding: t; -*-
+
 
 
 (use-package sql
@@ -32,3 +34,4 @@
   ;; todo
   :hook (sql-mode . sqlup-mode)
   )
+;;; sql.el ends here

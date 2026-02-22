@@ -1,3 +1,5 @@
+;;; bookmark.el --- Configure bookmark -*- lexical-binding: t; -*-
+
 (use-package bookmark
   :ensure nil
   :commands (bookmark-set bookmark-jump bookmark-bmenu-list)
@@ -31,6 +33,4 @@
           )
    )
   )
-
-
-
+;;; bookmark.el ends here

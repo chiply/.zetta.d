@@ -1,3 +1,5 @@
+;;; osx-lib.el --- Configure osx-lib -*- lexical-binding: t; -*-
+
 (use-package osx-lib
   :config
   (setq osx-lib-say-rate 200)
@@ -8,7 +10,4 @@
   ;; function to display in a side buffer at top with interactive mode
   ;; turned on
   )
-
-
-
-
+;;; osx-lib.el ends here

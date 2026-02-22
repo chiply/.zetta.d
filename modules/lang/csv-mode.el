@@ -1,3 +1,5 @@
+;;; csv-mode.el --- Configure csv-mode -*- lexical-binding: t; -*-
+
 (use-package csv-mode
   :config
   (setq csv-align-max-width 40)
@@ -10,3 +12,4 @@
   :hook
   (csv-mode . (lambda () (setq-local zetta-zen-disable t) (text-scale-adjust 0)))
   )
+;;; csv-mode.el ends here

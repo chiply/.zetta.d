@@ -1,3 +1,5 @@
+;;; eca-emacs.el --- Configure eca -*- lexical-binding: t; -*-
+
 (use-package eca
   :ensure (eca :host github :repo "editor-code-assistant/eca-emacs" :files ("*.el"))
   :config
@@ -19,5 +21,4 @@
   ;;(setq eca-extra-args '("--verbose" "--log-level" "debug"))
   (setq eca-extra-args nil)
   )
-
-
+;;; eca-emacs.el ends here

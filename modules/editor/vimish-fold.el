@@ -1,3 +1,5 @@
+;;; vimish-fold.el --- Configure vimish-fold -*- lexical-binding: t; -*-
+
 (use-package vimish-fold
   :commands (vimish-fold vimish-fold-mode vimish-fold-toggle vimish-fold-avy)
   :init
@@ -88,3 +90,4 @@ of tap), then toggle the closest fold"
    "<S-tab>" 'vimish-fold-toggle-all
    )
   )
+;;; vimish-fold.el ends here

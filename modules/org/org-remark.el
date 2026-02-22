@@ -1,3 +1,5 @@
+;;; org-remark.el --- Configure org-remark -*- lexical-binding: t; -*-
+
 ;; LEFTOFF
 ;; DONE finish implementation for elfeed -- need to add advide to get highlights to render properly -- replace the hook with advice.
 ;; DONE also need to think more / investigate more about how to set the heading titles -- right now they somewhat match eww... -- maybe unecessary given the files paths -- a: unnecessary, use file paths for this
@@ -241,3 +243,4 @@
          ("C-c n [" . org-remark-view-prev)
          ("C-c n r" . org-remark-remove)
          ("C-c n d" . org-remark-delete)))
+;;; org-remark.el ends here

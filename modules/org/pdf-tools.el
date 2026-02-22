@@ -1,3 +1,5 @@
+;;; pdf-tools.el --- Configure pdf-tools -*- lexical-binding: t; -*-
+
 ;; org-pdftools and org-noter-pdftools are too buggy - they interfere
 ;; with org noter, prevents from being a able to create a skeleton.
 ;; also requires lots of patching to simply make annotations
@@ -48,6 +50,4 @@
   (setq org-noter-kill-frame-at-session-end nil)
   (setq org-noter-highlight-selected-text t)
   (setq org-noter-notes-search-path '("~/pdfnotes")))
-
-
-
+;;; pdf-tools.el ends here

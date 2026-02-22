@@ -1,3 +1,5 @@
+;;; compile.el --- Configure compile -*- lexical-binding: t; -*-
+
 (use-package compile
   :ensure nil ;; builtin
   :config
@@ -9,5 +11,4 @@
               (append-to-zsh-history (car args))))
   :general (:keymaps '(override) "s-r" 'recompile)
   )
-
-
+;;; compile.el ends here

@@ -1,3 +1,5 @@
+;;; undo-tree.el --- Configure undo-tree -*- lexical-binding: t; -*-
+
 (use-package undo-tree
   :init
   (setq undo-tree-enable-undo-in-region t)
@@ -83,3 +85,4 @@
 
   :hook (undo-tree-visualizer-mode . (lambda () (text-scale-set -2)))
   )
+;;; undo-tree.el ends here

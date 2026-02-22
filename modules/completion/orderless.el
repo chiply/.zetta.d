@@ -1,3 +1,5 @@
+;;; orderless.el --- Configure orderless -*- lexical-binding: t; -*-
+
 (use-package orderless
   :init
   ;; style dispatchers
@@ -43,7 +45,4 @@
   ;; NOTE also gets set in prescient
   (setq completion-styles '(tab orderless basic))
   )
-
-
-
-
+;;; orderless.el ends here

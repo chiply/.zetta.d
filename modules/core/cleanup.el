@@ -1,3 +1,5 @@
+;;; cleanup.el --- Configure startup cleanup -*- lexical-binding: t; -*-
+
 ;;;;;;;;;;;;;;;;;;;;;; very strange -- something is adding this hook to org-mode, which causes it to break
 (remove-hook 'org-mode-hook 'org)
 (setq request-storage-directory (expand-file-name ".data/request" user-emacs-directory))
@@ -73,3 +75,4 @@
 ;; needed to load savehist data since initializing the package
 ;; overwrites the history
 (savehist-mode 1)
+;;; cleanup.el ends here

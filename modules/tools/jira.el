@@ -1,3 +1,5 @@
+;;; jira.el --- Configure org-jira -*- lexical-binding: t; -*-
+
 (use-package org-jira
   :config
 
@@ -10,6 +12,4 @@
                 :filename "My current tasks")
           ))
   )
-
-
-
+;;; jira.el ends here

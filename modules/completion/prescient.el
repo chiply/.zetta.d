@@ -1,3 +1,5 @@
+;;; prescient.el --- Configure prescient -*- lexical-binding: t; -*-
+
 ;; NOTE using for sorting
 
 ;; NOTE doesn't work for some commands, for example, doesn't work for
@@ -28,4 +30,4 @@
   (setq vertico-prescient-completion-styles
         '(tab prescient orderless basic))
   (vertico-prescient-mode t))
-
+;;; prescient.el ends here

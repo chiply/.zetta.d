@@ -1,3 +1,5 @@
+;;; jmespath.el --- Configure JMESPath support -*- lexical-binding: t; -*-
+
 (define-derived-mode jmespath-mode
   python-ts-mode "JMESPath"
   "Major mode for hypertext.")
@@ -22,7 +24,4 @@
      )
    )
   )
-
-
-
-
+;;; jmespath.el ends here

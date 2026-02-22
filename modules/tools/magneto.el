@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; magneto.el --- Configure magneto -*- lexical-binding: t; -*-
 
 ;; LEFT OFF -- testing embark integration, adding actions / trying other actions
 ;; FIRST: make 1) embark-action and 2) magneto-action sequential, with embark action being optional
@@ -399,4 +399,4 @@
   )
 
 (add-hook 'elpaca-after-init-hook (lambda () (when (require 'embark nil t) (zetta-embark-bind-keys))))
-
+;;; magneto.el ends here

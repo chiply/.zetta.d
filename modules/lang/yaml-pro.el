@@ -1,3 +1,5 @@
+;;; yaml-pro.el --- Configure yaml-pro -*- lexical-binding: t; -*-
+
 (use-package yaml-pro
   :after yaml
   :general
@@ -9,3 +11,4 @@
    )
   :hook (yaml-mode . yaml-pro-mode)
   )
+;;; yaml-pro.el ends here

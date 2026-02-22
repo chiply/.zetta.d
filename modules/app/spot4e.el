@@ -1,4 +1,5 @@
-;; -*- lexical-binding: t; -*-
+;;; spot4e.el --- Configure spot4e -*- lexical-binding: t; -*-
+
 ;; spotify
 (use-package spot4e
   :ensure nil
@@ -21,3 +22,4 @@
    )
 
   )
+;;; spot4e.el ends here

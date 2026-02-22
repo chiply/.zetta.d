@@ -1,3 +1,5 @@
+;;; mono-complete.el --- Configure mono-complete -*- lexical-binding: t; -*-
+
 ;; (use-package mono-complete
 ;;   :config
 ;;   (setq mono-complete-fallback-command 'tab-to-tab-stop)
@@ -14,3 +16,4 @@
   
 ;;   :hook ((prog-mode) . mono-complete-mode)
 ;;   )
+;;; mono-complete.el ends here

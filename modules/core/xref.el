@@ -1,3 +1,5 @@
+;;; xref.el --- Configure xref -*- lexical-binding: t; -*-
+
 (use-package xref
   :ensure nil
   :commands (xref-find-definitions xref-go-back xref-go-forward)
@@ -15,4 +17,4 @@
    "C-M-," 'xref-go-forward
    )
   )
-
+;;; xref.el ends here

@@ -1,3 +1,5 @@
+;;; all-the-icons.el --- Configure all-the-icons -*- lexical-binding: t; -*-
+
 (use-package all-the-icons
   :ensure (all-the-icons
            :host github
@@ -62,5 +64,4 @@
                                                          ))
 
   )
-
-
+;;; all-the-icons.el ends here

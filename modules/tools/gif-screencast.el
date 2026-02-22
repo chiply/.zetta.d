@@ -1,3 +1,5 @@
+;;; gif-screencast.el --- Configure gif-screencast -*- lexical-binding: t; -*-
+
 (use-package gif-screencast
   :config
   ;; Use png + Emacs-internal capture (no screencapture permission needed,
@@ -41,3 +43,4 @@
              :timestamp (time-subtract time gif-screencast--offset)
              :filename file)
             gif-screencast--frames))))
+;;; gif-screencast.el ends here

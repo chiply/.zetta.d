@@ -1,3 +1,5 @@
+;;; ddp.el --- Configure ddp -*- lexical-binding: t; -*-
+
 (use-package ddp
   :ensure (ddp :type git
                :host github
@@ -67,3 +69,4 @@
     :cmd "{{ exec }} --colour -f {{ file }} -r {{ dasel_read }} -s {{ query }}"
     :support ("yaml" "json" "toml" "csv" "xml"))
   )
+;;; ddp.el ends here

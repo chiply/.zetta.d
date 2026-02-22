@@ -1,3 +1,5 @@
+;;; ai.el --- Configure AI tools -*- lexical-binding: t; -*-
+
 ;;(use-package copilot
   ;;:straight (:host github :repo "copilot-emacs/copilot.el" :files ("dist" "*.el"))
   ;;:demand t
@@ -230,3 +232,4 @@
 ;;(use-package vscode-cp-proxy
   ;;:ensure (vscode-cp-proxy :type git :host github :repo "utsahi/vscode-cp-proxy")
   ;;)
+;;; ai.el ends here

@@ -1,3 +1,5 @@
+;;; say.el --- Configure text-to-speech -*- lexical-binding: t; -*-
+
 (defun my/async-shell-command (cmd)
   (let ((bufnm "*tts*")
         (process-connection-type nil)
@@ -25,3 +27,4 @@
                " --input-file " file-path)))))
 
 (general-define-key :keymaps 'override "s-:" 'my/async-shell-command-say)
+;;; say.el ends here

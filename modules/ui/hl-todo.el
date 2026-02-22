@@ -1,3 +1,5 @@
+;;; hl-todo.el --- Configure hl-todo -*- lexical-binding: t; -*-
+
 (use-package hl-todo
   :config
   ;; NOTE this should take precendence over org-mode highlighting
@@ -17,3 +19,4 @@
           ("EXPLANATION"   . "PaleGreen4")
           ))
   :hook ((prog-mode markdown-mode org-mode yaml-mode) . hl-todo-mode))
+;;; hl-todo.el ends here

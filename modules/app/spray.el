@@ -1,3 +1,5 @@
+;;; spray.el --- Configure spray -*- lexical-binding: t; -*-
+
 (use-package spray
   ;; NOTE doesn't work with evil, which is why I have the custom functions belowkj
   :ensure (spray :type git :host github :repo "emacsmirror/spray")
@@ -22,6 +24,4 @@
    )
 
   )
-
-
-
+;;; spray.el ends here

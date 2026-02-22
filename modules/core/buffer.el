@@ -1,3 +1,5 @@
+;;; buffer.el --- Configure buffer utilities -*- lexical-binding: t; -*-
+
 (defun zetta-indirect-buffer (&optional buffer)
   (interactive)
   (let* ((cbuf-name (buffer-name buffer))
@@ -21,3 +23,4 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; display
 ;;(zetta-side "^\\*indirect*" 'right)
+;;; buffer.el ends here

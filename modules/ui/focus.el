@@ -1,3 +1,5 @@
+;;; focus.el --- Configure focus -*- lexical-binding: t; -*-
+
 (use-package focus
   :commands focus-mode
 
@@ -35,3 +37,4 @@
          ;;((python-ts-mode sql-mode yaml-mode sh-mode) . (lambda () (zetta-focus-mode 'defun))))
   ;;(use-package--focus--post-config . (lambda () (zetta-brushup))))
   )
+;;; focus.el ends here

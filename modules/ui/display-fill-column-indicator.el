@@ -1,3 +1,5 @@
+;;; display-fill-column-indicator.el --- Configure display-fill-column-indicator -*- lexical-binding: t; -*-
+
 (use-package display-fill-column-indicator
   :ensure nil
   :hook (elpaca-after-init . global-display-fill-column-indicator-mode)
@@ -16,3 +18,4 @@
                   )
                )
   )
+;;; display-fill-column-indicator.el ends here

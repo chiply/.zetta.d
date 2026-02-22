@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; line.el --- Configure mode-line -*- lexical-binding: t; -*-
 
 ;; REFACTOR!
 ;; separate modeline functions
@@ -171,4 +171,4 @@
                                        ":"
                                        '(:eval (zetta-get-branch-name))
                                        ))))
-
+;;; line.el ends here

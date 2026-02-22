@@ -1,3 +1,5 @@
+;;; popper.el --- Configure popper -*- lexical-binding: t; -*-
+
 (use-package popper
   ;; this package controls the convenient display of more transient
   ;; buffers.  Often used for side windows, but very useful in the
@@ -29,3 +31,4 @@
   (setq popper-mode-line "")
   (setq popper-echo-lines 5)
   )
+;;; popper.el ends here

@@ -1,3 +1,5 @@
+;;; breadcrumb.el --- Configure breadcrumb -*- lexical-binding: t; -*-
+
 (use-package breadcrumb
   :config
   ;; proportional width of the breadcrumb, if set smaller, breadcrumb
@@ -6,4 +8,4 @@
   (setq breadcrumb-project-max-length 1000000)
   ;; NOTE still cuts magit off not sure why
   )
-
+;;; breadcrumb.el ends here

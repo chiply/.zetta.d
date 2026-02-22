@@ -1,3 +1,5 @@
+;;; dual-header.el --- Configure dual header-line -*- lexical-binding: t; -*-
+
 ;; -------------------------------------------------------------------
 ;; A proof of concept for a multi header or mode line
 ;;
@@ -79,3 +81,4 @@
 (add-to-list 'brushup-styles '(zetta-set-dual-header))
 
 (add-hook 'magit-status-mode-hook 'zetta-set-dual-header)
+;;; dual-header.el ends here

@@ -1,4 +1,4 @@
-;;;; -*- lexical-binding: t -*-
+;;; elfeed.el --- Configure elfeed -*- lexical-binding: t; -*-
 
 ;; LEFTOFF -- pull the huge payload and test if it occusr succesfully
 ;; and whetherr it tags stuff accurrately
@@ -312,3 +312,4 @@ This implementation is derived from `elfeed-search-print-entry--default'."
    :states '(normal)
    :keymaps '(elfeed-search-mode-map)
    "x" 'elfeed-score-explain))
+;;; elfeed.el ends here

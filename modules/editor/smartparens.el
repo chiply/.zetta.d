@@ -1,3 +1,5 @@
+;;; smartparens.el --- Configure smartparens -*- lexical-binding: t; -*-
+
 (use-package smartparens
   :init
   (setq sp-highlight-pair-overlay nil)
@@ -13,3 +15,4 @@
   (sp-local-pair '(emacs-lisp-mode) "'" "'" :actions nil)
   (sp-local-pair '(emacs-lisp-mode) "`" "`" :actions nil)
   )
+;;; smartparens.el ends here

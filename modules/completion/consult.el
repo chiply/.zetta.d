@@ -1,3 +1,5 @@
+;;; consult.el --- Configure consult -*- lexical-binding: t; -*-
+
 ;; NOTE tried implementing a function that lifts the preview keys to
 ;; temporarily get on the fly previews, but doesn't work as it doesn't
 ;; apply the completion
@@ -110,3 +112,4 @@ STYLE defaults to `consult-async-split-style'."
   )
 
 (use-package consult-dir)
+;;; consult.el ends here

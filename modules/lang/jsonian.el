@@ -1,3 +1,5 @@
+;;; jsonian.el --- Configure jsonian -*- lexical-binding: t; -*-
+
 (use-package jsonian
   :general
   (
@@ -6,3 +8,4 @@
    )
   :hook (json-mode . jsonian-mode)
   )
+;;; jsonian.el ends here

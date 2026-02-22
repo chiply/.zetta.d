@@ -1,3 +1,5 @@
+;;; lsp.el --- Configure lsp-mode -*- lexical-binding: t; -*-
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; LSP MODE
 ;; NOTE: GC and read-process-output-max tuning is handled in early-init.el
 
@@ -441,4 +443,4 @@
 ;; NOTE don't use as not all lsps provide compatibility
 ;; (lsp-capability-not-supported "foldingRangeProvider") (use-package
 ;; lsp-focus)
-
+;;; lsp.el ends here

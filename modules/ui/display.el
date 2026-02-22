@@ -1,3 +1,5 @@
+;;; display.el --- Configure display-buffer rules -*- lexical-binding: t; -*-
+
 (zetta-side :regex "^\\*blacken-error*" :side 'top :slot 1)
 (zetta-side :regex "^\\*compilation*" :side 'top :slot 1)
 ;; note this can't have the backslashes...
@@ -38,4 +40,4 @@
 ;;;;(zetta-side "^\\*helpful*" 'right)
 ;;
 ;;;; makes things less cluttered
-
+;;; display.el ends here

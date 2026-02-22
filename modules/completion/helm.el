@@ -1,3 +1,5 @@
+;;; helm.el --- Configure helm -*- lexical-binding: t; -*-
+
 (use-package helm
   :ensure t
 
@@ -11,3 +13,4 @@
    "C-M-e" 'zetta-helm-ag-edit
    )
   )
+;;; helm.el ends here

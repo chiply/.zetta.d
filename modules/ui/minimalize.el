@@ -1,3 +1,5 @@
+;;; minimalize.el --- Configure minimal UI -*- lexical-binding: t; -*-
+
 (setq ns-use-proxy-icon nil
       frame-resize-pixelwise t
       ring-bell-function 'ignore
@@ -27,6 +29,4 @@
 (setq blink-cursor-mode nil)
 
 (setq frame-title-format nil)
-
-
-
+;;; minimalize.el ends here

@@ -1,3 +1,5 @@
+;;; utility.el --- Configure utility functions -*- lexical-binding: t; -*-
+
 (defun zetta-wget ()
   (interactive)
   (let ((dir "~/Downloads/")
@@ -46,3 +48,4 @@
     (write-region
      (format ": %s:0;%s\n" timestamp command)
      nil hist-file t)))
+;;; utility.el ends here

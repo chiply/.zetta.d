@@ -1,3 +1,5 @@
+;;; color-identifiers-mode.el --- Configure color-identifiers-mode -*- lexical-binding: t; -*-
+
 ;; inspired by https://medium.com/@evnbr/coding-in-color-3a6db2743a1e
 (use-package color-identifiers-mode
   :config
@@ -18,7 +20,4 @@
     ;;(mapcar (lambda (face)
               ;;(cons (symbol-name face) (face-foreground face)))
             ;;(face-list))))
-
-
-
-
+;;; color-identifiers-mode.el ends here

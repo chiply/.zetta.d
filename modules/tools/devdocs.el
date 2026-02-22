@@ -1,3 +1,5 @@
+;;; devdocs.el --- Configure devdocs -*- lexical-binding: t; -*-
+
 (use-package devdocs
   :config
   (require 'cl-lib)
@@ -24,9 +26,4 @@
     ;;(devdocs-install lang))
 
   )
-
-
-
-
-
-
+;;; devdocs.el ends here

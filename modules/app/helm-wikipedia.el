@@ -1,3 +1,5 @@
+;;; helm-wikipedia.el --- Configure helm-wikipedia -*- lexical-binding: t; -*-
+
 (use-package helm-wikipedia
   :general
   (
@@ -9,3 +11,4 @@
    "w" 'helm-wikipedia-suggest
    )
   )
+;;; helm-wikipedia.el ends here

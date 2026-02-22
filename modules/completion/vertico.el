@@ -1,3 +1,5 @@
+;;; vertico.el --- Configure vertico -*- lexical-binding: t; -*-
+
 (use-package vertico-posframe
   :config
   ;;(vertico-posframe-mode 1)
@@ -192,5 +194,4 @@
          (minibuffer-setup . vertico-repeat-save)
          )
   )
-
-
+;;; vertico.el ends here

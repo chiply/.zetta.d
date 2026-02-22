@@ -1,3 +1,5 @@
+;;; beacon.el --- Configure beacon -*- lexical-binding: t; -*-
+
 (use-package beacon
   :config
   ;; one less than hl-line, otherwise there is a weird lag
@@ -8,3 +10,4 @@
   (setq beacon-blink-when-point-moves-horizontally nil)
   ;; NOTE stops working after a while, laggy
   (beacon-mode -1))
+;;; beacon.el ends here

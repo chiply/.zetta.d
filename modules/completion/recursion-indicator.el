@@ -1,3 +1,5 @@
+;;; recursion-indicator.el --- Configure recursion-indicator -*- lexical-binding: t; -*-
+
 (use-package recursion-indicator
   :hook (elpaca-after-init . recursion-indicator-mode)
 
@@ -11,3 +13,4 @@
 
 
   )
+;;; recursion-indicator.el ends here

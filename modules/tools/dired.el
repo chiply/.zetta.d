@@ -1,3 +1,5 @@
+;;; dired.el --- Configure dired -*- lexical-binding: t; -*-
+
 (use-package dired
   :ensure nil ;; builtin
 
@@ -317,13 +319,4 @@ Version 2019-11-04"
          ;;(dired-mode . (lambda () (text-scale-set -2)))
          )
   )
-
-
-
-
-
-
-
-
-
-
+;;; dired.el ends here

@@ -1,3 +1,5 @@
+;;; web-mode.el --- Configure web-mode -*- lexical-binding: t; -*-
+
 (use-package web-mode
   :mode (("\\.html?\\'" . web-mode)
          ("\\.vue?\\'" . web-mode)
@@ -54,3 +56,4 @@
          (mhtml-mode . web-mode)
          )
   )
+;;; web-mode.el ends here

@@ -1,3 +1,5 @@
+;;; all-the-icons-dired.el --- Configure all-the-icons-dired -*- lexical-binding: t; -*-
+
 (use-package all-the-icons-dired
   :init
   (defun zetta-enable-dired-icons-maybe ()
@@ -15,3 +17,4 @@
   :hook ((dired-mode . (lambda () (zetta-enable-dired-icons-maybe)))
          (use-package--all-the-icons-dired--post-config . (lambda () (zetta-brushup))))
   )
+;;; all-the-icons-dired.el ends here

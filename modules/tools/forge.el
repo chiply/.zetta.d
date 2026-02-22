@@ -1,3 +1,5 @@
+;;; forge.el --- Configure forge -*- lexical-binding: t; -*-
+
 (use-package forge
   ;; NOTE fixing a presumably temporary issue where elpaca tries to pull from main, which specifies a non-existent tags for magit and ghub
   ;;:ensure (forge :type git :host github :repo "magit/forge" :tag "v0.4.4")
@@ -13,3 +15,4 @@
   (
    :keymaps 'magit-status-mode-map
    "P" 'forge-pull))
+;;; forge.el ends here

@@ -1,3 +1,5 @@
+;;; evil-search-highlight-persist.el --- Configure evil-search-highlight-persist -*- lexical-binding: t; -*-
+
 ;;(use-package evil-search-highlight-persist
   ;;:after (highlight)
   ;;:init
@@ -24,3 +26,4 @@
 ;;
   ;;:hook (use-package--evil-search-highlight-persist--post-config . zetta-brushup)
   ;;)
+;;; evil-search-highlight-persist.el ends here

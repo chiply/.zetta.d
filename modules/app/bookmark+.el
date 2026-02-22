@@ -1,3 +1,5 @@
+;;; bookmark+.el --- Configure bookmark+ -*- lexical-binding: t; -*-
+
 (use-package bookmark+
   :ensure (bookmark+
            :fetcher github
@@ -48,3 +50,4 @@ expected read format."
   :hook ((org-mode python-ts-mode emacs-lisp-mode)
          . (lambda ()
              (call-interactively 'bmkp-light-bookmarks))))
+;;; bookmark+.el ends here

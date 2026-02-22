@@ -1,3 +1,5 @@
+;;; tab-line.el --- Configure tab-line -*- lexical-binding: t; -*-
+
 (use-package tab-line
   :ensure nil
   :hook (elpaca-after-init . global-tab-line-mode)
@@ -291,6 +293,4 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
 
   :hook ((fundamental-mode . tab-line-mode))
   )
-
-
-
+;;; tab-line.el ends here

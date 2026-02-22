@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; cape.el --- Configure cape -*- lexical-binding: t; -*-
 
 ;;; Completion source selector
 ;; Unified interface to trigger completion from specific sources.
@@ -51,3 +51,4 @@
   (if (fboundp 'gptel-complete)
       (gptel-complete)
     (message "gptel-autocomplete not available")))
+;;; cape.el ends here

@@ -1,3 +1,5 @@
+;;; desktop.el --- Configure desktop -*- lexical-binding: t; -*-
+
 (use-package desktop
   :ensure nil
   :config
@@ -20,3 +22,4 @@
     (zetta-desktop-save)
     (server-shutdown))
   )
+;;; desktop.el ends here

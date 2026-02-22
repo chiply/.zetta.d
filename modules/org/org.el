@@ -1,3 +1,5 @@
+;;; org.el --- Configure org-mode -*- lexical-binding: t; -*-
+
 (use-package origami)
 
 ;; basic tweaks and bindings
@@ -297,3 +299,4 @@ The PARAMS are the 3rd element of the info for the same src block."
 (setq org-export-with-sub-superscripts nil)
 
 (setq org-html-with-latex 'mathjax)
+;;; org.el ends here

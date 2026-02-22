@@ -7,6 +7,7 @@
   :demand t
   :config
   (unless (ht-keys space-tree-tree) (space-tree-init))
+
   :general
   ("s-1" (lambda () (interactive) (space-tree-switch-or-create '(1)))
    "s-2" (lambda () (interactive) (space-tree-switch-or-create '(2)))

@@ -103,12 +103,14 @@
    "ui/hl-block.el"
    "ui/awesome-tray.el"
    "ui/telephone-line.el"
+   "ui/keycast.el"
    "ui/marqueeo.el"
    "ui/ef-themes.el"
    "ui/doric-themes.el"
    "ui/adaptive-wrap.el"
    "ui/svg-lib.el"
    "ui/explain-pause-mode.el"
+   "ui/blinker.el"
    "ui/spacetree.el"
 
    ;; editor

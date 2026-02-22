@@ -1,6 +1,5 @@
 ;;; magneto.el --- Configure magneto -*- lexical-binding: t; -*-
 
-;; LEFT OFF -- testing embark integration, adding actions / trying other actions
 ;; FIRST: make 1) embark-action and 2) magneto-action sequential, with embark action being optional
 
 ;; move general to the config layer

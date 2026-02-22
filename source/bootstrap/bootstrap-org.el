@@ -115,10 +115,6 @@
     (let ((browse-url-browser-function 'browse-url-default-browser))
       (call-interactively 'org-open-at-point)))
 
-  ;; display
-  ;; TODO these don't load immediately: fix
-  ;;(add-to-list 'org-emphasis-alist '("*" (:foreground "black" :background "yellow")))
-
   ;; makes visible in focus mode
   ;; defer styling to hl-todo which allows finer grained control inside and outside of headings
   (add-to-list

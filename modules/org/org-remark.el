@@ -1,13 +1,6 @@
 ;;; org-remark.el --- Configure org-remark -*- lexical-binding: t; -*-
 
-;; LEFTOFF
-;; DONE finish implementation for elfeed -- need to add advide to get highlights to render properly -- replace the hook with advice.
-;; DONE also need to think more / investigate more about how to set the heading titles -- right now they somewhat match eww... -- maybe unecessary given the files paths -- a: unnecessary, use file paths for this
 ;; TODO cleanup my-org-remark-notes-file-name
-;; DONE add wombag support -- link currently goes back to https, not the wombag-- Unknown location -- wombag support bookmarks, but would this work to reload the highlights?  What is actually controlling the linking to sync the highlights -- is it the source or the file name?
-;; DONE highlights shift in eww -- is the key to actually use readable mode? -- using readable again -- not sure if this will actually help, but we'll see
-;; DONE fix error `run-hooks: Wrong type argument: stringp, my-org-remark-notes-file-name`
-;; DONE first let's look into having separate marginalia files for eww and elfeed... why do elfeed and eww go to .files while everything lese goes to homedir?
 
 (use-package org-remark
   :demand t

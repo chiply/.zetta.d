@@ -107,8 +107,6 @@
 
   (defun zetta-mcp-setup-gptel ()
     (interactive)
-    ;; TODO comment out
-    ;;(setq gptel-tools nil)
     (gptel-mcp-register-tool)
     (gptel-mcp-use-tool)))
 

@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; bootstrap-elpaca.el --- Configure elpaca package manager -*- lexical-binding: t; -*-
 
 (defvar elpaca-installer-version 0.11)
 (defvar elpaca-directory (expand-file-name "elpaca/" user-emacs-directory))
@@ -81,5 +81,4 @@
 (global-set-key (kbd "s-U") 'elpaca-pull-all)
 
 (provide 'bootstrap-elpaca)
-
-
+;;; bootstrap-elpaca.el ends here

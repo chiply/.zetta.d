@@ -74,25 +74,6 @@ Arguments are same as of `defhydra'."
                   (set-face-attribute 'hydra-face-blue nil
                                       :foreground brushup-fg-3)))
 
-  ;;:general
-  ;;(
-   ;;:keymaps 'launch-map
-   ;;;;"w" 'hydra-window/body
-   ;;"p" 'hydra-project/body
-   ;;)
-  ;;(
-   ;;:keymaps '(evil-insert-state-map)
-   ;;;;(general-chord ",w") 'hydra-window/body
-   ;;(general-chord ",p") 'hydra-project/body
-   ;;)
-  ;;(
-   ;;:keymaps 'override
-   ;;:states '(normal visual)
-   ;;:prefix ","
-   ;;;;"w" 'hydra-window/body
-   ;;"p" 'hydra-project/body
-   ;;)
-
   :hook (use-package--hydra--post-config . zetta-brushup)
   )
 

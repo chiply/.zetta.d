@@ -236,7 +236,7 @@ Code:
   ;; urls
   (highlight-regexp "http\\(s\\)?://[^ ]+" 'link)
 
-  ;; highlight case insensitive occurneces of "token"
+  ;; highlight case insensitive occurrences of "token"
   (highlight-phrase "token" 'modus-themes-subtle-blue)
   )
 

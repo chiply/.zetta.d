@@ -7,6 +7,6 @@
    :keymaps 'override
    "M-I" 'highlight-regexp
    )
-  
+
   )
 ;;; highlight.el ends here

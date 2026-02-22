@@ -4,16 +4,12 @@
 ;; it is a useful UI boost for focused programming, but is also a great development tool
 ;; in the context of working with tap
 
-
-
-
 ;; All the things
 (setq zetta-tap--things '("block" "brick" "symbol" "list" "sexp"
                       "defun" "filename" "url"
                       "email" "uuid" "word"
                       "sentence" "whitespace" "line"
                       "page" "orgtree" "paragraph" "button"))
-
 
 (defun zetta-intern-maybe (thing)
   (if (symbolp thing) thing (intern thing)))
@@ -25,7 +21,6 @@ used to override thing at point for whatever reason"
   (setq-local focus-current-thing
               (zetta-intern-maybe
                (or thing (completing-read "What thing? " zetta-tap--things)))))
-
 
 (defun zetta-locate-thing (&optional thing)
   (interactive)
@@ -43,12 +38,10 @@ used to override thing at point for whatever reason"
   (interactive)
   (let ((bnds (zetta-locate-thing thing))) (cadr bnds)))
 
-
-
 (defun zetta-get-thing (&optional thing)
   (interactive)
   (if (use-region-p)
-      (buffer-substring-no-properties (region-beginning) (region-end)) 
+      (buffer-substring-no-properties (region-beginning) (region-end))
     (buffer-substring-no-properties (zetta-locate-thing-beg thing) (zetta-locate-thing-end thing))))
 
 (defun zetta-pulse (&optional thing)
@@ -72,9 +65,6 @@ used to override thing at point for whatever reason"
     (call-interactively 'comment-or-uncomment-region)
     )
   )
-
-
-
 
 (general-define-key
  :keymaps '(
@@ -134,22 +124,17 @@ used to override thing at point for whatever reason"
               )
    "C-e" 'er/expand-region))
 
-
 (defun zetta-thing-at-bobp ()
   (interactive)
   (eq 1 (save-excursion
           (beginning-of-thing focus-current-thing)
           (point))))
 
-
 (defun zetta-thing-at-eobp ()
   (interactive)
   (save-excursion
     (end-of-thing focus-current-thing)
     (eobp)))
-
-
-
 
 ;; Brick
 (defun brick-next-brick ()
@@ -187,7 +172,7 @@ used to override thing at point for whatever reason"
              (if (re-search-backward delim nil t)
                  (evil-forward-word-begin)
                (progn (beginning-of-buffer) (point))
-               ) 
+               )
              )
            )
           (t (progn
@@ -198,11 +183,9 @@ used to override thing at point for whatever reason"
     )
   )
 
-
-
 (defun brick-forward-brick (&optional arg)
   (interactive "p")
-  (setq arg (or arg 1)) 
+  (setq arg (or arg 1))
   (while (and (> arg 0)
               (not (eobp))
               (brick-next-brick))
@@ -214,9 +197,6 @@ used to override thing at point for whatever reason"
   )
 
 (put 'brick 'forward-op 'brick-forward-brick)
-
-
-
 
 (defun current-line-empty-p ()
   (interactive)
@@ -244,10 +224,6 @@ used to override thing at point for whatever reason"
   )
 
 (put 'brick 'bounds-of-thing-at-point 'brick-bounds-of-brick-at-point)
-
-
-
-
 
 (defun zetta-contiguous-chars-at-point ()
   (save-excursion

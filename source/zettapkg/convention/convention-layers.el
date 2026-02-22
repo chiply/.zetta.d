@@ -25,18 +25,15 @@
                "RUN ${cmd-line-util} ${install-script} \n"
                "RUN rm -r ${install-script} \n"
                ))
-    
+
     )
   "An alist contianing layers, grouped and labeled by purpose (ie basse, sql-req, req)
        for the Dockerfile")
-
-
 
 (defun convention-query-layers (key-tuple)
   "Queries the convention-lang-info alist for an element specified
    by the KEY-TUPLE"
   (convention-util-recursive-assoc-cdr key-tuple convention-image-layers))
-
 
 (defun convention-get-layer-req (image-or-container-name)
   "Returns a string representing the requirements layer for the docker
@@ -46,5 +43,3 @@
     (convention-query-layers '("req"))))
 
 (provide 'convention-layers)
-
-

@@ -12,7 +12,6 @@
 (add-hook 'post-command-hook 'ml-record-selected-window)
 (add-hook 'buffer-list-update-hook 'ml-update-all)
 
-
 ;;;; functions for generating icons
 (defun zetta-line-iedit-icon ()
   (when (and (boundp 'iedit-mode) iedit-mode)
@@ -30,7 +29,7 @@
   (when (buffer-modified-p)
     (all-the-icons-material
      "change_history"
-     :face 'mode-line 
+     :face 'mode-line
      )))
 
 (defun zetta-line-tramp-icon ()
@@ -56,17 +55,14 @@
        (eq ml-selected-window (selected-window)))
       (all-the-icons-material
        "flare"
-       
+
        ;; make invisible in other buffers
-       :face 'mode-line 
+       :face 'mode-line
        )
     nil))
 
 (defun zetta-line-narrowed-icon ()
   (when (buffer-narrowed-p) "N"))
-
-
-
 
 (defun zetta-get-repo-name ()
   (last (split-string
@@ -84,8 +80,7 @@
            "git rev-parse --abbrev-ref HEAD")
           "\n")))
 
-
-(defun zetta-line-col () 
+(defun zetta-line-col ()
   (let ((col-length (length (int-to-string (current-column)))))
     (cond
      ((eq col-length 1) "%c%2 ")
@@ -94,9 +89,6 @@
      )
     )
   )
-
-
-
 
 ;; This buffer is for text that is not saved, and for Lisp evaluation.
 ;; To create a file, visit it with C-x C-f and enter text in its buffer.
@@ -123,7 +115,6 @@
               ;;'face face
               ))
 
-
 ;; NOTE use this to allow  more space ont eh right, otherwise you will get cutoff
 (defconst RIGHT_PADDING 20)
 
@@ -147,7 +138,6 @@
     (mode-line-fill-right 'mode-line-inactive
                           (reserve-middle/right line-align-right))
     ))
-
 
 ;; extremely conduing, but vars need to be passed to eval as strings
 (defun zetta-get-line-format (line-align-left line-align-middle line-align-right)

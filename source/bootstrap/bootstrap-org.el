@@ -53,7 +53,7 @@
            "STARTED(s!)"
            ;; waiting on someone else, but still actively being
            ;; worked on.
-           "WAITING(w!)" 
+           "WAITING(w!)"
            ;; on hold, not actively being worked on or
            ;; with another team with an unknown
            ;; timeline. aka 'BLOCKED'
@@ -78,7 +78,6 @@
            ))
         )
 
-
   (defun orgtree-forward-orgtree (&optional arg)
     "Move ARG times to start of a set of the same orgtree characters."
     (interactive "P")
@@ -93,7 +92,6 @@
     (orgtree-forward-orgtree (- (or arg 1))))
 
   (put 'orgtree 'forward-op 'orgtree-forward-orgtree)
-
 
   (defun zett-org-get-title (file)
     (let (title)
@@ -172,12 +170,9 @@
     (interactive)
     (setq current-prefix-arg '(4))
     (call-interactively 'org-babel-tangle))
-  
 
   :evil
   (evil-set-initial-state 'org-mode 'normal)
-
-
 
   :general
   (
@@ -225,7 +220,7 @@
    "A" (** org-archive-subtree)
    "s" (** org-sort)
    "q" (** org-columns-quit)
-   
+
    "TAB" (** org-cycle)
    "S-TAB" (** org-global-cycle)
    "i" (** org-tree-to-indirect-buffer)

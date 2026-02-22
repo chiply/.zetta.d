@@ -57,7 +57,6 @@
       (ansi-color-apply-on-region (point-min) (point-max)))
     ))
 
-
 ;; UI
 (defun zetta-gh-run-watch-interact (&optional arg)
   (interactive "P")
@@ -66,6 +65,5 @@
 (defun zetta-gh-run-view-log-interact ()
   (interactive)
   (zetta-gh-run-view-log default-directory))
-
 
 (provide 'gha)

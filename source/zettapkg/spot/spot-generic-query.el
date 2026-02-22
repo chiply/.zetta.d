@@ -5,8 +5,6 @@
 
 (require 'spot-var)
 
-
-
 ;; sync
 (defun spot-retrieve-url-to-alist-synchronously (url)
   "Return alist representation of json response from URL."
@@ -15,7 +13,6 @@
                                       (point-max) 'utf-8 t)))
       (when (not (string= json ""))
         (json-read-from-string json)))))
-
 
 (cl-defun spot-request (&key method url q-params parse-json extra-headers data)
   "Function to handle spot requests.
@@ -32,7 +29,6 @@ alist of headers, and DATA is request body data as JSON."
       (url-retrieve-synchronously
        (concat url q-params) nil nil spot--request-timeout))))
 
-
 ;; async
 (defun spot-retrieve-url-to-alist-asynchronously (url callback)
   "Async version that calls CALLBACK with alist from URL's JSON response."
@@ -44,10 +40,8 @@ alist of headers, and DATA is request body data as JSON."
        (funcall callback json)))
    nil t t))
 
-
 (defun spot--message-request-complete (&rest args)
   (message "spot request complete"))
-
 
 (cl-defun spot-request-async (&key
                               method url q-params callback
@@ -60,7 +54,6 @@ alist of headers, and DATA is request body data as JSON."
      (concat url q-params)
      (or callback #'spot--message-request-complete))))
 
-
 ;; currently playing
 (defun spot--currently-playing ()
   (spot-request
@@ -68,7 +61,5 @@ alist of headers, and DATA is request body data as JSON."
    :url spot-player-url
    :q-params (spot--base-q-params)
    :parse-json t))
-
-
 
 (provide 'spot-generic-query)

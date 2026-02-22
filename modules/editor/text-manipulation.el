@@ -9,6 +9,5 @@
     (while (re-search-forward "\\. *" nil t)
       (replace-match ".\n\n"))))
 
-
 (general-define-key :states 'visual :keymaps 'override "s-/" 'split-region-by-periods)
 ;;; text-manipulation.el ends here

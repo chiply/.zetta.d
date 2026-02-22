@@ -14,7 +14,6 @@
   (setq recentf-max-saved-items 500)
   (setq recentf-max-menu-items 50)
 
-
   ;; NOTE without this, we don't have a completing read or vomec style
   ;; interface to finding references.  while xref,
   ;; consult-find-references, and consult-ui-peek-references provide
@@ -25,7 +24,7 @@
   ;; find references for something more transient (although it doesn't
   ;; really provide additional features, the ui peak just looks cool)
   (setq xref-show-xrefs-function #'consult-xref)
-  
+
   ;;(setq recentf-save-file (expand-file-name ".data/recentf/recentf" user-emacs-directory))
   (setq consult-preview-key 'any)
   (setq consult-project-root-function #'(project-root (project-current nil default-directory))

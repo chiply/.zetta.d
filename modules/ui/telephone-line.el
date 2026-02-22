@@ -33,7 +33,6 @@
       ;; NOTE doesn't work, leaves behind an un-rendered animation frame
       "foo"))
 
-
   (telephone-line-defsegment zt-vc-segment-repo-icon ()
     (let ((result (shell-command-to-string
                    "git rev-parse --is-inside-work-tree")))
@@ -101,16 +100,15 @@
 
   (telephone-line-defsegment zt-iedit-segment ()
     (let ((icon (zetta-line-iedit-icon)))
-      (when icon 
+      (when icon
         ;; the car of iedit-mode-line unioned with the cdr of iedit-mode-line
         (cons (replace-regexp-in-string
-               " " "" 
+               " " ""
                (car iedit-mode-line) )
               (cdr iedit-mode-line)))))
 
   (telephone-line-defsegment zt-nyan ()
     (when (eq major-mode 'magit-status-mode) (nyan-create)))
-
 
   (telephone-line-defsegment zt-parrot ()
     (when (or
@@ -176,7 +174,6 @@
           (foo . (zt-nyan))
           (nil . (zt-parrot))
           ))
-
 
   (setq telephone-line-target 'mode-line)
   (setq telephone-line-rhs '())

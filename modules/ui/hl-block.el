@@ -13,7 +13,6 @@
 ;; the Free Software Foundation; either version 3, or (at your option)
 ;; any later version.
 
-
 ;; This file is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -70,7 +69,6 @@
 
 (defvar-local hl-block--current-node nil
   "Current node.")
-
 
 (defun hl-block--highlight (&optional node)
   "Highlight given NODE using overlays."
@@ -152,7 +150,6 @@
       (when-let ((parent (treesit-node-parent node)))
         (hl-block--search parent)))))
 
-
 (defun hl-block--update (&optional node)
   "Highlight the closest typed block that surround NODE (default to node at
 point). Available types are registered in hl-block-types."
@@ -205,7 +202,6 @@ point). Available types are registered in hl-block-types."
   (remove-overlays (point-min) (point-max) 'hl-block t)
   (remove-hook 'post-command-hook #'hl-block--update t))
 
-
 ;;###autoload
 (define-minor-mode hl-block-mode
   "Highlight logical block at point"
@@ -234,7 +230,6 @@ point). Available types are registered in hl-block-types."
                         :background brushup-bg-1_0
                         :underline nil
                         :extend t)))
-
 
 (provide 'hl-block)
 ;;; hl-block.el ends here

@@ -27,7 +27,7 @@
 
   :config
   (setq magit-git-executable (or (executable-find "git") "git"))
-  
+
   ;; project.el
   (keymap-substitute project-prefix-map #'project-vc-dir #'magit)
   (cl-nsubstitute-if
@@ -76,15 +76,15 @@
    "f" 'magit-fetch
    "p" 'magit-pull
    )
-  
+
   (general-define-key
    :keymaps 'launch-map
    "G" 'zetta-magit-project)
-  
+
   (general-define-key
    :keymaps 'text-mode-map
    "C-<return>" 'with-editor-finish
-   ) 
+   )
   (general-define-key
    :keymaps '(magit-mode-map magit-log-mode-map magit-blob-mode-map
                              magit-diff-mode-map magit-refs-mode-map

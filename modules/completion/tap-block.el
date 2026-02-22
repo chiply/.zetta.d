@@ -5,8 +5,6 @@
 ;; naming convention: tap-[thing]-
 ;; functiton to surround selection witth block open and block end
 
-
-
 ;;;; utils
 
 ;; dynamically compute block names
@@ -41,8 +39,6 @@
     )
   )
 
-
-
 ;;;; forward block
 (defun block-next-block ()
   (interactive)
@@ -65,8 +61,6 @@
   )
 
 (put 'block 'forward-op 'block-forward-block)
-
-
 
 (defun tap-in-block ()
   (interactive)
@@ -93,7 +87,6 @@
      (and (string= above "open") (string= below "close")))
     )
   )
-
 
 ;;; bounds of thing and point
 (defun block-bounds-of-block-at-point ()

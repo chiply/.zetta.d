@@ -1,3 +1,5 @@
+;;; display-line-numbers.el --- Configure display-line-numbers -*- lexical-binding: t; -*-
+
 (use-package display-line-numbers
   :ensure nil
   :init
@@ -35,3 +37,4 @@
 
   :hook (((vterm-mode) . (lambda () (display-line-numbers-mode -1)))
          ((pdf-view-mode) . (lambda () (display-line-numbers-mode -1)))))
+;;; display-line-numbers.el ends here

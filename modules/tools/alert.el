@@ -1,3 +1,5 @@
+;;; alert.el --- Configure alert -*- lexical-binding: t; -*-
+
 (use-package alert
   :config
   (setq alert-default-style 'osx-notifier)
@@ -10,5 +12,4 @@
                          (alert-encode-string (plist-get info :title))
                          "Frog")))
     (alert-message-notify info)))
-
-
+;;; alert.el ends here

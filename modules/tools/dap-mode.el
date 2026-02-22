@@ -1,3 +1,5 @@
+;;; dap-mode.el --- Configure dap-mode -*- lexical-binding: t; -*-
+
 (use-package dap-mode
   :commands (dap-debug dap-hydra dap-mode dap-ui-mode)
 
@@ -68,16 +70,4 @@
    "C-S-s-d" 'dap-debug
    )
   )
-
-
-
-
-
-
-
-
-
-
-
-
-
+;;; dap-mode.el ends here

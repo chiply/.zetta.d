@@ -1,3 +1,5 @@
+;;; pubmed.el --- Configure pubmed -*- lexical-binding: t; -*-
+
 (use-package pubmed
   :ensure (:host gitlab :repo "fvdbeek/emacs-pubmed")
 
@@ -69,3 +71,4 @@
    "p" 'pubmed-search
    )
   )
+;;; pubmed.el ends here

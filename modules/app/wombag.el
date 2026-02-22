@@ -1,3 +1,5 @@
+;;; wombag.el --- Configure wombag -*- lexical-binding: t; -*-
+
 (use-package wombag
   :after (embark org)
   :ensure (wombag :host github :repo "karthink/wombag")
@@ -38,3 +40,4 @@
   (general-define-key
    :keymaps 'embark-url-map
    "w" #'wombag-add-entry))
+;;; wombag.el ends here

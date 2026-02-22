@@ -1,3 +1,5 @@
+;;; project.el --- Configure project -*- lexical-binding: t; -*-
+
 (use-package project
   :ensure nil ;; builtin 
   :after consult
@@ -53,3 +55,4 @@
   ;; global-ede-mode replaces project-try-vc with project-try-ede in
   ;; project-find-functions, breaking git project detection. Add it back.
   (add-hook 'project-find-functions #'project-try-vc))
+;;; project.el ends here

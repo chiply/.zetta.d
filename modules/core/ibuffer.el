@@ -1,3 +1,5 @@
+;;; ibuffer.el --- Configure ibuffer -*- lexical-binding: t; -*-
+
 (use-package ibuffer
   :ensure nil
   :commands ibuffer
@@ -26,3 +28,4 @@
          (ibuffer-mode . (lambda () (ibuffer-auto-mode 1)))
          )
   )
+;;; ibuffer.el ends here

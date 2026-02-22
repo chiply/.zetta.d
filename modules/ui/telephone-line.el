@@ -1,3 +1,5 @@
+;;; telephone-line.el --- Configure telephone-line -*- lexical-binding: t; -*-
+
 (use-package telephone-line
   :config
 
@@ -196,3 +198,4 @@
                                       :inherit nil
                                       :foreground 'unspecified
                                       :background brushup-bg))))
+;;; telephone-line.el ends here

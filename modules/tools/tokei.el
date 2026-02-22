@@ -1,3 +1,5 @@
+;;; tokei.el --- Configure tokei -*- lexical-binding: t; -*-
+
 (use-package tokei
   :config
   ;; overwriting the tokei function to allow for display buffer
@@ -18,3 +20,4 @@
   :display
   ;;(zetta-side "tokei-mode" 'right 1)
   )
+;;; tokei.el ends here

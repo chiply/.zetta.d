@@ -1,3 +1,5 @@
+;;; simple.el --- Configure simple -*- lexical-binding: t; -*-
+
 (use-package simple
   :ensure nil ;; builtin
   :commands (shell-command async-shell-command)
@@ -32,3 +34,4 @@
    )
   
   )
+;;; simple.el ends here

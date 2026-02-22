@@ -1,3 +1,5 @@
+;;; embark.el --- Configure embark -*- lexical-binding: t; -*-
+
 (use-package embark
   :ensure (:wait t)
   :commands (embark-act embark-dwim embark-bindings embark-act-all)
@@ -127,6 +129,4 @@ targets."
    "s-k" 'outline-backward-same-level
    )
   )
-
-
-
+;;; embark.el ends here

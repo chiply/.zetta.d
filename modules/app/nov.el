@@ -1,3 +1,5 @@
+;;; nov.el --- Configure nov -*- lexical-binding: t; -*-
+
 (use-package nov
   :config
   (add-to-list 'auto-mode-alist '("\\.epub\\'" . nov-mode))
@@ -11,3 +13,4 @@
   ;; NOTE this would have an impact on org-remark probably, so try to pick a sensible default
   (setq nov-text-width t)
   )
+;;; nov.el ends here

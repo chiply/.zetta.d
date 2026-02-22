@@ -1,3 +1,5 @@
+;;; completion.el --- Configure bash-completion -*- lexical-binding: t; -*-
+
 ;; TODO selecting, acting on multiple candidates -- what happens when search is backspaced do we lose the selection?
 ;; TODO inputting multiple searhc strings
 ;; what are the other patterns... let's say we wanted multiple for... realistically we want a logical or for the styyle dispathers
@@ -179,5 +181,4 @@ tempel expand?)
  "C-;" 'indent-for-tab-command
  "<tab>" 'zetta-completion-at-point
  )
-
-
+;;; completion.el ends here

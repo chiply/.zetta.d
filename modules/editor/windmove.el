@@ -1,3 +1,5 @@
+;;; windmove.el --- Configure windmove -*- lexical-binding: t; -*-
+
 (use-package windmove
   :ensure nil
   :commands (zetta-split-window-v
@@ -38,3 +40,4 @@
    "H" (** zetta-split-window-H)
    )
   )
+;;; windmove.el ends here

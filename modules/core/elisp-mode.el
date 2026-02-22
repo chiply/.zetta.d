@@ -1,3 +1,5 @@
+;;; elisp-mode.el --- Configure elisp-mode -*- lexical-binding: t; -*-
+
 (use-package elisp-mode
   :ensure nil
   :commands (emacs-lisp-mode lisp-interaction-mode)
@@ -23,3 +25,4 @@
              (evil-indent (point-min) (point-max))))
    )
   )
+;;; elisp-mode.el ends here

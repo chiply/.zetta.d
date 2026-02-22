@@ -1,3 +1,5 @@
+;;; flycheck.el --- Configure flycheck -*- lexical-binding: t; -*-
+
 (use-package flycheck-aspell
   :config
   ;;(setq ispell-dictionary "your_default_dictionary")
@@ -97,3 +99,4 @@
          ;;(org-mode . flycheck-mode)
          )
   )
+;;; flycheck.el ends here

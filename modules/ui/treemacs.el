@@ -1,3 +1,5 @@
+;;; treemacs.el --- Configure treemacs -*- lexical-binding: t; -*-
+
 ;; NOTE this package in general is very buggy, try not to rely on it
 ;; treemacs-add-project has a bug -- this is like the most basic thing, if not an entry point!
 (use-package treemacs
@@ -137,4 +139,4 @@
 
 (use-package treemacs-magit
   :after (treemacs magit))
-
+;;; treemacs.el ends here

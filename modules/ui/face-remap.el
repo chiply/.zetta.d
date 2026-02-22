@@ -1,3 +1,5 @@
+;;; face-remap.el --- Configure face-remap -*- lexical-binding: t; -*-
+
 (use-package face-remap
   :ensure nil
   :config
@@ -24,3 +26,4 @@
    "_" (** zetta-big-zoom-out)
    )
   )
+;;; face-remap.el ends here

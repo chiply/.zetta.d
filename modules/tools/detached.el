@@ -1,3 +1,5 @@
+;;; detached.el --- Configure detached -*- lexical-binding: t; -*-
+
 (use-package detached
   :config
   ;; this avoids a cryptic error.  For whatever reason I'm able to
@@ -27,5 +29,4 @@
    "S-<tab>" 'compilation-previous-error
    )
   )
-
-
+;;; detached.el ends here

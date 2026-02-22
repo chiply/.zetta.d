@@ -1,3 +1,5 @@
+;;; keycast.el --- Configure keycast -*- lexical-binding: t; -*-
+
 (use-package keycast
   :config
   ;; Minor mode that manages keycast's post-command-hook tracking
@@ -74,3 +76,4 @@
               (apply fn macro args)))
         (apply fn macro args))))
   )
+;;; keycast.el ends here

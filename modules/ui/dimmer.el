@@ -1,3 +1,5 @@
+;;; dimmer.el --- Configure dimmer -*- lexical-binding: t; -*-
+
 (use-package dimmer
   :demand
   :init
@@ -54,6 +56,4 @@
   (setq dimmer-watch-frame-focus-events nil)
   (dimmer-mode t)
   )
-
-
-
+;;; dimmer.el ends here

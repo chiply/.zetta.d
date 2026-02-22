@@ -1,3 +1,5 @@
+;;; docker.el --- Configure docker -*- lexical-binding: t; -*-
+
 (use-package docker
   ;; there will inevitably be integration with convention.
   ;; the docker package makes working with containers easy
@@ -69,3 +71,4 @@
    "m" 'tablist-mark-forward
    )
   )
+;;; docker.el ends here

@@ -1,3 +1,5 @@
+;;; interface.el --- Configure core interface -*- lexical-binding: t; -*-
+
 ;; download from https://files.ax86.net/terminus-ttf/ drag it into the
 ;; `Font Book` app
 ;; Set font in default-frame-alist for daemon compatibility (set-frame-font
@@ -258,3 +260,4 @@
   :config
   (setq trailing-newline-indicator-show-line-number nil)
   )
+;;; interface.el ends here

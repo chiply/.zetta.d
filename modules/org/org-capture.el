@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+;;; org-capture.el --- Configure org-capture and logseq search -*- lexical-binding: t; -*-
 
 ;;; Searching logseq todo headings
 ;; Functions zetta-logseq-todo-files and related are defined in bootstrap-org.el
@@ -34,3 +34,5 @@
  "s" 'zetta-logseq-search-headings
  "t" 'zetta-logseq-search-todos
  "h" 'zetta-logseq-consult-headings)
+
+;;; org-capture.el ends here

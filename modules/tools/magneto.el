@@ -242,52 +242,6 @@
  "s" (** (lambda () (interactive) (magneto-set-magneto-destination-window "s")))
  "d" (** (lambda () (interactive) (magneto-set-magneto-destination-window "d"))))
 
-;;(defhydra+ hydra-magneto ()
-;;"
-;;%s(concat magneto-source-action \"-\"
-;;magneto-destination-action \"-\"
-;;magneto-select-action \"-\"
-;;magneto-action-action)
-;;"
-  ;;;; run the exit function, eg execute the move specifed by
-;;("s-m" magneto-move)
-;;("<return>" magneto-move :exit t)
-;;
-  ;;;; source actions
-;;("m" (magneto-set-magneto-source-action "move") "move" :column "source actions")
-;;("c" (magneto-set-magneto-source-action "copy") "copy")
-;;("p" (magneto-set-magneto-source-action "pull") "pull")
-;;
-  ;;;; destniation actions
-;;("0" (magneto-set-magneto-destination-action "f") "f" :column "destination actions")
-;;("h" (magneto-set-magneto-destination-action "h") "h")
-;;("H" (magneto-set-magneto-destination-action "H") "H")
-;;("v" (magneto-set-magneto-destination-action "v") "v")
-;;("V" (magneto-set-magneto-destination-action "V") "V")
-;;("t" (magneto-set-magneto-destination-action "t") "t")
-;;("T" (magneto-set-magneto-destination-action "T") "T")
-;;("b" (magneto-set-magneto-destination-action "b") "b")
-;;("B" (magneto-set-magneto-destination-action "B") "B")
-;;("l" (magneto-set-magneto-destination-action "l") "l")
-;;("L" (magneto-set-magneto-destination-action "L") "L")
-;;("r" (magneto-set-magneto-destination-action "r") "r")
-;;("R" (magneto-set-magneto-destination-action "R") "R")
-;;
-  ;;;; selection actions
-;;("o" (magneto-set-magneto-selection-action "o") "o"  :column "selection actions")
-;;("O" (magneto-set-magneto-selection-action "O") "O")
-;;
-  ;;;; action actions
-;;("w" (magneto-set-magneto-action-action "consult-buffer") "consult-buffer" :column "action actions")
-;;("x" (magneto-set-magneto-action-action "execute-command") "execute-command")
-;;("f" (magneto-set-magneto-action-action "find-file") "find-file")
-;;("C-b" (magneto-set-magneto-action-action "switch-buffer") "switch-buffer")
-;;
-  ;;;; note only a-d are used for ace
-;;("a" (magneto-set-magneto-destination-window "a") "select window" :column "ace window")
-;;("s" (magneto-set-magneto-destination-window "s") "select window")
-;;("d" (magneto-set-magneto-destination-window "d") "select window"))
-
 ;; embark integration
 (defun my/embark-magneto-action (keymap action key-sequence)
   ;; define a functions and bind it to a key

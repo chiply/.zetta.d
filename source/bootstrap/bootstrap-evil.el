@@ -5,14 +5,6 @@
   :demand t
   :init
   (setq evil-want-keybinding nil)
-  ;;(add-to-list
-  ;;'brushup-styles
-  ;;'(setq evil-emacs-state-cursor '("red" box)
-  ;;evil-visual-state-cursor '("orange" box)
-  ;;evil-insert-state-cursor '("blue" box)
-  ;;evil-replace-state-cursor '("green" hollow)
-  ;;evil-operator-state-cursor '("red" hollow)
-  ;;evil-normal-state-cursor `(,(face-attribute 'default :foreground) box)))
 
   :config
   (setq evil-default-state 'normal)
@@ -32,7 +24,6 @@
   (evil-set-initial-state 'with-editor-mode 'emacs)
   (evil-set-initial-state 'eww-mode 'emacs)
   (evil-set-initial-state 'minimap-sb-mode 'emacs)
-  (evil-set-initial-state 'minimap-mode 'emacs)
   (evil-set-initial-state 'minimap-mode 'emacs)
   (evil-set-initial-state 'biblio-selection-mode 'normal)
 

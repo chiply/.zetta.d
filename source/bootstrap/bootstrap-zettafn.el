@@ -161,8 +161,6 @@ Code:
     (kill-buffer (format "%s-doc.org" ext))
     ))
 
-;;(setq hi-lock-use-overlays t)
-
 ;; create a face inherits from 'link, except uses purple as the color
 (defface zetta-link-face
   '((t :inherit link :foreground "purple"))

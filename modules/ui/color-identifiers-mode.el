@@ -14,10 +14,4 @@
   ;; wastefully bind it to post-commad hook.  I can live with the
   ;; issue
   )
-
-;;(let ((theme (car custom-enabled-themes)))
-  ;;(when theme
-    ;;(mapcar (lambda (face)
-              ;;(cons (symbol-name face) (face-foreground face)))
-            ;;(face-list))))
 ;;; color-identifiers-mode.el ends here

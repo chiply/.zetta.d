@@ -1,35 +1,5 @@
 ;;; ai.el --- Configure AI tools -*- lexical-binding: t; -*-
 
-;;(use-package copilot
-  ;;:straight (:host github :repo "copilot-emacs/copilot.el" :files ("dist" "*.el"))
-  ;;:demand t
-  ;;:config
-  ;;;;(setq copilot-server-executable (concat "node " (expand-file-name "~/node_modules/@github/copilot-language-server/dist/language-server.js ") "--stdio "))
-  ;;;; modes
-;;
-  ;;(add-hook 'prog-mode-hook 'copilot-mode)
-  ;;(add-hook 'markdown-mode-hook 'copilot-mode)
-  ;;(add-hook 'org-mode-hook 'copilot-mode)
-  ;;(add-hook 'sql-mode-hook 'copilot-mode)
-  ;;(add-hook 'mermaid-mode-hook 'copilot-mode)
-  ;;(add-hook 'emacs-lisp-mode 'copilot-mode)
-  ;;(add-hook 'lisp-interaction-mode 'copilot-mode)
-  ;;(add-hook 'yaml-mode-hook 'copilot-mode)
-  ;;(add-hook 'dockerfile-mode 'copilot-mode)
-;;
-  ;;;; face
-  ;;(set-face-attribute 'copilot-overlay-face nil :foreground brushup-bg-5 :inherit nil)
-  ;;(setq copilot-indent-offset-warning-disable t)
- ;;
-  ;;:general (:keymaps '(copilot-completion-map)
-                     ;;"C-<return>" 'copilot-accept-completion
-                     ;;"C-S-f" 'copilot-accept-completion-by-word
-                     ;;"C-S-M-f" 'copilot-accept-completion-by-line
-                     ;;;;"C-S-M-f" 'copilot-accept-completion-by-paragraph
-                     ;;"C-n" 'copilot-next-completion
-                     ;;"C-p" 'copilot-previous-completion))
-
-;; TODO authenticate
 (use-package copilot-chat
   :config
   (setq copilot-chat-model "claude-3.5-sonnet"))
@@ -224,8 +194,4 @@
   ;;(setq gptel-autocomplete-use-context nil)
   )
 
-;; necessary to use chatgpt chat like claude or cursor using copilot
-;;(use-package vscode-cp-proxy
-  ;;:ensure (vscode-cp-proxy :type git :host github :repo "utsahi/vscode-cp-proxy")
-  ;;)
 ;;; ai.el ends here

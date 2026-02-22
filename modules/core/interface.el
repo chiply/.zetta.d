@@ -27,7 +27,6 @@
 (setq scroll-bar-width nil)
 (setq scroll-bar-height nil)
 
-
 (defun server-shutdown ()
   "Save buffers, Quit, and Shutdown (kill) server"
   (interactive)
@@ -57,7 +56,6 @@
 (setq-default right-margin-width 2)
 ;;(setq-default left-fringe-width 5)
 ;;(setq-default right-fringe-width 5)
-
 
 (defun zetta-tab-bar-hydra ()
   (let ((icon (zetta-line-hydra-indicator-icon))) (when icon "H")))
@@ -190,7 +188,6 @@
           (format " ai:%d " num-processes)
         ""))))
 
-
 (setq tab-bar-format '(;; everything here on will be aligned on the right
                        ;;zetta-tab-bar-hydra
                        zetta-buffer-name
@@ -212,7 +209,7 @@
                        blinker-tab-bar
 
                        tab-bar-format-align-right
-                       tab-bar-keycast 
+                       tab-bar-keycast
                        zetta-insert-space
                        zetta-tab-bar-recursion-level
                        recursion-indicator--string
@@ -231,7 +228,6 @@
 (add-to-list 'brushup-styles
              '(set-face-attribute 'tab-bar nil :box nil :inherit nil :background brushup-bg)
              )
-
 
 ;; Emacs 28 and newer: Hide commands in M-x which do not work in the current
 ;; mode.  Vertico commands are hidden in normal buffers. This setting is

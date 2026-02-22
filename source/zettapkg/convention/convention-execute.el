@@ -7,7 +7,6 @@
                      (string-match-p (regexp-quote "convention") x))))
    (mapcar (function (lambda (x) (buffer-name (process-buffer x) ))) (process-list))))
 
-
 (defun convention-set-db-params (arg container-name)
   "Sets local variables which contain data required to connect to a database container-name"
   (when (and (convention-is-sql container-name)
@@ -16,15 +15,10 @@
     (setq-local convention-db-password (convention-prompt-for-db-password))
     (setq-local convention-db-username (convention-query-lang-info container-name "root-user-name"))))
 
-
 (defun convention-prompt-for-repl-buffer ()
   "Returns a string representing the name of a buffer containing a repl
    that is associated with a running convention container"
   (completing-read "Process: " (convention-get-repl-buffers)))
-
-
-
-
 
 (defun convention-named-async ()
   (interactive)
@@ -37,9 +31,6 @@
     (async-shell-command (concat cmd "&") name)
     )
   )
-
-
-
 
 ;; TODO breakout venv into different section - want to allow for
 ;; specification of different venvs
@@ -64,8 +55,6 @@
     ;;(convention-set-db-params arg container-name)
     ))
 
-
-
 (defun convention-associate-text-buffer-to-container (arg)
   "'Associates' a text buffer - that is a buffer containing LANG code - to a
    running container.  This 'association' constitutes the setting of local
@@ -75,8 +64,6 @@
                           (message convention-container-target))))
     (setq-local convention-container-target container-name)
     (convention-set-db-params arg container-name)))
-
-
 
 (defun convention-associate-text-buffer-to-repl (arg)
   "'Associates' a text buffer - that is a buffer containing LANG code - to a
@@ -89,15 +76,12 @@
                        (message convention-repl-target))))
     (setq-local convention-repl-target repl-target)))
 
-
-
 (defun convention-associate-text-buffer (arg to)
   "Associates a text buffer TO either a conatiner or process buffer that is connected
-   to a convention contaier" 
+   to a convention contaier"
   (if (equal to "repl")
       (convention-associate-text-buffer-to-repl arg)
     (convention-associate-text-buffer-to-container arg)))
-
 
 (defun convention-get-bounds (&optional region)
   "Returns a 2 length list representing the bounds for
@@ -107,7 +91,6 @@
           (cons (region-beginning) `(,(region-end))) ;; get selected region
         (cons (point-at-bol) `(,(point-at-eol)))) ;; get current line
     (cons (point-min) `(,(point-max))))) ;; get entire buffer
-
 
 (defun convention-exec-in-repl (arg &optional region)
   "Executes code contained in either the entire buffer or a REGION
@@ -119,18 +102,15 @@
         (process-send-string convention-repl-target str)
       (process-send-string convention-repl-target (concat str "\n")))))
 
-
 (defun convention-exec-region-in-repl (arg)
   "Executes code contained in a region in a process buffer connected to a convention container"
   (interactive "P")
   (convention-exec-in-repl arg t))
 
-
 (defun convention-exec-buffer-in-repl (arg)
   "Executes code contained in the entire buffer in a process buffer connected to a convention container"
   (interactive "P")
   (convention-exec-in-repl arg))
-
 
 (defun convention-format-run-lang-cmd (container-name)
   "Returns a string reprenting the command used to execute code contained in a file"
@@ -141,8 +121,6 @@
                                        ("port" . ,convention-db-port)))
       (message run-lang-cmd))))
 
-
-
 (defun convention-format-exec-as-file-cmd ()
   "Returns a string representing a command which executes code residing in the .tmp_code file
    contained in a running container's code directory"
@@ -150,7 +128,6 @@
     (s-format convention-docker-command-exec-as-file 'aget
               `(("container" . ,convention-container-target)
                 ("run-lang-cmd" . ,run-lang-cmd)))))
-
 
 (defun convention-exec-as-file (arg &optional region)
   "Executes code contained in either the entire buffer or a REGION in a
@@ -161,7 +138,7 @@
           (cmd (concat convention-program-target " " (buffer-file-name)))
           ;;(bounds (convention-get-bounds region))
           )
-    ;;(write-region (nth 0 bounds) (nth 1 bounds) "./.tmp_code" nil) 
+    ;;(write-region (nth 0 bounds) (nth 1 bounds) "./.tmp_code" nil)
     (message "command")
     (message cmd)
     (message "file name")
@@ -173,9 +150,6 @@
     )
   )
 
-
-
-
 (defun convention-exec-region-as-file (arg)
   "Executes code in a region as a file on a running container"
   (interactive "P")
@@ -186,6 +160,4 @@
   (interactive "P")
   (convention-exec-as-file arg))
 
-
 (provide 'convention-execute)
-

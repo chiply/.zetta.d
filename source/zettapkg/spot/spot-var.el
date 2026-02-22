@@ -57,10 +57,7 @@
 (setq spot-recently-played-url "https://api.spotify.com/v1/me/player/recently-played")
 (defvar spot--request-timeout 10)
 
-
 (defun spot--base-q-params ()
   (concat "?access_token=" spot-access-token))
-
-
 
 (provide 'spot-var)

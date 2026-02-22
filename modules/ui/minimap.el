@@ -8,13 +8,9 @@
 ;; out of the way for the most part (eg not poppoing up in new
 ;; contexts were I don't need it)
 
-
-
 ;; org-mode needs to not be in indent mode
 
-
 ;; same behavior for treemacs with the updates?
-
 
 ;; The automatic update is cool, but this causes some issues. It will
 ;; be better to strike a balance between the two. Two functions should
@@ -23,7 +19,6 @@
 ;; function should be implemented to quickly update the mini Mac based
 ;; on location. These functions should be bound to similar keys and
 ;; the toggling should be the higher tier binding.
-
 
 ;; issues
 ;; doesn't appear in a consistent window
@@ -60,7 +55,7 @@
   ;;(lambda (ignored-buffer-regex)
   ;;(string-match ignored-buffer-regex (buffer-name (current-buffer))))
   ;;zetta-minimap-ignored-buffers
-  ;;)) 
+  ;;))
   ;;))
   ;;(apply 'derived-mode-p minimap-major-modes))
   ;;(unless (minimap-get-window)
@@ -94,7 +89,7 @@
   ;;(lambda (ignored-buffer-regex)
   ;;(string-match ignored-buffer-regex (buffer-name (current-buffer))))
   ;;zetta-minimap-ignored-buffers
-  ;;)) 
+  ;;))
   ;;))
   ;;
   ;;(apply 'derived-mode-p minimap-major-modes))
@@ -128,17 +123,13 @@
   ;;)
   ;;)
 
-  
-
-
-
   ;; to get git information in the fringes
   (setq minimap-hide-fringes nil)
   (setq minimap-minimum-width 25)
   (setq minimap-width-fraction 0.10)
   (setq minimap-update-delay 0.10)
   (setq minimap-hide-scroll-bar nil)
-  ;; causes issues with window size when on left... 
+  ;; causes issues with window size when on left...
   (setq minimap-window-location 'right)
   (setq minimap-enlarge-certain-faces nil)
   (setq minimap-recreate-window t)
@@ -192,7 +183,7 @@
                   (set-face-attribute 'minimap-active-region-background nil
                                       :background brushup-bg-1_0
                                       )
-                  
+
                   ))
 
   :general

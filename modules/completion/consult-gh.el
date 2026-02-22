@@ -22,7 +22,6 @@
   (require 'consult-gh-nerd-icons)
   (consult-gh-nerd-icons-mode +1)
 
-
   ;; set the default folder for cloning repositories, By default Consult-GH will confirm this before cloning
   (setq consult-gh-default-clone-directory "~/source_code/")
   (require 'consult-gh-transient)

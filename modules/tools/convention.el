@@ -16,7 +16,7 @@
 ;;
     ;;("C" convention-start-container "Start" :exit t :column "Container")
     ;;("s" convention-stop-container "Stop" :exit t)
-    ;;("S" convention-start-a-stopped-container "Start a stopped" :exit t) 
+    ;;("S" convention-start-a-stopped-container "Start a stopped" :exit t)
     ;;("lrc" convention-prompt-for-running-container "List running" :exit t)
     ;;("lsc" convention-prompt-for-stopped-container "List stopped" :exit t)
     ;;("lac" convention-prompt-for-all-container "List all" :exit t)

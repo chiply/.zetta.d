@@ -20,7 +20,6 @@
     )
   )
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; display
 ;;(zetta-side "^\\*indirect*" 'right)
 ;;; buffer.el ends here

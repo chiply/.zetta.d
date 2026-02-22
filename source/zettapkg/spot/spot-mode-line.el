@@ -5,8 +5,6 @@
 (require 'spot-generic-query)
 (require 'spot-util)
 
-
-
 (defvar spot--modeline-track nil)
 (defvar spot--modeline-artist nil)
 (defvar spot--modeline-album nil)
@@ -18,7 +16,6 @@
 (defvar spot--timer-started nil)
 (defvar spot--update-timers '())
 (defvar spot--update-interval 30)
-
 
 (defun spot--update-modeline-lighters ()
   (let* ((current (spot--alist-to-ht (spot--currently-playing))))
@@ -46,7 +43,6 @@
       (setq spot--modeline-shuffle-state nil)
       (setq spot--modeline-smart-shuffle nil))))
 
-
 (defun spot--check-for-modeline-update ()
   (spot--update-modeline-lighters)
   ;; NOTE when let is used because when no device is active, `current`
@@ -65,14 +61,12 @@
       (+ (/ delay 1000.0) 1.0) nil
       'spot--update-modeline-lighters))))
 
-
 (defun spot--start-update-timer ()
   (when (not spot--timer-started)
     (run-with-timer
      0 spot--update-interval
      'spot--check-for-modeline-update)
     (setq spot--timer-started t)))
-
 
 (defun spot-mode-line-string ()
   (let* ((lighters `(,spot--modeline-track
@@ -101,6 +95,5 @@
              ;;:foreground "#1db954"
              :foreground ,brushup-fg-4
                          ))))
-
 
 (provide 'spot-mode-line)

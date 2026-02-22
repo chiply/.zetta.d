@@ -3,11 +3,10 @@
 (use-package dired
   :ensure nil ;; builtin
 
-
   :init
 
   ;;(zetta-load-extension-file "dired/dired.el")
-  (when (string= system-type "darwin")       
+  (when (string= system-type "darwin")
     (setq dired-use-ls-dired nil))
 
   (setq dired-use-ls-dired nil)
@@ -21,7 +20,7 @@ A docstring
     (let* ((file (dired-get-file-for-visit))
            (buf (find-file-noselect file)))
       (zetta-indirect-buffer buf)
-      ) 
+      )
     )
 
   (defun zetta-soda-create-and-display-dired (&optional buf-or-mode-name)
@@ -54,7 +53,7 @@ A docstring
       )
     )
 
-  ;; function that returns the directory for the thing at point 
+  ;; function that returns the directory for the thing at point
   (defun zetta-dired-dir-at-point ()
     (interactive)
     (let ((thing (dired-get-file-for-visit)))
@@ -62,7 +61,6 @@ A docstring
           (message thing)
         (file-name-directory thing))
       ))
-
 
   (defun dired-ace-new-file ()
     "Use ace window to select a window for opening a file from dired."
@@ -99,7 +97,6 @@ A docstring
                             (find-file (read-file-name "Enter a file name: " file))))
           (find-file-other-window file)))))
 
-
   (defun dired-ace-find-file ()
     "Use ace window to select a window for opening a file from dired."
     (interactive)
@@ -111,11 +108,6 @@ A docstring
                                   (aw-switch-to-window window)
                                   (find-file file)))
           (find-file-other-window file)))))
-
-
-
-
-
 
   (defun dired-ace-find-file-vert ()
     "Use ce window to select a window (to split vertically) for opening a file from dired."
@@ -131,8 +123,6 @@ A docstring
                             (windmove-down)
                             (find-file file)))
           (find-file-other-window file)))))
-
-
 
   (defun dired-ace-find-file-hor ()
     "Use ace window to select a window (to split horizontatlly) for opening a file from dired."
@@ -200,8 +190,6 @@ A docstring
                  (file-name-directory (dired-get-file-for-visit)))))
       (helm-ag dir)))
 
-
-
   (defun zetta-dired-ranger-copy ()
     (interactive)
     (call-interactively 'dired-ranger-copy)
@@ -219,7 +207,6 @@ A docstring
     (call-interactively 'dired-ranger-move)
     (unless (file-remote-p default-directory) (revert-buffer))
     )
-
 
   (defun zetta-dired-open-in-chrome ()
     (interactive)
@@ -264,24 +251,20 @@ Version 2019-11-04"
            (lambda ($fpath) (let ((process-connection-type nil))
                               (start-process "" nil "xdg-open" $fpath))) $file-list))))))
 
-
   (defun zetta-soda-drink-dired ()
     (interactive)
     (zetta-soda-drink
      (quote zetta-soda-create-and-display-dired)
      "dired-mode"))
 
-
   (defun zetta-soda-cap-dired ()
     (interactive)
     (zetta-soda-cap "\\dired-mode*" 1))
-  
 
   (general-define-key
    :keymaps 'menu-run-map
    "d" (** zetta-soda-drink-dired)
    "D" (** zetta-soda-cap-dired))
-
 
   :general
   (

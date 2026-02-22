@@ -3,12 +3,12 @@
 ;; TODO
 ;; display buffer function
 ;; replacement logic -- lay out all the different use casces and options
-;; update: I'm going to call this a replace-buffer-function as this is operating at the buffer name level... 
+;; update: I'm going to call this a replace-buffer-function as this is operating at the buffer name level...
 ;;;; *replace* eg kill original,
 ;;;; *switch* to original (display and select),
 ;;;; *display* to original (display and don't select),
 ;;;; *create* with new buffername (simply prompt with what would have been used, eg provide a randomized thing as default)
-;;;; *warn* 
+;;;; *warn*
 ;;;; *default-buffer-replace-policy* to ease the change, implement a policy that does default-buffer-replace-policy (currently there is not really a policy, it just does default-buffer-replace-policy). note this would default to the underlying executor's default behavior.  eg for async-shell-command, it would simply warn you that the buffer already exists and do default-buffer-replace-policy.  I would typically prefer to set things explicitly
 
 ;;;;;;;;;;;;;;;; DEPENDENCIES
@@ -35,8 +35,6 @@
 (defvar zmc-cache nil)
 (setq zmc-async-shell-command-spinners-enable nil)
 ;; solution for monorepos:
-
-
 
 ;;;;;;;;;;;;;;;;;; HELPERS
 (defun zmc-get-hashtbl (args)
@@ -74,7 +72,6 @@ async-shell-command"
                :title "zmc finished"))
       (shell-command-sentinel process signal))))
 
-
 (defun zmc-async-shell-command+ (command output-buffer &optional error-buffer)
   (let* ((proc (progn
                  (async-shell-command command output-buffer error-buffer)
@@ -86,7 +83,6 @@ async-shell-command"
           (set-process-sentinel proc #'zmc-command-sentinel)
           output-buffer)
       (message "No process running"))))
-
 
 (defun zmc-detached-shell-command+ (command output-buffer)
   (let* ((detached--shell-command-buffer output-buffer)
@@ -100,7 +96,6 @@ async-shell-command"
           (set-process-sentinel proc #'zmc-command-sentinel)
           output-buffer)
       (message "No process running"))))
-
 
 ;;;;;;;;;;;;;;;;;;;;;; EXECUTORS
 ;; TODO keep an eye on this - may cause issues
@@ -203,7 +198,6 @@ async-shell-command"
     (when (string= "yes" select)
       (select-window (get-buffer-window new-buffer)))))
 
-
 ;; individual executors NOTE (process-connection-type nil) is a
 ;; performance optimization, but doesn't work with detached
 (defun zmc-es-compile (cmd)
@@ -241,7 +235,6 @@ async-shell-command"
         (zmc-async-shell-command-spinners-enable t))
     (zmc-detached-shell-command+ cmd bufnm)
     bufnm))
-
 
 (defun zmc-es-vterm (cmd)
   ;; if bufnm exists kill it
@@ -287,7 +280,6 @@ async-shell-command"
     (set (make-local-variable 'local-cmd) cmd)
     (apply 'zmc-run `(,program ,cmd ,bufnm ,side ,slot ,select ,buffer-replace-policy ,transient-name))))
 
-
 ;;;;;;;;;;;;;;;;;;;;;; TRANSIENT
 (defun zmc-define-transient (name htbl)
   (eval
@@ -311,7 +303,6 @@ async-shell-command"
       ;; Action: should simply take arguments and override variables
       ["Actions"
        ("<return>" "run" zmc-transient-act)])))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; DETECTORS
 (defun zmc-infer-program (build-file-type)
@@ -362,7 +353,6 @@ async-shell-command"
                        (buffer-string)))
          (targets (json-parse-string config-raw)))
     (ht-keys (ht-get targets "targets"))))
-
 
 ;; history
 ;; (string-match-p "python" cmd)
@@ -415,10 +405,10 @@ async-shell-command"
          (paths (--map (substring it 0 (string-match "\\[" it)) paths))
          (paths (append
                  ;; function level
-                 (delete-dups paths) 
+                 (delete-dups paths)
                  ;; file level
                  (delete-dups (--map (nth 0 (split-string it "::"))
-                                     paths)) 
+                                     paths))
                  ;; parent dir level
                  (delete-dups (-flatten (--map (zmc-get-parent-dirs it)
                                                paths))))))
@@ -426,7 +416,7 @@ async-shell-command"
 
 (defun zmc-get-parent-repo (subrepo)
   (let* ((subrepo (expand-file-name subrepo))
-         (repos 
+         (repos
           (-map
            (lambda (repo) (expand-file-name repo))
            (-filter
@@ -444,14 +434,10 @@ async-shell-command"
               repo)))
           repos))))
 
-
-
-
 ;;(seq-filter
 ;;(lambda (cmd) (not (string-prefix-p "dtach" cmd)))
 ;;(parse-zsh-history "~/.zsh_history")
 ;;)
-
 
 (defun parse-zsh-history (file)
   "Parse zsh history FILE into a list of successful commands (exit code 0)."
@@ -465,16 +451,15 @@ async-shell-command"
           (while (string-match "\\\\$" cmd)
             (forward-line)
             (let ((next-line (string-trim
-                              (buffer-substring-no-properties 
+                              (buffer-substring-no-properties
                                (line-beginning-position)
                                (line-end-position)))))
               (setq cmd (concat (substring cmd 0 -1) " " next-line))))
           (push cmd commands)))
-      
+
       (seq-filter
        (lambda (cmd) (not (string-prefix-p "dtach" cmd)))
        (nreverse commands)))))
-
 
 (defun zmc-make-alist (project-path build-file-name build-file-type)
   (let* ((fname (concat project-path build-file-name))
@@ -534,7 +519,6 @@ async-shell-command"
                  subtargets)))
     (ht-from-alist alist)))
 
-
 (defun zmc-get-targets (project-path build-file-type &optional build-file-regexp)
   (--map
    (let* ((build-file-name (when (file-exists-p
@@ -542,7 +526,6 @@ async-shell-command"
      (when build-file-name
        (zmc-make-alist project-path build-file-name build-file-type)))
    (directory-files project-path nil build-file-regexp t)))
-
 
 (defun zmc-detect-targets (build-file-type build-file-regexp)
   (let* ((projects (--filter (and (string-suffix-p "/" it)
@@ -554,7 +537,6 @@ async-shell-command"
          (lst (--filter it lst))
          (lst (flatten-list lst)))
     (eval (append '(ht-merge) lst))))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; INTERACTIVE FUNCTION
 (defun zmc (&optional arg)
@@ -605,7 +587,7 @@ CACHE: 1. latest/local transient 2. ~/.zmc-cache)"
                        (python-targets (zmc-detect-targets "python" "pyproject.toml"))
                        (tmuxinator-targets (zmc-detect-targets "tmuxinator" "\\.tmuxinator\\.yaml"))
                        (bash-script-targets (zmc-detect-targets "shell script" "\\.sh"))
-                       
+
                        ;; TODO do i have to use eval here?
                        (tmuxinator-targets-extra (eval
                                                   (append
@@ -660,7 +642,7 @@ CACHE: 1. latest/local transient 2. ~/.zmc-cache)"
              ;; needed to pass key into target object
              (key (completing-read "target " target-keys))
              ;; the hash table representing the cmd and its attributes
-             (target (ht-get targets key)) 
+             (target (ht-get targets key))
              (_ (ht-set! target "key" key))
              (transient-name (string-replace " " "-" key))
              ;; feature NYI: calls transient if exists (to benefti from getting
@@ -673,7 +655,6 @@ CACHE: 1. latest/local transient 2. ~/.zmc-cache)"
         (setq latest-transient transient-name) ;; global
         (set (make-local-variable 'local-transient) transient-name) ;; local
         (funcall (intern transient-name))))))
-
 
 (general-define-key
  ;; override alone doesn't work...
@@ -694,7 +675,6 @@ CACHE: 1. latest/local transient 2. ~/.zmc-cache)"
  ;; TODO wether or not to collect the 'slow' detectors, but see how we
  ;; go with cacheing
  )
-
 
 ;;;;;;;;;; CONFIG
 ;; TODO fix templates use jinja instead

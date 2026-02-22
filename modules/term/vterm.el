@@ -12,7 +12,6 @@
       (completing-read "Proces Buffer: " mode-buffers)
       ))
 
-
   (defun zetta-soda-create-and-display-term (buf-or-mode-name)
     (interactive)
     (let* ((buf (current-buffer))
@@ -94,7 +93,6 @@
          )
         )
 
-
       (process-send-string nm (concat "clear\n" program "\n"))
 
       (switch-to-buffer buf)
@@ -127,7 +125,6 @@ Prompt for a vterm buffer and store it as a buffer-local variable."
    (pcase-lambda (`(,cmd _)) (eq cmd #'project-eshell))
    project-switch-commands)
 
-
   ;; fixes unreadable situation -- comes out brown by default
   ;; note this is dependent on the terminal that launches emacs, I'm
   ;; using iterm2
@@ -136,7 +133,6 @@ Prompt for a vterm buffer and store it as a buffer-local variable."
                   (set-face-attribute 'vterm-color-yellow nil
                                       :foreground brushup-fg
                                       :background brushup-bg-3)))
-
 
   ;; set font in vterm -- note some fonts break certain applications.
   ;; Ex: Vulf font breaks the k9s cli

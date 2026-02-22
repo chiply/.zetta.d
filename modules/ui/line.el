@@ -149,9 +149,6 @@
 
 (setq anzu-cons-mode-line-p nil)
 
-;;(setq-default mode-line-format (zetta-get-line-format default-line-align-left "" ""))
-;;(setq-default header-line-format (zetta-get-line-format default-line-align-left-devel-1 "" "" ))
-
 ;; for apps that strangely don't take the defaults
 (add-hook 'treemacs-mode-hook
           '(lambda ()

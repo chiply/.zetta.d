@@ -98,54 +98,6 @@
 
 (make-local-variable 'zetta-zen-disable)
 
-;; (defun zetta-set-window-margin-zen ()
-;;   (unless (and (boundp 'zetta-zen-disable) zetta-zen-disable)
-;;     (when
-;;         (and
-;;          (> (window-total-width) 160)
-;;          (or (not (window-parameter (selected-window) 'window-slot)) (string= major-mode "org-mode"))
-;;          (not (equal text-scale-mode-amount 2)) ;; it should be two when both the above cateogires are true
-;;          )
-;;       (text-scale-set 2)
-;;       )
-;;     (when
-;;         (and
-;;          (<= (window-total-width) 160)
-;;          (>= (window-total-width) 50)
-;;          (or (not (window-parameter (selected-window) 'window-slot)) (string= major-mode "org-mode"))
-;;          (not (equal text-scale-mode-amount 0)) ;; it should be two when both the above cateogires are true
-;;          )
-;;       (text-scale-set 0)
-;;       )
-;;     (when
-;;         (and
-;;          (<= (window-total-width) 49)
-;;          (>= (window-total-width) 0)
-;;          (or (not (window-parameter (selected-window) 'window-slot)) (string= major-mode "org-mode"))
-;;          (not (equal text-scale-mode-amount -2)) ;; it should be two when both the above cateogires are true
-;;          )
-;;       (text-scale-set -2)
-;;       ) (when
-;;       (and
-;;        (or
-;;         (string= (symbol-name (window-parameter (selected-window) 'window-side)) "right")
-;;         (string= (symbol-name (window-parameter (selected-window) 'window-side)) "top")
-;;         (string= (symbol-name (window-parameter (selected-window) 'window-side)) "left")
-;;         (string= (symbol-name (window-parameter (selected-window) 'window-side)) "bottom")
-;;         )
-;;        (not (equal text-scale-mode-amount -2)) ;; it should be two when both the above cateogires are true
-;;        )
-;;       (text-scale-set -2)
-;;       )
-;;     )
-;;   )
-
-;; (defun zetta-zen-mode ()
-;;   (add-hook 'window-configuration-change-hook 'zetta-set-window-margin-zen 0 'local)
-;;   )
-;; (add-hook 'prog-mode-hook 'zetta-zen-mode)
-;; (add-hook 'window-configuration-change-hook 'zetta-zen-mode)
-
 (general-define-key
  :keymaps 'override
  "s-+" '(lambda () (interactive) (setq-local zetta-zen-disable t) (call-interactively 'text-scale-increase))

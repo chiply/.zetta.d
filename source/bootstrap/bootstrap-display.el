@@ -180,11 +180,11 @@ being displayed, otherwise returns nil"
 
 (general-define-key
  :keymaps 'menu-run-map
- "m" (** zetta-soda-drink-messages)
- "c"  (** calendar)
- "i"  (** info)
- "M" (** zetta-soda-cap-messages)
- "I" (** zetta-soda-cap-info))
+ "m" (repeatable-lite-wrap zetta-soda-drink-messages)
+ "c"  (repeatable-lite-wrap calendar)
+ "i"  (repeatable-lite-wrap info)
+ "M" (repeatable-lite-wrap zetta-soda-cap-messages)
+ "I" (repeatable-lite-wrap zetta-soda-cap-info))
 
 (defalias 'use-package-handler/:display 'use-package-handle-forms)
 (defalias 'use-package-normalize/:display 'use-package-normalize-forms)

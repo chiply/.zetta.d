@@ -5,7 +5,7 @@
   :demand t)
 
 ;; Block until repeatable-lite is installed — bootstrap-display and other
-;; downstream modules use `**` which must be available synchronously.
+;; downstream modules use `repeatable-lite-wrap` which must be available synchronously.
 (elpaca-wait)
 
 (provide 'bootstrap-repeatable-lite)

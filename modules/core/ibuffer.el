@@ -19,8 +19,8 @@
 
   (general-define-key
    :keymaps 'menu-run-map
-   "b" (** zetta-soda-drink-ibuffer)
-   "B" (** zetta-soda-cap-ibuffer))
+   "b" (repeatable-lite-wrap zetta-soda-drink-ibuffer)
+   "B" (repeatable-lite-wrap zetta-soda-cap-ibuffer))
 
   :hook (
          (ibuffer-mode . (lambda () (visual-line-mode -1)))

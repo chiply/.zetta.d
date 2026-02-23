@@ -37,7 +37,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: elpaca
-          key: elpaca-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**') }}
+          key: elpaca-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**', 'elpaca-lock.el') }}
           restore-keys: |
             elpaca-${{ matrix.emacs-version }}-
 

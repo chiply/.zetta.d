@@ -368,6 +368,16 @@ cmd_ci_test() {
                   (catch 'elpaca-timeout
                     (unwind-protect (elpaca-wait) (cancel-timer zetta--ci-timer)))
                   (message \"elpaca-wait: finished in %.0fs\" (- (float-time) start)))" \
+        --eval "(let ((failed-pkgs (cl-remove-if-not
+                                    (lambda (e) (eq (elpaca--status (cdr e)) 'failed))
+                                    (elpaca--queued))))
+                  (when failed-pkgs
+                    (message \"ELPACA-FAILED %d packages:\" (length failed-pkgs))
+                    (dolist (e failed-pkgs)
+                      (let* ((name (car e))
+                             (p (cdr e))
+                             (info (car (last (elpaca<-log p)))))
+                        (message \"  %s: %s\" name (if info (nth 2 info) \"unknown\"))))))" \
         --eval "(message \"ZETTA-OK packages=%d modules=%d\" (length (elpaca--queued)) (length user-files))" \
         2>&1 | tee "$logfile" || exit_code=$?
 
@@ -381,6 +391,14 @@ cmd_ci_test() {
 
     _ok "Config loaded successfully"
     grep "ZETTA-OK" "$logfile"
+
+    # Check for failed elpaca packages
+    if grep -q "ELPACA-FAILED" "$logfile"; then
+        _error "Some packages failed to install:"
+        grep -A 100 "ELPACA-FAILED" "$logfile" | grep "^  " | head -20
+        rm -f "$logfile"
+        return 1
+    fi
 
     # Check for serious errors (void-function, wrong-type-argument, debug-early)
     # These indicate real bugs even if the config loaded to completion.

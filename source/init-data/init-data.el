@@ -29,6 +29,7 @@
    "core/helpful.el"
    "core/elisp-mode.el"
    "core/prose.el"
+   "core/transient.el"
 
    ;; completion
    "completion/completion.el"
@@ -174,7 +175,6 @@
    "tools/ag.el"
    "tools/wgrep.el"
    "tools/vc.el"
-   "tools/transient.el"
    "tools/magit.el"
    "tools/forge.el"
    "tools/git-gutter.el"

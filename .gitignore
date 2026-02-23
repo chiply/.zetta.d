@@ -1,6 +1,7 @@
 # Build artifacts
 eaf
 tree-sitter
+modules/**/*.elc
 
 # Package manager caches
 elpaca/builds/

@@ -101,6 +101,17 @@ cmd_install() {
 
     _ok "Package installation complete"
 
+    _info "Byte-compiling modules..."
+    find "$ZETTA_DIR/modules" -name '*.elc' -delete
+    "$EMACS" --init-directory="$ZETTA_DIR" --batch \
+        -l "$ZETTA_DIR/init.el" \
+        --eval "(elpaca-wait)" \
+        --eval "(byte-recompile-directory \"$ZETTA_DIR/modules\" 0)" \
+        2>&1 | while IFS= read -r line; do
+            echo "  $line"
+        done
+    _ok "Module byte-compilation complete"
+
     _info "Native-compiling packages (this may take a while)..."
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
         --eval "(require 'comp)" \
@@ -130,6 +141,16 @@ cmd_sync() {
         -l "$ZETTA_DIR/init.el" \
         --eval "(elpaca-wait)" \
         --eval "(message \"Sync complete: %d packages queued\" (length (elpaca--queued)))" \
+        2>&1 | while IFS= read -r line; do
+            echo "  $line"
+        done
+
+    _info "Byte-compiling modules..."
+    find "$ZETTA_DIR/modules" -name '*.elc' -delete
+    "$EMACS" --init-directory="$ZETTA_DIR" --batch \
+        -l "$ZETTA_DIR/init.el" \
+        --eval "(elpaca-wait)" \
+        --eval "(byte-recompile-directory \"$ZETTA_DIR/modules\" 0)" \
         2>&1 | while IFS= read -r line; do
             echo "  $line"
         done

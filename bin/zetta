@@ -335,33 +335,36 @@ cmd_ci_test() {
     [[ -f ~/.private.el ]] || echo ";;" > ~/.private.el
     [[ -f ~/.zetta.el ]] || cp "$ZETTA_DIR/templates/zetta.example.el" ~/.zetta.el
 
-    local output exit_code=0
-    output=$("$EMACS" --init-directory="$ZETTA_DIR" --batch \
+    local logfile exit_code=0
+    logfile=$(mktemp)
+
+    # Stream output in real-time via tee so CI logs are visible during the run
+    "$EMACS" --init-directory="$ZETTA_DIR" --batch \
         -l "$ZETTA_DIR/init.el" \
         --eval "(elpaca-wait)" \
         --eval "(message \"ZETTA-OK packages=%d modules=%d\" (length (elpaca--queued)) (length user-files))" \
-        2>&1) || exit_code=$?
-
-    echo "$output"
+        2>&1 | tee "$logfile" || exit_code=$?
 
     # Check for success marker
-    if ! echo "$output" | grep -q "ZETTA-OK"; then
+    if ! grep -q "ZETTA-OK" "$logfile"; then
         _error "Config failed to load (exit code: $exit_code)"
-        echo "$output" | grep -iE "error|wrong-type|void-function" | head -20
+        grep -iE "error|wrong-type|void-function" "$logfile" | head -20
+        rm -f "$logfile"
         return 1
     fi
 
     _ok "Config loaded successfully"
-    echo "$output" | grep "ZETTA-OK"
+    grep "ZETTA-OK" "$logfile"
 
     # Check for serious errors (void-function, wrong-type-argument, debug-early)
     # These indicate real bugs even if the config loaded to completion.
     # "Cannot load" errors from use-package are expected on fresh installs.
     local errors
-    errors=$(echo "$output" \
-        | grep -iE "void-function|wrong-type-argument|debug-early" \
+    errors=$(grep -iE "void-function|wrong-type-argument|debug-early" "$logfile" \
         | grep -v "use-package" \
         || true)
+
+    rm -f "$logfile"
 
     if [[ -n "$errors" ]]; then
         _error "Serious errors detected:"

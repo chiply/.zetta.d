@@ -25,10 +25,12 @@ cd ~/.zetta.d
 bin/zetta install
 ```
 
-This will:
+**Important:** Run `bin/zetta install` before launching Emacs for the first time. This builds everything ahead of time so the UI renders correctly on first launch. Without it, Emacs will try to install, byte-compile, and native-compile ~320 packages on startup, resulting in a broken modeline, missing tab bar, and other visual glitches while it catches up.
+
+The install command will:
 1. Create `~/.zetta.el` (your config) and `~/.private.el` (API keys)
-2. Install and build all packages
-3. Native-compile for performance
+2. Install and byte-compile all packages via Elpaca
+3. Native-compile everything for runtime performance (this takes a few minutes)
 
 ### With chemacs2
 

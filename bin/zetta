@@ -64,8 +64,14 @@ cmd_install() {
 
     _info "Native-compiling packages (this may take a while)..."
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
+        --eval "(require 'comp)" \
         --eval "(native-compile-async \"$ZETTA_DIR/elpaca/builds\" 'recursively)" \
-        2>&1 | tail -5
+        --eval "(while (or comp-files-queue
+                        (> (comp-async-runnings) 0))
+                  (sleep-for 1))" \
+        2>&1 | while IFS= read -r line; do
+            echo "  $line"
+        done
 
     _ok "Zetta Emacs installed successfully"
     echo ""

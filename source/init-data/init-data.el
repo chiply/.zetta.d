@@ -187,7 +187,6 @@
    "tools/dired.el"
    "tools/dired-subtree.el"
    "tools/dired-ranger.el"
-   "tools/editorconfig.el"
    "tools/tokei.el"
    "tools/lsp.el"
    "tools/lark.el"

@@ -16,7 +16,7 @@ permissions:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -32,6 +32,14 @@ jobs:
         uses: jcs090218/setup-emacs@master
         with:
           version: ${{ matrix.emacs-version }}
+
+      - name: Cache elpaca directory
+        uses: actions/cache@v4
+        with:
+          path: elpaca
+          key: elpaca-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**') }}
+          restore-keys: |
+            elpaca-${{ matrix.emacs-version }}-
 
       - name: Create stub files
         run: |

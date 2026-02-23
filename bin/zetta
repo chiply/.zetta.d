@@ -336,10 +336,9 @@ cmd_ci_test() {
     [[ -f ~/.zetta.el ]] || cp "$ZETTA_DIR/templates/zetta.example.el" ~/.zetta.el
 
     local output exit_code=0
-    # Skip elpaca-wait: we're testing config loading, not package installation.
-    # elpaca-wait blocks on 200+ git clones in a fresh CI environment.
     output=$("$EMACS" --init-directory="$ZETTA_DIR" --batch \
         -l "$ZETTA_DIR/init.el" \
+        --eval "(elpaca-wait)" \
         --eval "(message \"ZETTA-OK packages=%d modules=%d\" (length (elpaca--queued)) (length user-files))" \
         2>&1) || exit_code=$?
 

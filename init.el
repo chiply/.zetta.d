@@ -21,7 +21,13 @@
 (load-file "~/.private.el")
 
 ;; load user config files
-(-map (lambda (pkg) (zetta-load-config-file pkg)) user-files)
+(let ((prev-category nil))
+  (dolist (pkg user-files)
+    (let ((category (file-name-directory pkg)))
+      (when (and prev-category (not (string= category prev-category)))
+        (elpaca-wait))
+      (setq prev-category category)
+      (zetta-load-config-file pkg))))
 
 (elpaca-process-queues)
 

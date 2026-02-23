@@ -1,14 +1,13 @@
 ;;; ai.el --- Configure AI tools -*- lexical-binding: t; -*-
 
-(use-package copilot-chat
-  :if (>= emacs-major-version 30)
-  :config
-  (setq copilot-chat-model "claude-3.5-sonnet"))
+(when (>= emacs-major-version 30)
+  (use-package copilot-chat
+    :config
+    (setq copilot-chat-model "claude-3.5-sonnet"))
 
-(use-package mcp
-  :if (>= emacs-major-version 30)
-  :ensure (mcp :type git :host github :repo "lizqwerscott/mcp.el")
-  :demand t
+  (use-package mcp
+    :ensure (mcp :type git :host github :repo "lizqwerscott/mcp.el")
+    :demand t
   :config
   ;; NOTE prepend mcp
   (setq zetta-mcp-cautious-tools '("mcp-bash-mcp"))
@@ -110,7 +109,7 @@
   (defun zetta-mcp-setup-gptel ()
     (interactive)
     (gptel-mcp-register-tool)
-    (gptel-mcp-use-tool)))
+    (gptel-mcp-use-tool))))
 
 (use-package gptel
   :demand t

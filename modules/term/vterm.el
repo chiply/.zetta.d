@@ -1,5 +1,8 @@
 ;;; vterm.el --- Configure vterm -*- lexical-binding: t; -*-
 
+;; vterm requires compiling a native C module (libvterm via CMake).
+;; Skip in batch mode where terminals are unusable and the build hangs CI.
+(unless noninteractive
 (use-package vterm
   :commands (vterm vterm-mode vterm-other-window)
   :init
@@ -183,5 +186,5 @@ Prompt for a vterm buffer and store it as a buffer-local variable."
                          (toggle-truncate-lines 1) (display-line-numbers-mode 1)))
          ((vterm-mode shell-command-mode) . tab-line-mode))
 
-  )
+  ))
 ;;; vterm.el ends here

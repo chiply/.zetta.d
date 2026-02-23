@@ -458,10 +458,11 @@ cmd_ci_test() {
     _ok "Config loaded successfully"
     grep "ZETTA-OK" "$logfile"
 
-    # Check for failed elpaca packages
-    if grep -q "ELPACA-FAILED" "$logfile"; then
+    # Check for failed elpaca packages (match only actual output, not literal
+    # strings embedded in backtraces which contain the eval'd Elisp code)
+    if grep -q "^ELPACA-FAILED" "$logfile"; then
         _error "Some packages failed to install:"
-        grep -A 100 "ELPACA-FAILED" "$logfile" | grep "^  " | head -20
+        grep -A 100 "^ELPACA-FAILED" "$logfile" | grep "^  " | head -20
         rm -f "$logfile"
         return 1
     fi

@@ -178,13 +178,14 @@ being displayed, otherwise returns nil"
   (interactive)
   (zetta-soda-cap "*info*"))
 
-(general-define-key
- :keymaps 'menu-run-map
- "m" (repeatable-lite-wrap zetta-soda-drink-messages)
- "c"  (repeatable-lite-wrap calendar)
- "i"  (repeatable-lite-wrap info)
- "M" (repeatable-lite-wrap zetta-soda-cap-messages)
- "I" (repeatable-lite-wrap zetta-soda-cap-info))
+(when (fboundp 'repeatable-lite-wrap)
+  (general-define-key
+   :keymaps 'menu-run-map
+   "m" (repeatable-lite-wrap zetta-soda-drink-messages)
+   "c"  (repeatable-lite-wrap calendar)
+   "i"  (repeatable-lite-wrap info)
+   "M" (repeatable-lite-wrap zetta-soda-cap-messages)
+   "I" (repeatable-lite-wrap zetta-soda-cap-info)))
 
 (defalias 'use-package-handler/:display 'use-package-handle-forms)
 (defalias 'use-package-normalize/:display 'use-package-normalize-forms)

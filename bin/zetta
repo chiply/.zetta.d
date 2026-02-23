@@ -328,7 +328,7 @@ cmd_test() {
 # ci-test
 # ——————————————————————————————————————————
 cmd_ci_test() {
-    _info "Running CI test (batch mode)..."
+    _info "Running CI test (batch mode)…"
 
     # Create required files if missing
     touch ~/.dir-locals.el

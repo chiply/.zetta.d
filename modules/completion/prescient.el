@@ -15,6 +15,8 @@
   (prescient-persist-mode t))
 
 (use-package corfu-prescient
+  :ensure (corfu-prescient :repo "radian-software/prescient.el"
+                           :files ("corfu-prescient.el"))
   :demand t
   :after (corfu prescient)
   :config
@@ -22,6 +24,8 @@
   )
 
 (use-package vertico-prescient
+  :ensure (vertico-prescient :repo "radian-software/prescient.el"
+                             :files ("vertico-prescient.el"))
   :demand t
   :after (prescient vertico)
   :config

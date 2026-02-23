@@ -35,9 +35,9 @@
 
   (general-define-key
    :keymaps 'menu-project-map
-   "g" (** git-gutter)
-   "j" (** git-gutter:next-hunk)
-   "k" (** git-gutter:previous-hunk))
+   "g" (repeatable-lite-wrap git-gutter)
+   "j" (repeatable-lite-wrap git-gutter:next-hunk)
+   "k" (repeatable-lite-wrap git-gutter:previous-hunk))
 
   :hook (use-package--git-gutter--post-config . zetta-brushup)
   )

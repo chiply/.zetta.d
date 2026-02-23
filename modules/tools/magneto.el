@@ -207,39 +207,39 @@
  "<return>" 'magneto-move
 
  ;; source actions
- "m" (** (lambda () (interactive) (magneto-set-magneto-source-action "move")))
- "c" (** (lambda () (interactive) (magneto-set-magneto-source-action "copy")))
- "p" (** (lambda () (interactive) (magneto-set-magneto-source-action "pull")))
+ "m" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-source-action "move")))
+ "c" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-source-action "copy")))
+ "p" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-source-action "pull")))
 
  ;; destniation actions
- "0" (** (lambda () (interactive) (magneto-set-magneto-destination-action "f")))
- "h" (** (lambda () (interactive) (magneto-set-magneto-destination-action "h")))
- "H" (** (lambda () (interactive) (magneto-set-magneto-destination-action "H")))
- "v" (** (lambda () (interactive) (magneto-set-magneto-destination-action "v")))
- "V" (** (lambda () (interactive) (magneto-set-magneto-destination-action "V")))
- "t" (** (lambda () (interactive) (magneto-set-magneto-destination-action "t")))
- "T" (** (lambda () (interactive) (magneto-set-magneto-destination-action "T")))
- "b" (** (lambda () (interactive) (magneto-set-magneto-destination-action "b")))
- "B" (** (lambda () (interactive) (magneto-set-magneto-destination-action "B")))
- "l" (** (lambda () (interactive) (magneto-set-magneto-destination-action "l")))
- "L" (** (lambda () (interactive) (magneto-set-magneto-destination-action "L")))
- "r" (** (lambda () (interactive) (magneto-set-magneto-destination-action "r")))
- "R" (** (lambda () (interactive) (magneto-set-magneto-destination-action "R")))
+ "0" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-action "f")))
+ "h" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-action "h")))
+ "H" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-action "H")))
+ "v" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-action "v")))
+ "V" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-action "V")))
+ "t" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-action "t")))
+ "T" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-action "T")))
+ "b" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-action "b")))
+ "B" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-action "B")))
+ "l" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-action "l")))
+ "L" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-action "L")))
+ "r" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-action "r")))
+ "R" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-action "R")))
 
  ;; selection actions
- "o" (** (lambda () (interactive) (magneto-set-magneto-selection-action "o")))
- "O" (** (lambda () (interactive) (magneto-set-magneto-selection-action "O")))
+ "o" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-selection-action "o")))
+ "O" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-selection-action "O")))
 
  ;; action actions
- "w" (** (lambda () (interactive) (magneto-set-magneto-action-action "consult-buffer")))
- "x" (** (lambda () (interactive) (magneto-set-magneto-action-action "execute-command")))
- "f" (** (lambda () (interactive) (magneto-set-magneto-action-action "find-file")))
- "C-b" (** (lambda () (interactive) (magneto-set-magneto-action-action "switch-buffer")))
+ "w" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-action-action "consult-buffer")))
+ "x" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-action-action "execute-command")))
+ "f" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-action-action "find-file")))
+ "C-b" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-action-action "switch-buffer")))
 
  ;; note only a-d are used for ace
- "a" (** (lambda () (interactive) (magneto-set-magneto-destination-window "a")))
- "s" (** (lambda () (interactive) (magneto-set-magneto-destination-window "s")))
- "d" (** (lambda () (interactive) (magneto-set-magneto-destination-window "d"))))
+ "a" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-window "a")))
+ "s" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-window "s")))
+ "d" (repeatable-lite-wrap (lambda () (interactive) (magneto-set-magneto-destination-window "d"))))
 
 ;; embark integration
 (defun my/embark-magneto-action (keymap action key-sequence)

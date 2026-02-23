@@ -34,10 +34,10 @@
    )
   (
    :keymaps 'menu-window-map
-   "v" (** zetta-split-window-v)
-   "V" (** zetta-split-window-V)
-   "h" (** zetta-split-window-h)
-   "H" (** zetta-split-window-H)
+   "v" (repeatable-lite-wrap zetta-split-window-v)
+   "V" (repeatable-lite-wrap zetta-split-window-V)
+   "h" (repeatable-lite-wrap zetta-split-window-h)
+   "H" (repeatable-lite-wrap zetta-split-window-H)
    )
   )
 ;;; windmove.el ends here

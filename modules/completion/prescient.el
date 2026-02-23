@@ -9,14 +9,14 @@
 ;; doesn't make sense (eg consult-line)
 
 (use-package prescient
+  :ensure (prescient :files ("prescient.el" "corfu-prescient.el" "vertico-prescient.el"))
   :demand t
   :after orderless
   :config
   (prescient-persist-mode t))
 
 (use-package corfu-prescient
-  :ensure (corfu-prescient :repo "radian-software/prescient.el"
-                           :files ("corfu-prescient.el"))
+  :ensure nil
   :demand t
   :after (corfu prescient)
   :config
@@ -24,8 +24,7 @@
   )
 
 (use-package vertico-prescient
-  :ensure (vertico-prescient :repo "radian-software/prescient.el"
-                             :files ("vertico-prescient.el"))
+  :ensure nil
   :demand t
   :after (prescient vertico)
   :config

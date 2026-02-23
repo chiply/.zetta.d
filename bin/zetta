@@ -339,24 +339,31 @@ cmd_ci_test() {
     logfile=$(mktemp)
 
     # Stream output in real-time via tee so CI logs are visible during the run.
-    # Use a custom wait loop with progress logging instead of bare elpaca-wait
-    # so we can see which packages are still pending if it stalls.
+    # Use elpaca-wait with a timer for progress logging and a hard timeout.
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
         -l "$ZETTA_DIR/init.el" \
-        --eval "(let ((timeout 480) (start (float-time)) (last-count 0))
-                  (while (and (elpaca--queued)
-                              (< (- (float-time) start) timeout))
-                    (let ((pending (length (seq-filter (lambda (e) (not (memq (elpaca--status e) '(finished blocked)))) (elpaca--queued))))
-                          (failed (length (seq-filter (lambda (e) (eq (elpaca--status e) 'failed)) (elpaca--queued)))))
-                      (unless (= pending last-count)
-                        (message \"elpaca-wait: %d pending, %d failed (%.0fs elapsed)\" pending failed (- (float-time) start))
-                        (setq last-count pending)))
-                    (accept-process-output nil 2))
-                  (if (elpaca--queued)
-                    (let ((stuck (seq-filter (lambda (e) (not (memq (elpaca--status e) '(finished blocked)))) (elpaca--queued))))
-                      (message \"ELPACA-TIMEOUT: %d packages still pending after %ds:\" (length stuck) timeout)
-                      (dolist (e stuck) (message \"  %s [%s]\" (elpaca<-package e) (elpaca--status e))))
-                    (message \"elpaca-wait: all packages finished in %.0fs\" (- (float-time) start))))" \
+        --eval "(let* ((start (float-time))
+                       (timeout 480)
+                       (timer (run-with-timer 10 10
+                               (lambda ()
+                                 (let ((pending 0) (failed 0) (total 0))
+                                   (dolist (entry (elpaca--queued))
+                                     (cl-incf total)
+                                     (pcase (elpaca--status (cdr entry))
+                                       ('failed (cl-incf failed))
+                                       ((or 'finished 'blocked) nil)
+                                       (_ (cl-incf pending))))
+                                   (message \"elpaca-wait: %d/%d done, %d pending, %d failed (%.0fs)\"
+                                            (- total pending failed) total pending failed
+                                            (- (float-time) start)))
+                                 (when (> (- (float-time) start) timeout)
+                                   (message \"ELPACA-TIMEOUT after %ds\" timeout)
+                                   (dolist (entry (elpaca--queued))
+                                     (unless (memq (elpaca--status (cdr entry)) '(finished blocked))
+                                       (message \"  %s [%s]\" (car entry) (elpaca--status (cdr entry)))))
+                                   (kill-emacs 1))))))
+                  (unwind-protect (elpaca-wait) (cancel-timer timer))
+                  (message \"elpaca-wait: all packages finished in %.0fs\" (- (float-time) start)))" \
         --eval "(message \"ZETTA-OK packages=%d modules=%d\" (length (elpaca--queued)) (length user-files))" \
         2>&1 | tee "$logfile" || exit_code=$?
 

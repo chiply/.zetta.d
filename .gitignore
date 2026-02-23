@@ -7,6 +7,7 @@ modules/**/*.elc
 elpaca/builds/
 elpaca/repos/
 elpaca/cache/
+elpa/
 source/straight/build/
 source/straight/repos/
 source/straight/build-cache.el

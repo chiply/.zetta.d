@@ -342,29 +342,31 @@ cmd_ci_test() {
     # Use elpaca-wait with a timer for progress logging and a hard timeout.
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
         -l "$ZETTA_DIR/init.el" \
+        --eval "(defvar zetta--ci-timer nil)" \
         --eval "(let* ((start (float-time))
-                       (timeout 480)
-                       (timer (run-with-timer 10 10
-                               (lambda ()
-                                 (let ((pending 0) (failed 0) (total 0))
-                                   (dolist (entry (elpaca--queued))
-                                     (cl-incf total)
-                                     (pcase (elpaca--status (cdr entry))
-                                       ('failed (cl-incf failed))
-                                       ((or 'finished 'blocked) nil)
-                                       (_ (cl-incf pending))))
-                                   (message \"elpaca-wait: %d/%d done, %d pending, %d failed (%.0fs)\"
-                                            (- total pending failed) total pending failed
-                                            (- (float-time) start)))
-                                 (when (> (- (float-time) start) timeout)
-                                   (message \"ELPACA-TIMEOUT after %ds\" timeout)
-                                   (dolist (entry (elpaca--queued))
-                                     (unless (memq (elpaca--status (cdr entry)) '(finished blocked))
-                                       (message \"  %s [%s]\" (car entry) (elpaca--status (cdr entry)))))
-                                   (cancel-timer timer)
-                                   (throw 'elpaca-timeout nil))))))
+                       (timeout 480))
+                  (setq zetta--ci-timer
+                        (run-with-timer 10 10
+                         (lambda ()
+                           (let ((pending 0) (failed 0) (total 0))
+                             (dolist (entry (elpaca--queued))
+                               (cl-incf total)
+                               (pcase (elpaca--status (cdr entry))
+                                 ('failed (cl-incf failed))
+                                 ((or 'finished 'blocked) nil)
+                                 (_ (cl-incf pending))))
+                             (message \"elpaca-wait: %d/%d done, %d pending, %d failed (%.0fs)\"
+                                      (- total pending failed) total pending failed
+                                      (- (float-time) start)))
+                           (when (> (- (float-time) start) timeout)
+                             (message \"ELPACA-TIMEOUT after %ds\" timeout)
+                             (dolist (entry (elpaca--queued))
+                               (unless (memq (elpaca--status (cdr entry)) '(finished blocked))
+                                 (message \"  %s [%s]\" (car entry) (elpaca--status (cdr entry)))))
+                             (cancel-timer zetta--ci-timer)
+                             (throw 'elpaca-timeout nil)))))
                   (catch 'elpaca-timeout
-                    (unwind-protect (elpaca-wait) (cancel-timer timer)))
+                    (unwind-protect (elpaca-wait) (cancel-timer zetta--ci-timer)))
                   (message \"elpaca-wait: finished in %.0fs\" (- (float-time) start)))" \
         --eval "(message \"ZETTA-OK packages=%d modules=%d\" (length (elpaca--queued)) (length user-files))" \
         2>&1 | tee "$logfile" || exit_code=$?

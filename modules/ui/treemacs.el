@@ -135,7 +135,6 @@
                             (toggle-truncate-lines -1)))))
 
 (use-package treemacs-magit
-  :ensure (treemacs-magit :repo "Alexander-Miller/treemacs"
-                          :files ("src/extra/treemacs-magit.el"))
+  :ensure nil
   :after (treemacs magit))
 ;;; treemacs.el ends here

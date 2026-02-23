@@ -1,17 +1,19 @@
 ;;; project.el --- Configure project -*- lexical-binding: t; -*-
 
+(use-package consult-project-extra
+  :after consult
+  :config
+  ;; TODO no sorting by recency in files?
+  ;; suddenly started working though...
+  (consult-customize
+   consult-project-extra-find
+   :preview-key "C-="))
+
 (use-package project
   :ensure nil ;; builtin
   :after consult
   :demand t
   :config
-  (use-package consult-project-extra
-    :config
-    ;; TODO no sorting by recency in files?
-    ;; suddenly started working though...
-    (consult-customize
-     consult-project-extra-find
-     :preview-key "C-="))
 
   ;; Fallback for directories not recognized by project-find-functions.
   ;; Must use with-eval-after-load since nested use-package :config

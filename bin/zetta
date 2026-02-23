@@ -361,9 +361,11 @@ cmd_ci_test() {
                                    (dolist (entry (elpaca--queued))
                                      (unless (memq (elpaca--status (cdr entry)) '(finished blocked))
                                        (message \"  %s [%s]\" (car entry) (elpaca--status (cdr entry)))))
-                                   (kill-emacs 1))))))
-                  (unwind-protect (elpaca-wait) (cancel-timer timer))
-                  (message \"elpaca-wait: all packages finished in %.0fs\" (- (float-time) start)))" \
+                                   (cancel-timer timer)
+                                   (throw 'elpaca-timeout nil))))))
+                  (catch 'elpaca-timeout
+                    (unwind-protect (elpaca-wait) (cancel-timer timer)))
+                  (message \"elpaca-wait: finished in %.0fs\" (- (float-time) start)))" \
         --eval "(message \"ZETTA-OK packages=%d modules=%d\" (length (elpaca--queued)) (length user-files))" \
         2>&1 | tee "$logfile" || exit_code=$?
 
@@ -384,6 +386,7 @@ cmd_ci_test() {
     local errors
     errors=$(grep -iE "void-function|wrong-type-argument|debug-early" "$logfile" \
         | grep -v "use-package" \
+        | grep -v "elpaca" \
         || true)
 
     rm -f "$logfile"

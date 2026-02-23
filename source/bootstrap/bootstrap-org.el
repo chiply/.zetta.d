@@ -186,9 +186,23 @@
    "C-c C-S-o" 'zetta-org-open-at-point
    "C-c C-o" 'org-open-at-point
    )
-  (
-   ;; TODO make this org-specific -- already tried, but couldn't get
-   ;; the keybindings to work
+
+  :hook (
+         (org-ctrl-c-ctrl-c-final . org-table-shrink)
+         (org-mode . (lambda () (progn
+                                  (auto-fill-mode -1)
+                                  (org-indent-mode -1)
+                                  (visual-line-mode -1)
+                                  ;; NOTE prevents indefinte
+                                  ;; indentation of code blocks
+                                  (electric-indent-mode -1)
+                                  (toggle-truncate-lines -1)
+                                  (when (fboundp 'undo-tree-mode)
+                                    (undo-tree-mode +1))
+                                  )))))
+
+(when (fboundp 'repeatable-lite-wrap)
+  (general-define-key
    :keymaps 'menu-org-map
    "g" (repeatable-lite-wrap zetta-org-go)
    "j" (repeatable-lite-wrap org-next-visible-heading)
@@ -226,22 +240,7 @@
    "m" (repeatable-lite-wrap org-mark-element)
    "M" (repeatable-lite-wrap org-mark-subtree)
    "C-t" (repeatable-lite-wrap zetta-org-call-tangle-with-prefix)
-   "C-S-t" (repeatable-lite-wrap org-babel-tangle)
-   )
-
-  :hook (
-         (org-ctrl-c-ctrl-c-final . org-table-shrink)
-         (org-mode . (lambda () (progn
-                                  (auto-fill-mode -1)
-                                  (org-indent-mode -1)
-                                  (visual-line-mode -1)
-                                  ;; NOTE prevents indefinte
-                                  ;; indentation of code blocks
-                                  (electric-indent-mode -1)
-                                  (toggle-truncate-lines -1)
-                                  (when (fboundp 'undo-tree-mode)
-                                    (undo-tree-mode +1))
-                                  )))))
+   "C-S-t" (repeatable-lite-wrap org-babel-tangle)))
 
 ;;; Logseq TODO files management
 ;; zetta-logseq-dir is defined in bootstrap-modules.el

@@ -1,10 +1,12 @@
 ;;; ai.el --- Configure AI tools -*- lexical-binding: t; -*-
 
 (use-package copilot-chat
+  :if (>= emacs-major-version 30)
   :config
   (setq copilot-chat-model "claude-3.5-sonnet"))
 
 (use-package mcp
+  :if (>= emacs-major-version 30)
   :ensure (mcp :type git :host github :repo "lizqwerscott/mcp.el")
   :demand t
   :config
@@ -112,10 +114,10 @@
 
 (use-package gptel
   :demand t
-  :after mcp
   :config
   (gptel-make-anthropic "Claude" :stream t :key gptel-api-key)
-  (require 'gptel-integrations) ;; required for mcp stuff
+  (when (featurep 'mcp)
+    (require 'gptel-integrations))
   (setq gptel-confirm-tool-calls nil)
   ;; NOTE messes up chat when using vscode-cp-proxy.  I think it
   ;; basically creates a syntax issue... probably something I can
@@ -147,7 +149,8 @@
     :confirm t
     :include t))
 
-  (zetta-mcp-setup-gptel)
+  (when (featurep 'mcp)
+    (zetta-mcp-setup-gptel))
 
   :general
   (

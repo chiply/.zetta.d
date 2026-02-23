@@ -1,26 +1,58 @@
 ;;; -*- coding: utf-8; mode: lisp-data -*-
-(("/Users/charlieholland/source_code/space-tree/space-tree.el" . 1552)
+(("/Users/charlieholland/.zetta.d/modules/tools/dired-subtree.el"
+  . 329)
+ ("/Users/charlieholland/.zetta.d/ede-projects.el" . 86)
+ ("/Users/charlieholland/.files/README.org" . 127)
+ ("/Users/charlieholland/source_code/chiply.dev/org/todos/chiply-dev.org"
+  . 639)
+ ("/Users/charlieholland/.files/source_code/"
+  (dired-filename
+   . "/Users/charlieholland/.files/source_code/ralph_prose"))
+ ("/Users/charlieholland/.zetta.d/modules/app/flappy-fish.el" . 6554)
+ ("/Users/charlieholland/.zetta.d/modules/ui/spinner.el" . 9633)
+ ("/Users/charlieholland/.zetta.d/source/zmc.org" . 1829)
+ ("/Users/charlieholland/.zetta.d/modules/tools/multi-compile.el"
+  . 3792)
+ ("/Users/charlieholland/.zetta.d/modules/ui/blinker.el" . 276)
+ ("/Users/charlieholland/.zetta.d/modules/core/interface.el" . 6338)
+ ("/Users/charlieholland/source_code/ralph_prose/articles/ralph-loop-simpsons/editorial_log.md"
+  . 3326)
+ ("/Users/charlieholland/source_code/ralph_prose/articles/why-emacs/editorial_log.md"
+  . 2405)
+ ("/Users/charlieholland/source_code/ralph_prose/articles/why-emacs/post.md"
+  . 273)
+ ("/Users/charlieholland/.authinfo" . 675)
+ ("/Users/charlieholland/source_code/ralph_prose/.env" . 228)
+ ("/Users/charlieholland/source_code/ralph_prose/articles/ai-ghostwriting-deception/post.md"
+  . 3798)
+ ("/Users/charlieholland/.zetta.d/"
+  (dired-filename . "/Users/charlieholland/.zetta.d/.data"))
+ ("/Users/charlieholland/.private.el" . 4763)
+ ("/Users/charlieholland/source_code/chiply.dev/org/post-space-tree.org"
+  . 365)
+ ("/Users/charlieholland/source_code/ralph_prose/articles/perils-of-under-testing/"
+  (dired-filename
+   . "/Users/charlieholland/source_code/ralph_prose/articles/perils-of-under-testing/post.md"))
+ ("/Users/charlieholland/source_code/ralph_prose/articles/perils-of-under-testing/post.md"
+  . 2054)
+ ("/Users/charlieholland/diet.org" . 159)
+ ("/Users/charlieholland/.zetta.d/elpaca-lock.el" . 5053)
+ ("/Users/charlieholland/source_code/chiply.dev/org/todos/blog-posts.org"
+  . 14946)
+ ("/Users/charlieholland/source_code/chiply.dev/org/post-technical-debt.org"
+  . 62829)
+ ("/Users/charlieholland/source_code/chiply.dev/org/post0.org"
+  . 118724)
+ ("/Users/charlieholland/logseq/pages/(todo) archive.org" . 16)
+ ("/Users/charlieholland/source_code/space-tree/space-tree.el" . 1552)
  ("/Users/charlieholland/source_code/space-tree/"
   (dired-filename
    . "/Users/charlieholland/source_code/space-tree/version.txt"))
- ("/Users/charlieholland/.zetta.d/modules/core/interface.el" . 2423)
- ("/Users/charlieholland/.zetta.d/modules/ui/keycast.el" . 979)
- ("/Users/charlieholland/source_code/chiply.dev/org/post-space-tree.org"
-  . 6858)
- ("/Users/charlieholland/source_code/chiply.dev/org/post0.org" . 16094)
  ("/Users/charlieholland/.files/files/.config/Brewfile" . 653)
- ("/Users/charlieholland/.zetta.d/"
-  (dired-filename . "/Users/charlieholland/.zetta.d/.data"))
  ("/Users/charlieholland/.files/CLAUDE.md" . 7337)
- ("/Users/charlieholland/.files/README.org" . 127)
  ("/Users/charlieholland/.zetta.d/modules/tools/gif-screencast.el"
   . 842)
- ("/Users/charlieholland/source_code/chiply.dev/org/todos/chiply-dev.org"
-  . 495)
- ("/Users/charlieholland/logseq/pages/(todo) archive.org" . 16)
  ("/Users/charlieholland/logseq/pages/(todo) buy.org" . 14)
- ("/Users/charlieholland/source_code/chiply.dev/org/todos/blog-posts.org"
-  . 387)
  ("/Users/charlieholland/logseq/logseq/version-files/base/pages/spacetree blog post.org"
   . 1236)
  ("/Users/charlieholland/logseq/pages/Blog.org" . 4184)
@@ -30,9 +62,6 @@
   (dired-filename . "/Users/charlieholland/logseq/assets"))
  ("/Users/charlieholland/logseq/pages/the time in a day.org" . 1624)
  ("/Users/charlieholland/source_code/chiply.dev/src/lib/flags.ts" . 24)
- ("/Users/charlieholland/diet.org" . 333747)
- ("/Users/charlieholland/source_code/chiply.dev/org/post-technical-debt.org"
-  . 63474)
  ("/Users/charlieholland/source_code/chiply.dev/org/posts.org" . 977)
  ("/Users/charlieholland/source_code/"
   (dired-filename . "/Users/charlieholland/source_code/chiply.dev"))
@@ -48,5 +77,4 @@
  ("/Users/charlieholland/logseq/pages/diet.org" . 7)
  ("/Users/charlieholland/source_code/chiply.dev/coverage/"
   (dired-filename
-   . "/Users/charlieholland/source_code/chiply.dev/coverage/base.css"))
- ("/Users/charlieholland/.private.el" . 2184))
+   . "/Users/charlieholland/source_code/chiply.dev/coverage/base.css")))

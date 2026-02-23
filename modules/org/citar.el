@@ -1,6 +1,7 @@
 ;;; citar.el --- Configure citar -*- lexical-binding: t; -*-
 
 (use-package citar
+  :ensure (:files (:defaults))
   :after all-the-icons
   :config
   (setq citar-symbols
@@ -25,6 +26,7 @@
   )
 
 (use-package citar-embark
+  :ensure nil
   :after citar embark
   :no-require
   :config (citar-embark-mode))

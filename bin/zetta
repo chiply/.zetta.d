@@ -55,7 +55,46 @@ cmd_install() {
     _info "Starting Emacs to install and build packages..."
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
         -l "$ZETTA_DIR/init.el" \
-        --eval "(elpaca-wait)" \
+        --eval "(defvar zetta--install-timer nil)" \
+        --eval "(defvar zetta--install-prev-done 0)" \
+        --eval "(defvar zetta--install-stall-since nil)" \
+        --eval "(let* ((start (float-time))
+                       (timeout 600)
+                       (stall-limit 120))
+                  (setq zetta--install-timer
+                        (run-with-timer 10 10
+                         (lambda ()
+                           (let ((pending 0) (failed 0) (total 0) (done 0) (stuck nil))
+                             (dolist (entry (elpaca--queued))
+                               (cl-incf total)
+                               (pcase (elpaca--status (cdr entry))
+                                 ('failed (cl-incf failed))
+                                 ((or 'finished 'blocked) (cl-incf done))
+                                 (_ (cl-incf pending)
+                                    (push (format \"%s [%s]\" (car entry)
+                                                  (elpaca--status (cdr entry)))
+                                          stuck))))
+                             (message \"install: %d/%d done, %d pending, %d failed (%.0fs)\"
+                                      done total pending failed
+                                      (- (float-time) start))
+                             (if (> done zetta--install-prev-done)
+                                 (progn (setq zetta--install-prev-done done)
+                                        (setq zetta--install-stall-since nil))
+                               (when (and stuck (not zetta--install-stall-since))
+                                 (setq zetta--install-stall-since (float-time)))
+                               (when (and zetta--install-stall-since
+                                          (> (- (float-time) zetta--install-stall-since) stall-limit))
+                                 (message \"install: no progress for %ds, giving up on: %s\"
+                                          stall-limit (string-join stuck \", \"))
+                                 (cancel-timer zetta--install-timer)
+                                 (throw 'elpaca-timeout nil))))
+                           (when (> (- (float-time) start) timeout)
+                             (message \"INSTALL-TIMEOUT after %ds\" timeout)
+                             (cancel-timer zetta--install-timer)
+                             (throw 'elpaca-timeout nil)))))
+                  (catch 'elpaca-timeout
+                    (unwind-protect (elpaca-wait) (cancel-timer zetta--install-timer)))
+                  (message \"Package installation finished in %.0fs\" (- (float-time) start)))" \
         2>&1 | while IFS= read -r line; do
             echo "  $line"
         done
@@ -67,7 +106,7 @@ cmd_install() {
         --eval "(require 'comp)" \
         --eval "(native-compile-async \"$ZETTA_DIR/elpaca/builds\" 'recursively)" \
         --eval "(while (or comp-files-queue
-                        (> (comp-async-runnings) 0))
+                        (> (hash-table-count comp-async-compilations) 0))
                   (sleep-for 1))" \
         2>&1 | while IFS= read -r line; do
             echo "  $line"

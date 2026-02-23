@@ -13,20 +13,25 @@
 
 ;;;;;;;;;;;;;;;; DEPENDENCIES
 (use-package templatel)
-(use-package compile-multi :commands compile-multi)
-(use-package consult-compile-multi :after compile-multi :config (consult-compile-multi-mode))
+(use-package compile-multi
+  :ensure (:files (:defaults "extensions/*/*.el"))
+  :commands compile-multi)
+(use-package consult-compile-multi :ensure nil :after compile-multi :config (consult-compile-multi-mode))
 (use-package all-the-icons-completion
   :hook (elpaca-after-init . all-the-icons-completion-mode)
   :config
   (add-hook 'marginalia-mode-hook #'all-the-icons-completion-marginalia-setup))
-(use-package compile-multi-all-the-icons :after compile-multi)
-(use-package compile-multi-embark :after (compile-multi embark) :config (compile-multi-embark-mode +1))
-(use-package projection :commands projection-mode)
+(use-package compile-multi-all-the-icons :ensure nil :after compile-multi)
+(use-package compile-multi-embark :ensure nil :after (compile-multi embark) :config (compile-multi-embark-mode +1))
+(use-package projection
+  :ensure (:files (:defaults "src/*.el" "src/projection-multi/*.el" "src/projection-multi-embark/*.el"))
+  :commands projection-mode)
 (use-package projection-multi
+  :ensure nil
   :after projection
   :config
   (require 'projection-multi-make))
-(use-package projection-multi-embark :after (projection embark))
+(use-package projection-multi-embark :ensure nil :after (projection embark))
 
 ;; TODO - timing of setting local and latest-transient -- should only happen once the transient has been executed, but this may be challenging or require more refactoring
 

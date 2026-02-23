@@ -66,18 +66,14 @@ STYLE defaults to `consult-async-split-style'."
 
 (use-package consult-gh-embark
   :if (executable-find "gh")
-  :ensure (consult-gh-embark :host github
-                             :repo "armindarvish/consult-gh"
-                             :files ("consult-gh-embark.el"))
+  :ensure nil
   :after consult-gh
   :config
   (consult-gh-embark-mode +1))
 
 (use-package consult-gh-forge
   :if (executable-find "gh")
-  :ensure (consult-gh-forge :host github
-                            :repo "armindarvish/consult-gh"
-                            :files ("consult-gh-forge.el"))
+  :ensure nil
   :after consult-gh
   :config
   (consult-gh-forge-mode +1))

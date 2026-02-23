@@ -152,8 +152,8 @@ Prompt for a vterm buffer and store it as a buffer-local variable."
 
   (general-define-key
    :keymaps 'menu-run-map
-   "s" (** zetta-soda-drink-term)
-   "S" (** zetta-soda-cap-term))
+   "s" (repeatable-lite-wrap zetta-soda-drink-term)
+   "S" (repeatable-lite-wrap zetta-soda-cap-term))
 
   :display
   ;;(zetta-side "^\\*zsh*" 'bottom)

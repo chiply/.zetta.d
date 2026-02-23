@@ -106,10 +106,10 @@
 
   (general-define-key
    :keymaps 'menu-run-map
-   "t" (** zetta-soda-drink-treemacs)
-   "T" (** treemacs)
-   "C-t" (** zetta-refresh-treemacs)
-   "M-t" (** zetta-soda-toggle-treemacs-follow-mode))
+   "t" (repeatable-lite-wrap zetta-soda-drink-treemacs)
+   "T" (repeatable-lite-wrap treemacs)
+   "C-t" (repeatable-lite-wrap zetta-refresh-treemacs)
+   "M-t" (repeatable-lite-wrap zetta-soda-toggle-treemacs-follow-mode))
 
   ;;:brushup
   ;;(add-to-list 'brushup-styles

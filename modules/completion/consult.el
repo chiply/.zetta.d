@@ -99,8 +99,8 @@ STYLE defaults to `consult-async-split-style'."
    )
   (
    :keymaps 'menu-window-map
-   "s" (** consult-ripgrep)
-   "S" (** consult-line)
+   "s" (repeatable-lite-wrap consult-ripgrep)
+   "S" (repeatable-lite-wrap consult-line)
    )
   (
    :keymaps 'launch-map

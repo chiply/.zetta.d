@@ -26,7 +26,7 @@
   :general
   (
    :keymaps 'menu-window-map
-   "C-f" (** focus-mode)
+   "C-f" (repeatable-lite-wrap focus-mode)
    )
 
   ;;:hook (((prog-mode) . (lambda () (focus-mode)))

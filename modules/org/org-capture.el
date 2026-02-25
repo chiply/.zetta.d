@@ -1,7 +1,7 @@
 ;;; org-capture.el --- Configure org-capture and logseq search -*- lexical-binding: t; -*-
 
 ;;; Searching logseq todo headings
-;; Functions zetta-logseq-todo-files and related are defined in bootstrap-org.el
+;; Functions zetta-logseq-todo-files and related are defined in modules/org/org.el
 
 (defun zetta-logseq-search-headings ()
   "Search through headings in all logseq (todo) files using org-ql-find."

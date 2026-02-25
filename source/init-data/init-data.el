@@ -282,7 +282,7 @@
    ;; term
    "term/shell.el"
    "term/foreman.el"
-   "term/foreman_conf.el"
+   "term/foreman-conf.el"
    "term/vterm.el"))
 
 (provide 'init-data)

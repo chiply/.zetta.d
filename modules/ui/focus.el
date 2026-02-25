@@ -32,6 +32,6 @@
   ;;:hook (((prog-mode) . (lambda () (focus-mode)))
          ;;(emacs-lisp-mode . (lambda () (zetta-focus-mode 'defun)))
          ;;((python-ts-mode sql-mode yaml-mode sh-mode) . (lambda () (zetta-focus-mode 'defun))))
-  ;;(use-package--focus--post-config . (lambda () (zetta-brushup))))
+  ;;(use-package--focus--post-config . (lambda () (brushup))))
   )
 ;;; focus.el ends here

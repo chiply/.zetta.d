@@ -10,5 +10,5 @@
   (general-define-key :keymaps 'override
                       "s-o" 'evil-avy-goto-char-timer)
 
-  :hook (use-package--avy--post-config . zetta-brushup))
+  :hook (use-package--avy--post-config . brushup))
 ;;; avy.el ends here

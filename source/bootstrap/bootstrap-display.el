@@ -61,17 +61,18 @@ being displayed, otherwise returns nil"
       (string-match mode (symbol-name major-mode)))))
 
 (defun zetta-soda-count-windows ()
-  (setq lst '())
-  (while (not (member (selected-window) lst))
-    (setq lst (cons (selected-window) lst))
-    (other-window 1))
-  (length lst))
+  (let ((lst '()))
+    (while (not (member (selected-window) lst))
+      (setq lst (cons (selected-window) lst))
+      (other-window 1))
+    (length lst)))
 
 ;;;;;;;;;;;; side windows
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Display buffer alist (leverages soda functions)
-;; left top right bottom
+;; Max side-window slots per edge: (left top right bottom).
+;; 3 slots per edge except bottom gets 4 for which-key + compilation + misc.
 (setq window-sides-slots '(3 3 3 4))
-;; trying this out for now
+;; When t, left/right side windows span the full frame height (above/below top/bottom).
 (setq window-sides-vertical t)
 
 ;; note you need to reevaluate the zetta-side function

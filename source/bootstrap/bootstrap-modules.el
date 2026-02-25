@@ -242,5 +242,39 @@ Examples:
      (setq zetta-modules (zetta--parse-module-specs ',specs))
      (setq user-files (zetta--resolve-all-modules zetta-modules))))
 
+;;; Init-critical utility functions
+
+(defun zetta-load-config-file (file)
+  "Load a module FILE relative to `zetta-modules-dir'."
+  (interactive)
+  (message file)
+  (let* ((emacsdir (expand-file-name user-emacs-directory))
+         (sourcefile-path (format "%smodules/%s" emacsdir file))
+         (file-extension (file-name-extension file))
+         (root (file-name-sans-extension file)))
+    (cond
+     ((string= "el" file-extension)
+      (load-file sourcefile-path))
+     ((string= "org" file-extension)
+      (let* ((tanglefile-path (format "%smodules/tangled/%s.el" emacsdir root)))
+        (org-babel-tangle-file sourcefile-path tanglefile-path)
+        (load-file tanglefile-path))))))
+
+(defun zetta-touch-maybe (path)
+  "Create file or directory at PATH if it doesn't already exist.
+If PATH has an extension, creates a file; otherwise creates a directory."
+  (if (file-exists-p path)
+      (message "{%s} already exists" path)
+    (if (string-match-p
+         (regexp-quote ".")
+         (file-name-nondirectory path))
+        (progn
+          (make-directory (file-name-directory path) t)
+          (with-temp-file path (insert ""))
+          (message "Created file: %s" path))
+      (progn
+        (make-directory path t)
+        (message "Created directory: %s" path)))))
+
 (provide 'bootstrap-modules)
 ;;; bootstrap-modules.el ends here

@@ -6,7 +6,7 @@
   :mode ("\\.grep\\'" . grep-mode)
   :config
 
-  ;; TODO doesn't work
+  ;; Unbind default "g r" so we can rebind to embark-rerun below
   (general-unbind 'grep-mode-map "g r")
   :general
   (

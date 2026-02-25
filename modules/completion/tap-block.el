@@ -1,10 +1,5 @@
 ;;; tap-block.el --- Configure tap block navigation -*- lexical-binding: t; -*-
 
-;; TODO:
-;; block titles -- just maker sure the reggex works
-;; naming convention: tap-[thing]-
-;; functiton to surround selection witth block open and block end
-
 ;;;; utils
 
 ;; dynamically compute block names

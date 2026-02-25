@@ -55,7 +55,6 @@
   ;; For example, would be nice for something like monitoring CI to be different from running unit tests
   (setq spinner-types
         '(
-          ;; TODO remove 2 comemnts to get old list, going simple for now
           ;;(Foo . ("-" "\\" "|" "/"))
           (Bar .
                ;;("o" "O" "@" "*")

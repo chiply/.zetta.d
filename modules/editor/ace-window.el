@@ -46,6 +46,6 @@
    "," 'ace-window
    )
 
-  :hook (use-package--ace-window--post-config . zetta-brushup)
+  :hook (use-package--ace-window--post-config . brushup)
   )
 ;;; ace-window.el ends here

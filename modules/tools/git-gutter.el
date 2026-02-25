@@ -39,6 +39,6 @@
    "j" (repeatable-lite-wrap git-gutter:next-hunk)
    "k" (repeatable-lite-wrap git-gutter:previous-hunk))
 
-  :hook (use-package--git-gutter--post-config . zetta-brushup)
+  :hook (use-package--git-gutter--post-config . brushup)
   )
 ;;; git-gutter.el ends here

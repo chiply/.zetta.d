@@ -139,15 +139,15 @@
                    ("suppress-output" "yes")
                    ))
       ("emacs-lisp-mode" (ht
-                          ("exec" "foobar")
+                          ("exec" "emacs")
                           ("venv" "none")
                           ("suff" "el")
                           ("wraps" ())
-                          ("wrap" "# ${sourcefile} \n{code}")
+                          ("wrap" ";; ${sourcefile}\n${code}")
                           ("wrapnm" "none")
                           ("dir" dir)
                           ("procname" nil)
-                          ("repl" "ipython")
+                          ("repl" "ielm")
                           ("repl-p" "no")
                           ("pos" "t0")
                           ("suppress-output" "yes")
@@ -156,104 +156,94 @@
     )
   )
 
-;; Modes with 4mn controls
-;; (add-hook 'python-ts-mode-hook '4mn-init-conf)
-;; (add-hook 'sql-mode-hook '4mn-init-conf)
-;; (add-hook 'emacs-lisp-mode-hook '4mn-init-conf)
-;; (add-hook 'sh-mode-hook '4mn-init-conf)
-;; (add-hook 'yaml-mode-hook '4mn-init-conf)
-;; (add-hook 'dockerfile-mode-hook '4mn-init-conf)
+;; 4mn-init-conf is called on-demand (interactively) rather than via mode
+;; hooks.  The keybindings below (<return>, <C-return>, <S-return>) trigger
+;; 4mn-exec, which expects 4mn-init-conf to have been run for the current
+;; buffer.  Call `M-x 4mn-init-conf` in a supported mode before first use.
 
-;;;; Set functions
-(defun 4mn-set-suppress-output ()
-  (interactive)
-  (s "suppress-output" (completing-read "Suppress output: " '("yes" "no"))))
-(defun 4mn-set-executable ()
-  (interactive)
-  (s "exec" (completing-read "Exec: " 4mn-executable-registry)))
-(defun 4mn-set-procname ()
-  (interactive)
-  (s "procname" (completing-read "Set a procname: " '()))
-  )
-(defun 4mn-set-venv ()
-  (interactive)
-  (s "venv" (read-directory-name "Choose a venv" "~/envs/"))
-  )
-(defun 4mn-set-dir ()
-  (interactive)
-  (s "dir" (4mn-detrampify-path (read-directory-name "Directory: ")))
-  )
+;;;; Setter macro and generated setters
+
+(defmacro def4mn-setter (name key reader)
+  "Define an interactive 4mn setter function.
+NAME is the function suffix (e.g. \"executable\" -> 4mn-set-executable).
+KEY is the 4mn-conf key string to set.
+READER is a form that reads user input and returns the value to store."
+  (let ((fn-name (intern (format "4mn-set-%s" name))))
+    `(defun ,fn-name ()
+       (interactive)
+       (s ,key ,reader))))
+
+;; completing-read setters
+(def4mn-setter "suppress-output" "suppress-output"
+  (completing-read "Suppress output: " '("yes" "no")))
+(def4mn-setter "executable" "exec"
+  (completing-read "Exec: " 4mn-executable-registry))
+(def4mn-setter "procname" "procname"
+  (completing-read "Set a procname: " '()))
+(def4mn-setter "pos" "pos"
+  (completing-read "Position: " '()))
+(def4mn-setter "action" "action"
+  (completing-read "Action: " '(push pull_request workflow_dispatch delete create workflow_call)))
+(def4mn-setter "type" "type"
+  (completing-read "Type: " '("Github Actions" "docker-compose")))
+
+;; directory setters
+(def4mn-setter "venv" "venv"
+  (read-directory-name "Choose a venv: " "~/envs/"))
+(def4mn-setter "dir" "dir"
+  (4mn-detrampify-path (read-directory-name "Directory: ")))
+
+;; file setters
+(def4mn-setter "workflow-file" "workflow_file"
+  (read-file-name "Select a file: "))
+(def4mn-setter "secret-file-path" "secret_file_path"
+  (read-file-name "Select a file: "))
+(def4mn-setter "event-path" "event_path"
+  (concat "-e " (read-file-name "Select a file: ")))
+(def4mn-setter "dockerfile" "dockerfile"
+  (read-file-name "Select a file: "))
+(def4mn-setter "json-file" "json_file"
+  (read-file-name "Select a file: "))
+
+;; minibuffer setter
+(def4mn-setter "image-name" "image-name"
+  (read-from-minibuffer "Name the image: "))
+
+;;;; Non-trivial setters (kept as manual defuns)
+
 (defun 4mn-get-sqlite3dbpath ()
-  ;; todo -- maybe something more sophisticated
+  "Return the path to the project's sqlite3 db, or \":memory:\" if not found."
   (let* ((dir (project-root (project-current nil default-directory)))
-         (sqlite3dbpath (concat dir "main.db"))
-         )
+         (sqlite3dbpath (concat dir "main.db")))
     (if (file-exists-p sqlite3dbpath)
         sqlite3dbpath
-      ":memory:"
-      )
-    )
-  )
+      ":memory:")))
+
 (defun 4mn-set-wraps ()
+  "Select a wrapper, updating wrapnm, wrap, and sqlite3dbpath accordingly."
   (interactive)
   (let ((wrapnm (completing-read "Choose a wrapper: " (ht-keys (g "wraps")))))
     (s "wrapnm" wrapnm)
     (s "wrap" (ht-get* (g "wraps") (g "wrapnm")))
     (if (string= wrapnm "sqlite3")
         (s "sqlite3dbpath" (4mn-get-sqlite3dbpath))
-      (s "sqlite3dbpath" nil)
-      )
-    )
-  )
+      (s "sqlite3dbpath" nil))))
+
 (defun 4mn-set-sqlite3dbpath ()
+  "Prompt for a .db file path when the active wrapper is sqlite3."
   (interactive)
   (when (string= (g 'wrapnm) "sqlite3")
-    (let (
-          (dbpath (read-file-name "dbpath: " )))
+    (let ((dbpath (read-file-name "dbpath: ")))
       (if (string= (file-name-extension dbpath) "db")
           (s "sqlite3dbpath" dbpath)
-        (message "not a dbfile")
-        )
-      )
-    )
-  )
+        (message "not a dbfile")))))
+
 (defun 4mn-set-repl ()
+  "Toggle the REPL flag between yes and no."
   (interactive)
   (if (string= "yes" (g 'repl-p))
       (s "repl-p" "no")
-    (progn
-      (s "repl-p" "yes")
-      ;;(s "window" "repl")
-      )
-    )
-  )
-(defun 4mn-set-pos ()
-  (interactive)
-  (s "pos" (completing-read "Position: " '())))
-(defun 4mn-set-action ()
-  (interactive)
-  (s "action" (completing-read "Position: " '(push pull_request workflow_dispatch delete create workflow_call))))
-(defun 4mn-set-type ()
-  (interactive)
-  (s "type" (completing-read "Position: " '("Github Actions" "docker-compose"))))
-(defun 4mn-set-workflow-file ()
-  (interactive)
-  (s "workflow_file" (read-file-name "select a file")))
-(defun 4mn-set-secret-file-path ()
-  (interactive)
-  (s "secret_file_path" (read-file-name "select a file")))
-(defun 4mn-set-event-path ()
-  (interactive)
-  (s "event_path" (concat "-e " (read-file-name "select a file"))))
-(defun 4mn-set-dockerfile ()
-  (interactive)
-  (s "dockerfile" (read-file-name "select a file")))
-(defun 4mn-set-image-name ()
-  (interactive)
-  (s "image-name" (read-from-minibuffer "Name the image: ")))
-(defun 4mn-set-json-file ()
-  (interactive)
-  (s "json_file" (read-file-name "select a file")))
+    (s "repl-p" "yes")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  Exec function
 (defun 4mn-exec (&optional thing)

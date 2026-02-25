@@ -168,5 +168,5 @@ Terminal and process management.
 |------|---------|-------------|
 | shell.el | shell | Built-in shell configuration |
 | foreman.el | foreman | Process manager integration |
-| foreman_conf.el | — | Foreman configuration |
+| foreman-conf.el | — | Foreman configuration |
 | vterm.el | vterm | Full terminal emulator |

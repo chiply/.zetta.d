@@ -209,22 +209,22 @@ Finally, show the buffer."
 
   )
 
+(defun zetta-state-evil ()
+  (interactive)
+  (if (fboundp 'evil-mode)
+      (progn (evil-mode t) (meow-global-mode -1) (message "evil enabled"))
+    (message "evil not available")))
+
 (defun zetta-state-meow ()
   (interactive)
-  (evil-mode -1)
+  (when (fboundp 'evil-mode) (evil-mode -1))
   (meow-setup)
   (meow-global-mode 1)
   (message "meow enabled"))
 
-(defun zetta-state-evil ()
-  (interactive)
-  (evil-mode t)
-  (meow-global-mode -1)
-  (message "evil enabled"))
-
 (defun zetta-state-emacs ()
   (interactive)
-  (evil-mode -1)
+  (when (fboundp 'evil-mode) (evil-mode -1))
   (meow-global-mode -1)
   (message "emacs state enabled"))
 
@@ -250,71 +250,32 @@ Finally, show the buffer."
 (defprefix launch-map menu-help-map "h")
 (defprefix launch-map menu-vc-map "g")
 
-;; There are different key systems that can be used.  emacs, evil,
-;; meow.  the issue is that evil and meow are modal editing systems
-;; while emacs is not.  in modal editing systems there is a notion of
-;; insert state (eg entering text) and non-insert states.  modal
-;; editing systems achieve short key sequences relative to systems
-;; like emacs built keys because of their non-insert states.  The
-;; issue this creates for keybindings is that you will have keys (like
-;; ,f for find-file) that will need to be bound in non-insert states,
-;; but not in insert states.  This block of codes simplifies setup by
-;; defining a prefix-command, 'launch-map, and binding the launch key
-;; (,) to this prefix.  Then, the keymap is bound to , in all modal
-;; keymaps (defined in zetta-modal-states-non-insert).  In this way, code
-;; elsewhere in the config can declare keybindings that apply ACROSS
-;; MULTIPLE MODAL EDITING SYSTEMS AND DEFAUKT KEYBINDINGS, by simply
-;; defining a keysequence on the 'launch-map, as opposed to defining 3
-;; separate forms that define the keys for non-insert, insert and
-;; emacs states.  This setup is robust to the addition of new modal
-;; editing systems such as
-
-;; note on easing migration -- as I am migrating from evil to meow, I
-;; can still rely on evil muscle memory, or even differential
-;; functionality, by quick dropping into evil mode.  This is useful
-;; not only for easing migration, but as a general feature of my
-;; configuration. Can almost consider this as a meta state.  Maybe
-;; 'modal state'.  And the idea would be to live in meow MOST of the
-;; time, while only switching to evil or emacs when necessary.
-
-;; EXPLANATION: a prefix command needs to be defined (here it is the
-;; symbol 'launch-map).  A key is also defined that will be used to
-;; run this command (",").  We define a list of modal insert states
-;; and modal non-insert states in which to bind the launch-key to the
-;; launch-map - this is done for convenience as many modal editing
-;; systems may be available, each containing potentially many of each
-;; insert and non-insert states (NOTE that for insert states,
-;; something like general-chord would need to be used).  With this
-;; setup, we can conveniently use either general or the built-in
-;; keybinding API elsewhere in the configuration to bind keys to the
-;; 'launch-map ONE TIME, making the keybindings contained within those
-;; declarations available in the arbitrary number of modal states
-;; defined in insert and non-insert.  NOTE this code also takes care
-;; of defining launch-key (",") as a prefix in these states, allowing
-;; for easy keybindings elsewhere in the configuration
-
-;; define the launch-map
+;; launch-map: a prefix command bound to "," in non-insert modal states.
+;; Modules bind keys to launch-map once; they become available across all
+;; modal editing systems (meow, evil, emacs) automatically.
 (define-prefix-command 'launch-map)
 (defvar launch-key ",")
 
 ;; NOTE unused currently
-(defvar zetta-modal-states-insert '(evil-insert-state-map
-                                meow-insert-state-keymap))
+(defvar zetta-modal-states-insert '(meow-insert-state-keymap))
 
-(defvar zetta-modal-states-non-insert '(evil-normal-state-map
-                                    evil-visual-state-map
-                                    meow-beacon-state-keymap
-                                    meow-motion-state-keymap
-                                    meow-normal-state-keymap))
+(defvar zetta-modal-states-non-insert
+  '(meow-beacon-state-keymap meow-motion-state-keymap meow-normal-state-keymap))
 
-;; Bind launch map to , in non insert states
+;; Bind launch-map in meow states immediately
 (general-define-key :keymaps zetta-modal-states-non-insert launch-key 'launch-map)
+
+;; Add evil states when/if evil loads
+(with-eval-after-load 'evil
+  (push 'evil-insert-state-map zetta-modal-states-insert)
+  (dolist (map '(evil-normal-state-map evil-visual-state-map))
+    (push map zetta-modal-states-non-insert))
+  (general-define-key
+   :keymaps '(evil-normal-state-map evil-visual-state-map)
+   launch-key 'launch-map))
 
 ;; Bind launch map to C-, in insert states.  Compatible with meow and embark-become
 (general-define-key (concat "C-" launch-key) 'launch-map)
-
-;; then actually edit code to use direct general bindings instead of my custom function
-;; define code for easily switching between modes -- use whatever is bound to c-z but make it cylce through
 
 (provide 'bootstrap-keys)
 ;;; bootstrap-keys.el ends here

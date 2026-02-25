@@ -63,15 +63,6 @@
    ;;(when (boundp 'latest-transient) latest-transient)
    ))
 
-(setq pom nil)
-(defun pomodoro! ()
-  ;; toggle the value of global variable pom
-  (interactive)
-  (setq pom (not pom)))
-
-(defun pom-ind ()
-  (when pom "🍅 "))
-
 (defun tab-bar-keycast ()
   (let ((str (keycast--format keycast-mode-line-format)))
     (when str
@@ -87,8 +78,6 @@
                "}")))
 
 (defun new-line () "\n")
-(defun new-line-1 () "2")
-(defun new-line-2 () "\n")
 
 (defun zetta-nyan ()
   (nyan-create))
@@ -110,41 +99,6 @@
 (add-hook 'prefix-command-echo-keystrokes-functions 'force-mode-line-update)
 
 (defun zetta-insert-space () " ")
-
-;; Tab-bar spinner — replaces flappy-fish with a spinner-types animation.
-;; Like the fish, a continuously running animation tells you Emacs isn't frozen.
-(defvar zetta-tab-spinner-index 0)
-(defvar zetta-tab-spinner-type 'Bar)
-(defvar zetta-tab-spinner--timer nil)
-
-(defun zetta-tab-spinner--advance ()
-  "Advance the tab-bar spinner to the next frame."
-  (let ((frames (cdr (assq zetta-tab-spinner-type spinner-types))))
-    (when frames
-      (setq zetta-tab-spinner-index
-            (mod (1+ zetta-tab-spinner-index) (length frames)))))
-  (force-mode-line-update))
-
-(defun zetta-tab-spinner-start (&optional type)
-  "Start the tab-bar spinner with optional TYPE (defaults to `zetta-tab-spinner-type')."
-  (interactive)
-  (when type (setq zetta-tab-spinner-type type))
-  (when zetta-tab-spinner--timer (cancel-timer zetta-tab-spinner--timer))
-  (setq zetta-tab-spinner--timer
-        (run-at-time nil 0.2 #'zetta-tab-spinner--advance)))
-
-(defun zetta-tab-spinner-stop ()
-  "Stop the tab-bar spinner."
-  (interactive)
-  (when zetta-tab-spinner--timer
-    (cancel-timer zetta-tab-spinner--timer)
-    (setq zetta-tab-spinner--timer nil)))
-
-(defun zetta-fish ()
-  "Return the current spinner frame for the tab-bar."
-  (let ((frames (cdr (assq zetta-tab-spinner-type spinner-types))))
-    (when frames
-      (concat " " (nth zetta-tab-spinner-index frames) " "))))
 
 (defun zetta-tab-bar-spot-mode-line-string ()
   (if (fboundp 'spot-mode-line-string)
@@ -203,7 +157,6 @@
                        zetta-tab-bar-recursion-level
                        recursion-indicator--string
                        ;;"  "
-                       pom-ind
                        tab-bar-format-global
                        repeat-indicator-icon ;; (?)
                        ;; these go together

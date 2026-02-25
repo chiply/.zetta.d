@@ -1,26 +1,5 @@
 ;;; bootstrap-zettafn.el --- Configure zetta utility functions -*- lexical-binding: t; -*-
 
-(defun zetta-load-extension-file (file)
-  (interactive)
-  "Load a file in current user's configuration directory"
-  (message file)
-  (let* ((emacsdir (expand-file-name user-emacs-directory))
-         (sourcefile-path (format "%ssource/zetta-lisp/%s" emacsdir file))
-         (file-extension (file-name-extension file))
-         (root (file-name-sans-extension file))
-         )
-    (cond
-     ((string= "el" file-extension)
-      (load-file sourcefile-path))
-     ((string= "org" file-extension)
-      (let* ((tanglefile-path (format "%sconfig/tangled/%s.el" emacsdir root)))
-        (org-babel-tangle-file sourcefile-path tanglefile-path)
-        (load-file tanglefile-path)
-        ))
-     )
-    )
-  )
-
 (defun zetta-load-config-file (file)
   (interactive)
   "Load a file in current user's configuration directory"
@@ -92,74 +71,6 @@ With a non-nil prefix ARG only show bindings in active maps."
     (kill-buffer)
     )
   )
-
-(defun zetta-foobar (func)
-  (with-current-buffer (get-buffer-create "*zetta-tmp-autodoc*")
-    (condition-case nil
-        (pp-emacs-lisp-code (symbol-function func))
-      (error nil)
-      )
-    (setq elisp-code (buffer-substring
-                      (save-excursion (beginning-of-buffer) (point))
-                      (save-excursion (end-of-buffer) (point))
-                      ))
-    )
-  (kill-buffer "*zetta-tmp-autodoc*")
-  elisp-code
-  )
-
-(defun zetta-docs-from-extension (ext)
-  (let* ((fname (expand-file-name
-                 (format "source/extension/%s.el" ext)
-                 user-emacs-directory))
-         (elements (cdr
-                    (assoc
-                     fname
-                     load-history)))
-         (vars (-filter 'symbolp elements))
-         (funcons (-filter (lambda (x)
-                             (and (consp x)
-                                  (eq 'defun (car x))))
-                           elements))
-         (funcs (mapcar 'cdr funcons)))
-    (switch-to-buffer "*org-doc*")
-    (erase-buffer)
-    (insert (format "#+TITLE: Documentation for %s
-#+OPTIONS: toc:nil
-" fname))
-    (insert "* Variables\n")
-    (dolist (var (sort vars 'string-lessp))
-      (insert (format "** %s
-Documentation: %s\n\n" var  (documentation-property var 'variable-documentation))))
-
-    (insert "* Functions\n\n")
-
-    (dolist (funcs (sort funcs 'string-lessp))
-
-      ;;(kill-buffer "*zetta-tmp-autodoc*")
-
-      (progn
-
-        (insert (format "** %s %s
-Documentation: %s
-
-Code:
-#+BEGIN_SRC emacs-lisp
-%s
-#+END_SRC
-"
-                        funcs
-                        (or (help-function-arglist funcs) "")
-                        (documentation funcs)
-                        (zetta-foobar funcs))
-
-                )))
-    (org-mode)
-    (write-file (format "%s-doc.org" ext))
-                                        ;(org-export-to-file 'latex "jmax-bibtex-doc.tex")
-                                        ;(org-latex-compile "jmax-bibtex-doc.tex")
-    (kill-buffer (format "%s-doc.org" ext))
-    ))
 
 ;; create a face inherits from 'link, except uses purple as the color
 (defface zetta-link-face
@@ -276,29 +187,6 @@ If PATH has an extension, creates a file; otherwise creates a directory."
   (interactive "sMode: ")
   (switch-to-buffer (get-buffer-create (concat "*scratch-" mode "*")))
   (funcall (intern mode)))
-
-;; copied from John Kitchin's blog
-;; https://kitchingroup.cheme.cmu.edu/blog/2018/05/14/f-strings-in-emacs-lisp/
-(defmacro f (fmt)
-  "Like `s-format' but with format fields in it.
-FMT is a string to be expanded against the current lexical
-environment. It is like what is used in `s-lex-format', but has
-an expanded syntax to allow format-strings. For example:
-${user-full-name 20s} will be expanded to the current value of
-the variable `user-full-name' in a field 20 characters wide.
-  (let ((z (sqrt 5)))  (f \"${z 1.2f}\"))
-  will render as: 2.24
-This function is inspired by the f-strings in Python 3.6, which I
-enjoy using a lot.
-"
-  (let* ((matches (s-match-strings-all"${\\(?3:\\(?1:[^} ]+\\) *\\(?2:[^}]*\\)\\)}" fmt))
-         (agetter (cl-loop for (m0 m1 m2 m3) in matches
-                        collect `(cons ,m3  (format (format "%%%s" (if (string= ,m2 "")
-                                                                      (if s-lex-value-as-lisp "S" "s")
-                                                                   ,m2))
-                                                  (symbol-value (intern ,m1)))))))
-
-    `(s-format ,fmt 'aget (list ,@agetter))))
 
 (provide 'bootstrap-zettafn)
 ;;; bootstrap-zettafn.el ends here

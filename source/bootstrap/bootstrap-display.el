@@ -187,9 +187,5 @@ being displayed, otherwise returns nil"
    "M" (repeatable-lite-wrap zetta-soda-cap-messages)
    "I" (repeatable-lite-wrap zetta-soda-cap-info)))
 
-(defalias 'use-package-handler/:display 'use-package-handle-forms)
-(defalias 'use-package-normalize/:display 'use-package-normalize-forms)
-(add-to-list 'use-package-keywords :display t)
-
 (provide 'bootstrap-display)
 ;;; bootstrap-display.el ends here

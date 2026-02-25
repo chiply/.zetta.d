@@ -1,4 +1,4 @@
-;;; foreman_conf.el --- Configure foreman process manager -*- lexical-binding: t; -*-
+;;; foreman-conf.el --- Configure foreman process manager -*- lexical-binding: t; -*-
 
 ;; this file represents config space for 4mn.  This is what an end user will interact with to
 ;; add their programming language of choice
@@ -298,22 +298,15 @@
                         procname
                         )))
     (cond ((string= "yes" (g 'repl-p))
-           ;; TODO NEED TO REWRITE AS WE AUTOMATICALLY SUPPRESS OUTPUT
+           ;; TODO: repl-p path needs rewrite — detached output suppression changed
            (progn
              (when (not (member bufnm
                                 (-map
                                  (lambda (buf) (buffer-name buf))
-                                 (buffer-list)
-                                 )))
-               (detached-shell-command innercmd nil)
-               (with-current-buffer (zetta-detached-get-newest-buffer)
-                 (rename-buffer bufnm)
-                 )
-               )
+                                 (buffer-list))))
+               (detached-shell-command innercmd nil))
              (process-send-string bufnm code)
-             (display-buffer bufnm)
-             )
-           )
+             (display-buffer bufnm)))
           ((string= "no" (g 'repl-p))
            (progn
              (with-temp-file filenm (insert code))
@@ -342,4 +335,4 @@
    )
 
   )
-;;; foreman_conf.el ends here
+;;; foreman-conf.el ends here

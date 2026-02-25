@@ -24,6 +24,6 @@
    ;;"/" 'evil-search-highlight-persist-remove-all
    ;;)
 ;;
-  ;;:hook (use-package--evil-search-highlight-persist--post-config . zetta-brushup)
+  ;;:hook (use-package--evil-search-highlight-persist--post-config . brushup)
   ;;)
 ;;; evil-search-highlight-persist.el ends here

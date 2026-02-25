@@ -111,7 +111,7 @@ in the order they appear in the `zetta-modules!' declaration.")
     (org . ("org.el" "org-ql.el" "org-capture.el" "org-ref.el" "ob-mermaid.el"
             "pdf-tools.el" "biblio.el" "citar.el" "org-remark.el"
             "org-tree-slide.el" "org-transclusion.el"))
-    (term . ("shell.el" "foreman.el" "foreman_conf.el" "vterm.el")))
+    (term . ("shell.el" "foreman.el" "foreman-conf.el" "vterm.el")))
   "Default load order for files within each module category.
 Derived from the curated order in init-data.el.  Files on disk
 but not listed here are appended alphabetically at the end.")

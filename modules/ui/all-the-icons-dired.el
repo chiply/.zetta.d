@@ -15,6 +15,6 @@
                                     :foreground brushup-fg-3))
 
   :hook ((dired-mode . (lambda () (zetta-enable-dired-icons-maybe)))
-         (use-package--all-the-icons-dired--post-config . (lambda () (zetta-brushup))))
+         (use-package--all-the-icons-dired--post-config . (lambda () (brushup))))
   )
 ;;; all-the-icons-dired.el ends here

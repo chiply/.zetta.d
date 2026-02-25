@@ -7,7 +7,7 @@
   (mapc #'disable-theme custom-enabled-themes)
   (load-theme 'ef-light t)
   ;; ensure brushup styling is applied after theme loads
-  (when (fboundp 'zetta-brushup)
-    (zetta-brushup)))
+  (when (fboundp 'brushup)
+    (brushup)))
 
 ;;; ef-themes.el ends here

@@ -14,7 +14,8 @@
   (when debug-on-error
     (toggle-debug-on-error)
     (message "Debug-on-error is off"))
-  (zetta-brushup))
+  (when (fboundp 'brushup)
+    (brushup)))
 
 (general-define-key
  :keymaps 'menu-theme-map

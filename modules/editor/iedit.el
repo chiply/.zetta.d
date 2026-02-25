@@ -39,6 +39,6 @@
    "i" (repeatable-lite-wrap zetta-iedit-initiate)
    )
 
-  :hook (use-package--iedit--post-config . zetta-brushup)
+  :hook (use-package--iedit--post-config . brushup)
   )
 ;;; iedit.el ends here

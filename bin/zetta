@@ -10,6 +10,7 @@
 #   update    Pull all packages (backs up lockfile first)
 #   doctor    Diagnose environment and configuration
 #   test      Start a test daemon and verify startup
+#   ci-sync   Install missing packages after stale cache restore
 #   ci-test   Batch-mode test for CI runners (no daemon)
 #   help      Show this help message
 
@@ -391,6 +392,72 @@ cmd_test() {
 }
 
 # ——————————————————————————————————————————
+# ci-sync  (install missing packages on stale cache)
+# ——————————————————————————————————————————
+cmd_ci_sync() {
+    _info "Syncing packages (stale cache detected)…"
+
+    # Create required files if missing
+    touch ~/.dir-locals.el
+    [[ -f ~/.private.el ]] || echo ";;" > ~/.private.el
+    [[ -f ~/.zetta.el ]] || cp "$ZETTA_DIR/templates/zetta.example.el" ~/.zetta.el
+
+    local exit_code=0
+    "$EMACS" --init-directory="$ZETTA_DIR" --batch \
+        -l "$ZETTA_DIR/init.el" \
+        --eval "(defvar zetta--sync-timer nil)" \
+        --eval "(defvar zetta--sync-prev-done 0)" \
+        --eval "(defvar zetta--sync-stall-since nil)" \
+        --eval "(let* ((start (float-time))
+                       (timeout 480)
+                       (stall-limit 120))
+                  (setq zetta--sync-timer
+                        (run-with-timer 5 10
+                         (lambda ()
+                           (let ((pending 0) (failed 0) (total 0) (done 0) (stuck nil))
+                             (dolist (entry (elpaca--queued))
+                               (cl-incf total)
+                               (pcase (elpaca--status (cdr entry))
+                                 ('failed (cl-incf failed))
+                                 ((or 'finished 'blocked) (cl-incf done))
+                                 (_ (cl-incf pending)
+                                    (push (format \"%s [%s]\" (car entry)
+                                                  (elpaca--status (cdr entry)))
+                                          stuck))))
+                             (message \"sync: %d/%d done, %d pending, %d failed (%.0fs)\"
+                                      done total pending failed
+                                      (- (float-time) start))
+                             (when stuck
+                               (message \"  waiting: %s\" (string-join stuck \", \")))
+                             (if (> done zetta--sync-prev-done)
+                                 (progn (setq zetta--sync-prev-done done)
+                                        (setq zetta--sync-stall-since nil))
+                               (when (and stuck (not zetta--sync-stall-since))
+                                 (setq zetta--sync-stall-since (float-time)))
+                               (when (and zetta--sync-stall-since
+                                          (> (- (float-time) zetta--sync-stall-since) stall-limit))
+                                 (message \"sync: no progress for %ds, giving up\" stall-limit)
+                                 (cancel-timer zetta--sync-timer)
+                                 (throw 'elpaca-timeout nil))))
+                           (when (> (- (float-time) start) timeout)
+                             (message \"SYNC-TIMEOUT after %ds\" timeout)
+                             (cancel-timer zetta--sync-timer)
+                             (throw 'elpaca-timeout nil)))))
+                  (catch 'elpaca-timeout
+                    (unwind-protect (elpaca-wait) (cancel-timer zetta--sync-timer)))
+                  (message \"Package sync finished in %.0fs\" (- (float-time) start)))" \
+        2>&1 | while IFS= read -r line; do
+            echo "  $line"
+        done || exit_code=$?
+
+    if [[ $exit_code -ne 0 ]]; then
+        _warn "Package sync exited with code $exit_code (continuing)"
+    else
+        _ok "Package sync complete"
+    fi
+}
+
+# ——————————————————————————————————————————
 # ci-test
 # ——————————————————————————————————————————
 cmd_ci_test() {
@@ -500,6 +567,7 @@ cmd_help() {
     echo "  update           Pull all packages (backs up lockfile)"
     echo "  doctor           Diagnose environment and configuration"
     echo "  test             Start test daemon and verify startup"
+    echo "  ci-sync          Install missing packages (stale cache)"
     echo "  ci-test          Batch-mode test for CI runners (no daemon)"
     echo "  help             Show this help message"
     echo ""
@@ -518,6 +586,7 @@ case "${1:-help}" in
     update)  cmd_update ;;
     doctor)  cmd_doctor ;;
     test)    cmd_test ;;
+    ci-sync) cmd_ci_sync ;;
     ci-test) cmd_ci_test ;;
     help|--help|-h) cmd_help ;;
     *)

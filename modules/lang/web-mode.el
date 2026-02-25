@@ -52,7 +52,7 @@
    )
 
   :hook ((web-mode . (lambda () (smartparens-mode +1)))
-         (use-package--web-mode--post-config . zetta-brushup)
+         (use-package--web-mode--post-config . brushup)
          (mhtml-mode . web-mode)
          )
   )

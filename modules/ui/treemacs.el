@@ -129,7 +129,7 @@
    "d" 'treemacs-delete-file
    )
 
-  :hook ((use-package--treemacs--post-config . zetta-brushup)
+  :hook ((use-package--treemacs--post-config . brushup)
          (treemacs-mode . (lambda ()
                             (text-scale-set -2)
                             (toggle-truncate-lines -1)))))

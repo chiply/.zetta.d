@@ -74,7 +74,7 @@ Arguments are same as of `defhydra'."
                   (set-face-attribute 'hydra-face-blue nil
                                       :foreground brushup-fg-3)))
 
-  :hook (use-package--hydra--post-config . zetta-brushup)
+  :hook (use-package--hydra--post-config . brushup)
   )
 
 (defalias 'use-package-handler/:hydra 'use-package-handle-forms)

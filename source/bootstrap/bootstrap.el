@@ -9,7 +9,6 @@
 (require 'bootstrap-display)
 (require 'bootstrap-evil)
 (require 'bootstrap-org)
-(require 'bootstrap-zettafn)
 
 (provide 'bootstrap)
 ;;; bootstrap.el ends here

@@ -1,26 +1,5 @@
 ;;; completion.el --- Configure bash-completion -*- lexical-binding: t; -*-
 
-;; TODO selecting, acting on multiple candidates -- what happens when search is backspaced do we lose the selection?
-;; TODO inputting multiple searhc strings
-;; what are the other patterns... let's say we wanted multiple for... realistically we want a logical or for the styyle dispathers
-;; som limited ability per command... we have regexes at our disposal, so an individual regex can have the logical or (\|)
-;; another pattern to this could be that we typically don't want to do this, and if we done, then create mutliple export buffers?
-
-;; TODO flat has issues with going to next, want scroll margin
-;; TODO right click to embark act on item
-
-;; TODO look into completing read multiple
-;; TODO using cape to merge capf functions; tried, couuldn't get it workinig
-;; TODO consult future
-;; TODO history element!  this seems odd by defautl... I want 1) incremental history search and 2) history scoped to command
-;; TODO reverse is happening in flat... doesn't make sense, need to override?
-
-;; prevent blank space until a char is typed in?
-
-;; TODO! formalize all features of a completion/action paradigm,
-;; sometimies it isn't obvous where features come from... eg style
-;; dispatchers within orderless.
-
 (setq enable-recursive-minibuffers t)
 
 (require 'sh-script)

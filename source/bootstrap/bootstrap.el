@@ -8,7 +8,6 @@
 (require 'bootstrap-brushup)
 (require 'bootstrap-display)
 (require 'bootstrap-evil)
-(require 'bootstrap-org)
 
 (provide 'bootstrap)
 ;;; bootstrap.el ends here

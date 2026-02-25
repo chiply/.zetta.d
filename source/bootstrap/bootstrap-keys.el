@@ -28,7 +28,7 @@
       which-key-side-window-max-height)
      (frame-width)))
 
-  (defun fit-horizonatally ()
+  (defun fit-horizontally ()
     (let ((fit-window-to-buffer-horizontally t))
       (fit-window-to-buffer)))
 
@@ -53,6 +53,10 @@
       (quit-windows-on which-key--buffer)
       ))
 
+  ;; Monkey-patch: suppress the "No bindings found" message when
+  ;; formatted-keys is nil.  Without this, which-key briefly flashes
+  ;; a message on the first of two rapid invocations before the
+  ;; second invocation succeeds.  Tested against which-key 3.x.
   (defun which-key--create-buffer-and-show
       (&optional prefix-keys from-keymap filter prefix-title)
     "Fill `which-key--buffer' with key descriptions and reformat.
@@ -256,7 +260,7 @@ Finally, show the buffer."
 (define-prefix-command 'launch-map)
 (defvar launch-key ",")
 
-;; NOTE unused currently
+;; Used by vertico.el and multi-compile.el for insert-state bindings
 (defvar zetta-modal-states-insert '(meow-insert-state-keymap))
 
 (defvar zetta-modal-states-non-insert

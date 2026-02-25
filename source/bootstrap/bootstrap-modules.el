@@ -50,7 +50,7 @@ in the order they appear in the `zetta-modules!' declaration.")
 ;; this order.  Files present on disk but not listed here are appended
 ;; alphabetically at the end.
 (defvar zetta--default-file-order
-  '((core . ("emacs.el" "simple.el" "utility.el" "interface.el" "desktop.el"
+  '((core . ("emacs.el" "simple.el" "utility.el" "interface.el" "tab-bar.el" "desktop.el"
              "remote.el" "security.el" "keys.el" "xref.el" "project.el"
              "persist.el" "smerge-mode.el" "repeat-mode.el" "saveplace.el"
              "savehist.el" "comint.el" "cleanup.el" "buffer.el" "ibuffer.el"
@@ -94,7 +94,8 @@ in the order they appear in the `zetta-modules!' declaration.")
               "docker-compose-mode.el" "convention.el" "tree-mode.el" "dap-mode.el"
               "dired.el" "dired-subtree.el" "dired-ranger.el" "tokei.el" "lsp.el"
               "lark.el" "apheleia.el" "flycheck.el" "flycheck-indicator.el"
-              "python-pytest.el" "multi-compile.el" "compile.el"
+              "python-pytest.el" "multi-compile.el" "multi-compile-executors.el"
+              "multi-compile-targets.el" "compile.el"
               "fancy-compilation.el" "detached.el" "git-link.el"
               "browse-at-remote.el" "git-timemachine.el" "blamer.el" "devdocs.el"
               "color-rg.el" "osx-lib.el" "spotlight.el" "gha.el" "jira.el"

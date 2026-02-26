@@ -101,8 +101,9 @@
                            (all-the-icons-icon-for-mode 'magit-refs-mode)
                            "} ")
                    )))
-        (:eval (let ((text (flycheck-indicator--mode-line)))
-                 (if (string= " not-checked" text) "" text)))
+        (:eval (when (fboundp 'flycheck-indicator--mode-line)
+                 (let ((text (flycheck-indicator--mode-line)))
+                   (if (string= " not-checked" text) "" text))))
         (:eval (concat (or (if (boundp 'latest-transient) latest-transient) (if (boundp 'local-transient) local-transient)) " "))
         (:eval (when (or
                       (zetta-line-tramp-icon)

@@ -30,7 +30,9 @@
                               (project-known-project-roots)
                               :prompt "Project: "
                               :category 'project)))
-      (call-interactively 'magit)))
+      (if (fboundp 'magit)
+          (call-interactively 'magit)
+        (project-vc-dir))))
 
   (general-define-key
    :keymaps 'menu-project-map

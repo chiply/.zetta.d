@@ -185,11 +185,12 @@
   (use-package org-remark-nov  :ensure nil :after nov
     :config (org-remark-nov-mode +1))
 
-  (setq org-remark-icon-notes
-        (all-the-icons-file-icons "org"
-                                  :face 'all-the-icons-blue
-                                  :v-adjust 0.0
-                                  :height 1.0))
+  (when (display-graphic-p)
+    (setq org-remark-icon-notes
+          (all-the-icons-file-icons "org"
+                                    :face 'all-the-icons-blue
+                                    :v-adjust 0.0
+                                    :height 1.0)))
 
   (add-to-list 'brushup-styles
                '(set-face-attribute

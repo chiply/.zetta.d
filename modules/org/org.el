@@ -321,7 +321,17 @@ or nil to disable."
 
 ;;; Additional org-mode configuration
 
-(use-package origami)
+(use-package origami
+  :init
+  ;; Pre-define the face before origami loads.  The upstream defface uses
+  ;; bare `:line-width 1` (needs cons cell in Emacs 29+) and unguarded
+  ;; `face-attribute` that returns `unspecified` in batch mode.  Defining
+  ;; the face here makes the upstream defface a no-op.
+  (let ((bg (or (face-attribute 'highlight :background nil t) "gray")))
+    (when (eq bg 'unspecified) (setq bg "gray"))
+    (defface origami-fold-header-face
+      `((t (:box (:line-width (1 . 1) :color ,bg) :background ,bg)))
+      "Face used to display fold headers.")))
 
 ;; basic tweaks and bindings
 (setenv "BROWSER" "chrome")

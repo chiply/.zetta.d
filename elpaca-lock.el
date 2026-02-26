@@ -2939,7 +2939,7 @@
                            treeless :host github :repo
                            "chiply/repeatable-lite" :package
                            "repeatable-lite" :ref
-                           "022f2147bbda559a6a011ee2b1475ceb034c07c5"))
+                           "567338136c340c583109675ca4dadc9b6f235a99"))
  (request :source "elpaca-menu-lock-file"
    :recipe
    (:package "request" :repo "tkf/emacs-request" :fetcher github

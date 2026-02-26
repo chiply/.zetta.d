@@ -79,7 +79,9 @@ targets."
   ;; vc dir
   (defun embark-vc-dir (dir)
     (let ((default-directory dir))
-      (call-interactively #'magit)))
+      (if (fboundp 'magit)
+          (call-interactively #'magit)
+        (call-interactively #'project-vc-dir))))
 
   ;; dired
   (defun embark-dired (dir)
@@ -88,14 +90,17 @@ targets."
   ;; regex
   (defun embark-project-ripgrep (dir)
     (let ((default-directory dir)
-          (this-command 'consult-ripgrep)  ;; to disable preview
-          )
-      (call-interactively #'consult-ripgrep)))
+          (this-command 'consult-ripgrep))  ;; to disable preview
+      (if (fboundp 'consult-ripgrep)
+          (call-interactively #'consult-ripgrep)
+        (call-interactively #'grep))))
 
   ;; vterm
   (defun embark-project-vterm (dir)
     (let ((default-directory dir))
-      (call-interactively #'vterm)))
+      (if (fboundp 'vterm)
+          (call-interactively #'vterm)
+        (call-interactively #'shell))))
 
   ;; TODO seems to be some hijacking of C-g going on.
   (general-define-key

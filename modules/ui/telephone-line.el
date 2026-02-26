@@ -66,8 +66,9 @@
         (vc-git--symbolic-ref (or (buffer-file-name) default-directory)))))
 
   (telephone-line-defsegment zt-flycheck-segment ()
-    (let ((text (flycheck-indicator--mode-line)))
-      (if (string= " not-checked" text) "" text)))
+    (when (fboundp 'flycheck-indicator--mode-line)
+      (let ((text (flycheck-indicator--mode-line)))
+        (if (string= " not-checked" text) "" text))))
 
   (telephone-line-defsegment zt-zmc-segment ()
     (concat (or (if (boundp 'latest-transient) latest-transient) (if (boundp 'local-transient) local-transient)) " "))

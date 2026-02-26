@@ -55,7 +55,9 @@
           )
       (unless (with-local-quit
                 (zetta-snip-view-snippet-file)
-                (consult-line (concat mode " "))
+                (if (fboundp 'consult-line)
+                    (consult-line (concat mode " "))
+                  (isearch-forward-regexp (concat mode " ")))
                 t)
         (progn
           (select-window win)
@@ -95,12 +97,15 @@
           )
       (if (with-local-quit
             (zetta-snip-view-snippet-file)
-            (consult-line (concat mode " ") 1)
+            (if (fboundp 'consult-line)
+                (consult-line (concat mode " ") 1)
+              (isearch-forward-regexp (concat mode " ")))
             (org-end-of-subtree)
             t)
           (progn
             (insert "\nzsnip")
-            (call-interactively 'evil-insert)
+            (when (fboundp 'evil-insert)
+              (call-interactively 'evil-insert))
             (yas-expand)
             )
         (progn

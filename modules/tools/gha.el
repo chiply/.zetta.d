@@ -66,10 +66,10 @@
   (interactive)
   (zetta-gh-run-view-log default-directory))
 
-(general-define-key
-
- :states '(normal visual)
- :keymaps 'magit-mode-map
- "g a w" 'zetta-gh-run-watch-interact
- "g a l" 'zetta-gh-run-view-log-interact)
+(with-eval-after-load 'evil
+  (general-define-key
+   :states '(normal visual)
+   :keymaps 'magit-mode-map
+   "g a w" 'zetta-gh-run-watch-interact
+   "g a l" 'zetta-gh-run-view-log-interact))
 ;;; gha.el ends here

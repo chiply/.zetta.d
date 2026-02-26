@@ -113,18 +113,19 @@
          (window-width . 0.30)
          (window-parameters . ((no-delete-other-windows . 1)))))))
 
-  (defun evil-goto-definition-1 ()
-    "Display the type signature and documentation of the thing at point."
-    (interactive)
-    (evil-goto-definition)
-    (let ((buf (current-buffer)))
-      (bury-buffer)
-      (display-buffer-in-side-window
-       buf
-       '((side . right)
-         (slot . 1)
-         (window-width . 0.30)
-         (window-parameters . ((no-delete-other-windows . 1)))))))
+  (with-eval-after-load 'evil
+    (defun evil-goto-definition-1 ()
+      "Display the type signature and documentation of the thing at point."
+      (interactive)
+      (evil-goto-definition)
+      (let ((buf (current-buffer)))
+        (bury-buffer)
+        (display-buffer-in-side-window
+         buf
+         '((side . right)
+           (slot . 1)
+           (window-width . 0.30)
+           (window-parameters . ((no-delete-other-windows . 1))))))))
 
   (defun lsp-headerline--enable-breadcrumb-1 ()
     "Enable headerline breadcrumb mode."
@@ -227,10 +228,9 @@
                (lambda (window)
                  (aw-switch-to-window window)
                  (switch-to-buffer buf)
-                 (evil-goto-definition)
-                 ))
-    )
-  )
+                 (if (fboundp 'evil-goto-definition)
+                     (evil-goto-definition)
+                   (xref-find-definitions (thing-at-point 'symbol t)))))))
 
 (defun zetta-jump-to-def-vert ()
   (interactive)
@@ -242,18 +242,16 @@
                      (split-window-below)
                      (windmove-down)
                      (switch-to-buffer buf)
-                     (evil-goto-definition)
-                     )
-                   )
+                     (if (fboundp 'evil-goto-definition)
+                         (evil-goto-definition)
+                       (xref-find-definitions (thing-at-point 'symbol t)))))
       (progn
         (split-window-below)
         (windmove-down)
         (switch-to-buffer buf)
-        (evil-goto-definition)
-        )
-      )
-    )
-  )
+        (if (fboundp 'evil-goto-definition)
+            (evil-goto-definition)
+          (xref-find-definitions (thing-at-point 'symbol t)))))))
 
 (defun zetta-jump-to-def-vert-1 ()
   (interactive)
@@ -264,16 +262,15 @@
                      (aw-switch-to-window window)
                      (split-window-below)
                      (switch-to-buffer buf)
-                     (evil-goto-definition)
-                     ))
+                     (if (fboundp 'evil-goto-definition)
+                         (evil-goto-definition)
+                       (xref-find-definitions (thing-at-point 'symbol t)))))
       (progn
         (split-window-below)
         (switch-to-buffer buf)
-        (evil-goto-definition)
-        )
-      )
-    )
-  )
+        (if (fboundp 'evil-goto-definition)
+            (evil-goto-definition)
+          (xref-find-definitions (thing-at-point 'symbol t)))))))
 
 (defun zetta-jump-to-def-hor ()
   (interactive)
@@ -285,13 +282,16 @@
                      (split-window-right)
                      (windmove-right)
                      (switch-to-buffer buf)
-                     (evil-goto-definition)
-                     ))
+                     (if (fboundp 'evil-goto-definition)
+                         (evil-goto-definition)
+                       (xref-find-definitions (thing-at-point 'symbol t)))))
       (progn
         (split-window-right)
         (windmove-right)
         (switch-to-buffer buf)
-        (evil-goto-definition)))))
+        (if (fboundp 'evil-goto-definition)
+            (evil-goto-definition)
+          (xref-find-definitions (thing-at-point 'symbol t)))))))
 
 (defun zetta-jump-to-def-hor-1 ()
   (interactive)
@@ -302,12 +302,15 @@
                      (aw-switch-to-window window)
                      (split-window-right)
                      (switch-to-buffer buf)
-                     (evil-goto-definition)
-                     ))
+                     (if (fboundp 'evil-goto-definition)
+                         (evil-goto-definition)
+                       (xref-find-definitions (thing-at-point 'symbol t)))))
       (progn
         (split-window-right)
         (switch-to-buffer buf)
-        (evil-goto-definition)))))
+        (if (fboundp 'evil-goto-definition)
+            (evil-goto-definition)
+          (xref-find-definitions (thing-at-point 'symbol t)))))))
 
 (defun zetta-jump-to-def-side ()
   (interactive)
@@ -320,7 +323,9 @@
                                           (window-width . 0.30)
                                           (window-parameters . ((no-delete-other-windows . 1)))
                                           )))
-    (evil-goto-definition)))
+    (if (fboundp 'evil-goto-definition)
+        (evil-goto-definition)
+      (xref-find-definitions (thing-at-point 'symbol t)))))
 
 (general-define-key
  :keymaps 'launch-map

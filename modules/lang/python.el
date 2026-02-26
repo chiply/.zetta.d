@@ -57,13 +57,15 @@
    :keymaps 'python-ts-mode-map
    "C-c =" '(lambda () (interactive)
               (save-excursion
-                (evil-indent (point-min) (point-max))))
+                (if (fboundp 'evil-indent)
+                    (evil-indent (point-min) (point-max))
+                  (indent-region (point-min) (point-max)))))
    )
 
   :hook (
-         (python-ts-mode . flycheck-mode)
-         (python-ts-mode . dap-ui-mode)
-         (python-ts-mode . dap-mode)
+         (python-ts-mode . (lambda () (when (fboundp 'flycheck-mode) (flycheck-mode 1))))
+         (python-ts-mode . (lambda () (when (fboundp 'dap-ui-mode) (dap-ui-mode 1))))
+         (python-ts-mode . (lambda () (when (fboundp 'dap-mode) (dap-mode 1))))
          (dap-stopped . (lambda (arg) (call-interactively #'dap-hydra)))
          )
   )

@@ -92,6 +92,18 @@ STYLE defaults to `consult-async-split-style'."
   ;; to type the narrow key in and hit space as its easier
   (setq consult-narrow-key "<")
 
+  (general-define-key
+   :keymaps 'launch-map
+   "b" 'consult-buffer
+   "B" 'consult-buffer
+   "f" 'consult-project-extra-find)
+
+  (with-eval-after-load 'vertico
+    (general-define-key :keymaps 'vertico-map "C-d" 'consult-dir))
+
+  (general-define-key :keymaps 'minibuffer-local-map
+    "C-r" 'consult-history)
+
   :general
   (
    :keymaps 'override

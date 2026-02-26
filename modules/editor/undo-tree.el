@@ -61,6 +61,13 @@
   :config
   (global-undo-tree-mode)
 
+  (with-eval-after-load 'evil
+    (general-define-key
+     :keymaps '(evil-normal-state-map evil-visual-state-map)
+     :state '(normal visual)
+     "u" 'undo-tree-undo
+     "C-r" 'undo-tree-redo))
+
   :brushup
   (add-to-list 'brushup-styles
                '(set-face-attribute 'undo-tree-visualizer-active-branch-face nil
@@ -73,12 +80,6 @@
   (
    :keymaps 'launch-map
    "u" 'undo-tree-visualize
-   )
-  (
-   :keymaps '(evil-normal-state-map evil-visual-state-map)
-   :state '(normal visual)
-   "u" 'undo-tree-undo
-   "C-r" 'undo-tree-redo
    )
 
   :hook (undo-tree-visualizer-mode . (lambda () (text-scale-set -2)))

@@ -69,7 +69,7 @@
                 (string= major-mode "lisp-interaction-mode")
                 (string= major-mode "lisp-mode")
                 (string= major-mode "lisp-data-mode")))
-      (unless (and (boundp 'lsp-mode) lsp-mode)
+      (when (and (fboundp 'lsp) (not (and (boundp 'lsp-mode) lsp-mode)))
         (lsp)))
     (let* ((completion-in-region-function 'consult-completion-in-region)
            ;; this prevents sorting, which can cause vertico repeat to
@@ -103,7 +103,9 @@
             ;; LEFT OFF -- need to refine these functions
             ;; what if definition is in the same buffer... maybe the
             ;; way we use let will inform this
-            (evil-goto-definition-1)
+            (if (fboundp 'evil-goto-definition-1)
+                (evil-goto-definition-1)
+              (xref-find-definitions (thing-at-point 'symbol t)))
           (lsp-find-definition-1))
         (zetta-vertico-IS-find)
         (progn (beginning-of-line) (kill-line))
@@ -128,7 +130,6 @@
             ;; intellisesne
             "C-S-h" 'zetta-vertico-IS-help
             "C-S-d" 'zetta-vertico-IS-find
-            "C-d" 'consult-dir
             ;; navigation
             "C-j" 'vertico-next
             "C-k" 'vertico-previous

@@ -4,17 +4,18 @@
   :ensure (:files (:defaults))
   :after all-the-icons
   :config
-  (setq citar-symbols
-        `((file ,(all-the-icons-faicon "file-o"
-                                       :face 'all-the-icons-red
-                                       :v-adjust -0.1) . " ")
-          (note ,(all-the-icons-material "speaker_notes"
+  (when (display-graphic-p)
+    (setq citar-symbols
+          `((file ,(all-the-icons-faicon "file-o"
                                          :face 'all-the-icons-red
-                                         :v-adjust -0.3) . " ")
-          (link ,(all-the-icons-octicon "link"
-                                        :face'all-the-icons-red
-                                        :v-adjust 0.01) . " ")))
-  (setq citar-symbol-separator "  ")
+                                         :v-adjust -0.1) . " ")
+            (note ,(all-the-icons-material "speaker_notes"
+                                           :face 'all-the-icons-red
+                                           :v-adjust -0.3) . " ")
+            (link ,(all-the-icons-octicon "link"
+                                          :face'all-the-icons-red
+                                          :v-adjust 0.01) . " ")))
+    (setq citar-symbol-separator "  "))
 
   ;; NOT RECURSIVE!!! Need to specify explicitly
   (setq

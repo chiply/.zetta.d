@@ -47,7 +47,15 @@
 
 ;; Configure use-package to use Elpaca by default
 (setq elpaca-use-package-by-default t)
-(setq elpaca-queue-limit 8)
+;; In batch mode (e.g. `zetta install`), after-init-time is already set before
+;; init.el loads, which causes elpaca--unprocess to reset builtp on all packages.
+;; With builtp=nil, queue throttling applies.  The unthrottle code path in
+;; elpaca--finalize can trigger synchronous dependency processing that grows the
+;; queue, but elpaca--finalize's stale snapshot of the queue length causes a
+;; premature finalize-queue call before all packages are activated, resulting in
+;; "Cannot load" errors for tail-end packages.  Disabling the queue limit in
+;; batch mode avoids the throttle code path entirely.
+(setq elpaca-queue-limit (unless noninteractive 8))
 
 ;; Enable lockfile for reproducible builds.
 ;; The lockfile pins all packages to exact commits.

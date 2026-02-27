@@ -122,5 +122,14 @@ STYLE defaults to `consult-async-split-style'."
    )
   )
 
+(use-package consult-project-extra
+  :after consult
+  :config
+  ;; TODO no sorting by recency in files?
+  ;; suddenly started working though...
+  (consult-customize
+   consult-project-extra-find
+   :preview-key "C-="))
+
 (use-package consult-dir)
 ;;; consult.el ends here

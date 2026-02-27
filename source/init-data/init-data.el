@@ -267,6 +267,7 @@
    "app/flappy-fish.el"
    "app/speed-type.el"
    "app/spray.el"
+   "app/touchtype.el"
    "app/key-quiz.el"
 
    ;; org

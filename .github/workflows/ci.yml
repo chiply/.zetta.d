@@ -42,10 +42,6 @@ jobs:
           restore-keys: |
             elpaca-${{ matrix.emacs-version }}-
 
-      - name: Clear stale builds on cache miss
-        if: steps.cache-elpaca.outputs.cache-hit != 'true'
-        run: rm -rf elpaca/builds/
-
       - name: Create stub files
         run: |
           touch ~/.dir-locals.el

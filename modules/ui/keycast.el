@@ -16,8 +16,8 @@
         (remove-hook 'minibuffer-exit-hook #'keycast--minibuffer-exit))))
 
   ;; Remove the box from keycast-key so it doesn't exceed tab-bar height.
-  (set-face-attribute 'keycast-key nil :inherit nil :box nil :overline nil :underline nil :background nil :foreground brushup-fg)
-  (set-face-attribute 'keycast-command nil :inherit nil :box nil :overline nil :underline nil :background nil :foreground brushup-fg)
+  (set-face-attribute 'keycast-key nil :inherit nil :box nil :overline nil :underline nil :background 'unspecified :foreground brushup-fg)
+  (set-face-attribute 'keycast-command nil :inherit nil :box nil :overline nil :underline nil :background 'unspecified :foreground brushup-fg)
 
   (zetta-keycast-mode)
 

@@ -1,14 +1,5 @@
 ;;; project.el --- Configure project -*- lexical-binding: t; -*-
 
-(use-package consult-project-extra
-  :after consult
-  :config
-  ;; TODO no sorting by recency in files?
-  ;; suddenly started working though...
-  (consult-customize
-   consult-project-extra-find
-   :preview-key "C-="))
-
 (use-package project
   :ensure nil ;; builtin
   :after consult

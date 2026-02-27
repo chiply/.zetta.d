@@ -45,6 +45,23 @@
   (elpaca-use-package-mode))
 (elpaca-wait)  ;; Block until elpaca-use-package is ready
 
+;; Fix elpaca bug: when a package is re-declared after being queued as a
+;; transitive dependency, elpaca--queue returns the `warn' string instead of
+;; the existing elpaca struct, causing elpaca--expand-declaration to crash
+;; with (wrong-type-argument listp ...) when it tries to access struct fields.
+(define-advice elpaca--queue (:around (fn order &optional queue) fix-duplicate-return)
+  "Return existing elpaca struct for duplicate packages instead of warn string."
+  (if-let* ((id (elpaca--first (or order (signal 'wrong-type-argument
+                                                 '((or symbolp listp) nil)))))
+            ((not after-init-time))
+            (e (elpaca-get id)))
+      (progn
+        (if-let* ((dependents (elpaca<-dependents e)))
+            (warn "%S previously queued as dependency of: %S" id dependents)
+          (warn "Duplicate item ID queued: %S" id))
+        e)
+    (funcall fn order queue)))
+
 ;; Configure use-package to use Elpaca by default
 (setq elpaca-use-package-by-default t)
 ;; In batch mode (e.g. `zetta install`), after-init-time is already set before

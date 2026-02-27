@@ -108,7 +108,7 @@ in the order they appear in the `zetta-modules!' declaration.")
             "olivetti.el" "activities.el" "spot4e.el" "elfeed.el" "wombag.el"
             "whisper.el" "say.el" "md4rd.el" "wttrin.el" "nov.el" "eca-emacs.el"
             "mastodon.el" "erc.el" "eww.el" "flappy-fish.el" "speed-type.el"
-            "spray.el" "key-quiz.el"))
+            "spray.el" "touchtype.el" "key-quiz.el"))
     (org . ("org.el" "org-ql.el" "org-capture.el" "org-ref.el" "ob-mermaid.el"
             "pdf-tools.el" "biblio.el" "citar.el" "org-remark.el"
             "org-tree-slide.el" "org-transclusion.el"))

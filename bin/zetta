@@ -343,22 +343,33 @@ cmd_test() {
 
     _info "Starting test daemon ($daemon_name)..."
 
-    local output
-    output=$("$EMACS" --init-directory="$ZETTA_DIR" --daemon="$daemon_name" 2>&1)
+    local output exit_code=0
+    output=$("$EMACS" --init-directory="$ZETTA_DIR" --daemon="$daemon_name" 2>&1) || exit_code=$?
 
-    if echo "$output" | grep -q "Starting Emacs daemon"; then
-        _ok "Daemon started"
-    else
-        _error "Daemon failed to start"
+    if [[ $exit_code -ne 0 ]]; then
+        _error "Daemon failed to start (exit code: $exit_code)"
         echo "$output"
         return 1
     fi
 
-    # Check for errors (ignore known warnings)
+    # Verify responsiveness via emacsclient
+    local response
+    response=$(emacsclient -s "$daemon_name" -e '(message "Config OK")' 2>&1)
+    if [[ "$response" == '"Config OK"' ]]; then
+        _ok "Daemon started and responding"
+    else
+        _error "Daemon process exited 0 but emacsclient failed: $response"
+        echo "$output"
+        return 1
+    fi
+
+    # Check for errors in *Messages* buffer
+    local messages
+    messages=$(emacsclient -s "$daemon_name" -e '(with-current-buffer "*Messages*" (buffer-string))' 2>&1)
     local errors
-    errors=$(echo "$output" | grep -iE "error|wrong-type|void-function" \
-        | grep -v "corfu previously queued" \
-        | grep -v "listp" \
+    errors=$(echo "$messages" | grep -iE "void-function|wrong-type-argument|debug-early" \
+        | grep -v "use-package" \
+        | grep -v "elpaca" \
         || true)
 
     if [[ -n "$errors" ]]; then
@@ -366,15 +377,6 @@ cmd_test() {
         echo "$errors" | while IFS= read -r line; do
             echo "  $line"
         done
-    fi
-
-    # Verify responsiveness
-    local response
-    response=$(emacsclient -s "$daemon_name" -e '(message "Config OK")' 2>&1)
-    if [[ "$response" == '"Config OK"' ]]; then
-        _ok "Config loaded successfully"
-    else
-        _error "Config verification failed: $response"
     fi
 
     # Report stats

@@ -1,5 +1,50 @@
 ;;; -*- coding: utf-8; mode: lisp-data -*-
-(("/Users/charlieholland/.zetta.d/modules/tools/dired-subtree.el"
+(("/Users/charlieholland/.claude/plugins/local/plugins/emacs-eval/skills/emacs-eval/"
+  (dired-filename
+   . "/Users/charlieholland/.claude/plugins/local/plugins/emacs-eval/skills/emacs-eval/SKILL.md"))
+ ("/Users/charlieholland/.claude/plugins/local/plugins/emacs-eval/commands/emacs-eval.md"
+  . 5)
+ ("/Users/charlieholland/.claude/plugins/local/plugins/emacs-eval/skills/emacs-eval/SKILL.md"
+  . 5624)
+ ("/Users/charlieholland/source_code/touchtype/"
+  (dired-filename
+   . "/Users/charlieholland/source_code/touchtype/README.md"))
+ ("/Users/charlieholland/source_code/touchtype/touchtype-var.el"
+  . 59778)
+ ("/Users/charlieholland/source_code/touchtype/README.md" . 109)
+ ("/Users/charlieholland/source_code/touchtype/touchtype-ui.el"
+  . 33426)
+ ("/Users/charlieholland/source_code/chiply.dev/org/todos/blog-posts.org"
+  . 372)
+ ("/Users/charlieholland/.zetta.d/modules/app/touchtype.el" . 319)
+ ("/Users/charlieholland/.zetta.d/touchtype-stats.el" . 11656)
+ ("/Users/charlieholland/.files/CLAUDE.md" . 1321)
+ ("/Users/charlieholland/source_code/touchtype/touchtype.el" . 5509)
+ ("/Users/charlieholland/.files/.github/workflows/test_install.yml"
+  . 17)
+ ("/Users/charlieholland/logseq/logseq/version-files/base/pages/Distro todo.org"
+  . 151)
+ ("/Users/charlieholland/.elfeed/index" . 384)
+ ("/Users/charlieholland/.mbsyncrc" . 1656)
+ ("/Users/charlieholland/.zetta.d/source/bootstrap/bootstrap-brushup.el"
+  . 864)
+ ("/Users/charlieholland/.zetta.d/source/bootstrap/"
+  (dired-filename
+   . "/Users/charlieholland/.zetta.d/source/bootstrap/bootstrap-brushup.el"))
+ ("/Users/charlieholland/.zetta.d/modules/ui/spacetree.el" . 376)
+ ("/Users/charlieholland/source_code/spot/"
+  (dired-filename
+   . "/Users/charlieholland/source_code/spot/spot-search.el"))
+ ("/Users/charlieholland/source_code/spot/spot-search.el" . 334)
+ ("/Users/charlieholland/source_code/spot/spot-generic-query.el"
+  . 1363)
+ ("/Users/charlieholland/.zetta.d/modules/app/spot.el" . 441)
+ ("/Users/charlieholland/.private.el" . 12771)
+ ("/Users/charlieholland/.zetta.d/.gitignore" . 125)
+ ("/Users/charlieholland/source_code/chiply.dev/org/post-schema-languages.org"
+  . 10)
+ ("/Users/charlieholland/source_code/chiply.dev/org/posts.org" . 903)
+ ("/Users/charlieholland/.zetta.d/modules/tools/dired-subtree.el"
   . 329)
  ("/Users/charlieholland/.zetta.d/ede-projects.el" . 86)
  ("/Users/charlieholland/.files/README.org" . 127)
@@ -27,7 +72,6 @@
   . 3798)
  ("/Users/charlieholland/.zetta.d/"
   (dired-filename . "/Users/charlieholland/.zetta.d/.data"))
- ("/Users/charlieholland/.private.el" . 4763)
  ("/Users/charlieholland/source_code/chiply.dev/org/post-space-tree.org"
   . 365)
  ("/Users/charlieholland/source_code/ralph_prose/articles/perils-of-under-testing/"
@@ -37,8 +81,6 @@
   . 2054)
  ("/Users/charlieholland/diet.org" . 159)
  ("/Users/charlieholland/.zetta.d/elpaca-lock.el" . 5053)
- ("/Users/charlieholland/source_code/chiply.dev/org/todos/blog-posts.org"
-  . 14946)
  ("/Users/charlieholland/source_code/chiply.dev/org/post-technical-debt.org"
   . 62829)
  ("/Users/charlieholland/source_code/chiply.dev/org/post0.org"
@@ -49,7 +91,6 @@
   (dired-filename
    . "/Users/charlieholland/source_code/space-tree/version.txt"))
  ("/Users/charlieholland/.files/files/.config/Brewfile" . 653)
- ("/Users/charlieholland/.files/CLAUDE.md" . 7337)
  ("/Users/charlieholland/.zetta.d/modules/tools/gif-screencast.el"
   . 842)
  ("/Users/charlieholland/logseq/pages/(todo) buy.org" . 14)
@@ -62,15 +103,11 @@
   (dired-filename . "/Users/charlieholland/logseq/assets"))
  ("/Users/charlieholland/logseq/pages/the time in a day.org" . 1624)
  ("/Users/charlieholland/source_code/chiply.dev/src/lib/flags.ts" . 24)
- ("/Users/charlieholland/source_code/chiply.dev/org/posts.org" . 977)
  ("/Users/charlieholland/source_code/"
   (dired-filename . "/Users/charlieholland/source_code/chiply.dev"))
- ("/Users/charlieholland/source_code/chiply.dev/org/post-schema-languages.org"
-  . 559)
  ("/Users/charlieholland/source_code/chiply.dev/org/post-schema-diagrams.org"
   . 417)
  ("/Users/charlieholland/logseq/pages/(todo) emacs.org" . 18)
- ("/Users/charlieholland/.elfeed/index" . 384)
  ("/Users/charlieholland/source_code/chiply.dev/tests/e2e/screenshots/"
   (dired-filename
    . "/Users/charlieholland/source_code/chiply.dev/tests/e2e/screenshots/01-filter-buttons-initial.png"))

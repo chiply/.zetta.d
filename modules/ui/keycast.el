@@ -47,15 +47,15 @@
              (or zetta-keycast--in-repeatable
                  (and (symbolp cmd)
                       (string-prefix-p "repeatable-lite-wrap" (symbol-name cmd))))))
-        (apply fn cmd args)
-        (when (and zetta-keycast--in-repeatable
-                   (bound-and-true-p zetta-keycast-mode)
-                   (symbolp cmd)
-                   (not (string-prefix-p "repeatable-lite-wrap" (symbol-name cmd))))
-          (setq keycast--this-command-desc cmd
-                keycast--this-command-keys (this-single-command-keys)
-                keycast--command-repetitions 0)
-          (force-mode-line-update t))))
+        (prog1 (apply fn cmd args)
+          (when (and zetta-keycast--in-repeatable
+                     (bound-and-true-p zetta-keycast-mode)
+                     (symbolp cmd)
+                     (not (string-prefix-p "repeatable-lite-wrap" (symbol-name cmd))))
+            (setq keycast--this-command-desc cmd
+                  keycast--this-command-keys (this-single-command-keys)
+                  keycast--command-repetitions 0)
+            (force-mode-line-update t)))))
 
     (define-advice keycast--update
         (:around (fn) zetta-skip-repeatable-wrappers)

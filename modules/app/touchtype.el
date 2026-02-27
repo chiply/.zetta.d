@@ -1,8 +1,7 @@
 ;;; touchtype.el --- Configure touchtype -*- lexical-binding: t; -*-
 
 (use-package touchtype
-  ;; :ensure (:host github :repo "chiply/touchtype")
-  :ensure (:repo "~/source_code/touchtype")
+  :ensure (:host github :repo "chiply/touchtype")
   :commands (touchtype
              touchtype-progressive
              touchtype-full-words

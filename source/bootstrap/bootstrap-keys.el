@@ -12,6 +12,7 @@
 
 ;; provides hints
 (use-package which-key
+  :ensure (:wait t)
   :demand t
   :config
 

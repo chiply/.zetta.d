@@ -32,5 +32,49 @@
   (defvar brushup-dark-p t)
   (defun brushup () nil))
 
+;; Base face overrides using brushup palette
+(defun zetta-brushup-base-faces ()
+  "Apply base face customizations using brushup palette."
+  (when window-system
+    (set-face-attribute 'region nil
+                        :background (if brushup-dark-p
+                                        (color-lighten-name brushup-fg -60)
+                                      brushup-bg-3)
+                        :foreground 'unspecified)
+    (set-face-attribute 'mode-line nil
+                        :background brushup-bg-1_0
+                        :foreground 'unspecified
+                        :box nil :underline nil :overline nil)
+    (when (facep 'mode-line-active)
+      (set-face-attribute 'mode-line-active nil
+                          :background brushup-bg-1_0
+                          :foreground 'unspecified
+                          :box nil :underline nil :overline nil))
+    (set-face-attribute 'mode-line-inactive nil
+                        :foreground brushup-bg-6
+                        :background brushup-bg-1_0
+                        :underline nil :box nil)
+    (set-face-attribute 'header-line nil
+                        :background brushup-bg
+                        :underline nil :box nil :inherit nil)
+    (let ((comment-color (if brushup-dark-p
+                             (color-lighten-name brushup-bg 40)
+                           (color-lighten-name brushup-bg -50))))
+      (set-face-attribute 'font-lock-comment-face nil
+                          :foreground comment-color :slant 'normal)
+      (set-face-attribute 'font-lock-doc-face nil
+                          :foreground comment-color :slant 'normal))
+    (set-face-attribute 'font-lock-string-face nil :slant 'normal)
+    (when (facep 'sh-heredoc)
+      (set-face-attribute 'sh-heredoc nil :foreground brushup-fg :weight 'normal))
+    (set-face-attribute 'button nil
+                        :foreground brushup-fg :background brushup-bg
+                        :box nil :underline t)
+    (set-face-attribute 'minibuffer-prompt nil
+                        :foreground brushup-fg :background brushup-bg-1_0)
+    (set-face-background 'fringe brushup-bg)))
+
+(add-to-list 'brushup-styles '(zetta-brushup-base-faces))
+
 (provide 'bootstrap-brushup)
 ;;; bootstrap-brushup.el ends here

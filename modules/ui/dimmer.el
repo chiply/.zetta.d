@@ -52,7 +52,7 @@
   (dimmer-configure-corfu)
   (dimmer-configure-lsp-doc)
   (dimmer-configure-minimap)
-  (setq dimmer-fraction 0.4)
+  (setq dimmer-fraction 0.3)
   (setq dimmer-watch-frame-focus-events nil)
   (dimmer-mode t)
   )

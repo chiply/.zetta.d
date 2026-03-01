@@ -51,7 +51,7 @@
                           :foreground 'unspecified
                           :box nil :underline nil :overline nil))
     (set-face-attribute 'mode-line-inactive nil
-                        :foreground brushup-bg-6
+                        :foreground (if brushup-dark-p brushup-bg-6 brushup-fg-4)
                         :background brushup-bg-1_0
                         :underline nil :box nil)
     (set-face-attribute 'header-line nil

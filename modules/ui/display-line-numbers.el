@@ -15,7 +15,7 @@
   (add-to-list 'brushup-styles
                '(progn
                   (set-face-attribute 'line-number nil
-                                      :foreground brushup-bg-4
+                                      :foreground brushup-bg-5
                                       :background brushup-bg)
                   (set-face-attribute 'line-number-current-line nil
                                       :inherit 'line-number

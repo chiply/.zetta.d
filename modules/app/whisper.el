@@ -65,7 +65,15 @@ If `DEVICE-NAME' is provided, it will be used instead of prompting the user."
       (when (boundp 'whisper--ffmpeg-input-device)
         (setq whisper--ffmpeg-input-device (format ":%s" rk/default-audio-device)))))
 
-  (rk/select-default-audio-device "MacBook Pro Microphone")
+  (defun rk/select-best-audio-device (&rest preferred)
+    "Try each device name in PREFERRED order, selecting the first available one."
+    (let ((available (mapcar #'cdr (cadr (rk/get-ffmpeg-device)))))
+      (cl-loop for name in preferred
+               for match = (cl-find-if (lambda (dev) (string-match-p name dev)) available)
+               when match
+               return (rk/select-default-audio-device match))))
+
+  (rk/select-best-audio-device "fifine Microphone" "MacBook Pro Microphone")
 
   ;; NOTE using openai to prevent the need for a local whisper model
   ;; and the need to maintain / upgrade that on my own

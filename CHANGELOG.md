@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/chiply/.zetta.d/compare/v0.1.2...v0.1.3) (2026-03-01)
+
+
+### Features
+
+* auto-select best available audio device for whisper ([8d0c7cb](https://github.com/chiply/.zetta.d/commit/8d0c7cbe195fc0cdef78fffedd4fc49a8bd1aaaa))
+
 ## [0.1.2](https://github.com/chiply/.zetta.d/compare/v0.1.1...v0.1.2) (2026-03-01)
 
 

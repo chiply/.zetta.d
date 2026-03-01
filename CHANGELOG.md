@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/chiply/.zetta.d/compare/v0.1.1...v0.1.2) (2026-03-01)
+
+
+### Bug Fixes
+
+* improve face contrast for light themes ([a5433b7](https://github.com/chiply/.zetta.d/commit/a5433b77365f75f22389f1c89d34ac38ee4a0556))
+
 ## [0.1.1](https://github.com/chiply/.zetta.d/compare/v0.1.0...v0.1.1) (2026-02-28)
 
 

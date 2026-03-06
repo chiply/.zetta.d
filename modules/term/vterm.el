@@ -137,10 +137,6 @@ Prompt for a vterm buffer and store it as a buffer-local variable."
                                       :foreground brushup-fg
                                       :background brushup-bg-3)))
 
-  ;; set font in vterm -- note some fonts break certain applications.
-  ;; Ex: Vulf font breaks the k9s cli
-
-  (add-hook 'vterm-mode-hook 'my-buffer-face-mode-pt-mono)
 
   (defun zetta-soda-drink-term ()
     (interactive)

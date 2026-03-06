@@ -25,7 +25,7 @@
 ;; VARIABLES
 (defvar zmc-extra-project-paths '())
 (defvar zmc-cache nil)
-(setq zmc-async-shell-command-spinners-enable nil)
+(defvar zmc-async-shell-command-spinners-enable nil)
 
 ;;;;;;;;;;;;;;;;;; HELPERS
 (defun zmc-get-hashtbl (args)

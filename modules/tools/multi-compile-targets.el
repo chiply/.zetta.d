@@ -119,7 +119,8 @@
          (parent-repo (when (and (member build-file-type
                                          '("nx-run-many"))
                                  (zmc-get-parent-repo project-path))))
-         (project-current-path (expand-file-name (cadr (cdr (project-current nil)))))
+         (project-current-path (when-let ((proj (project-current nil)))
+                                 (expand-file-name (project-root proj))))
          (subtargets (cond
                       ((string= build-file-type "history")
                        (parse-zsh-history fname))
@@ -130,6 +131,7 @@
                       ((string= build-file-type "nx-run-many")
                        (zmc-parse-nx-targets fname))
                       ((and (string= build-file-type "pytest")
+                            project-current-path
                             (or
                              (string= project-current-path (expand-file-name project-path))
                              (and

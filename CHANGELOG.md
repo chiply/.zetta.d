@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/chiply/.zetta.d/compare/v0.1.3...v0.1.4) (2026-03-06)
+
+
+### Bug Fixes
+
+* resolve multi-compile crashes and spinner not firing ([b5f7ca2](https://github.com/chiply/.zetta.d/commit/b5f7ca2f3415e2672b3880ee21acf810edba4792))
+
 ## [0.1.3](https://github.com/chiply/.zetta.d/compare/v0.1.2...v0.1.3) (2026-03-01)
 
 

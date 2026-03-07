@@ -2,7 +2,7 @@
 
 (use-package magneto
   :ensure (:host github :repo "chiply/magneto")
-  :commands (magneto-move magneto-compose)
+  :demand t
   :custom
   (magneto-buffer-command #'consult-buffer)
   :general

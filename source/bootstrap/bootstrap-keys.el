@@ -45,7 +45,6 @@
 
       (display-buffer-in-side-window which-key--buffer alist)
       (setq zetta-which-key-showing t)
-      (setq prefix-help-command 'which-key-C-h-dispatch)
       ))
 
   (defun which-key-custom-hide-popup-function ()

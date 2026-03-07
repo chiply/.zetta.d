@@ -151,14 +151,6 @@ Prompt for a vterm buffer and store it as a buffer-local variable."
    "s" (repeatable-lite-wrap zetta-soda-drink-term)
    "S" (repeatable-lite-wrap zetta-soda-cap-term))
 
-  :display
-  ;;(zetta-side "^\\*zsh*" 'bottom)
-  ;;(zetta-side "^\\*bash*" 'bottom)
-  ;;(zetta-side "^\\*python3*" 'bottom 1)
-  ;;(zetta-side "^\\*ipython*" 'bottom 1)
-  ;;(zetta-side "^\\*ssh*" 'bottom 1)
-  ;;(zetta-side "^\\*sqlite3*" 'bottom 2)
-
   :general
   (
    :states '(insert)

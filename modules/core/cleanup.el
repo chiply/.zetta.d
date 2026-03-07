@@ -9,7 +9,7 @@
 ;;(setq prefix-help-command #'embark-prefix-help-command)
 
 ;; truly cannot tell what is ovewriting this upstream but should figure it out
-(setq prefix-help-command 'versatile-C-h)
+(setq prefix-help-command 'repeatable-lite--versatile-C-h)
 
 (tab-bar-mode +1)
 

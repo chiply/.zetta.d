@@ -22,8 +22,8 @@
 
   ;; install all missing devdocs
   ;; TODO -- might be running into API errors here
-  ;;(dolist (lang zetta-devdocs-uninstalled-langs)
-    ;;(devdocs-install lang))
+  (dolist (lang zetta-devdocs-uninstalled-langs)
+    (devdocs-install lang))
 
   )
 ;;; devdocs.el ends here

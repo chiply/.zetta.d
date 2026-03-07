@@ -30,6 +30,7 @@
     (unless (or
              (string-match "reddit" (eww-current-url))
              (string-match "xkcd" (eww-current-url))
+             (string-match "orgmode.org" (eww-current-url))
              )
       (eww-readable))
     (toggle-truncate-lines -1)

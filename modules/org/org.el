@@ -8,6 +8,11 @@
 
   :config
   (setq-default org-indent-mode nil)
+
+  ;; LaTeX preview — dvisvgm produces SVG (vector, crisp on retina)
+  (setq org-preview-latex-default-process 'dvisvgm)
+  (plist-put org-format-latex-options :scale 1.5)
+
   (setq org-confirm-babel-evaluate nil
         org-src-preserve-indentation t
         org-tags-column 0
@@ -155,6 +160,10 @@
                                   (toggle-truncate-lines -1)
                                   (when (fboundp 'undo-tree-mode)
                                     (undo-tree-mode +1)))))))
+
+;; Auto-toggle LaTeX previews: render when cursor leaves, show source when entering
+(use-package org-fragtog
+  :hook (org-mode . org-fragtog-mode))
 
 (with-eval-after-load 'evil
   (evil-set-initial-state 'org-mode 'normal))

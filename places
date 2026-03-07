@@ -1,14 +1,25 @@
 ;;; -*- coding: utf-8; mode: lisp-data -*-
-(("/Users/charlieholland/.zetta.d/source/bootstrap/bootstrap-keys.el"
-  . 44)
- ("/Users/charlieholland/.zetta.d/source/zettapkg/menu/menu.el" . 407)
+(("/Users/charlieholland/.files/files/.tmux.conf" . 99)
  ("/Users/charlieholland/.zetta.d/elpaca/repos/repeatable-lite/repeatable-lite.el"
-  . 3711)
+  . 4249)
+ ("/Users/charlieholland/.zetta.d/modules/tools/magneto.el" . 361)
+ ("/Users/charlieholland/.zetta.d/elpaca/repos/repeatable-lite/"
+  . 1003)
+ ("/Users/charlieholland/.zetta.d/source/bootstrap/bootstrap-repeatable-lite.el"
+  . 123)
+ ("/Users/charlieholland/source_code/magneto/magneto-embark.el" . 9326)
+ ("/Users/charlieholland/.zetta.d/source/bootstrap/bootstrap-keys.el"
+  . 3856)
+ ("/Users/charlieholland/source_code/repeatable-lite/"
+  (dired-filename
+   . "/Users/charlieholland/source_code/repeatable-lite/.eask"))
+ ("/Users/charlieholland/source_code/repeatable-lite/repeatable-lite.el"
+  . 3144)
+ ("/Users/charlieholland/.zetta.d/source/zettapkg/menu/menu.el" . 407)
  ("/Users/charlieholland/.zetta.d/modules/core/cleanup.el" . 609)
  ("/Users/charlieholland/.files/"
   (dired-filename . "/Users/charlieholland/.files/TMUX.md"))
  ("/Users/charlieholland/.files/TMUX.md" . 4557)
- ("/Users/charlieholland/source_code/magneto/magneto-embark.el" . 9326)
  ("/Users/charlieholland/.zetta.d/"
   (dired-filename . "/Users/charlieholland/.zetta.d/elfeed.score"))
  ("/Users/charlieholland/.zetta.d/ede-projects.el" . 86)
@@ -19,7 +30,6 @@
  ("/Users/charlieholland/"
   (dired-filename . "/Users/charlieholland/logseq"))
  ("/Users/charlieholland/.cmds.yaml" . 151)
- ("/Users/charlieholland/.zetta.d/modules/tools/magneto.el" . 390)
  ("/Users/charlieholland/.zetta.d/modules/editor/avy.el" . 300)
  ("/Users/charlieholland/logseq/pages/(todo) emacs.org" . 281)
  ("/Users/charlieholland/.zetta.d/modules/tools/multi-compile.el"
@@ -80,8 +90,6 @@
  ("/Users/charlieholland/source_code/brushup/"
   (dired-filename . "/Users/charlieholland/source_code/brushup/Eask"))
  ("/Users/charlieholland/source_code/brushup/brushup.el" . 111)
- ("/Users/charlieholland/.zetta.d/source/bootstrap/bootstrap-repeatable-lite.el"
-  . 395)
  ("/Applications/Emacs.app/Contents/Resources/lisp/subr.el" . 278272)
  ("/Users/charlieholland/source_code/magneto/magneto.el" . 2117)
  ("/Users/charlieholland/.zetta.d/elpaca/repos/ace-window/ace-window.el"

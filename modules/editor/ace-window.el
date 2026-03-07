@@ -20,6 +20,7 @@
         aw-char-position "left"
         aw-keys '(?a ?s ?d)
         aw-display-mode-overlay nil
+        aw--lead-overlay-fn (lambda (_path _leaf))
         aw-background nil
         aw-minibuffer-flag t
         aw-ignore-current nil

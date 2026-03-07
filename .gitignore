@@ -84,3 +84,7 @@ speed-type/
 
 # Hypothesis
 .hypothesis/
+
+# touchtype
+touchtype-stats.el
+touchtype/

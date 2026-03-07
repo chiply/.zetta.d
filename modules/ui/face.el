@@ -10,7 +10,7 @@
 
 (defun zetta-theme-brushup ()
   (interactive)
-  (setq prefix-help-command 'versatile-C-h)
+  (setq prefix-help-command 'repeatable-lite--versatile-C-h)
   (when debug-on-error
     (toggle-debug-on-error)
     (message "Debug-on-error is off"))

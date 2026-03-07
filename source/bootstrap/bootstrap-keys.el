@@ -98,7 +98,7 @@ Finally, show the buffer."
    ;;;; make sure which-key doesn't show normally but refreshes
    ;;;; quickly after it is triggered.
    which-key-idle-delay 1000
-   which-key-idle-secondary-delay 0.01
+   which-key-idle-secondary-delay 0.1
    ;; doesn't seem to have an effect
    which-key-show-transient-maps t
    which-key-popup-type 'custom

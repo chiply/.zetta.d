@@ -11,7 +11,7 @@
   ;; note basic functionality only is implemented... search backwards
   ;; not supported, allows for convenient kill line without
   ;; interfering with other keybindings
-  (setq evil-want-minibuffer t)
+  (setq evil-want-minibuffer nil)
 
   ;; get emacs kbds in insert-mode
   (setcdr evil-insert-state-map nil)

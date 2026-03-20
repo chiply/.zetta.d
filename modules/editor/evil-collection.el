@@ -2,5 +2,5 @@
 
 (use-package evil-collection
   :after evil
-  :init (evil-collection-init))
+  :config (evil-collection-init))
 ;;; evil-collection.el ends here

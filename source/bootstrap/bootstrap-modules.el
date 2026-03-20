@@ -125,7 +125,8 @@ alphabetically."
   (let* ((dir (expand-file-name (symbol-name category) zetta-modules-dir))
          (default-order (alist-get category zetta--default-file-order))
          (disk-files (when (file-directory-p dir)
-                       (directory-files dir nil "\\.el\\'"))))
+                       (cl-remove-if (lambda (f) (string-prefix-p "." f))
+                                     (directory-files dir nil "\\.el\\'")))))
     (when disk-files
       (let* ((ordered (cl-remove-if-not (lambda (f) (member f disk-files))
                                         default-order))

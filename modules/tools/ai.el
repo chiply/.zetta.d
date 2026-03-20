@@ -115,6 +115,9 @@
   :demand t
   :config
   (gptel-make-anthropic "Claude" :stream t :key gptel-api-key)
+  (gptel-make-openai "OpenAI" :stream t :key openai-api-key)
+  (setq gptel-backend (cdr (assoc "OpenAI" gptel--known-backends))
+        gptel-model   'gpt-4o)
   (when (featurep 'mcp)
     (require 'gptel-integrations))
   (setq gptel-confirm-tool-calls nil)

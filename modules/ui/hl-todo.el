@@ -13,7 +13,7 @@
           ("DEBUG"  . "#A020F0")
           ("STUB"   . "#1E90FF")
           ("LEFTOFF"   . "#0000FA")
-          ("DONE"   . "#0000FA0F0000")
+          ("DONE"   . "Blue")
           ("NOTE"   . "#0000FA")
           ("PROMPT"   . "#9B9B3030FFFF")
           ("EXPLANATION"   . "PaleGreen4")

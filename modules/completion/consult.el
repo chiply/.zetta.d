@@ -48,19 +48,8 @@
    :preview-key "C-=")
 
   (setq consult-async-split-style 'comma)
-  ;; NOTE fixing bug when consult-async-split-style is set to comma
-  (defun consult-omni--get-split-style-character (&optional style)
-    "Get the character for consult async split STYLE.
-
-STYLE defaults to `consult-async-split-style'."
-    (let ((style (or style consult-async-split-style 'none))
-          (char (or
-                 (plist-get (alist-get style consult-async-split-styles-alist) :initial)
-                 (plist-get (alist-get style consult-async-split-styles-alist) :separator)
-                 ))
-          )
-      (if char (char-to-string char) "")
-      ))
+  ;; NOTE consult-omni--get-split-style-character fix moved to consult-omni.el
+  ;; (must be defined after consult-omni loads or it gets overwritten)
 
   (defvar consult--yank-pop-history nil)
   (consult-customize consult-yank-pop :history 'consult--yank-pop-history)

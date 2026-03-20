@@ -30,7 +30,7 @@
 ;; emojis, the rendering also doesn't really work
 
 (use-package spinner
-
+  :ensure nil
   :after (compile unicode-fonts)
 
   :config

@@ -50,7 +50,7 @@
    "completion/prescient.el"
    "completion/mono-complete.el"
    "completion/consult-gh.el"
-   ;;"completion/consult-omni.el"
+   "completion/consult-omni.el"
    "completion/consult-lsp.el"
    "completion/consult-dash.el"
    "completion/consult-ls-git.el"
@@ -111,6 +111,7 @@
    "ui/svg-lib.el"
    "ui/explain-pause-mode.el"
    "ui/blinker.el"
+   ;;"ui/lolipop.el" ;; disabled: upstream implementation incomplete
    "ui/spacetree.el"
 
    ;; editor
@@ -217,18 +218,19 @@
    "tools/devdocs.el"
    "tools/color-rg.el"
    "tools/osx-lib.el"
-   "tools/spotlight.el"
+   ;;"tools/spotlight.el" ;; disabled: swiper dep broken on Emacs 31
    "tools/gha.el"
    "tools/jira.el"
    "tools/pr-review.el"
    "tools/embark-vc.el"
    "tools/treesit-fold.el"
-   "tools/kubernetes-el.el"
+   ;;"tools/kubernetes-el.el" ;; disabled: magit-popup dep archived, broken on Emacs 31
    "tools/kubel.el"
    "tools/magneto.el"
    "tools/know-your-http-well.el"
    "tools/ai.el"
    "tools/alert.el"
+   "tools/command-palette.el"
    "tools/ddp.el"
    "tools/gnus.el"
    "tools/gif-screencast.el"

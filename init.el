@@ -125,11 +125,13 @@
    '("4c7228157ba3a48c288ad8ef83c490b94cb29ef01236205e360c2c4db200bb18"
      default))
  '(helm-minibuffer-history-key "M-p")
- '(org-safe-remote-resources '("\\`https://fniessen\\.github\\.io\\(?:/\\|\\'\\)")))
+ '(org-safe-remote-resources '("\\`https://fniessen\\.github\\.io\\(?:/\\|\\'\\)"))
+ '(warning-suppress-log-types '((native-compiler))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- )
+ '(cursor ((t (:background "gray"))))
+ '(header-line-inactive ((t (:inherit header-line)))))
 ;;; init.el ends here

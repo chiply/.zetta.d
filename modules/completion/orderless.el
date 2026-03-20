@@ -9,7 +9,13 @@
 
   (defun annotation-if-at (pattern _index _total)
     (when (string-prefix-p "@" pattern)
-      `(orderless-annotation . ,(substring pattern 1))))
+      (let ((rest (substring pattern 1)))
+        (if (string-prefix-p "~" rest)
+            ;; @~ → flex match on annotation
+            (let ((re (mapconcat (lambda (c) (regexp-quote (char-to-string c)))
+                                 (string-to-list (substring rest 1)) ".*")))
+              `(orderless-annotation . ,re))
+          `(orderless-annotation . ,rest)))))
 
   (defun my/orderless-dispatcher-initialism (pattern index _total)
     (when (string-prefix-p "`" pattern)

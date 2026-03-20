@@ -30,4 +30,7 @@
 
 (message "chocolate-theme")
 (use-package chocolate-theme)
+(custom-set-faces
+ '(cursor ((t (:background "gray"))))
+ '(header-line-inactive ((t (:background unspecified :foreground unspecified :inherit header-line)))))
 ;;; theme.el ends here

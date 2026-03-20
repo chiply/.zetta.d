@@ -51,6 +51,7 @@
   ;(setq magit-log-margin '(t age-abbreviated magit-log-margin-width nil 6))
   ;(add-hook 'magit-status-mode-hook 'magit-toggle-log-margin-style)
   ;(add-hook 'magit-log-mode-hook 'magit-toggle-log-margin-style)
+  (add-hook 'magit-status-sections-hook #'magit-insert-worktrees)
 
   (general-unbind :keymaps 'magit-status-mode-map :states 'normal "M-<tab>")
   (general-unbind :keymaps 'magit-mode-map :states 'normal "M-<tab>")

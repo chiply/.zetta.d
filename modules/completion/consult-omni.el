@@ -80,7 +80,7 @@ STYLE defaults to `consult-async-split-style'."
       str))
 
   (setq consult-omni-sources-modules-to-load
-        '(consult-omni-buffer
+        `(consult-omni-buffer
           consult-omni-apps
           consult-omni-grep
           consult-omni-ripgrep
@@ -97,7 +97,7 @@ STYLE defaults to `consult-async-split-style'."
           consult-omni-stackoverflow
           ;; gptel source — requires gptel-backend to be set; we point
           ;; consult-omni at whichever backend gptel has configured
-          consult-omni-gptel
+          ,@(when (featurep 'gptel) '(consult-omni-gptel))
           ;; PubMed module loaded for standalone M-x consult-omni-pubmed,
           ;; but excluded from consult-omni-web multi command.
           ;; Upstream bug: esummary async callback does unguarded
@@ -111,6 +111,12 @@ STYLE defaults to `consult-async-split-style'."
 
   (require 'consult-omni-sources)
   (consult-omni-sources-load-modules)
+
+  ;; Load gptel source lazily when gptel becomes available
+  (with-eval-after-load 'gptel
+    (unless (member 'consult-omni-gptel consult-omni-sources-modules-to-load)
+      (add-to-list 'consult-omni-sources-modules-to-load 'consult-omni-gptel t)
+      (require 'consult-omni-gptel nil t)))
 
   ;; embark integration
   (require 'consult-omni-embark)

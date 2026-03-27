@@ -6,6 +6,10 @@
   :config
   ;;(zetta-side "^\\*xref*" 'right -1)
 
+  ;; Emacs 31: control-click to jump to definition (VSCode-style)
+  (when (fboundp 'global-xref-mouse-mode)
+    (global-xref-mouse-mode 1))
+
   :general
   (
    ;; just override doesn't work

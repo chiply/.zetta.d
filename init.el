@@ -17,6 +17,95 @@
   (when (file-exists-p zetta-config)
     (load-file zetta-config)))
 
+;; 1Password integration — needed by ~/.private.el before modules load.
+;; Uses `op inject` to resolve all secrets in a single CLI call (one
+;; Touch ID prompt).  The template lives in source/op-secrets.env.tpl.
+(defvar zetta-op--cache (make-hash-table :test 'equal)
+  "Cache for 1Password secrets, populated by `zetta-op-load'.")
+
+(defun zetta-op-read (key)
+  "Read a secret from the 1Password cache by env-style KEY.
+KEY is the environment variable name from op-secrets.env.tpl,
+e.g. \"OPENAI_API_KEY\"."
+  (or (gethash key zetta-op--cache)
+      (warn "zetta-op-read: %s not found in cache" key)))
+
+(defun zetta-op-load ()
+  "Load all secrets from 1Password via `op inject' (single Touch ID prompt).
+Parses source/op-secrets.env.tpl and caches resolved KEY=VALUE pairs."
+  (let* ((tpl (expand-file-name "source/op-secrets.env.tpl" user-emacs-directory))
+         (output (string-trim
+                  (shell-command-to-string
+                   (format "op inject -i '%s' 2>/dev/null" tpl)))))
+    (if (string-empty-p output)
+        (warn "zetta-op-load: `op inject' failed — is 1Password unlocked?")
+      (dolist (line (split-string output "\n" t))
+        (when (string-match "\\`\\([^=]+\\)=\\(.*\\)\\'" line)
+          (puthash (match-string 1 line) (match-string 2 line) zetta-op--cache))))))
+
+;; ──────────────────────────────────────────────────────────────────
+;; auth-source backend backed by 1Password cache
+;; Replaces ~/.authinfo — consumers like forge, erc, slack, gptel
+;; call `auth-source-search' and this backend serves from cache.
+;; ──────────────────────────────────────────────────────────────────
+
+(require 'auth-source)
+(require 'cl-lib)
+
+(defvar zetta-op-auth-source-entries
+  '((:host "mastodon.social"  :user "REDACTED"        :key "MASTODON_PASSWORD")
+    (:host "debian_droplet"   :user "root"    :port "ssh"    :key "DEBIAN_DROPLET_PASSWORD")
+    (:host "api.openai.com"   :user "apikey"                 :key "OPENAI_API_KEY")
+    (:host "api.anthropic.com" :user "apikey"                :key "ANTHROPIC_API_KEY")
+    (:host "api.anthropic.com" :user "personal"              :key "ANTHROPIC_API_KEY")
+    (:host "api.github.com"   :user "chiply^forge"           :key "GITHUB_FORGE_TOKEN")
+    (:host "irc.libera.chat"  :user "REDACTED"         :key "LIBERA_CHAT_PASSWORD")
+    (:host "app.slack.com"    :user "you@example.com"        :key "SLACK_TOKEN")
+    (:host "app.slack.com"    :user "you@example.com^cookie" :key "SLACK_COOKIE"))
+  "Mapping from auth-source queries to 1Password cache keys.")
+
+(cl-defun zetta-op-auth-source-search (&rest spec
+                                       &key backend type host user port
+                                       require max
+                                       &allow-other-keys)
+  "Search the 1Password cache for auth-source credentials."
+  (let (results)
+    (dolist (entry zetta-op-auth-source-entries)
+      (let ((e-host (plist-get entry :host))
+            (e-user (plist-get entry :user))
+            (e-port (plist-get entry :port))
+            (e-key  (plist-get entry :key)))
+        (when (and (or (null host) (equal host e-host))
+                   (or (null user) (equal user e-user))
+                   (or (null port) (equal port e-port)))
+          (let ((secret-key e-key))
+            (push (list :host e-host
+                        :user e-user
+                        :port (or e-port "443")
+                        :secret (lambda () (gethash secret-key zetta-op--cache)))
+                  results)))))
+    (setq results (nreverse results))
+    (when (and max (> (length results) max))
+      (setq results (cl-subseq results 0 max)))
+    results))
+
+(defun zetta-op-auth-source-parser (entry)
+  "Parse auth-source backend ENTRY.
+Returns a backend object when ENTRY is the symbol `zetta-op'."
+  (when (eq entry 'zetta-op)
+    (auth-source-backend
+     :type 'zetta-op
+     :source "1Password"
+     :search-function #'zetta-op-auth-source-search)))
+
+;; Register the backend parser
+(if (boundp 'auth-source-backend-parser-functions)
+    (add-hook 'auth-source-backend-parser-functions #'zetta-op-auth-source-parser)
+  (advice-add 'auth-source-backend-parse :before-until #'zetta-op-auth-source-parser))
+
+;; Put 1Password first in auth-sources
+(setq auth-sources '(zetta-op))
+
 ;; load private.el early (before config files that need API keys)
 (load-file "~/.private.el")
 

@@ -107,7 +107,7 @@ minibuffer with something like `exit-minibuffer'."
   (defun embark-target-elfeed-entry ()
     "Target elfeed entry at point."
     (when (derived-mode-p 'elfeed-search-mode)
-      (when-let ((entry (elfeed-search-selected :ignore-region)))
+      (when-let* ((entry (elfeed-search-selected :ignore-region)))
         (cons 'elfeed-entry entry))))
 
   ;; Add to embark target finders

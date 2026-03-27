@@ -34,36 +34,16 @@
       "foo"))
 
   (telephone-line-defsegment zt-vc-segment-repo-icon ()
-    (let ((result (shell-command-to-string
-                   "git rev-parse --is-inside-work-tree")))
-      (when (and result (string= result "true\n"))
-        ;; HACKY: note that some icons still come through
-        ;; with the blank background and get resized whenever
-        ;; i change the fontsize in the buffer.
-        ;; icon-for-mode and icon-for-file seems to work well
-        ;; for this, but only when the relevant entry in
-        ;; `all-the-icons-mode-icon-alist` or `...` has a
-        ;; face set (and this face does not inherit the
-        ;; default font.).  Desired setup up is to be able to
-        ;; directly reference any icon and insert here, but
-        ;; I'm having to use the *-for-* functions in order
-        ;; to get an icon that is fixed height in the
-        ;; modeline
-        (all-the-icons-icon-for-mode 'magit-status-mode)
-        ))
-    )
+    (when (vc-git-root (or (buffer-file-name) default-directory))
+      (all-the-icons-icon-for-mode 'magit-status-mode)))
 
   (telephone-line-defsegment zt-vc-segment-repo ()
-    (let ((result (shell-command-to-string
-                   "git rev-parse --is-inside-work-tree")))
-      (when (and result (string= result "true\n"))
-        (nth 0 (zetta-get-repo-name)))))
+    (when (vc-git-root (or (buffer-file-name) default-directory))
+      (nth 0 (zetta-get-repo-name))))
 
   (telephone-line-defsegment zt-vc-segment-branch ()
-    (let ((result (shell-command-to-string
-                   "git rev-parse --is-inside-work-tree")))
-      (when (and result (string= result "true\n"))
-        (vc-git--symbolic-ref (or (buffer-file-name) default-directory)))))
+    (when (vc-git-root (or (buffer-file-name) default-directory))
+      (vc-git--symbolic-ref (or (buffer-file-name) default-directory))))
 
   (telephone-line-defsegment zt-flycheck-segment ()
     (when (fboundp 'flycheck-indicator--mode-line)

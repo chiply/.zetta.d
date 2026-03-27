@@ -9,7 +9,7 @@
   ;; git config --global github.user USERNAME
   ;; git config --local github.user USERNAME
   :init
-  (setq auth-sources '("~/.authinfo"))
+  ;; auth-sources set in init.el (1Password backend)
   ;;(zetta-side "\\forge-topic-mode" 'right 2)
   :general
   (

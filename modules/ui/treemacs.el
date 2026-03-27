@@ -1,124 +1,80 @@
 ;;; treemacs.el --- Configure treemacs -*- lexical-binding: t; -*-
 
-;; NOTE this package in general is very buggy, try not to rely on it
-;; treemacs-add-project has a bug -- this is like the most basic thing, if not an entry point!
+;; Define commands before use-package so keybindings work before treemacs loads.
+(defun zetta-refresh-treemacs ()
+  (interactive)
+  (let ((treemacs-buf (nth 0 (zetta-soda-mode-displayed-p "treemacs-mode")))
+        (win (selected-window)))
+    (when treemacs-buf
+      (kill-buffer treemacs-buf)
+      (treemacs)
+      (select-window win))))
+
+(defun zetta-soda-drink-treemacs ()
+  (interactive)
+  (let* ((win (selected-window))
+         (treemacs-buf (nth 0 (zetta-soda-mode-displayed-p "treemacs-mode"))))
+    (if treemacs-buf
+        (select-window (get-buffer-window treemacs-buf))
+      (treemacs)
+      (select-window win))))
+
+(defun zetta-soda-toggle-treemacs-follow-mode ()
+  (interactive)
+  (if treemacs-tag-follow-mode
+      (progn
+        (treemacs-tag-follow-mode -1)
+        (treemacs-follow-mode 1))
+    (treemacs-tag-follow-mode 1)))
+
+;; Keybindings available immediately (not deferred to :config)
+(general-define-key
+ :keymaps 'menu-run-map
+ "t" (repeatable-lite-wrap zetta-soda-drink-treemacs)
+ "T" (repeatable-lite-wrap treemacs)
+ "C-t" (repeatable-lite-wrap zetta-refresh-treemacs)
+ "M-t" (repeatable-lite-wrap zetta-soda-toggle-treemacs-follow-mode))
+
 (use-package treemacs
   :ensure (treemacs
            :files ("src/elisp/*.el"
-                   "src/extra/*.el"))
-  :commands (treemacs treemacs-select-window treemacs-add-project
-             zetta-soda-drink-treemacs zetta-refresh-treemacs)
-
-  ;;(setq treemacs-persist-file
-  ;;(expand-file-name ".data/treemacs/.cache/treemacs-persist"
-  ;;user-emacs-directory))
+                   "src/extra/*.el"
+                   "src/scripts/*.py"))
+  :commands (treemacs treemacs-select-window treemacs-add-project)
 
   :config
-  ;; TODO factor out
-  ;; NOTE tried with all the icons -- issue is that I use the svg
-  ;; branch of all-the-icons and this is not compatible with treemacs
-  ;; implementation of the all-the-icons theme.  better to simply
-  ;; avoid having icons for now... if I revert to the master branch of
-  ;; all the icons, I get an issue which is that the icons are not
-  ;; rendered properly in many of the places I use them in emacs,
-  ;; specifically the mode line, tab-line.  I don't really need the
-  ;; icons in treemacs, so I'm leaving them out for now
+  ;; "Idea" theme no longer exists upstream — use "Default".
+  (treemacs-load-theme "Default")
 
-  ;; NOTE also observed that many themes are broken.  For example,
-  ;; Iconless doesn't work, default has numerous issues and also looks
-  ;; terrible.
-
-  ;; NOTE Idea probably comes with icons but they aren't rendering.
-  ;; This is a hacky config because I'm targeting the goal of having
-  ;; no icons, but I'm using a theme that has icons...
-  (treemacs-load-theme "Idea")
-
-  (treemacs-resize-icons
-   ;; NOTE setting to nil allows to be arbitrarly small, otherwise
-   ;; they can ;; only shrink to the minimum size of the icon
-   nil
-  ;; NOTE set to the initial default font size (note this is set 1
-   ;;time, so altering the text scale wont cause the icons to change
-   ;;size) (font-get (face-attribute 'default :font) :size)
-   )
+  (treemacs-resize-icons nil)
 
   (setq aw-ignored-buffers '("*Calc Trail*" " *LV*"))
 
   (setq-default
-   treemacs-file-follow-delay 0.25
-   treemacs-file-event-delay 1000
-   treemacs-tag-follow-delay 0.25
-   ;; makes it take up more screen realestate and based on treemacs
-   ;; defauults of 1 buffer per frame this bahaves a lot like
-   ;; frame-level contruct
+   treemacs-file-follow-delay 0.5
+   treemacs-file-event-delay 2000
+   treemacs-tag-follow-delay 1.0
    treemacs-display-in-side-window t
    treemacs-width 35
    treemacs-width-is-initially-locked nil)
 
-  ;; very odd.. order matters here..., esp when it comes to files that
-  ;; lack tags in the other order, there is an issue with the
-  ;; followign of files without tags
+  ;; Disable expensive modes that treemacs auto-enables during its own
+  ;; init (via `treemacs-only-during-init').  Must happen in :config
+  ;; (not :init) because treemacs re-enables them at load time.
+  ;;
+  ;; git-mode spawns a python subprocess on every node expansion —
+  ;; biggest perf hit and source of number-or-marker-p errors.
+  (treemacs-git-mode -1)
+
+  ;; Filewatch-mode exhausts macOS file descriptors in large trees.
+  (treemacs-filewatch-mode -1)
+
+  ;; Only file-follow — tag-follow adds expensive idle-timer overhead.
+  ;; Do NOT call (treemacs-project-follow-mode -1) — its teardown
+  ;; unconditionally cancels a timer that doesn't exist when the mode
+  ;; was never enabled, throwing (wrong-type-argument timerp nil).
   (treemacs-follow-mode t)
-  (treemacs-project-follow-mode t)
-  (treemacs-tag-follow-mode t)
-
-  (treemacs-filewatch-mode t)
-
-  (defun zetta-refresh-treemacs ()
-    (interactive)
-    (let ((treemacs-buf (nth 0 (zetta-soda-mode-displayed-p "treemacs-mode")))
-          (win (selected-window)))
-      (when treemacs-buf
-        (progn
-          (kill-buffer treemacs-buf)
-          (treemacs)
-          (select-window win)))))
-
-  ;; TODO update as this also jumps to other buffers displaying
-  ;; treemacs like lsp symbols or lsp error list
-  (defun zetta-soda-drink-treemacs ()
-    (interactive)
-    (let* ((bufnm (current-buffer))
-           (win (get-buffer-window bufnm))
-           (treemacs-buf (nth 0 (zetta-soda-mode-displayed-p "treemacs-mode")))
-           )
-      (if treemacs-buf
-          (select-window (get-buffer-window treemacs-buf))
-        (progn
-          (treemacs)
-          (select-window win)
-          )
-        )))
-
-  (defun zetta-soda-toggle-treemacs-follow-mode ()
-    (interactive)
-    (if treemacs-tag-follow-mode
-        (progn
-          (treemacs-tag-follow-mode -1)
-          ;; need this as treemacs tag follow mode -1 affects
-          ;; follow mode SO STRANGE.. but this seems to sovle
-          ;; the issie of not having proper tracking to to
-          ;; lack of tags in a file.  I can get file based
-          ;; following in the files where I run this
-          ;; function.  Not expectetd, but works!
-          (treemacs-follow-mode 1))
-      (treemacs-tag-follow-mode 1)))
-
-  (general-define-key
-   :keymaps 'menu-run-map
-   "t" (repeatable-lite-wrap zetta-soda-drink-treemacs)
-   "T" (repeatable-lite-wrap treemacs)
-   "C-t" (repeatable-lite-wrap zetta-refresh-treemacs)
-   "M-t" (repeatable-lite-wrap zetta-soda-toggle-treemacs-follow-mode))
-
-  ;;:brushup
-  ;;(add-to-list 'brushup-styles
-  ;;'(progn
-  ;;(set-face-attribute 'treemacs-root-face nil
-  ;;:height 1.2
-  ;;:foreground brushup-fg-2
-  ;;)
-  ;;(setq treemacs-width (floor (* 0.10 (frame-total-cols))))))
+  (treemacs-tag-follow-mode -1)
 
   :general
   (

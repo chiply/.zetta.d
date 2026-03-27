@@ -34,14 +34,17 @@
     (zetta-popup-frame-delete)))
 
 (defun zetta-popup-frame--make ()
-  "Create and return a popup frame. Cleans up any stale one first."
+  "Create and return a centered popup frame. Cleans up any stale one first."
   (zetta-popup-frame-delete)
   (let* ((display-w (display-pixel-width))
          (display-h (display-pixel-height))
-         (frame-w (/ display-w 2))
-         (frame-h (/ display-h 20))
-         (frame-x (/ (- display-w frame-w) 2))
-         (frame-y (/ display-h 4))
+         (border 16)
+         (frame-w (/ (* display-w 3) 10))
+         (frame-h (/ display-h 2))
+         (total-w (+ frame-w (* 2 border)))
+         (total-h (+ frame-h (* 2 border)))
+         (frame-x (/ (- display-w total-w) 2))
+         (frame-y (/ (- display-h total-h) 2))
          (frame (make-frame
                  `((zetta-popup-frame . t)
                    (name . "command-palette")
@@ -49,8 +52,8 @@
                    (height . 1)
                    (minibuffer . only)
                    (undecorated . t)
-                   (internal-border-width . 16)
-
+                   (fullscreen . nil)
+                   (internal-border-width . ,border)
                    (left . ,frame-x)
                    (top . ,frame-y)
                    (pixel-width . ,frame-w)
@@ -119,14 +122,18 @@
   (interactive)
   (let* ((display-w (display-pixel-width))
          (display-h (display-pixel-height))
-         (frame-w (/ display-w 2))
-         (frame-h (/ display-h 3))
-         (frame-x (/ (- display-w frame-w) 2))
-         (frame-y (/ display-h 4))
+         (border 16)
+         (frame-w (/ (* display-w 3) 10))
+         (frame-h (/ display-h 2))
+         (total-w (+ frame-w (* 2 border)))
+         (total-h (+ frame-h (* 2 border)))
+         (frame-x (/ (- display-w total-w) 2))
+         (frame-y (/ (- display-h total-h) 2))
          (frame (make-frame
                  `((zetta-popup-frame . t)
                    (name . "command-palette")
-                   (internal-border-width . 16)
+                   (fullscreen . nil)
+                   (internal-border-width . ,border)
                    (left . ,frame-x)
                    (top . ,frame-y)
                    (width . 80)
@@ -179,7 +186,12 @@
                        (buffer-string))))
         (when (and current
                    (not (string-empty-p current))
-                   (not (string= current zetta-clipboard-last)))
+                   (not (string= current zetta-clipboard-last))
+                   ;; Don't clobber the kill ring head if it has the same
+                   ;; text — it may carry a yank-handler (e.g. evil
+                   ;; linewise yank) that would be lost by kill-new.
+                   (not (string= current (substring-no-properties
+                                          (or (car kill-ring) "")))))
           (setq zetta-clipboard-last current)
           (kill-new current)))
     (error nil)))

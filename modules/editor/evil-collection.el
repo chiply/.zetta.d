@@ -2,5 +2,7 @@
 
 (use-package evil-collection
   :after evil
-  :config (evil-collection-init))
+  :config
+  (evil-collection-init)
+  (evil-set-initial-state 'org-agenda-mode 'normal))
 ;;; evil-collection.el ends here

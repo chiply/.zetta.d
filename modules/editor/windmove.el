@@ -38,6 +38,11 @@
    "V" (repeatable-lite-wrap zetta-split-window-V)
    "h" (repeatable-lite-wrap zetta-split-window-h)
    "H" (repeatable-lite-wrap zetta-split-window-H)
+   ;; Emacs 31: new window layout commands (,w l prefix = layout)
+   "l r" 'window-rotate
+   "l f" 'window-flip
+   "l s" 'split-frame
+   "l m" 'merge-frames
    )
   )
 ;;; windmove.el ends here

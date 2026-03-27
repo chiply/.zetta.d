@@ -12,11 +12,12 @@
 (setq gc-cons-threshold most-positive-fixnum
       gc-cons-percentage 0.6)
 
-;; Restore reasonable GC settings after init
-(add-hook 'emacs-startup-hook
-          (lambda ()
-            (setq gc-cons-threshold (* 16 1024 1024)  ; 16MB
-                  gc-cons-percentage 0.1)))
+;; Restore reasonable GC settings after init.
+(defun zetta--restore-gc ()
+  "Restore GC settings after init."
+  (setq gc-cons-threshold (* 16 1024 1024)  ; 16MB
+        gc-cons-percentage 0.1))
+(add-hook 'emacs-startup-hook #'zetta--restore-gc)
 
 ;; Bypass file-name-handler-alist during init (~90-120ms savings).
 ;; Every require/load checks this regex list for TRAMP, compression, etc.
@@ -32,8 +33,12 @@
 (setq load-prefer-newer nil)
 
 ;; Suppress all rendering during init (restored automatically on frame creation)
-(setq inhibit-redisplay t
-      inhibit-message t)
+;; Don't suppress messages in daemon mode — there's no frame, so
+;; window-setup-hook never fires to restore them, and we want to see
+;; startup progress in the terminal.
+(setq inhibit-redisplay t)
+(unless (daemonp)
+  (setq inhibit-message t))
 (add-hook 'window-setup-hook
           (lambda ()
             (setq inhibit-redisplay nil

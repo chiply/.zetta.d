@@ -71,7 +71,12 @@
   )
 
 (defun zetta-buffer-name ()
-  (if (buffer-file-name) (abbreviate-file-name (buffer-file-name)) "%b"))
+  (let ((name (if (buffer-file-name)
+                  (abbreviate-file-name (buffer-file-name))
+                (buffer-name))))
+    (if (> (length name) 70)
+        (concat (substring name 0 67) "…")
+      name)))
 
 (defun zetta-gptel-processes ()
   (when (boundp 'gptel--request-alist)

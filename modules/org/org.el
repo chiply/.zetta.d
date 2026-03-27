@@ -2,12 +2,65 @@
 
 ;;; Core org-mode setup (moved from bootstrap-org.el)
 
+(defun zetta-org-sort-buffer (type)
+  "Sort all entries in the buffer recursively by TYPE.
+TYPE is a character: ?a alphabetic, ?t timestamp, ?p priority, ?o TODO order."
+  (interactive "cSort by: [a]lpha [t]imestamp [p]riority [o]rder ")
+  (org-map-entries (lambda () (ignore-errors (org-sort-entries nil type))) nil 'file))
+
+;;; Calendar display and styling
+
+(add-to-list 'display-buffer-alist
+             '("\\*Calendar\\*"
+               (display-buffer-in-side-window)
+               (side . top)
+               (slot . 0)
+               (window-height . fit-window-to-buffer)
+               (preserve-size . (nil . t))))
+
+(setq calendar-week-start-day 1
+      calendar-mark-holidays-flag t
+      calendar-day-header-array ["Su" "Mo" "Tu" "We" "Th" "Fr" "Sa"]
+      calendar-month-name-array ["Jan" "Feb" "Mar" "Apr" "May" "Jun"
+                                 "Jul" "Aug" "Sep" "Oct" "Nov" "Dec"]
+      calendar-month-abbrev-array ["Jan" "Feb" "Mar" "Apr" "May" "Jun"
+                                   "Jul" "Aug" "Sep" "Oct" "Nov" "Dec"]
+      calendar-intermonth-text
+      '(propertize
+        (format "%2d" (org-days-to-iso-week
+                       (calendar-absolute-from-gregorian
+                        (list month day year))))
+        'font-lock-face 'font-lock-comment-face))
+
+(add-hook 'calendar-mode-hook (lambda () (setq truncate-lines t)))
+
+(defun zetta-calendar-grayscale-faces ()
+  "Set calendar faces to grayscale, adapting to light/dark background."
+  (let ((dark-p (eq (frame-parameter nil 'background-mode) 'dark)))
+    (set-face-attribute 'calendar-today nil
+                        :foreground (if dark-p "#ffffff" "#000000")
+                        :weight 'bold
+                        :underline t)
+    (set-face-attribute 'calendar-weekday-header nil
+                        :foreground (if dark-p "#aaaaaa" "#555555"))
+    (set-face-attribute 'calendar-weekend-header nil
+                        :foreground (if dark-p "#666666" "#999999"))
+    (set-face-attribute 'holiday nil
+                        :foreground (if dark-p "#ffffff" "#000000")
+                        :background (if dark-p "#333333" "#e0e0e0"))
+    (set-face-attribute 'calendar-month-header nil
+                        :foreground (if dark-p "#cccccc" "#333333")
+                        :weight 'bold)))
+
+(add-hook 'calendar-mode-hook #'zetta-calendar-grayscale-faces)
+
 (use-package org
   :ensure nil
   :mode ("\\.org" . org-mode)
 
   :config
   (setq-default org-indent-mode nil)
+
 
   ;; LaTeX preview — dvisvgm produces SVG (vector, crisp on retina)
   (setq org-preview-latex-default-process 'dvisvgm)
@@ -149,6 +202,12 @@
    :keymaps '(org-mode-map org-agenda-mode-map)
    "C-c C-S-o" 'zetta-org-open-at-point
    "C-c C-o" 'org-open-at-point)
+  (
+   :keymaps '(org-agenda-mode-map)
+   "C-c d" 'org-agenda-goto-date)
+  (
+   :keymaps '(org-mode-map)
+   "C-c S" 'zetta-org-sort-buffer)
 
   :hook (
          (org-ctrl-c-ctrl-c-final . org-table-shrink)
@@ -421,13 +480,13 @@ or nil to disable."
 (defun gpc/open-node-roam-ref-url ()
   "Open the URL in this node's ROAM_REFS property, if one exists"
   (interactive)
-  (when-let ((ref-url (org-entry-get-with-inheritance "ROAM_REFS")))
+  (when-let* ((ref-url (org-entry-get-with-inheritance "ROAM_REFS")))
     (browse-url ref-url)))
 
 (defun gpc/open-node-roam-ref-url-eww ()
   "Open the URL in this node's ROAM_REFS property, if one exists"
   (interactive)
-  (when-let ((ref-url (org-entry-get-with-inheritance "ROAM_REFS")))
+  (when-let* ((ref-url (org-entry-get-with-inheritance "ROAM_REFS")))
     (eww-browse-url ref-url)))
 
 ;;(add-hook 'org-mode-hook (lambda () (font-lock-add-keywords
@@ -624,4 +683,115 @@ The PARAMS are the 3rd element of the info for the same src block."
 (setq org-export-with-sub-superscripts nil)
 
 (setq org-html-with-latex 'mathjax)
+
+;;; Logseq journals view
+
+(defun zetta-logseq--ordinal-suffix (day)
+  "Return ordinal suffix for DAY (1-31)."
+  (cond
+   ((memq day '(11 12 13)) "th")
+   ((= (% day 10) 1) "st")
+   ((= (% day 10) 2) "nd")
+   ((= (% day 10) 3) "rd")
+   (t "th")))
+
+(defun zetta-logseq--format-date (time)
+  "Format TIME as a Logseq journal date string like [[Mar 10th, 2026]]."
+  (let ((day (string-to-number (format-time-string "%d" time))))
+    (format "[[%s %d%s, %s]]"
+            (format-time-string "%b" time)
+            day
+            (zetta-logseq--ordinal-suffix day)
+            (format-time-string "%Y" time))))
+
+(defun zetta-logseq--file-headings (file cache)
+  "Return an alist of (LINE-NUMBER . HEADING-TEXT) for FILE.
+Results are cached in hash table CACHE."
+  (or (gethash file cache)
+      (puthash file
+               (with-temp-buffer
+                 (insert-file-contents file)
+                 (let ((headings nil)
+                       (line 0))
+                   (while (not (eobp))
+                     (cl-incf line)
+                     (when (looking-at "\\(\\*+\\)[ \t]+\\(.*\\)")
+                       (push (cons line (match-string 2)) headings))
+                     (forward-line 1))
+                   (nreverse headings)))
+               cache)))
+
+(defun zetta-logseq--heading-at (line headings)
+  "Find the nearest heading at or before LINE in HEADINGS alist."
+  (let ((best nil))
+    (dolist (h headings best)
+      (when (<= (car h) line)
+        (setq best (cdr h))))))
+
+(defun zetta-logseq-journals (&optional dir n)
+  "Show an org buffer with Logseq journal references for the last N days.
+DIR is the Logseq graph directory to search (defaults to
+`zetta-logseq-pages-dir').  N defaults to 30.
+Each date becomes a heading; under it are org links to every
+location where that date's journal link appears, annotated with
+the nearest heading from the source file."
+  (interactive (list (when current-prefix-arg
+                       (read-directory-name "Logseq directory: " zetta-logseq-pages-dir))
+                     (when current-prefix-arg
+                       (read-number "Number of days: " 30))))
+  (let* ((dir (or dir zetta-logseq-pages-dir))
+         (n (or n 30))
+         (dates (cl-loop for i from 0 below n
+                         for time = (time-subtract (current-time)
+                                                   (days-to-time i))
+                         collect (cons (zetta-logseq--format-date time) time)))
+         (rg-args (append (list "--no-heading" "-n" "--fixed-strings")
+                          (cl-loop for (date . _) in dates
+                                   append (list "-e" date))
+                          (list (expand-file-name dir))))
+         (hits (apply #'process-lines "rg" rg-args))
+         (results (make-hash-table :test 'equal))
+         (heading-cache (make-hash-table :test 'equal))
+         (abs-dir (expand-file-name dir)))
+    ;; group hits by date
+    (dolist (line hits)
+      (when (string-match "\\`\\(.+\\):\\([0-9]+\\):\\(.*\\)\\'" line)
+        (let ((file (match-string 1 line))
+              (lnum (match-string 2 line))
+              (text (string-trim (match-string 3 line))))
+          (dolist (entry dates)
+            (when (string-search (car entry) text)
+              (push (list file lnum text) (gethash (car entry) results)))))))
+    ;; build org buffer
+    (let ((buf (get-buffer-create "*Logseq Journals*")))
+      (with-current-buffer buf
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (org-mode)
+          (insert "#+title: Logseq Journals\n\n")
+          (dolist (entry dates)
+            (let* ((date-str (car entry))
+                   (matches (reverse (gethash date-str results))))
+              (insert (format "* %s\n" date-str))
+              (if matches
+                  (dolist (m matches)
+                    (cl-destructuring-bind (file lnum text) m
+                      (let* ((rel (file-relative-name file abs-dir))
+                             (headings (zetta-logseq--file-headings file heading-cache))
+                             (heading (zetta-logseq--heading-at
+                                       (string-to-number lnum) headings))
+                             (context (string-trim
+                                       (replace-regexp-in-string
+                                        (regexp-quote date-str) "" text))))
+                        (insert (format "- [[file:%s::%s][%s]] — %s%s\n"
+                                        file lnum rel
+                                        (if heading
+                                            (format "*%s* · " heading)
+                                          "")
+                                        context)))))
+                (insert "  /no references/\n"))
+              (insert "\n")))))
+      (pop-to-buffer buf)
+      (goto-char (point-min)))))
+
 ;;; org.el ends here

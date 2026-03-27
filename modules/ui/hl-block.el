@@ -147,7 +147,7 @@
          (types (mapcar #'car hl-block-types)))
     (if (member type types)
         node
-      (when-let ((parent (treesit-node-parent node)))
+      (when-let* ((parent (treesit-node-parent node)))
         (hl-block--search parent)))))
 
 (defun hl-block--update (&optional node)
@@ -155,7 +155,7 @@
 point). Available types are registered in hl-block-types."
 
   (interactive)
-  (if-let ((node (hl-block--search)))
+  (if-let* ((node (hl-block--search)))
       (hl-block--highlight node)
     (remove-overlays (point-min) (point-max) 'hl-block t)))
 

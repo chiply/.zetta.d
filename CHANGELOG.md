@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.5](https://github.com/chiply/.zetta.d/compare/v0.1.4...v0.1.5) (2026-03-27)
+
+
+### Features
+
+* add embark backend switching and misc config updates ([708b302](https://github.com/chiply/.zetta.d/commit/708b302ceed77a81570728824720ccb10fdd9fc4))
+* Emacs 31 compatibility fixes and config updates ([1a1fb10](https://github.com/chiply/.zetta.d/commit/1a1fb10c5a734e6df0d8f91e8d8eb0ed8eb7aeac))
+
+
+### Bug Fixes
+
+* bulk changes ([f0b369e](https://github.com/chiply/.zetta.d/commit/f0b369ee4d34425143a77d23784e184a03f56731))
+* prevent which-key auto-popup and add embark help backend ([b76b8b8](https://github.com/chiply/.zetta.d/commit/b76b8b8156053d4f21ffd46d8a9b424ac6e28501))
+* slack.md ([aa2e220](https://github.com/chiply/.zetta.d/commit/aa2e2206b3649c62248d81d014d6c3738c26d0e7))
+
 ## [0.1.4](https://github.com/chiply/.zetta.d/compare/v0.1.3...v0.1.4) (2026-03-06)
 
 

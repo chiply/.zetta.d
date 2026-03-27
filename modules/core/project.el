@@ -33,6 +33,7 @@
    "p" (repeatable-lite-wrap consult-project-switch-project)
    "d" (repeatable-lite-wrap project-find-dir)
    "f" (repeatable-lite-wrap consult-project-extra-find)
+   "r" (repeatable-lite-wrap project-remember-project)
    )
 
   (general-define-key

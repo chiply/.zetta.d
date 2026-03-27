@@ -157,6 +157,7 @@ Prompt for a vterm buffer and store it as a buffer-local variable."
    :keymaps '(vterm-mode-map)
    "C-s" 'vterm-send-C-s
    "C-x" 'vterm-send-C-x
+   "C-," 'vterm--self-insert
    "<escape>" 'vterm-send-escape
    "C-u" 'universal-argument
    )
@@ -165,6 +166,7 @@ Prompt for a vterm buffer and store it as a buffer-local variable."
    :states '(normal)
    :keymaps '(vterm-mode-map)
    "C-b" 'vterm-send-C-b
+   "C-," 'vterm--self-insert
    "C-k" 'vterm-send-up
    "C-j" 'vterm-send-down
    )

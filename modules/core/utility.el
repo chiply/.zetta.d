@@ -1,5 +1,8 @@
 ;;; utility.el --- Configure utility functions -*- lexical-binding: t; -*-
 
+;; 1Password integration — canonical definitions are in init.el
+;; (loaded early for ~/.private.el).  See source/op-secrets.env.tpl.
+
 (defun zetta-wget ()
   (interactive)
   (let ((dir "~/Downloads/")

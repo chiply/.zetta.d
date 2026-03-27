@@ -197,4 +197,11 @@
   ;;(setq gptel-autocomplete-use-context nil)
   )
 
+(use-package copilot
+  :ensure t
+  :hook (prog-mode . copilot-mode)
+  :bind (:map copilot-completion-map
+              ("C-<return>" . copilot-accept-completion)
+              ))
+
 ;;; ai.el ends here

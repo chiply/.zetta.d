@@ -234,6 +234,7 @@
    "tools/ddp.el"
    "tools/gnus.el"
    "tools/gif-screencast.el"
+   "tools/signel.el"
 
    ;; app
    "app/pocket-reader.el"

@@ -1,6 +1,6 @@
 ;;; bootstrap-elpaca.el --- Configure elpaca package manager -*- lexical-binding: t; -*-
 
-(defvar elpaca-installer-version 0.11)
+(defvar elpaca-installer-version 0.12)
 (defvar elpaca-directory (expand-file-name "elpaca/" user-emacs-directory))
 (defvar elpaca-builds-directory (expand-file-name "builds/" elpaca-directory))
 (defvar elpaca-repos-directory (expand-file-name "repos/" elpaca-directory))
@@ -46,10 +46,11 @@
 (elpaca-wait)  ;; Block until elpaca-use-package is ready
 
 ;; Fix elpaca bug: when a package is re-declared after being queued as a
-;; transitive dependency, elpaca--queue returns the `warn' string instead of
+;; transitive dependency, elpaca--enqueue returns the `warn' string instead of
 ;; the existing elpaca struct, causing elpaca--expand-declaration to crash
 ;; with (wrong-type-argument listp ...) when it tries to access struct fields.
-(define-advice elpaca--queue (:around (fn order &optional queue) fix-duplicate-return)
+;; Renamed from elpaca--queue to elpaca--enqueue in elpaca 0.12.
+(define-advice elpaca--enqueue (:around (fn order &optional queue) fix-duplicate-return)
   "Return existing elpaca struct for duplicate packages instead of warn string."
   (if-let* ((id (elpaca--first (or order (signal 'wrong-type-argument
                                                  '((or symbolp listp) nil)))))

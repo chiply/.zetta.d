@@ -1,7 +1,7 @@
 ;;; kubernetes-el.el --- Configure kubernetes -*- lexical-binding: t; -*-
 
 (use-package kubernetes
-  :ensure t
+  :ensure (:host github :repo "kubernetes-el/kubernetes-el")
   :commands (kubernetes-overview)
   :config
   (setq kubernetes-poll-frequency 3600

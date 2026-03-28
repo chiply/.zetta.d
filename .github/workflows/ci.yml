@@ -24,7 +24,7 @@ jobs:
         emacs-version:
           - 29.4
           - 30.2
-          - 31.0.50
+          - snapshot  # Emacs 31 (pre-release)
 
     steps:
       - uses: actions/checkout@v4

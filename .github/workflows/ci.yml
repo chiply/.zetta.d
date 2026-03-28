@@ -24,6 +24,7 @@ jobs:
         emacs-version:
           - 29.4
           - 30.2
+          - 31.0.50
 
     steps:
       - uses: actions/checkout@v4

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/chiply/.zetta.d/compare/v0.1.5...v0.1.6) (2026-03-28)
+
+
+### Bug Fixes
+
+* **ci:** use snapshot for Emacs 31 (nix attribute name) ([8a3c03e](https://github.com/chiply/.zetta.d/commit/8a3c03e9b50da84240dc80063257bac6b93f97ab))
+
 ## [0.1.5](https://github.com/chiply/.zetta.d/compare/v0.1.4...v0.1.5) (2026-03-27)
 
 

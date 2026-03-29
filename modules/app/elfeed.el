@@ -137,9 +137,6 @@ minibuffer with something like `exit-minibuffer'."
   ;; Register the keymap
   (add-to-list 'embark-keymap-alist '(elfeed-entry . embark-elfeed-entry-map))
 
-  (general-unbind :states 'normal :keymaps 'elfeed-search-mode-map "f")
-  (general-unbind :states 'normal :keymaps 'elfeed-search-mode-map "R")
-
   :brushup
   (add-to-list 'brushup-styles
                '(progn
@@ -163,7 +160,6 @@ minibuffer with something like `exit-minibuffer'."
                                       :foreground brushup-fg-4
                                       :inherit nil)))
 
-  ;; TODO these bindings don't get applied for some reason
   :general
   (
    :states '(normal)
@@ -174,36 +170,40 @@ minibuffer with something like `exit-minibuffer'."
    "SPC" 'elfeed-show-next
    "S-SPC" 'elfeed-show-prev
    )
-  (
-   :states '(normal)
-   :keymaps '(elfeed-search-mode-map)
-   "tt" 'prot-elfeed-search-tag-filter
-   ;; quick filters
-   "fu" (my-elfeed-filter "@6-months-ago +unread")
-   "fy" (my-elfeed-filter "@6-months-ago +unread +youtube")
-   "fp" (my-elfeed-filter "@6-months-ago +unread +podcast")
-   "fd" (my-elfeed-filter "@6-months-ago +unread +data")
-   "fr" (my-elfeed-filter "@6-months-ago +unread +reddit")
-   "fe" (my-elfeed-filter "@6-months-ago +unread +emacs")
-   "fh" (my-elfeed-filter "@6-months-ago +unread +hackernews")
-   "fn" (my-elfeed-filter "@6-months-ago +unread +npr")
-   "fw" (my-elfeed-filter "@6-months-ago +unread +watches")
-   "fl" (my-elfeed-filter "@6-months-ago +readlater")
-   "fm" (my-elfeed-filter "@6-months-ago +myblog")
-   ;; quick tags
-   "l" (elfeed-tag-selection-as 'readlater)
-   "d" (elfeed-tag-selection-as 'junk)
-   "B" 'elfeed-search-eww-open
-   ;; keep the headline in the same position when hitting r, reduces
-   ;; eyes strain
-   "r" (lambda () (interactive)
-         (elfeed-search-untag-all-unread)
-         (evil-scroll-line-down 1))
-   "tR" 'elfeed-search-tag-all-unread
-   "R" 'elfeed-protocol-fever-reinit)
 
   :hook (elfeed-search-update . elfeed-score-enable)
   )
+
+;; Bind elfeed-search keys after evil-collection sets up its bindings.
+;; Must be outside use-package with high depth so it runs after
+;; evil-collection's hook.
+(add-hook 'elfeed-search-mode-hook
+          (lambda ()
+            (evil-local-set-key 'normal "R" #'elfeed-protocol-fever-reinit)
+            (evil-local-set-key 'normal "tt" #'prot-elfeed-search-tag-filter)
+            ;; quick filters
+            (evil-local-set-key 'normal "fu" (my-elfeed-filter "@6-months-ago +unread"))
+            (evil-local-set-key 'normal "fy" (my-elfeed-filter "@6-months-ago +unread +youtube"))
+            (evil-local-set-key 'normal "fp" (my-elfeed-filter "@6-months-ago +unread +podcast"))
+            (evil-local-set-key 'normal "fd" (my-elfeed-filter "@6-months-ago +unread +data"))
+            (evil-local-set-key 'normal "fr" (my-elfeed-filter "@6-months-ago +unread +reddit"))
+            (evil-local-set-key 'normal "fe" (my-elfeed-filter "@6-months-ago +unread +emacs"))
+            (evil-local-set-key 'normal "fh" (my-elfeed-filter "@6-months-ago +unread +hackernews"))
+            (evil-local-set-key 'normal "fn" (my-elfeed-filter "@6-months-ago +unread +npr"))
+            (evil-local-set-key 'normal "fw" (my-elfeed-filter "@6-months-ago +unread +watches"))
+            (evil-local-set-key 'normal "fl" (my-elfeed-filter "@6-months-ago +readlater"))
+            (evil-local-set-key 'normal "fm" (my-elfeed-filter "@6-months-ago +myblog"))
+            ;; quick tags
+            (evil-local-set-key 'normal "l" (elfeed-tag-selection-as 'readlater))
+            (evil-local-set-key 'normal "d" (elfeed-tag-selection-as 'junk))
+            (evil-local-set-key 'normal "B" #'elfeed-search-eww-open)
+            ;; keep the headline in the same position when hitting r
+            (evil-local-set-key 'normal "r"
+                                (lambda () (interactive)
+                                  (elfeed-search-untag-all-unread)
+                                  (evil-scroll-line-down 1)))
+            (evil-local-set-key 'normal "tR" #'elfeed-search-tag-all-unread))
+          90)
 
 (use-package elfeed-org
   :demand t

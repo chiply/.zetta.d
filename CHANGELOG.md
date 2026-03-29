@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/chiply/.zetta.d/compare/v0.1.6...v0.1.7) (2026-03-29)
+
+
+### Bug Fixes
+
+* bulk changes ([c0abb08](https://github.com/chiply/.zetta.d/commit/c0abb08f6ba57d6b7591b2c01810158cb30aab98))
+
 ## [0.1.6](https://github.com/chiply/.zetta.d/compare/v0.1.5...v0.1.6) (2026-03-28)
 
 

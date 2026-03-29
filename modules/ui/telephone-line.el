@@ -108,6 +108,15 @@
         (all-the-icons-vscode-codicons "layout-sidebar-left") ;; NOTE requires svg branch
       ""))
 
+  (telephone-line-defsegment zt-doc-position ()
+    (cond
+     ((eq major-mode 'pdf-view-mode)
+      (format " %d/%d " (pdf-view-current-page) (pdf-cache-number-of-pages)))
+     ((eq major-mode 'reader-mode)
+      (let ((page (reader-current-doc-pagenumber)))
+        (when page (format " p%d " (1+ page)))))
+     (t nil)))
+
   (setq telephone-line-primary-left-separator 'telephone-line-nil
         telephone-line-primary-right-separator 'telephone-line-nil
         telephone-line-secondary-left-separator 'telephone-line-nil
@@ -147,7 +156,7 @@
         '(
           (nil . (telephone-line-evil-tag-segment telephone-line-meow-tag-segment))
           (foo . (zt-ace-1))
-          (nil . (zt-icon-file-or-buffer zt-icon-copilot zt-icon-lsp zt-popper-popup zt-vc-segment-repo-icon))
+          (nil . (zt-icon-file-or-buffer zt-doc-position zt-icon-copilot zt-icon-lsp zt-popper-popup zt-vc-segment-repo-icon))
           (foo . (zt-indicators-segment))
           (nil . (zt-iedit-segment))
           (foo . (zt-anzu-segment))

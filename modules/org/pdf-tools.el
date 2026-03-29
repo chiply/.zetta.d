@@ -19,6 +19,13 @@
   (pdf-loader-install :no-query)
   :config
   (add-hook 'pdf-view-mode-hook 'pdf-view-fit-height-to-window)
+  (add-hook 'pdf-view-mode-hook (lambda ()
+                                  (display-fill-column-indicator-mode -1)
+                                  (display-line-numbers-mode -1)))
+  ;; Sharp rendering on retina displays
+  (setq pdf-view-use-scaling t)
+  ;; Midnight mode colors for dark reading (toggle with M-x pdf-view-midnight-minor-mode)
+  (setq pdf-view-midnight-colors '("#FFFFFF" . "#1a1a1a"))
 
   :general
   (

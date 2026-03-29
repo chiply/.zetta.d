@@ -202,6 +202,12 @@
   :hook (prog-mode . copilot-mode)
   :bind (:map copilot-completion-map
               ("C-<return>" . copilot-accept-completion)
-              ))
+              ("C-f" . copilot-accept-completion-by-word)
+              ("C-n" . copilot-next-completion)
+              ("C-p" . copilot-previous-completion)
+              )
+  :config
+  (add-hook 'prog-mode-hook 'copilot-mode)
+  )
 
 ;;; ai.el ends here

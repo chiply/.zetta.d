@@ -313,10 +313,17 @@ Uses first letter, or first two letters if conflicts exist."
               templates)))
     (nreverse templates)))
 
+(defvar zetta-extra-agenda-files '()
+  "Additional files to add to `org-agenda-files'.
+Set this in ~/.private.el before modules load.")
+
 (defun zetta-logseq-update-agenda-files ()
-  "Add all (todo) files to org-agenda-files."
+  "Add all (todo) files and `zetta-extra-agenda-files' to org-agenda-files."
   (let ((todo-files (zetta-logseq-todo-files)))
     (dolist (file todo-files)
+      (add-to-list 'org-agenda-files file t)))
+  (dolist (file zetta-extra-agenda-files)
+    (when (file-exists-p file)
       (add-to-list 'org-agenda-files file t))))
 
 ;;; org-capture configuration (deferred until org loads)

@@ -69,9 +69,9 @@
   (
    :keymaps 'corfu-map
    "M-F" 'corfu-expand
-   "M-f" 'corfu-complete
+   ;;"M-f" 'corfu-complete
    "C-'" 'corfu-quick-complete
-   "RET" nil
+   "RET" 'corfu-complete
    ;; seems counterintuitive, based on the function names, but I like
    ;; this behavior
    "C-S-j" 'corfu-popupinfo-scroll-up
@@ -81,4 +81,6 @@
   :after corfu
   :config
   (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
+
+
 ;;; corfu.el ends here

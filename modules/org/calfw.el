@@ -29,9 +29,11 @@
       (kbd "RET") 'calfw-org-onclick
       "q" 'bury-buffer)))
 
+(autoload 'calfw-org-open-calendar "calfw-org" "Open calfw calendar with org agenda." t)
+
 (use-package calfw-org
   :ensure t
   :after calfw
-  :commands (calfw-org-open-calendar))
+  :demand t)
 
 ;;; calfw.el ends here

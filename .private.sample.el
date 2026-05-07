@@ -20,6 +20,9 @@
 (setq mastodon-instance-url "https://mastodon.social"
       mastodon-active-user "YOUR_MASTODON_HANDLE")
 
+;; Signal (signel) — your registered Signal phone number, E.164 format
+(setq signel-account "+15551234567")
+
 ;; Spotify (spot4e)
 (setq spot4e-client-id "YOUR_SPOTIFY_CLIENT_ID")
 (setq spot4e-client-secret "YOUR_SPOTIFY_CLIENT_SECRET")

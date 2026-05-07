@@ -3,7 +3,8 @@
 (use-package signel
   :commands (signel-start signel-dashboard signel-chat)
   :config
-  (setq signel-account "+19736538391")
+  ;; Set `signel-account' to your Signal phone number (E.164, e.g. "+15551234567")
+  ;; in ~/.private.el rather than here.
 
   ;; macOS notifications (D-Bus not available)
   (defun signel--macos-notify (title body)

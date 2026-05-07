@@ -52,17 +52,11 @@ Parses source/op-secrets.env.tpl and caches resolved KEY=VALUE pairs."
 (require 'auth-source)
 (require 'cl-lib)
 
-(defvar zetta-op-auth-source-entries
-  '((:host "mastodon.social"  :user "REDACTED"        :key "MASTODON_PASSWORD")
-    (:host "debian_droplet"   :user "root"    :port "ssh"    :key "DEBIAN_DROPLET_PASSWORD")
-    (:host "api.openai.com"   :user "apikey"                 :key "OPENAI_API_KEY")
-    (:host "api.anthropic.com" :user "apikey"                :key "ANTHROPIC_API_KEY")
-    (:host "api.anthropic.com" :user "personal"              :key "ANTHROPIC_API_KEY")
-    (:host "api.github.com"   :user "chiply^forge"           :key "GITHUB_FORGE_TOKEN")
-    (:host "irc.libera.chat"  :user "REDACTED"         :key "LIBERA_CHAT_PASSWORD")
-    (:host "app.slack.com"    :user "you@example.com"        :key "SLACK_TOKEN")
-    (:host "app.slack.com"    :user "you@example.com^cookie" :key "SLACK_COOKIE"))
-  "Mapping from auth-source queries to 1Password cache keys.")
+(defvar zetta-op-auth-source-entries nil
+  "Mapping from auth-source queries to 1Password cache keys.
+Set this in ~/.private.el with entries of the form:
+  (:host HOST :user USER [:port PORT] :key OP-KEY)
+See .private.sample.el for an example.")
 
 (cl-defun zetta-op-auth-source-search (&rest spec
                                        &key backend type host user port

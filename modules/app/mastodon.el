@@ -3,7 +3,6 @@
 (use-package mastodon
   ;;:ensure (mastodon :host codeberg :repo "martianh/mastodon.el")
   :config
-    (setq mastodon-instance-url "https://mastodon.social"
-          mastodon-active-user "REDACTED")
+  ;; Set `mastodon-instance-url' and `mastodon-active-user' in ~/.private.el
   )
 ;;; mastodon.el ends here

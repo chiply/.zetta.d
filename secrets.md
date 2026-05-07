@@ -101,13 +101,13 @@ so no `~/.authinfo` file is needed.
 
 | Host | User | Cache Key | Used By |
 |---|---|---|---|
-| `mastodon.social` | `REDACTED` | `MASTODON_PASSWORD` | mastodon.el |
+| `mastodon.social` | `your-mastodon-handle` | `MASTODON_PASSWORD` | mastodon.el |
 | `debian_droplet` | `root` | `DEBIAN_DROPLET_PASSWORD` | ssh/tramp |
 | `api.openai.com` | `apikey` | `OPENAI_API_KEY` | gptel |
 | `api.anthropic.com` | `apikey` | `ANTHROPIC_API_KEY` | gptel |
 | `api.anthropic.com` | `personal` | `ANTHROPIC_API_KEY` | gptel |
-| `api.github.com` | `chiply^forge` | `GITHUB_FORGE_TOKEN` | forge |
-| `irc.libera.chat` | `REDACTED` | `LIBERA_CHAT_PASSWORD` | erc |
+| `api.github.com` | `your-github-user^forge` | `GITHUB_FORGE_TOKEN` | forge |
+| `irc.libera.chat` | `your-irc-nick` | `LIBERA_CHAT_PASSWORD` | erc |
 | `app.slack.com` | `you@example.com` | `SLACK_TOKEN` | emacs-slack |
 | `app.slack.com` | `you@example.com^cookie` | `SLACK_COOKIE` | emacs-slack |
 
@@ -117,9 +117,8 @@ These are called by external programs (not Emacs) using `PassCmd` or similar:
 
 | 1Password Item | Used By | Config File |
 |---|---|---|
-| `Dev/Gmail-misterchiply/app-password` | mbsync (IMAP) | `~/.mbsyncrc` |
-| `Dev/Gmail-REDACTED/app-password` | mbsync (IMAP) | `~/.mbsyncrc` |
-| `Dev/Gmail-REDACTED/app-password` | mbsync (IMAP) | `~/.mbsyncrc` |
+| `Dev/Gmail-personal/app-password` | mbsync (IMAP) | `~/.mbsyncrc` |
+| `Dev/Gmail-work/app-password` | mbsync (IMAP) | `~/.mbsyncrc` |
 
 These use `op read 'op://Dev/Item/field'` directly in the config (not the
 Emacs cache), since mbsync runs outside Emacs. The service account token in the

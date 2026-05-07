@@ -102,12 +102,13 @@ cmd_install() {
 
     _ok "Package installation complete"
 
-    _info "Byte-compiling modules..."
-    find "$ZETTA_DIR/modules" -name '*.elc' -delete
+    _info "Byte-compiling modules and bootstrap..."
+    find "$ZETTA_DIR/modules" "$ZETTA_DIR/source" -name '*.elc' -delete
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
         -l "$ZETTA_DIR/init.el" \
         --eval "(elpaca-wait)" \
         --eval "(byte-recompile-directory \"$ZETTA_DIR/modules\" 0)" \
+        --eval "(byte-recompile-directory \"$ZETTA_DIR/source/bootstrap\" 0)" \
         2>&1 | while IFS= read -r line; do
             echo "  $line"
         done
@@ -146,12 +147,13 @@ cmd_sync() {
             echo "  $line"
         done
 
-    _info "Byte-compiling modules..."
-    find "$ZETTA_DIR/modules" -name '*.elc' -delete
+    _info "Byte-compiling modules and bootstrap..."
+    find "$ZETTA_DIR/modules" "$ZETTA_DIR/source" -name '*.elc' -delete
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
         -l "$ZETTA_DIR/init.el" \
         --eval "(elpaca-wait)" \
         --eval "(byte-recompile-directory \"$ZETTA_DIR/modules\" 0)" \
+        --eval "(byte-recompile-directory \"$ZETTA_DIR/source/bootstrap\" 0)" \
         2>&1 | while IFS= read -r line; do
             echo "  $line"
         done

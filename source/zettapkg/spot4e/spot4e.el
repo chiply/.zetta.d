@@ -1,8 +1,8 @@
 ;;; spot4e.el --- Control Spotify playback with Helm.
 ;; Copyright 2018 Charlie Baker
 ;;
-;; Author: Charlie Baker <mister.chiply@gmail.com>
-;; Maintainer: Charlie Baker <mister.chiply@gmail.com>
+;; Author: Charlie Baker
+;; Maintainer: Charlie Baker
 ;; URL: https://github.com/chiply/spot4e
 ;; Version: 0.0.1
 ;; Package-Requires: helm, json, url

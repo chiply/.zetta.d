@@ -1,6 +1,7 @@
 ;;; bootstrap.el --- Configure bootstrap loader -*- lexical-binding: t; -*-
 
 (require 'bootstrap-elpaca)
+(require 'bootstrap-compile-angel)
 (require 'bootstrap-use-package-keywords)
 (require 'bootstrap-utils)
 (require 'bootstrap-modules)

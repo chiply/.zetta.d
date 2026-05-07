@@ -24,7 +24,6 @@
   (interactive)
   (let ((cmd (completing-read "Please enter a command: " '(
                                             "docker run -p 5672:5672 rabbitmq:3.8.2"
-                                            "source ~/envs/dagit_tutorial/bin/activate && export DAGSTER_HOME=/Users/REDACTED && dagster-celery worker start -A dagster_celery.app"
                                             )))
         (name (completing-read "Name the output buffer: " '()))
         )
@@ -40,9 +39,6 @@
    variables"
   (let ((program-name (if (or arg (not (boundp 'convention-program-target)))
                           (completing-read "Please select a program: " '(
-                                                                             "source ~/envs/psauto/bin/activate && python"
-                                                                             "source ~/envs/dagit_tutorial/bin/activate && export DAGSTER_HOME=/Users/REDACTED && dagit -f"
-                                                                             "bash -c 'source ~/envs/psauto/bin/activate && python'"
                                                                              "python"
                                                                              "python3"
                                                                              "ipython"

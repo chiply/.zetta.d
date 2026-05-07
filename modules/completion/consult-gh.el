@@ -50,18 +50,18 @@
    :preview-key "C-="
    )
 
-  ;; redefined as this was breaking
-  ;; LEFTOFF - split style is the issues?
-  (defun consult-gh--get-split-style-character (&optional style)
-    "Get the character for consult async split STYLE.
-
-STYLE defaults to `consult-async-split-style'."
-    (let ((style (or style consult-async-split-style 'none)))
-      (cond
-       ((equal style 'none) "")
-       ((equal style 'perl) "#")
-       ((equal style 'comma) ",")
-       ((equal style 'semicolon) ","))))
+  ;; Fix upstream bug: consult-gh--get-split-style-character calls
+  ;; (char-to-string nil) when the split style has no :initial key
+  ;; (e.g. comma style only has :separator).  Use :override advice
+  ;; rather than `defun' so the fix survives async native compilation
+  ;; — the .eln loads after :config runs and would otherwise restore
+  ;; the broken original via defalias (advice persists across that).
+  (advice-add 'consult-gh--get-split-style-character :override
+              (lambda (&optional style)
+                (let* ((style (or style consult-async-split-style 'none))
+                       (char (or (plist-get (alist-get style consult-async-split-styles-alist) :initial)
+                                 (plist-get (alist-get style consult-async-split-styles-alist) :separator))))
+                  (if char (char-to-string char) ""))))
   )
 
 (use-package consult-gh-embark

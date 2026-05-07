@@ -29,9 +29,6 @@
      ("fastmcp_demo" . (:url "http://127.0.0.1:8000/mcp"))
      ("fastmcp_docs" . (:url "https://gofastmcp.com/mcp"))
      ("playwright" . (:command "npx" :args ("@playwright/mcp@latest")))
-     ("Demo" . (:command "poetry" :args ("run" "fastmcp"
-                                                   "run" "/Users/REDACTED/.files/mcp_servers/servers/src/servers/server1.py:mcp"
-                                                   )))
      ("memory" . (
                   :command "npx"
                   :args ("-y"

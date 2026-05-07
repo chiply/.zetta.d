@@ -21,7 +21,7 @@
 (defun consult-selection-history-prompt (&optional history index bol)
   (interactive)
   (cl-letf (((symbol-function 'consult--current-history)
-             '(lambda () (list consult-omni--selection-history))))
+             (lambda () (list consult-omni--selection-history))))
     (consult-history)))
 
 (general-define-key :keymaps 'minibuffer-local-map "C-r" 'consult-history)

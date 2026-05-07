@@ -2,10 +2,23 @@
 ;;
 ;; Copy this file to ~/.private.el and fill in your credentials.
 ;; ~/.private.el is loaded early in init.el and is NOT tracked by git.
+;;
+;; Two ways to supply secrets:
+;;
+;;   (a) Manual — paste literal values below (the YOUR_X placeholders).
+;;
+;;   (b) 1Password CLI — populate `op-secrets.env.tpl` with item refs,
+;;       then call `(zetta-op-read "KEY")` here.  See `secrets.md` for
+;;       the full setup.  The `zetta-op-auth-source-entries` block
+;;       below is the auth-source bridge for that mode.
 
 ;; IRC (erc)
 (setq erc-nick "YOUR_IRC_NICK")
 (setq erc-user-full-name "Your Name")
+
+;; Mastodon
+(setq mastodon-instance-url "https://mastodon.social"
+      mastodon-active-user "YOUR_MASTODON_HANDLE")
 
 ;; Spotify (spot4e)
 (setq spot4e-client-id "YOUR_SPOTIFY_CLIENT_ID")
@@ -37,3 +50,13 @@
 
 ;; GitHub notifications
 (setq github-notifier-token "YOUR_GITHUB_TOKEN")
+
+;; ──────────────────────────────────────────────────────────────────
+;; 1Password auth-source entries (only needed if using mode (b) above)
+;; Maps (host, user, port) tuples to 1Password cache keys.
+;; Used by forge, gptel, erc, mastodon, etc. via auth-source-search.
+;; ──────────────────────────────────────────────────────────────────
+;; (setq zetta-op-auth-source-entries
+;;       '((:host "api.openai.com"    :user "apikey"           :key "OPENAI_API_KEY")
+;;         (:host "api.anthropic.com" :user "apikey"           :key "ANTHROPIC_API_KEY")
+;;         (:host "api.github.com"    :user "your-user^forge"  :key "GITHUB_FORGE_TOKEN")))

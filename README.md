@@ -20,7 +20,7 @@ A batteries-included Emacs distribution built on [Elpaca](https://github.com/pro
 ## Installation
 
 ```bash
-git clone https://github.com/YOU/zetta-emacs ~/.zetta.d
+git clone https://github.com/chiply/.zetta.d ~/.zetta.d
 cd ~/.zetta.d
 bin/zetta install
 ```
@@ -82,17 +82,17 @@ bin/zetta <command>
 
 ## Modules
 
-| Category | Files | Description |
-|----------|-------|-------------|
-| `:core` | 24 | Emacs defaults, buffers, projects, persistence, keybindings |
-| `:completion` | 20 | Vertico, consult, orderless, corfu, embark, marginalia |
-| `:ui` | 54 | Themes, modeline, icons, treemacs, window management, visual aids |
-| `:editor` | 29 | Evil + extensions, smartparens, snippets, undo-tree, avy, ace-window |
-| `:lang` | 25 | Python, TypeScript, YAML, Terraform, SQL, web-mode, tree-sitter |
-| `:tools` | 50 | Magit, LSP, Docker, flycheck, dired, compile, git utilities |
-| `:app` | 30 | Elfeed, bookmarks, Spotify, Mastodon, ERC, EWW, word lookup |
-| `:org` | 11 | Org-mode, org-ref, citar, pdf-tools, org-capture, org-remark |
-| `:term` | 4 | Vterm, shell, foreman |
+| Category      | Files | Description                                                          |
+|---------------|-------|----------------------------------------------------------------------|
+| `:core`       | 24    | Emacs defaults, buffers, projects, persistence, keybindings          |
+| `:completion` | 20    | Vertico, consult, orderless, corfu, embark, marginalia               |
+| `:ui`         | 54    | Themes, modeline, icons, treemacs, window management, visual aids    |
+| `:editor`     | 29    | Evil + extensions, smartparens, snippets, undo-tree, avy, ace-window |
+| `:lang`       | 25    | Python, TypeScript, YAML, Terraform, SQL, web-mode, tree-sitter      |
+| `:tools`      | 50    | Magit, LSP, Docker, flycheck, dired, compile, git utilities          |
+| `:app`        | 30    | Elfeed, bookmarks, Spotify, Mastodon, ERC, EWW, word lookup          |
+| `:org`        | 11    | Org-mode, org-ref, citar, pdf-tools, org-capture, org-remark         |
+| `:term`       | 4     | Vterm, shell, foreman                                                |
 
 See [docs/modules.md](docs/modules.md) for detailed descriptions.
 
@@ -100,18 +100,18 @@ See [docs/modules.md](docs/modules.md) for detailed descriptions.
 
 The leader key is `,` (comma) in non-insert states, `C-,` in insert state.
 
-| Key | Menu | Purpose |
-|-----|------|---------|
+| Key   | Menu            | Purpose                                  |
+|-------|-----------------|------------------------------------------|
 | `, g` | Version control | Magit, git-link, git-timemachine, blamer |
-| `, p` | Project | Project-scoped operations |
-| `, w` | Window | Window management, ace-window |
-| `, l` | Lookup | Search, devdocs, consult |
-| `, o` | Org | Org-mode commands, capture, agenda |
-| `, r` | Run | Compile, run, shell commands |
-| `, t` | Theme | Theme switching |
-| `, h` | Help | Help, documentation |
-| `, d` | Smerge | Merge conflict resolution |
-| `, i` | iedit | Multi-occurrence editing |
+| `, p` | Project         | Project-scoped operations                |
+| `, w` | Window          | Window management, ace-window            |
+| `, l` | Lookup          | Search, devdocs, consult                 |
+| `, o` | Org             | Org-mode commands, capture, agenda       |
+| `, r` | Run             | Compile, run, shell commands             |
+| `, t` | Theme           | Theme switching                          |
+| `, h` | Help            | Help, documentation                      |
+| `, d` | Smerge          | Merge conflict resolution                |
+| `, i` | iedit           | Multi-occurrence editing                 |
 
 See [docs/keybindings.md](docs/keybindings.md) for the full reference.
 

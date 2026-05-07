@@ -105,15 +105,20 @@
     (when (equal major-mode 'elfeed-show-mode)
       (org-store-link nil)))
 
-  ;; NOTE to appease logseq
+  ;; Sanitize filenames to match logseq's :triple-lowbar naming format.
+  ;; Logseq uses ___ for / and percent-encoding for other unsafe chars.
   (defun my-org-remark-sanitize-notes-file-name (filename)
     (string-replace
-     "?" "%3F"
+     "/" "___"
      (string-replace
-      ":" "--"
+      ":" "%3A"
       (string-replace
-       "/" "--"
-       filename))))
+       "?" "%3F"
+       (string-replace
+        "|" "%7C"
+        (string-replace
+         "\\" "%5C"
+         filename))))))
 
   (defun my-org-remark-notes-file-name-url (url)
     (my-org-remark-sanitize-notes-file-name

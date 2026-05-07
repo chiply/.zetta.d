@@ -116,7 +116,17 @@ STYLE defaults to `consult-async-split-style'."
   (with-eval-after-load 'gptel
     (unless (member 'consult-omni-gptel consult-omni-sources-modules-to-load)
       (add-to-list 'consult-omni-sources-modules-to-load 'consult-omni-gptel t)
-      (require 'consult-omni-gptel nil t)))
+      (require 'consult-omni-gptel nil t))
+    ;; consult-omni-gptel's defcustom default `(or gptel-backend
+    ;; gptel--openai)' is evaluated when consult-omni-gptel.el loads,
+    ;; which can happen before user gptel config sets `gptel-backend'.
+    ;; Re-sync after gptel loads so calls to (gptel-backend-name
+    ;; consult-omni-gptel-backend) don't hit `wrong-type-argument
+    ;; gptel-backend nil'.
+    (when (and (boundp 'gptel-backend) gptel-backend)
+      (setq consult-omni-gptel-backend gptel-backend))
+    (when (and (boundp 'gptel-model) gptel-model)
+      (setq consult-omni-gptel-model (format "%s" gptel-model))))
 
   ;; embark integration
   (require 'consult-omni-embark)

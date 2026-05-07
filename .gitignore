@@ -2,10 +2,12 @@
 eaf
 tree-sitter
 modules/**/*.elc
+source/**/*.elc
 
 # Package manager caches
 elpaca/builds/
 elpaca/repos/
+elpaca/sources/
 elpaca/cache/
 elpa/
 source/straight/build/
@@ -42,6 +44,10 @@ dtache.db
 eww-bookmarks
 .emacs.desktop*
 .sx
+places
+nov-places
+*-places
+signel-history/
 
 # Docs and snippets
 devdocs/*

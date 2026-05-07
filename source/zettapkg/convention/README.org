@@ -441,5 +441,4 @@ I also hope to build more features into Convention.  To name a few:
   all the rage these days!)
 
 I am seeking collaborators on this project!  Please feel free to
-submit issues / fork / submit pull requests / reach out to me via
-email (mister.chiply@gmail.com)
+submit issues / fork / submit pull requests.

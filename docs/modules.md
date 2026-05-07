@@ -2,7 +2,7 @@
 
 Each module is a directory under `modules/` containing one `.el` file per package configuration. Enable modules in `~/.zetta.el` via `zetta-modules!`.
 
-## :core (24 files)
+## :core
 
 Essential Emacs settings and built-in enhancements. Almost always required.
 
@@ -33,7 +33,7 @@ Essential Emacs settings and built-in enhancements. Almost always required.
 | elisp-mode.el | — | Emacs Lisp enhancements |
 | prose.el | — | Prose writing settings |
 
-## :completion (20 files)
+## :completion
 
 Minibuffer completion framework. The default stack is Vertico + Consult + Orderless + Corfu + Embark.
 
@@ -60,7 +60,7 @@ Minibuffer completion framework. The default stack is Vertico + Consult + Orderl
 | consult-ls-git.el | consult-ls-git | Git file search via consult |
 | corfu.el | corfu | In-buffer completion popup |
 
-## :ui (54 files)
+## :ui
 
 Visual appearance, themes, modeline, and display management.
 
@@ -73,7 +73,7 @@ Key packages:
 - **Tree view**: treemacs (file explorer sidebar)
 - **Fun**: nyan-mode (progress bar cat), parrot (animated parrot)
 
-## :editor (29 files)
+## :editor
 
 Editing enhancements and modal editing.
 
@@ -86,7 +86,7 @@ Key packages:
 - **Snippets**: yasnippet via snippets.el
 - **Text**: text-manipulation, move-text, hungry-delete, markdown-toc
 
-## :lang (25 files)
+## :lang
 
 Language-specific configurations.
 
@@ -111,7 +111,7 @@ Language-specific configurations.
 | biome.el | — | Biome formatter/linter |
 | ein.el | Jupyter | Jupyter notebook integration |
 
-## :tools (50 files)
+## :tools
 
 Development tools and integrations.
 
@@ -128,7 +128,7 @@ Key packages:
 - **Cloud**: kubernetes-el, kubel, gha (GitHub Actions)
 - **Other**: jira, pr-review, detached, tokei, spotlight, ai, alert
 
-## :app (30 files)
+## :app
 
 Applications and utilities.
 
@@ -142,7 +142,7 @@ Key packages:
 - **Productivity**: whisper (speech-to-text), say (text-to-speech)
 - **Fun**: flappy-fish, speed-type, spray (speed reading), key-quiz
 
-## :org (11 files)
+## :org
 
 Org-mode ecosystem.
 
@@ -160,7 +160,7 @@ Org-mode ecosystem.
 | org-tree-slide.el | org-tree-slide | Presentations from org |
 | org-transclusion.el | org-transclusion | Content transclusion |
 
-## :term (4 files)
+## :term
 
 Terminal and process management.
 

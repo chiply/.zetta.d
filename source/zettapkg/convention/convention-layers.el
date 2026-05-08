@@ -27,7 +27,7 @@
                ))
 
     )
-  "An alist contianing layers, grouped and labeled by purpose (ie basse, sql-req, req)
+  "An alist containing layers, grouped and labeled by purpose (ie basse, sql-req, req)
        for the Dockerfile")
 
 (defun convention-query-layers (key-tuple)

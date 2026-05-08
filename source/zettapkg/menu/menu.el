@@ -188,7 +188,7 @@ before invoking one of the helper commands to get a better description
 of the keymap.  Any value here acts as an indicator in the echo-line
 that a transient-map is active, however, it cannot be used as a fully
 robust alternative to menu-indicator because sometimes side-effects
-occuring while using the keymap can cause the echo-line to be flushed or
+occurring while using the keymap can cause the echo-line to be flushed or
 occupied by other text.  That being said, nice behavior is that pressing
 a key in the transient map will force the message to appear in the echo
 line (unless that command bound to that key flushes or occupies the

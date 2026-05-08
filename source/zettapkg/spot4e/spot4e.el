@@ -61,7 +61,7 @@
 
 ;; there are synchronicity issues when displaying currently-playing
 ;; after doing player action (i.e. next, previous), even when using
-;; spot4e-message-currently-playing as a callback funtion, so for now
+;; spot4e-message-currently-playing as a callback function, so for now
 ;; force sleep time between changing track and calling
 ;; spot4e-message-currently-playing to resolve this issue.
 (defvar spot4e-wait-time 1.0)
@@ -252,9 +252,9 @@ to the track, artist, and context, respctively"
                     helm-actions)
   "Create helm buffer given args.
 HELM-SOURCE-NAME will be the name of the helm-source.  URL is the
-url to the spotify api enpoint DYNAMIC-HELM specifies whether the
+url to the spotify api endpoint DYNAMIC-HELM specifies whether the
 api request should be updated with helm-pattern Q-PARAMS are the
-query paremters to be appended to the URL ALIST-ADDRESS will be
+query parameters to be appended to the URL ALIST-ADDRESS will be
 the chain address of the candidate residing within the alist
 response TRACK-ADDRESS is the chain address of the track within
 the candidate alist ARTIST-ADDRESS is the chain address of the

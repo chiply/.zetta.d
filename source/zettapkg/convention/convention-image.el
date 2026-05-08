@@ -107,7 +107,7 @@
 
 (defun convention-format-reqs-list (base-image-name-and-tag)
   "Returns a string representing the package list portion of the requirements scripts for a given LANG.
-   These requirements come from a user specified file containing newline seperated third-party package names"
+   These requirements come from a user specified file containing newline separated third-party package names"
   (let* ((default-req-lst (convention-query-install-info base-image-name-and-tag "default-req"))
          (default-req-str (concat (mapconcat 'identity
                                              default-req-lst "\n") "\n"))
@@ -144,7 +144,7 @@
 
 (defun convention-format-req-layer (base-image-name-and-tag)
   "Returns a string representing the requirements layer for a given IMAGE.
-   Of note, there can be null requirements, or a list of requirements decsribed by a user
+   Of note, there can be null requirements, or a list of requirements described by a user
    specified file of newline separated third-party package names"
   (if (convention-is-sql base-image-name-and-tag)
       (convention-format-layer-req-sql base-image-name-and-tag)

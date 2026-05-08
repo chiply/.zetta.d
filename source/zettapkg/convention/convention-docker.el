@@ -3,7 +3,7 @@
 (defvar convention-docker-command-search-image-names
   "docker search --format='{{.Name}}' ${search-term}"
   "A pre-formatted string representing a docker cli command that returns a list of images
-   mathcing a search term")
+   matching a search term")
 
 (defvar convention-docker-command-list-image-tags
   "${convention-dir}/dockertags.sh ${base-image-name}"
@@ -43,18 +43,18 @@
 
 (defvar convention-docker-command-detect-all-containers
  "docker ps -a | grep convention | awk '{print $1}'"
- "A string representing a command that returns a list of all contianers
+ "A string representing a command that returns a list of all containers
   (stopped or started) with convention in their name")
 
 (defvar convention-docker-command-detect-running-containers
   "docker ps | grep convention | awk '{print $1}'"
- "A string representing a command that returns a list of running contianers
+ "A string representing a command that returns a list of running containers
   (stopped or started) with convention in their name"
   )
 
 (defvar convention-docker-command-detect-stopped-containers
   "docker ps --filter \"status=exited\" | grep convention | awk '{print $1}'"
-  "A string representing a command that returns a list of stopped contianers
+  "A string representing a command that returns a list of stopped containers
   (stopped or started) with convention in their name" )
 
 (defvar convention-docker-command-list-all-containers

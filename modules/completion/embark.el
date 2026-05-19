@@ -133,7 +133,19 @@ targets."
    "s-j" 'outline-forward-same-level
    "s-k" 'outline-backward-same-level
    )
-  )
+  :config
+  ;; embark loads before evil, so the :general block above misses evil's
+  ;; state maps (they're added to zetta-modal-states-non-insert only after
+  ;; evil loads). Re-bind explicitly so evil's own C-. → evil-repeat-pop
+  ;; doesn't shadow embark-act in normal/visual state.
+  (with-eval-after-load 'evil
+    (general-define-key
+     :keymaps '(evil-normal-state-map
+                evil-visual-state-map)
+     "C-."   'embark-act
+     "C-h B" 'embark-bindings
+     "C-;"   'embark-dwim
+     "C->"   'embark-act-all)))
 
 (defun zetta-embark-help-handler (km prefix)
   "Show embark bindings for KM via completing-read.

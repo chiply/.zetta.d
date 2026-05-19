@@ -23,6 +23,13 @@
   (define-key embark-general-map (kbd "!") 'symbol-overlay-put)
   (define-key embark-general-map (kbd "C-!") 'symbol-overlay-remove-all)
 
+  ;; Back-step chord for embark-act's cycle: `C-,' inside the prompter
+  ;; sets prefix-arg = -1, then `C-.' (the cycle key) rotates -1
+  ;; instead of +1. The keymap prompter recognises `negative-argument'
+  ;; explicitly (see `embark-keymap-prompter') and re-prompts after
+  ;; executing it, so the next keypress benefits from the prefix arg.
+  (define-key embark-general-map (kbd "C-,") 'negative-argument)
+
   (setq embark-help-key "C-h")
 
   (defun embark-which-key-indicator ()

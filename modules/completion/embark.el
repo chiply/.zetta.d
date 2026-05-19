@@ -143,22 +143,27 @@ include both spellings of any construct you want to target."
     :group 'embark)
 
   (defun zetta-embark-target-treesit-node-at-point ()
-    "Embark target finder: smallest interesting tree-sitter node at point.
-Walks up from `treesit-node-at' until the node type is a member of
-`zetta-embark-treesit-types'. Returns nil if the buffer has no
-treesit parser or no matching ancestor exists."
+    "Embark target finder: every recognised tree-sitter ancestor at point.
+Walks up from `treesit-node-at' and returns one bounded target per
+ancestor whose type is in `zetta-embark-treesit-types', innermost
+first. Returning all ancestors (not just the innermost) lets
+`embark-act' cycle through structural scopes the way
+`er/expand-region' does, with the size sort on `embark--targets'
+arranging them smallest -> largest."
     (when (and (fboundp 'treesit-parser-list) (treesit-parser-list))
-      (let ((node (treesit-node-at (point))))
-        (while (and node
-                    (not (member (treesit-node-type node)
-                                 zetta-embark-treesit-types)))
+      (let ((node (treesit-node-at (point)))
+            targets)
+        (while node
+          (when (member (treesit-node-type node)
+                        zetta-embark-treesit-types)
+            (let ((start (treesit-node-start node))
+                  (end (treesit-node-end node)))
+              (push (cons (intern (concat "ts-" (treesit-node-type node)))
+                          (cons (buffer-substring-no-properties start end)
+                                (cons start end)))
+                    targets)))
           (setq node (treesit-node-parent node)))
-        (when node
-          (let ((start (treesit-node-start node))
-                (end (treesit-node-end node)))
-            (cons (intern (concat "ts-" (treesit-node-type node)))
-                  (cons (buffer-substring-no-properties start end)
-                        (cons start end))))))))
+        (nreverse targets))))
   (add-to-list 'embark-target-finders
                #'zetta-embark-target-treesit-node-at-point)
 
@@ -203,12 +208,10 @@ Cleared on buffer modification.")
     (setq zetta-embark-expand-history nil))
 
   (defun zetta-embark--bounded-targets-at-point ()
-    "Return list of (BEG . END) for every bounded target at point.
-Sources: all `embark-target-finders' return values that include
-bounds, plus every treesit ancestor whose node-type is in
-`zetta-embark-treesit-types' (Bridge C's finder only surfaces the
-innermost match -- this walk recovers the intermediate scopes so
-`zetta-embark-expand-region' can step through them)."
+    "Return list of (BEG . END) for every bounded target embark sees.
+Walks `embark-target-finders'. Bridge C now returns every recognised
+AST ancestor as a separate target, so structural scopes are already
+covered without an explicit treesit walk here."
     (let (bounds)
       (dolist (finder embark-target-finders)
         (let ((result (ignore-errors (funcall finder))))
@@ -223,15 +226,6 @@ innermost match -- this walk recovers the intermediate scopes so
                            (numberp (caddr tgt))
                            (numberp (cdddr tgt)))
                   (push (cons (caddr tgt) (cdddr tgt)) bounds)))))))
-      (when (and (fboundp 'treesit-parser-list) (treesit-parser-list))
-        (let ((node (treesit-node-at (point))))
-          (while node
-            (when (member (treesit-node-type node)
-                          zetta-embark-treesit-types)
-              (push (cons (treesit-node-start node)
-                          (treesit-node-end node))
-                    bounds))
-            (setq node (treesit-node-parent node)))))
       (cl-delete-duplicates bounds :test #'equal)))
 
   (defun zetta-embark-expand-region ()
@@ -294,27 +288,50 @@ default."
     :type 'boolean
     :group 'embark)
 
+  (defvar zetta-embark--sort-targets-reverse nil
+    "Dynamically bound: when non-nil, sort embark targets largest-first.
+Set by `zetta-embark-act-contract' to flip the cycle direction.")
+
   (defun zetta-embark--sort-targets-by-bounds (targets)
-    "Sort embark TARGETS list by bounds size, smallest first.
-Plists without `:bounds' keep their relative order at the end."
+    "Sort embark TARGETS list by bounds size.
+Smallest first by default (expand-region forward order). When
+`zetta-embark--sort-targets-reverse' is non-nil, largest first
+(contract order). Plists without `:bounds' keep their relative
+order at the end."
     (if (not zetta-embark-sort-targets-by-bounds)
         targets
-      (let ((bounded   (cl-remove-if-not
-                        (lambda (tgt) (plist-get tgt :bounds)) targets))
-            (unbounded (cl-remove-if
-                        (lambda (tgt) (plist-get tgt :bounds)) targets)))
-        (append
-         (sort bounded
-               (lambda (a b)
-                 (let* ((ba (plist-get a :bounds))
-                        (bb (plist-get b :bounds))
-                        (sa (- (cdr ba) (car ba)))
-                        (sb (- (cdr bb) (car bb))))
-                   (< sa sb))))
-         unbounded))))
+      (let* ((bounded   (cl-remove-if-not
+                         (lambda (tgt) (plist-get tgt :bounds)) targets))
+             (unbounded (cl-remove-if
+                         (lambda (tgt) (plist-get tgt :bounds)) targets))
+             (sorted (sort bounded
+                           (lambda (a b)
+                             (let* ((ba (plist-get a :bounds))
+                                    (bb (plist-get b :bounds))
+                                    (sa (- (cdr ba) (car ba)))
+                                    (sb (- (cdr bb) (car bb))))
+                               (< sa sb))))))
+        (append (if zetta-embark--sort-targets-reverse
+                    (reverse sorted)
+                  sorted)
+                unbounded))))
 
   (advice-add 'embark--targets :filter-return
               #'zetta-embark--sort-targets-by-bounds)
+
+  (defun zetta-embark-act-contract ()
+    "Like `embark-act' but cycle through targets largest -> smallest.
+Mirrors `er/contract-region' the way `embark-act' mirrors
+`er/expand-region': the default action is the outermost scope, and
+repeated `embark-cycle' walks inward. Use this when you want to act
+on an enclosing scope without cycling past it via `embark-act'.
+
+To step backward from within the standard `embark-act' prompter
+(forward order), prefix the cycle key with `C-u -1' -- the
+universal-argument family is already handled there."
+    (interactive)
+    (let ((zetta-embark--sort-targets-reverse t))
+      (call-interactively #'embark-act)))
 
   ;; project
   (defvar-keymap embark-project-map :parent embark-general-map)

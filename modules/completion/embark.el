@@ -182,6 +182,99 @@ treesit parser or no matching ancestor exists."
   (dolist (sym '(ts-call ts-call_expression))
     (setf (alist-get sym embark-keymap-alist) 'embark-ts-call-map))
 
+  ;; Bridge D: expand-region driven by embark target bounds.
+  ;; Same idea as `er/expand-region' but the "what units exist at
+  ;; point" question is answered by `embark-target-finders'. Grows
+  ;; uniformly over every Bridge A/B/C target and any other embark
+  ;; finder wired in. Tie-break favours the bounds whose start is
+  ;; closest to current start (minimises visible jump on cycle).
+  (defvar-local zetta-embark-expand-history nil
+    "Stack of (BEG . END) pairs for `zetta-embark-contract-region'.
+Cleared on buffer modification.")
+
+  (defun zetta-embark--clear-expand-history (&rest _)
+    (setq zetta-embark-expand-history nil))
+
+  (defun zetta-embark--bounded-targets-at-point ()
+    "Return list of (BEG . END) for every bounded target at point.
+Sources: all `embark-target-finders' return values that include
+bounds, plus every treesit ancestor whose node-type is in
+`zetta-embark-treesit-types' (Bridge C's finder only surfaces the
+innermost match -- this walk recovers the intermediate scopes so
+`zetta-embark-expand-region' can step through them)."
+    (let (bounds)
+      (dolist (finder embark-target-finders)
+        (let ((result (ignore-errors (funcall finder))))
+          (when result
+            (let ((targets (if (and (consp result) (symbolp (car result)))
+                               (list result)
+                             result)))
+              (dolist (tgt targets)
+                (when (and (consp tgt)
+                           (consp (cdr tgt))
+                           (consp (cddr tgt))
+                           (numberp (caddr tgt))
+                           (numberp (cdddr tgt)))
+                  (push (cons (caddr tgt) (cdddr tgt)) bounds)))))))
+      (when (and (fboundp 'treesit-parser-list) (treesit-parser-list))
+        (let ((node (treesit-node-at (point))))
+          (while node
+            (when (member (treesit-node-type node)
+                          zetta-embark-treesit-types)
+              (push (cons (treesit-node-start node)
+                          (treesit-node-end node))
+                    bounds))
+            (setq node (treesit-node-parent node)))))
+      (cl-delete-duplicates bounds :test #'equal)))
+
+  (defun zetta-embark-expand-region ()
+    "Expand the active region to the next-smallest embark target bounds
+that strictly contains the current region (or point if no region).
+Subsequent calls keep growing the selection; `zetta-embark-contract-region'
+walks back through the history."
+    (interactive)
+    (let* ((cur-beg (if (use-region-p) (region-beginning) (point)))
+           (cur-end (if (use-region-p) (region-end) (point)))
+           (cur-size (- cur-end cur-beg))
+           (candidates
+            (cl-remove-if-not
+             (lambda (b)
+               (and (<= (car b) cur-beg)
+                    (>= (cdr b) cur-end)
+                    (> (- (cdr b) (car b)) cur-size)))
+             (zetta-embark--bounded-targets-at-point))))
+      (cond
+       ((null candidates)
+        (message "zetta-embark-expand-region: no further expansion"))
+       (t
+        (let* ((sorted
+                (sort candidates
+                      (lambda (a b)
+                        (let ((sa (- (cdr a) (car a)))
+                              (sb (- (cdr b) (car b))))
+                          (if (= sa sb)
+                              (< (- cur-beg (car a))
+                                 (- cur-beg (car b)))
+                            (< sa sb))))))
+               (next (car sorted)))
+          (when (null zetta-embark-expand-history)
+            (add-hook 'after-change-functions
+                      #'zetta-embark--clear-expand-history nil t))
+          (push (cons cur-beg cur-end) zetta-embark-expand-history)
+          (push-mark (car next) t t)
+          (goto-char (cdr next)))))))
+
+  (defun zetta-embark-contract-region ()
+    "Undo the last `zetta-embark-expand-region' step."
+    (interactive)
+    (if (null zetta-embark-expand-history)
+        (message "zetta-embark-contract-region: no history")
+      (let ((prev (pop zetta-embark-expand-history)))
+        (if (= (car prev) (cdr prev))
+            (progn (deactivate-mark) (goto-char (car prev)))
+          (push-mark (car prev) t t)
+          (goto-char (cdr prev))))))
+
   ;; project
   (defvar-keymap embark-project-map :parent embark-general-map)
   (add-to-list 'embark-keymap-alist '(project embark-project-map))

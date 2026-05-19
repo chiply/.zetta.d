@@ -107,6 +107,78 @@ TYPE is the embark target type reported; defaults to THING."
     "m" #'mark-defun)
   (setf (alist-get 'defun embark-keymap-alist) 'embark-defun-map)
 
+  ;; Bridge C: tree-sitter AST node -> embark target.
+  ;; Walks up from `treesit-node-at' until the node type is in
+  ;; `zetta-embark-treesit-types', then reports it as embark type
+  ;; `ts-<node-type>'. Action menus respond to the *exact* AST node
+  ;; under point (string literal, call expression, argument list, ...)
+  ;; rather than thing-at-point's coarser categories.
+  (defcustom zetta-embark-treesit-types
+    '("function_definition" "function_declaration"
+      "class_definition" "class_declaration"
+      "method_definition" "method_declaration"
+      "call" "call_expression"
+      "string" "string_literal"
+      "comment"
+      "decorator"
+      "argument_list" "parameter_list" "parameters"
+      "if_statement" "for_statement" "while_statement"
+      "import_statement" "import_from_statement")
+    "Tree-sitter node-type names Bridge C surfaces to embark.
+Each entry becomes a target of type `ts-<NAME>'; bind actions in
+`embark-keymap-alist' under that symbol. Node-type names vary by
+language (e.g. python `call' vs javascript `call_expression');
+include both spellings of any construct you want to target."
+    :type '(repeat string)
+    :group 'embark)
+
+  (defun zetta-embark-target-treesit-node-at-point ()
+    "Embark target finder: smallest interesting tree-sitter node at point.
+Walks up from `treesit-node-at' until the node type is a member of
+`zetta-embark-treesit-types'. Returns nil if the buffer has no
+treesit parser or no matching ancestor exists."
+    (when (and (fboundp 'treesit-parser-list) (treesit-parser-list))
+      (let ((node (treesit-node-at (point))))
+        (while (and node
+                    (not (member (treesit-node-type node)
+                                 zetta-embark-treesit-types)))
+          (setq node (treesit-node-parent node)))
+        (when node
+          (let ((start (treesit-node-start node))
+                (end (treesit-node-end node)))
+            (cons (intern (concat "ts-" (treesit-node-type node)))
+                  (cons (buffer-substring-no-properties start end)
+                        (cons start end))))))))
+  (add-to-list 'embark-target-finders
+               #'zetta-embark-target-treesit-node-at-point)
+
+  ;; Alias function/method/class AST types to `embark-defun-map' so the
+  ;; existing eval/narrow/mark actions apply -- those commands are
+  ;; point-based and pick up the right region via Bridge A's bounds.
+  (dolist (sym '(ts-function_definition ts-function_declaration
+                 ts-method_definition ts-method_declaration
+                 ts-class_definition ts-class_declaration))
+    (setf (alist-get sym embark-keymap-alist) 'embark-defun-map))
+
+  ;; String literal: treat the node text as URL / path / kill-ring entry.
+  (defvar-keymap embark-ts-string-map
+    :parent embark-general-map
+    "u" #'browse-url
+    "f" #'find-file
+    "w" #'kill-new)
+  (dolist (sym '(ts-string ts-string_literal))
+    (setf (alist-get sym embark-keymap-alist) 'embark-ts-string-map))
+
+  ;; Call expression: jump-to-definition uses point (the call site),
+  ;; so xref / lsp / eglot variants all just work.
+  (defvar-keymap embark-ts-call-map
+    :parent embark-general-map
+    "d" #'xref-find-definitions
+    "r" #'xref-find-references
+    "w" #'kill-new)
+  (dolist (sym '(ts-call ts-call_expression))
+    (setf (alist-get sym embark-keymap-alist) 'embark-ts-call-map))
+
   ;; project
   (defvar-keymap embark-project-map :parent embark-general-map)
   (add-to-list 'embark-keymap-alist '(project embark-project-map))

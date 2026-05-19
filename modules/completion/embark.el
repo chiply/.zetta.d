@@ -23,12 +23,44 @@
   (define-key embark-general-map (kbd "!") 'symbol-overlay-put)
   (define-key embark-general-map (kbd "C-!") 'symbol-overlay-remove-all)
 
-  ;; Back-step chord for embark-act's cycle: `C-,' inside the prompter
-  ;; sets prefix-arg = -1, then `C-.' (the cycle key) rotates -1
-  ;; instead of +1. The keymap prompter recognises `negative-argument'
-  ;; explicitly (see `embark-keymap-prompter') and re-prompts after
-  ;; executing it, so the next keypress benefits from the prefix arg.
-  (define-key embark-general-map (kbd "C-,") 'negative-argument)
+  ;; Backward cycle for embark-act: `C-,' inside the prompter is a
+  ;; single-key step-back through the (size-sorted) target list.
+  ;;
+  ;; The earlier approach of binding `C-,' directly to `negative-argument'
+  ;; broke because that command TOGGLES: nil -> `-, `- -> nil, etc.
+  ;; Without prefix-arg being reset between cycles, repeated C-, presses
+  ;; alternated direction (-1, +1, -1, +1) instead of stepping back.
+  ;;
+  ;; Instead, bind to a marker symbol that an :around advice on
+  ;; `embark-keymap-prompter' intercepts: when seen, force prefix-arg
+  ;; to -1 and substitute `embark-cycle' as the returned command.
+  (defun zetta-embark-back-cycle ()
+    "Marker for single-key backward cycle inside `embark-keymap-prompter'.
+The actual back-rotation is performed by the :around advice that
+substitutes `embark-cycle' with `prefix-arg' forced to -1."
+    (interactive)
+    (user-error
+     "`zetta-embark-back-cycle' is meant for the embark prompter only"))
+
+  (define-advice embark-keymap-prompter
+      (:around (orig keymap update) zetta-back-cycle)
+    "Translate `zetta-embark-back-cycle' returns into a backward
+`embark-cycle' invocation by forcing `prefix-arg' to -1."
+    (let ((cmd (funcall orig keymap update)))
+      (if (eq cmd 'zetta-embark-back-cycle)
+          (progn (setq prefix-arg -1) 'embark-cycle)
+        cmd)))
+
+  ;; Reset `prefix-arg' after each cycle rotation so direction is
+  ;; per-press rather than sticky. Without this, pressing C-, once
+  ;; would leave `prefix-arg' at -1 for the rest of the cycle session,
+  ;; so subsequent C-. presses would also go backward.
+  (define-advice embark--rotate (:after (&rest _) zetta-reset-prefix-arg)
+    "Reset `prefix-arg' after rotation -- one-shot prefix semantics
+inside the embark-act cycle loop."
+    (setq prefix-arg nil))
+
+  (define-key embark-general-map (kbd "C-,") #'zetta-embark-back-cycle)
 
   (setq embark-help-key "C-h")
 

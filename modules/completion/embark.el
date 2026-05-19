@@ -85,12 +85,19 @@ TYPE is the embark target type reported; defaults to THING."
            (unless (or (minibufferp)
                        (derived-mode-p 'completion-list-mode
                                        'embark-collect-mode))
-             (when-let* ((bnds (bounds-of-thing-at-point ',thing-sym)))
+             (when-let* ((bnds (bounds-of-thing-at-point ',thing-sym))
+                         ;; Clamp to buffer boundaries: some user-defined
+                         ;; bounds functions (e.g. `brick' here) compute
+                         ;; (+ 1 point-max), which would later crash
+                         ;; `buffer-substring-no-properties'.
+                         (beg (max (point-min) (car bnds)))
+                         (end (min (point-max) (cdr bnds)))
+                         ((< beg end)))
                ;; Embark's bounded-target shape is the dotted list
                ;; (TYPE TARGET START . END) -- NOT (TYPE TARGET START END).
                (cons ',type-sym
-                     (cons (buffer-substring-no-properties (car bnds) (cdr bnds))
-                           (cons (car bnds) (cdr bnds)))))))
+                     (cons (buffer-substring-no-properties beg end)
+                           (cons beg end))))))
          (add-to-list 'embark-target-finders #',name))))
 
   ;; Register finders for the user-defined things in `tap.el' that
@@ -274,6 +281,40 @@ walks back through the history."
             (progn (deactivate-mark) (goto-char (car prev)))
           (push-mark (car prev) t t)
           (goto-char (cdr prev))))))
+
+  ;; Make `embark-act' cycling follow expand-region's innermost-outward
+  ;; order: smallest-bounds target is the default; repeated `embark-act'
+  ;; walks to the next-larger scope. Targets without bounds (minibuffer
+  ;; candidates etc.) keep their relative order at the end of the list.
+  (defcustom zetta-embark-sort-targets-by-bounds t
+    "When non-nil, sort embark's target cycle by bounds size (ascending).
+Repeated `embark-act' then walks innermost -> outermost the way
+`er/expand-region' does. Disable to restore embark's finder-order
+default."
+    :type 'boolean
+    :group 'embark)
+
+  (defun zetta-embark--sort-targets-by-bounds (targets)
+    "Sort embark TARGETS list by bounds size, smallest first.
+Plists without `:bounds' keep their relative order at the end."
+    (if (not zetta-embark-sort-targets-by-bounds)
+        targets
+      (let ((bounded   (cl-remove-if-not
+                        (lambda (tgt) (plist-get tgt :bounds)) targets))
+            (unbounded (cl-remove-if
+                        (lambda (tgt) (plist-get tgt :bounds)) targets)))
+        (append
+         (sort bounded
+               (lambda (a b)
+                 (let* ((ba (plist-get a :bounds))
+                        (bb (plist-get b :bounds))
+                        (sa (- (cdr ba) (car ba)))
+                        (sb (- (cdr bb) (car bb))))
+                   (< sa sb))))
+         unbounded))))
+
+  (advice-add 'embark--targets :filter-return
+              #'zetta-embark--sort-targets-by-bounds)
 
   ;; project
   (defvar-keymap embark-project-map :parent embark-general-map)

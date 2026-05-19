@@ -247,11 +247,12 @@ used to override thing at point for whatever reason"
     )
   )
 
-;;;; Bridge A: treesit -> thing-at-point
-;; Teach `bounds-of-thing-at-point' to consult tree-sitter when the
-;; current major mode has populated `treesit-thing-settings'. Every
-;; downstream consumer (this file's navigation, embark target finders,
-;; lsp helpers, expand-region, ...) then gets AST-accurate bounds in
+;;;; Bridge A: treesit <-> thing-at-point
+;; Teach the thing-at-point machinery to consult tree-sitter for both
+;; bounds (`bounds-of-thing-at-point') and navigation (`forward-thing',
+;; and by extension `beginning-of-thing' / `end-of-thing'). Downstream
+;; consumers -- this file's navigation, embark target finders, lsp
+;; helpers, expand-region, etc. -- then get AST-accurate behavior in
 ;; treesit-backed buffers with no further wiring.
 
 (defun zetta-treesit-bounds (thing)
@@ -264,11 +265,56 @@ not defined in `treesit-thing-settings' for the current language."
     (when-let* ((node (treesit-thing-at-point thing 'nested)))
       (cons (treesit-node-start node) (treesit-node-end node)))))
 
+(defun zetta-treesit-forward-thing-provider (thing backward)
+  "Provider conforming to `forward-thing-provider-alist'.
+When BACKWARD is non-nil, move to the beginning of the previous
+THING; otherwise move to the end of the next THING. No-op (returns
+nil and does not move point) when THING is not treesit-defined for
+this buffer."
+  (when (and (fboundp 'treesit-parser-list)
+             (treesit-parser-list)
+             (treesit-thing-defined-p thing (treesit-language-at (point))))
+    (let* ((arg (if backward -1 1))
+           (side (if backward 'beg 'end))
+           (dest (treesit-navigate-thing (point) arg side thing)))
+      (when dest (goto-char dest)))))
+
+(defun zetta-treesit-bridge-thing (thing)
+  "Register treesit-aware bounds and forward providers for THING.
+Both providers gate on `treesit-thing-defined-p' at call time, so
+they are inert in buffers without a treesit parser or where THING
+is not defined for the buffer's language. Idempotent (setf-based)."
+  (setf (alist-get thing bounds-of-thing-at-point-provider-alist)
+        (lambda () (zetta-treesit-bounds thing)))
+  (setf (alist-get thing forward-thing-provider-alist)
+        (lambda (backward)
+          (zetta-treesit-forward-thing-provider thing backward))))
+
+(defcustom zetta-treesit-bridged-things
+  '(defun sexp list sentence text comment paragraph
+    function class method
+    loop conditional decorator call
+    parameter parameter_list argument_list
+    string statement)
+  "Symbols bridged between thing-at-point and tree-sitter.
+Each symbol becomes a key in `bounds-of-thing-at-point-provider-alist'
+and `forward-thing-provider-alist'. The provider is a no-op in buffers
+without a treesit parser or where the language's `treesit-thing-settings'
+does not define the thing, so a generous list is cheap.
+
+The defaults cover python's stock settings (defun / sexp / list /
+sentence / text), common cross-language constructs that user queries
+or future modes may populate (function / class / method / loop /
+conditional / decorator / call), and a handful of node-level things
+useful for region selection (parameter, argument_list, string,
+statement).
+
+To extend at runtime, push to this list and call
+`zetta-treesit-bridge-thing' on the new symbol."
+  :type '(repeat symbol)
+  :group 'zetta)
+
 (when (fboundp 'treesit-thing-defined-p)
-  (dolist (thing '(defun sexp sentence comment))
-    ;; setf/alist-get is idempotent under file re-evaluation;
-    ;; add-to-list would duplicate because fresh lambdas are not `equal'.
-    (setf (alist-get thing bounds-of-thing-at-point-provider-alist)
-          (lambda () (zetta-treesit-bounds thing)))))
+  (mapc #'zetta-treesit-bridge-thing zetta-treesit-bridged-things))
 
 ;;; tap.el ends here

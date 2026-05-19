@@ -48,21 +48,15 @@ targets."
          nil nil t (lambda (binding)
                      (not (string-suffix-p "-argument" (cdr binding))))))))
 
+  ;; Minimal echo-area indicator instead of the which-key popup --
+  ;; eliminates the popup redraw that causes visible jitter when
+  ;; cycling embark-act through multiple targets. `embark-bindings'
+  ;; (`C-h B') is the discoverability path now.
   (setq embark-indicators
         '(
-          embark-which-key-indicator
+          embark-minimal-indicator
           embark-highlight-indicator
           embark-isearch-highlight-indicator))
-
-  (defun embark-hide-which-key-indicator (fn &rest args)
-    "Hide the which-key indicator immediately when using the completing-read prompter."
-    (which-key--hide-popup-ignore-command)
-    (let ((embark-indicators
-           (remq #'embark-which-key-indicator embark-indicators)))
-      (apply fn args)))
-
-  (advice-add #'embark-completing-read-prompter
-              :around #'embark-hide-which-key-indicator)
 
   ;; Bridge B: thing-at-point -> embark target finder factory.
   ;; `zetta-embark-deftap-finder' interns a named target-finder defun

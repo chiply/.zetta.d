@@ -15,14 +15,28 @@ and `zetta-narrow-or-widen'.")
 
 (defun zetta-tap-forward-thing (n)
   "Move N things of `zetta-tap-current-thing' forward (negative for back).
-Lands at the start of the destination thing's bounds so that subsequent
-`bounds-of-thing-at-point' lookups (used by `zetta-narrow-or-widen')
-succeed. For defun-style things `forward-op' = `end-of-defun', which
-leaves point on the trailing boundary of the current thing; the
-whitespace skip nudges into the next thing before the snap."
+Dispatches to `treesit-navigate-thing' when the thing is defined in
+the buffer's `treesit-thing-settings', otherwise to `forward-thing'.
+Lands at the start of the destination thing's bounds so subsequent
+`bounds-of-thing-at-point' lookups (e.g. in `zetta-narrow-or-widen')
+succeed. Does not move when there is no destination thing -- treesit
+returns nil cleanly; legacy `forward-thing's limit-jump behaviour is
+avoided by going through `treesit-navigate-thing' directly."
   (interactive "p")
-  (let ((thing zetta-tap-current-thing))
-    (forward-thing thing n)
+  (let* ((thing zetta-tap-current-thing)
+         (treesit-defined
+          (and (fboundp 'treesit-parser-list)
+               (treesit-parser-list)
+               (treesit-thing-defined-p
+                thing (treesit-language-at (point))))))
+    (if treesit-defined
+        (when-let* ((side (if (> n 0) 'end 'beg))
+                    (dest (treesit-navigate-thing (point) n side thing)))
+          (goto-char dest))
+      (forward-thing thing n))
+    ;; Land inside the destination thing: skip inter-thing whitespace
+    ;; (for forward motion the destination boundary is the END of the
+    ;; thing, not its interior) and snap to the thing's start.
     (when (> n 0)
       (skip-chars-forward " \t\n"))
     (when-let* ((bnds (bounds-of-thing-at-point thing)))
@@ -265,56 +279,53 @@ not defined in `treesit-thing-settings' for the current language."
     (when-let* ((node (treesit-thing-at-point thing 'nested)))
       (cons (treesit-node-start node) (treesit-node-end node)))))
 
-(defun zetta-treesit-forward-thing-provider (thing backward)
-  "Provider conforming to `forward-thing-provider-alist'.
-When BACKWARD is non-nil, move to the beginning of the previous
-THING; otherwise move to the end of the next THING. No-op (returns
-nil and does not move point) when THING is not treesit-defined for
-this buffer."
-  (when (and (fboundp 'treesit-parser-list)
-             (treesit-parser-list)
-             (treesit-thing-defined-p thing (treesit-language-at (point))))
-    (let* ((arg (if backward -1 1))
-           (side (if backward 'beg 'end))
-           (dest (treesit-navigate-thing (point) arg side thing)))
-      (when dest (goto-char dest)))))
-
-(defun zetta-treesit-bridge-thing (thing)
-  "Register treesit-aware bounds and forward providers for THING.
-Both providers gate on `treesit-thing-defined-p' at call time, so
-they are inert in buffers without a treesit parser or where THING
-is not defined for the buffer's language. Idempotent (setf-based)."
-  (setf (alist-get thing bounds-of-thing-at-point-provider-alist)
-        (lambda () (zetta-treesit-bounds thing)))
-  (setf (alist-get thing forward-thing-provider-alist)
-        (lambda (backward)
-          (zetta-treesit-forward-thing-provider thing backward))))
-
 (defcustom zetta-treesit-bridged-things
   '(defun sexp list sentence text comment paragraph
     function class method
     loop conditional decorator call
     parameter parameter_list argument_list
-    string statement)
+    str-lit statement)
   "Symbols bridged between thing-at-point and tree-sitter.
-Each symbol becomes a key in `bounds-of-thing-at-point-provider-alist'
-and `forward-thing-provider-alist'. The provider is a no-op in buffers
-without a treesit parser or where the language's `treesit-thing-settings'
-does not define the thing, so a generous list is cheap.
+For each symbol: a bounds provider is registered globally; a forward
+provider is registered buffer-locally (in treesit buffers) only when
+the symbol is defined in the buffer's `treesit-thing-settings'.
 
-The defaults cover python's stock settings (defun / sexp / list /
-sentence / text), common cross-language constructs that user queries
-or future modes may populate (function / class / method / loop /
-conditional / decorator / call), and a handful of node-level things
-useful for region selection (parameter, argument_list, string,
-statement).
+Defaults cover python's stock settings (defun / sexp / list / sentence
+/ text), plus common cross-language constructs that user queries or
+language hooks can populate (function / class / method / loop /
+conditional / decorator / call / parameter / argument_list / str-lit /
+statement). Pushing to this list is free -- the symbol becomes
+navigable only once some language's `treesit-thing-settings' defines
+it. To extend per-language, augment `treesit-thing-settings' in that
+mode's hook -- see `zetta-python-ts-extend-things' in
+`modules/lang/treesit.el' for the pattern.
 
-To extend at runtime, push to this list and call
-`zetta-treesit-bridge-thing' on the new symbol."
+Note: thing symbols MUST NOT collide with the name of a built-in
+function. `treesit-node-match-p' (a C function) tries to call a
+symbol as a predicate before consulting `treesit-thing-settings',
+so e.g. `string' as a thing symbol crashes -- hence `str-lit'."
   :type '(repeat symbol)
   :group 'zetta)
 
+;; Bounds providers can be registered globally: `bounds-of-thing-at-point'
+;; treats a nil-returning provider as a miss and falls through to other
+;; providers / legacy mechanisms.
 (when (fboundp 'treesit-thing-defined-p)
-  (mapc #'zetta-treesit-bridge-thing zetta-treesit-bridged-things))
+  (dolist (thing zetta-treesit-bridged-things)
+    (setf (alist-get thing bounds-of-thing-at-point-provider-alist)
+          (let ((th thing))
+            (lambda () (zetta-treesit-bounds th))))))
+
+;; Forward-thing providers are intentionally NOT registered.
+;;
+;; `forward-thing's contract is: "if any provider is registered for THING,
+;; never fall back to legacy; if no provider moves point, jump to
+;; (point-min) / (point-max) and terminate." A provider registered for a
+;; defined thing that simply has no destination in the buffer (e.g.
+;; `forward-thing 'function' in a buffer with no functions) sends point
+;; flying to buffer-end. There is no provider-side workaround. So
+;; navigation is funnelled through `zetta-tap-forward-thing' below, which
+;; calls `treesit-navigate-thing' directly -- that returns nil cleanly
+;; when no destination exists and we simply do not move.
 
 ;;; tap.el ends here

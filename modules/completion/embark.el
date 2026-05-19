@@ -64,6 +64,49 @@ targets."
   (advice-add #'embark-completing-read-prompter
               :around #'embark-hide-which-key-indicator)
 
+  ;; Bridge B: thing-at-point -> embark target finder factory.
+  ;; `zetta-embark-deftap-finder' interns a named target-finder defun
+  ;; for any THING that `bounds-of-thing-at-point' understands, and
+  ;; registers it with embark. Named (not anonymous) so re-loading
+  ;; this file is idempotent under `add-to-list'. Combined with
+  ;; Bridge A in `tap.el', tree-sitter bounds flow through to embark
+  ;; in treesit buffers with no further wiring.
+  (defmacro zetta-embark-deftap-finder (thing &optional type)
+    "Define and register an embark target finder for thing-at-point THING.
+TYPE is the embark target type reported; defaults to THING."
+    (let* ((thing-sym (if (and (consp thing) (eq (car thing) 'quote))
+                          (cadr thing) thing))
+           (type-sym (or (and (consp type) (eq (car type) 'quote) (cadr type))
+                         type thing-sym))
+           (name (intern (format "zetta-embark-target-%s-at-point" thing-sym))))
+      `(progn
+         (defun ,name ()
+           ,(format "Embark target finder for thing-at-point `%s'." thing-sym)
+           (when-let* ((bnds (bounds-of-thing-at-point ',thing-sym)))
+             ;; Embark's bounded-target shape is the dotted list
+             ;; (TYPE TARGET START . END) -- NOT (TYPE TARGET START END).
+             (cons ',type-sym
+                   (cons (buffer-substring-no-properties (car bnds) (cdr bnds))
+                         (cons (car bnds) (cdr bnds))))))
+         (add-to-list 'embark-target-finders #',name))))
+
+  ;; Register finders for the user-defined things in `tap.el' that
+  ;; embark would not otherwise see (block/brick come from tap-block.el
+  ;; and tap.el via `put ... bounds-of-thing-at-point').
+  (zetta-embark-deftap-finder block)
+  (zetta-embark-deftap-finder brick)
+
+  ;; A defun keymap so embark has somewhere to dispatch when its
+  ;; built-in `embark-target-defun-at-point' fires (it ships no
+  ;; defun-specific map by default; the keymap also covers the
+  ;; treesit-bridged `defun' bounds from Bridge A).
+  (defvar-keymap embark-defun-map
+    :parent embark-general-map
+    "e" #'eval-defun
+    "n" #'narrow-to-defun
+    "m" #'mark-defun)
+  (setf (alist-get 'defun embark-keymap-alist) 'embark-defun-map)
+
   ;; project
   (defvar-keymap embark-project-map :parent embark-general-map)
   (add-to-list 'embark-keymap-alist '(project embark-project-map))

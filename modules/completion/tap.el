@@ -233,4 +233,29 @@ used to override thing at point for whatever reason"
       )
     )
   )
+
+;;;; Bridge A: treesit -> thing-at-point
+;; Teach `bounds-of-thing-at-point' to consult tree-sitter when the
+;; current major mode has populated `treesit-thing-settings'. Every
+;; downstream consumer (this file's navigation, embark target finders,
+;; lsp helpers, expand-region, ...) then gets AST-accurate bounds in
+;; treesit-backed buffers with no further wiring.
+
+(defun zetta-treesit-bounds (thing)
+  "Return (BEG . END) of THING at point via tree-sitter, or nil.
+Returns nil when the buffer has no treesit parser or when THING is
+not defined in `treesit-thing-settings' for the current language."
+  (when (and (fboundp 'treesit-parser-list)
+             (treesit-parser-list)
+             (treesit-thing-defined-p thing (treesit-language-at (point))))
+    (when-let* ((node (treesit-thing-at-point thing 'nested)))
+      (cons (treesit-node-start node) (treesit-node-end node)))))
+
+(when (fboundp 'treesit-thing-defined-p)
+  (dolist (thing '(defun sexp sentence comment))
+    ;; setf/alist-get is idempotent under file re-evaluation;
+    ;; add-to-list would duplicate because fresh lambdas are not `equal'.
+    (setf (alist-get thing bounds-of-thing-at-point-provider-alist)
+          (lambda () (zetta-treesit-bounds thing)))))
+
 ;;; tap.el ends here

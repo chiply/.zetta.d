@@ -30,17 +30,21 @@ avoided by going through `treesit-navigate-thing' directly."
                (treesit-thing-defined-p
                 thing (treesit-language-at (point))))))
     (if treesit-defined
-        (when-let* ((side (if (> n 0) 'end 'beg))
-                    (dest (treesit-navigate-thing (point) n side thing)))
+        ;; SIDE 'beg with positive N lands at the START of the next
+        ;; instance directly; with negative N, at the START of the
+        ;; previous. This is the right thing for both nested things
+        ;; (where 'end returned the end of the *current* not the next)
+        ;; and top-level things (where 'end+snap happened to work).
+        (when-let* ((dest (treesit-navigate-thing (point) n 'beg thing)))
           (goto-char dest))
-      (forward-thing thing n))
-    ;; Land inside the destination thing: skip inter-thing whitespace
-    ;; (for forward motion the destination boundary is the END of the
-    ;; thing, not its interior) and snap to the thing's start.
-    (when (> n 0)
-      (skip-chars-forward " \t\n"))
-    (when-let* ((bnds (bounds-of-thing-at-point thing)))
-      (goto-char (car bnds)))))
+      (forward-thing thing n)
+      ;; Legacy forward-op for defun-style things lands at the end
+      ;; boundary; snap to bounds.start so the next call's "still
+      ;; inside" check works.
+      (when (> n 0)
+        (skip-chars-forward " \t\n"))
+      (when-let* ((bnds (bounds-of-thing-at-point thing)))
+        (goto-char (car bnds))))))
 
 (defun zetta-intern-maybe (thing)
   (if (symbolp thing) thing (intern thing)))

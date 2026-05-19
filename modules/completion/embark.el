@@ -340,6 +340,88 @@ universal-argument family is already handled there."
     (let ((zetta-embark--sort-targets-reverse t))
       (call-interactively #'embark-act)))
 
+  ;; Bridge E: per-target-type navigation inside embark prompts.
+  ;; C-j / C-k bound in `embark-general-map' move to the next /
+  ;; previous instance of whatever type the current target has --
+  ;; e.g. on a `ts-call' target, C-j jumps to the next call; on a
+  ;; `defun', C-j jumps to the next defun.
+  (defcustom zetta-embark-nav-type-map
+    '((identifier . symbol)
+      (expression . sexp)
+      (defun . defun)
+      (paragraph . paragraph)
+      (sentence . sentence)
+      (ts-string . str-lit)
+      (ts-string_literal . str-lit)
+      (ts-call . call)
+      (ts-call_expression . call)
+      (ts-function_definition . function)
+      (ts-function_declaration . function)
+      (ts-method_definition . method)
+      (ts-method_declaration . method)
+      (ts-class_definition . class)
+      (ts-class_declaration . class)
+      (ts-argument_list . argument_list)
+      (ts-parameter_list . parameter_list)
+      (ts-for_statement . loop)
+      (ts-while_statement . loop)
+      (ts-if_statement . conditional)
+      (ts-decorator . decorator)
+      (block . block)
+      (brick . brick))
+    "Map embark target types to thing-at-point things for navigation.
+Missing entries fall through to the type itself, in case the type
+*is* already a thing. Navigation no-ops if the resolved thing has
+neither a `forward-op' property nor a treesit definition for the
+buffer's language."
+    :type '(alist :key-type symbol :value-type symbol)
+    :group 'embark)
+
+  (defvar zetta-embark--current-target-type nil
+    "Type of the most recent embark target. Set by the :always
+pre-action hook; read by `zetta-embark-nav-next' / `nav-prev'.")
+
+  (defvar zetta-embark--current-target-bounds nil
+    "Bounds of the most recent embark target, or nil if unbounded.")
+
+  (defun zetta-embark--capture-target (&rest plist)
+    "Pre-action hook: capture target type and bounds for nav commands."
+    (setq zetta-embark--current-target-type (plist-get plist :type)
+          zetta-embark--current-target-bounds (plist-get plist :bounds)))
+
+  (setf (alist-get :always embark-pre-action-hooks)
+        (cons #'zetta-embark--capture-target
+              (alist-get :always embark-pre-action-hooks)))
+
+  (defun zetta-embark--nav (n)
+    "Move N instances forward (negative = back) of current target's type."
+    (let* ((type zetta-embark--current-target-type)
+           (bounds zetta-embark--current-target-bounds)
+           (thing (alist-get type zetta-embark-nav-type-map type)))
+      (cond
+       ((null type)
+        (message "No embark target captured yet"))
+       ((null bounds)
+        (message "Embark type `%s' has no bounds; nav not applicable" type))
+       ((not (symbolp thing))
+        (message "No nav thing mapped for embark type `%s'" type))
+       (t
+        (let ((zetta-tap-current-thing thing))
+          (zetta-tap-forward-thing n))))))
+
+  (defun zetta-embark-nav-next ()
+    "Move to next instance of current embark target's type."
+    (interactive)
+    (zetta-embark--nav 1))
+
+  (defun zetta-embark-nav-prev ()
+    "Move to previous instance of current embark target's type."
+    (interactive)
+    (zetta-embark--nav -1))
+
+  (define-key embark-general-map (kbd "C-j") #'zetta-embark-nav-next)
+  (define-key embark-general-map (kbd "C-k") #'zetta-embark-nav-prev)
+
   ;; project
   (defvar-keymap embark-project-map :parent embark-general-map)
   (add-to-list 'embark-keymap-alist '(project embark-project-map))

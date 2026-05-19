@@ -253,6 +253,131 @@ in the current buffer, looks up its language in
 `(LANG . EXTRAS)` entry and the wiring happens automatically. No
 per-mode hook needed.
 
+## Manual testing walkthrough
+
+Use this to exercise the bridges end-to-end after changes or to
+diagnose regressions. Each step is something to type/press; the
+expected behaviour is what proves the bridge is wired.
+
+A test fixture lives at `/tmp/zetta-bridge-test.py` (regenerate from
+this doc if `/tmp` was cleared on reboot). Open it with
+`C-x C-f /tmp/zetta-bridge-test.py` — `python-ts-mode` should
+auto-activate.
+
+### Setup checks
+
+1. `M-:` then `(treesit-parser-list)` — should return a non-nil list.
+2. `M-:` then `(memq 'zetta-treesit-apply-language-extras after-change-major-mode-hook)` — non-nil means the per-language extras hook is wired.
+
+### Test 1 — navigate by `function` (Bridge A treesit extra)
+
+1. `s-x t` → at prompt type `function` → `RET`
+2. Move point to the top of the buffer.
+3. `s-j` → cursor jumps to the start of the first function.
+4. `s-j` repeatedly → walks through every function in the buffer,
+   including methods inside classes.
+5. `s-j` past the last function → should stay put (the
+   limit-jump-fix in `zetta-tap-forward-thing`).
+6. `s-k` → previous function.
+7. `s-x v` (pulse) → flashes the **entire** function body, end to
+   end, not just one line.
+
+Failure mode: cursor lands mid-function or jumps to end of buffer →
+the treesit extras did not load for python, or
+`zetta-tap-forward-thing` is using the legacy path.
+
+### Test 2 — navigate by `class`
+
+1. `s-x t` → `class` → `RET`
+2. `s-j` → jumps to the first class definition.
+3. `s-x v` → pulses the entire class body.
+4. `s-j` past the last class → stays put.
+
+### Test 3 — navigate by `call`
+
+1. `s-x t` → `call` → `RET`
+2. `s-j` repeatedly → walks through every call expression
+   (`foo(...)`, `print(...)`, `range(...)`, etc.).
+
+### Test 4 — embark on a string literal (Bridge C)
+
+1. Move point inside a string literal (e.g. a URL).
+2. `C-.` — the embark indicator should read `Act on ts-string '"…"'`.
+3. Press `u` → opens the URL in the browser (`browse-url`).
+4. Cancel with `C-g`, retry, press `w` → copies the literal to the
+   kill-ring.
+
+If the indicator says `Act on str-lit '…'` instead, that is Bridge
+B's path firing first. Press `C-.` again to cycle to `ts-string`.
+
+### Test 5 — embark on a call expression
+
+1. Point on the callee identifier of a call (e.g. `foo` in `foo(99)`).
+2. `C-.` — indicator says `Act on ts-call 'foo(99)'`.
+3. Press `d` → `xref-find-definitions` runs on the call site.
+
+### Test 6 — embark on a function definition
+
+1. Point anywhere inside a function body.
+2. `C-.` — should show `Act on ts-function_definition …` or
+   `Act on defun …`.
+3. Press `n` → narrows to just that function.
+4. `s-n` → widens back.
+
+### Test 7 — `defun` (python stock thing, should still work)
+
+1. `s-x t` → `defun` → `RET`
+2. `s-j` / `s-k` → same walk as Test 1.
+
+Confirms the pre-existing `defun` path is not regressed by the
+extras.
+
+### Test 8 — `statement` (generalised extra)
+
+1. `s-x t` → `statement` → `RET`
+2. `s-j` → steps through each return / if / for / while / yield /
+   assignment / definition.
+
+### Test 9 — completion UI still works (regression check)
+
+1. `, p p` (project leader → project switch).
+2. Highlight a project candidate.
+3. `C-.` — indicator should say `Act on project '/path/to/project'`,
+   **not** `Act on brick …` or similar.
+4. Press `f` → opens find-file scoped to that project.
+
+This is the path that broke when the `block`/`brick` finders were
+not gated out of completion UIs. If `f` says "not bound to an
+action", the finder guard in `zetta-embark-deftap-finder` regressed.
+
+### Test 10 — `C-h B` survey
+
+Inside any function, `C-h B` opens a buffer listing every embark
+action available at point, grouped by target type. Useful to confirm
+which keymaps are participating (`ts-call`, `ts-string`, `defun`,
+etc.).
+
+### Diagnostic one-liners
+
+Paste any of these into `M-:`:
+
+```elisp
+(treesit-thing-defined-p 'function (treesit-language-at (point)))
+;; -> regex string in a treesit buffer where `function' is defined; nil otherwise
+
+(bounds-of-thing-at-point 'function)
+;; -> (BEG . END) when point is inside a function
+
+(thing-at-point 'str-lit t)
+;; -> string text when point is inside a string literal
+
+zetta-tap-current-thing
+;; -> symbol that s-j / s-k will navigate next
+
+(memq 'zetta-treesit-apply-language-extras after-change-major-mode-hook)
+;; -> non-nil if the per-language extras hook is wired
+```
+
 ## References
 
 - [GNU Emacs Lisp Reference Manual — User-defined Things](https://www.gnu.org/software/emacs/manual/html_node/elisp/User_002ddefined-Things.html)

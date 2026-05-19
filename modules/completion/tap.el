@@ -147,7 +147,9 @@ used to override thing at point for whatever reason"
               compilation-mode-map lark-mode-map css-mode-map
               fundamental-mode-map lisp-data-mode-map prog-mode-map
               )
-   "C-e" 'er/expand-region))
+   "C-e"   'zetta-embark-expand-region
+   "C-M-e" 'er/expand-region
+   "C-S-e" 'zetta-embark-contract-region))
 
 (defun zetta-thing-at-bobp ()
   (interactive)

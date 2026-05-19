@@ -82,12 +82,21 @@ TYPE is the embark target type reported; defaults to THING."
       `(progn
          (defun ,name ()
            ,(format "Embark target finder for thing-at-point `%s'." thing-sym)
-           (when-let* ((bnds (bounds-of-thing-at-point ',thing-sym)))
-             ;; Embark's bounded-target shape is the dotted list
-             ;; (TYPE TARGET START . END) -- NOT (TYPE TARGET START END).
-             (cons ',type-sym
-                   (cons (buffer-substring-no-properties (car bnds) (cdr bnds))
-                         (cons (car bnds) (cdr bnds))))))
+           ;; Skip completion UIs: minibuffer / collect / completions
+           ;; buffers should be classified by embark's own minibuffer
+           ;; finders, not by our bounds-of-thing-at-point overlays.
+           ;; Without this guard, e.g. `bounds-of-thing-at-point 'brick'
+           ;; happily computes bounds against the candidate text and
+           ;; steals the default target.
+           (unless (or (minibufferp)
+                       (derived-mode-p 'completion-list-mode
+                                       'embark-collect-mode))
+             (when-let* ((bnds (bounds-of-thing-at-point ',thing-sym)))
+               ;; Embark's bounded-target shape is the dotted list
+               ;; (TYPE TARGET START . END) -- NOT (TYPE TARGET START END).
+               (cons ',type-sym
+                     (cons (buffer-substring-no-properties (car bnds) (cdr bnds))
+                           (cons (car bnds) (cdr bnds)))))))
          (add-to-list 'embark-target-finders #',name))))
 
   ;; Register finders for the user-defined things in `tap.el' that

@@ -58,14 +58,14 @@ of tap), then toggle the closest fold"
           (beg (if (zetta-thing-at-bobp)
                    1
                  (save-excursion
-                   (beginning-of-thing focus-current-thing)
+                   (beginning-of-thing zetta-tap-current-thing)
                    ;; in case there is indentation
                    (beginning-of-line)
                    (- (point) 1)
                    )))
           (end (if (zetta-thing-at-eobp)
                    (save-excursion (end-of-buffer) (point))
-                 (+ 1 (cdr (bounds-of-thing-at-point focus-current-thing)))))
+                 (+ 1 (cdr (bounds-of-thing-at-point zetta-tap-current-thing)))))
           )
       (narrow-to-region beg end)
       )

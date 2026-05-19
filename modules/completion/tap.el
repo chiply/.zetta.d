@@ -1,15 +1,32 @@
 ;;; tap.el --- Configure tap -*- lexical-binding: t; -*-
 
-;; focus is a package that allows us to easily and constantly visualize things at point
-;; it is a useful UI boost for focused programming, but is also a great development tool
-;; in the context of working with tap
-
 ;; All the things
 (setq zetta-tap--things '("block" "brick" "symbol" "list" "sexp"
                       "defun" "filename" "url"
                       "email" "uuid" "word"
                       "sentence" "whitespace" "line"
                       "page" "orgtree" "paragraph" "button"))
+
+(defvar-local zetta-tap-current-thing 'defun
+  "Buffer-local thing-at-point symbol used by zetta-tap navigation.
+Set via `zetta-set-local-thing'. Consumed by s-j/s-k (next/prev),
+s-h/s-l (start/end), `zetta-pulse', `zetta-select', `zetta-comment',
+and `zetta-narrow-or-widen'.")
+
+(defun zetta-tap-forward-thing (n)
+  "Move N things of `zetta-tap-current-thing' forward (negative for back).
+Lands at the start of the destination thing's bounds so that subsequent
+`bounds-of-thing-at-point' lookups (used by `zetta-narrow-or-widen')
+succeed. For defun-style things `forward-op' = `end-of-defun', which
+leaves point on the trailing boundary of the current thing; the
+whitespace skip nudges into the next thing before the snap."
+  (interactive "p")
+  (let ((thing zetta-tap-current-thing))
+    (forward-thing thing n)
+    (when (> n 0)
+      (skip-chars-forward " \t\n"))
+    (when-let* ((bnds (bounds-of-thing-at-point thing)))
+      (goto-char (car bnds)))))
 
 (defun zetta-intern-maybe (thing)
   (if (symbolp thing) thing (intern thing)))
@@ -18,14 +35,14 @@
   "This is run as a hook on each relevant major-mode and can also be
 used to override thing at point for whatever reason"
   (interactive)
-  (setq-local focus-current-thing
+  (setq-local zetta-tap-current-thing
               (zetta-intern-maybe
                (or thing (completing-read "What thing? " zetta-tap--things)))))
 
 (defun zetta-locate-thing (&optional thing)
   (interactive)
   (let* ((bnds (bounds-of-thing-at-point
-                (zetta-intern-maybe (or thing focus-current-thing))))
+                (zetta-intern-maybe (or thing zetta-tap-current-thing))))
          (beg (if (string= thing "buf") (point-min) (car bnds)))
          (end (if (string= thing "buf") (point-max) (- (cdr bnds) 1))))
     (cons beg `(,end))))
@@ -75,23 +92,19 @@ used to override thing at point for whatever reason"
  "s-j" '(lambda () (interactive)
           (if (buffer-narrowed-p)
               (progn (call-interactively 'zetta-narrow-or-widen)
-                     (focus-next-thing 1)
-                     (call-interactively 'zetta-narrow-or-widen)
-                     )
-            (focus-next-thing 1))
-          )
+                     (zetta-tap-forward-thing 1)
+                     (call-interactively 'zetta-narrow-or-widen))
+            (zetta-tap-forward-thing 1)))
  "s-k" '(lambda () (interactive)
           (if (buffer-narrowed-p)
               (progn (call-interactively 'zetta-narrow-or-widen)
-                     (focus-prev-thing 1)
-                     (call-interactively 'zetta-narrow-or-widen)
-                     )
-            (focus-prev-thing 1))
-          )
+                     (zetta-tap-forward-thing -1)
+                     (call-interactively 'zetta-narrow-or-widen))
+            (zetta-tap-forward-thing -1)))
  "s-h" '(lambda () (interactive)
-          (beginning-of-thing focus-current-thing))
+          (beginning-of-thing zetta-tap-current-thing))
  "s-l" '(lambda () (interactive)
-          (end-of-thing focus-current-thing)
+          (end-of-thing zetta-tap-current-thing)
           ;; to take care of skipping whitespace, not sure why this
           ;; happens
           (re-search-backward "[^[:space:]\n]")
@@ -125,13 +138,13 @@ used to override thing at point for whatever reason"
 (defun zetta-thing-at-bobp ()
   (interactive)
   (eq 1 (save-excursion
-          (beginning-of-thing focus-current-thing)
+          (beginning-of-thing zetta-tap-current-thing)
           (point))))
 
 (defun zetta-thing-at-eobp ()
   (interactive)
   (save-excursion
-    (end-of-thing focus-current-thing)
+    (end-of-thing zetta-tap-current-thing)
     (eobp)))
 
 ;; Brick

@@ -470,16 +470,34 @@ pre-action hook; read by `zetta-embark-nav-next' / `nav-prev'.")
     (interactive)
     (zetta-embark--nav -1))
 
+  (defun zetta-embark-nav-beg ()
+    "Move point to the start of the current embark target's bounds."
+    (interactive)
+    (if zetta-embark--current-target-bounds
+        (goto-char (car zetta-embark--current-target-bounds))
+      (message "No embark target bounds captured")))
+
+  (defun zetta-embark-nav-end ()
+    "Move point to the end of the current embark target's bounds."
+    (interactive)
+    (if zetta-embark--current-target-bounds
+        (goto-char (cdr zetta-embark--current-target-bounds))
+      (message "No embark target bounds captured")))
+
   (define-key embark-general-map (kbd "C-j") #'zetta-embark-nav-next)
   (define-key embark-general-map (kbd "C-k") #'zetta-embark-nav-prev)
+  (define-key embark-general-map (kbd "C-a") #'zetta-embark-nav-beg)
+  (define-key embark-general-map (kbd "C-e") #'zetta-embark-nav-end)
 
   ;; Mark the nav commands as repeatable so embark re-fetches targets
   ;; at the new point and re-prompts with the same type preferred.
   ;; Result: `C-.' once enters the prompt, then `C-j' / `C-k' step
-  ;; through instances of that type with the prompt continuing on
+  ;; through instances of that type and `C-a' / `C-e' jump to the
+  ;; current target's start / end -- with the prompt continuing on
   ;; each new target. Pick an action key when you find the right one.
-  (add-to-list 'embark-repeat-actions 'zetta-embark-nav-next)
-  (add-to-list 'embark-repeat-actions 'zetta-embark-nav-prev)
+  (dolist (cmd '(zetta-embark-nav-next zetta-embark-nav-prev
+                 zetta-embark-nav-beg zetta-embark-nav-end))
+    (add-to-list 'embark-repeat-actions cmd))
 
   ;; project
   (defvar-keymap embark-project-map :parent embark-general-map)

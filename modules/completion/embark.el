@@ -781,6 +781,69 @@ filters embark-target-finders to just the picked one, then calls
 
   (define-key embark-general-map (kbd "C-l") #'zetta-embark-pick-target-type)
 
+  (defun zetta-embark-pick-instance ()
+    "List every instance of the active target's type; pick one and act.
+Inside an embark prompt, opens a `consult--read' over every
+instance of the current target's resolved nav-thing in the
+buffer (formatted as `L<line>: <snippet>'). Preview jumps point
+to each instance as you navigate. On commit, jumps to the picked
+instance and re-enters `embark-act' filtered to that target. On
+cancel (C-g), restores point."
+    (interactive)
+    (let* ((type zetta-embark--current-target-type)
+           (thing (and type (alist-get type zetta-embark-nav-type-map type))))
+      (cond
+       ((null type) (message "No embark target captured"))
+       ((not (symbolp thing))
+        (message "No nav thing for embark type `%s'" type))
+       (t
+        (let* ((start (point))
+               (cancelled t)
+               (instances (zetta-embark--collect-instances-of-thing thing))
+               (candidates
+                (mapcar
+                 (lambda (b)
+                   (let* ((line (line-number-at-pos (car b)))
+                          (snippet (replace-regexp-in-string
+                                    "\n+" " "
+                                    (buffer-substring-no-properties
+                                     (car b)
+                                     (min (cdr b) (+ (car b) 80)))))
+                          (snippet (truncate-string-to-width
+                                    snippet 80 nil nil "…")))
+                     (cons (format "L%-5d %s" line snippet) b)))
+                 instances))
+               (preview-state
+                (lambda (action cand)
+                  (pcase action
+                    ('preview
+                     (when (and cand (stringp cand))
+                       (when-let* ((b (cdr (assoc cand candidates))))
+                         (goto-char (car b))))))))) ; close lambda, pcase, let* binding
+          (cond
+           ((null candidates)
+            (message "No instances of `%s' in buffer" thing))
+           (t
+            (unwind-protect
+                (let* ((choice (consult--read (mapcar #'car candidates)
+                                              :prompt (format "Pick %s: " type)
+                                              :require-match t
+                                              :state preview-state))
+                       (picked (cdr (assoc choice candidates))))
+                  (when picked
+                    (let* ((beg (car picked))
+                           (end (cdr picked))
+                           (text (buffer-substring-no-properties beg end))
+                           (embark-target-finders
+                            (list (lambda ()
+                                    (cons type (cons text (cons beg end)))))))
+                      (goto-char beg)
+                      (setq cancelled nil)
+                      (call-interactively #'embark-act))))
+              (when cancelled (goto-char start))))))))))
+
+  (define-key embark-general-map (kbd "C-o") #'zetta-embark-pick-instance)
+
   ;; Top-level command (not an embark action): prompt for a type,
   ;; jump to the closest instance, kick off `embark-act' there.
   ;; Uses `consult--read' so we get live preview: highlighting every

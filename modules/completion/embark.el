@@ -827,10 +827,18 @@ cancel (C-g), restores point."
                      type thing))
            (t
             (unwind-protect
-                (let* ((choice (consult--read (mapcar #'car candidates)
-                                              :prompt (format "Pick %s: " type)
-                                              :require-match t
-                                              :state preview-state))
+                (let* ((choice
+                        ;; embark's pre-action `inject' prefills our
+                        ;; minibuffer with the target string, which
+                        ;; hides candidates. Add a one-shot hook that
+                        ;; clears the minibuffer right after embark's
+                        ;; inject runs.
+                        (minibuffer-with-setup-hook
+                            (lambda () (delete-minibuffer-contents))
+                          (consult--read (mapcar #'car candidates)
+                                         :prompt (format "Pick %s: " type)
+                                         :require-match t
+                                         :state preview-state)))
                        (picked (cdr (assoc choice candidates))))
                   (when picked
                     (let* ((beg (car picked))

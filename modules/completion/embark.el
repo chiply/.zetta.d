@@ -422,13 +422,6 @@ universal-argument family is already handled there."
       (identifier . symbol)
       (expression . sexp)
       (defun . defun)
-      ;; Embark's `function' target in elisp tags a callable symbol,
-      ;; not a definition. Map it to `defun' so nav/pick walk all
-      ;; function definitions in the buffer. In treesit buffers
-      ;; `function' is also a defined treesit thing, so the
-      ;; ts-function_definition entry above remains authoritative
-      ;; for the treesit path.
-      (function . defun)
       (paragraph . paragraph)
       (sentence . sentence)
       (ts-string . str-lit)
@@ -898,6 +891,56 @@ buffer which instance is currently selected in the minibuffer."
         (zetta-embark--pick-clear-preview)
         (when cancelled (goto-char start)))))
 
+  (defcustom zetta-embark-symbol-target-types
+    '(function command variable face symbol identifier
+       library package macro defvar)
+    "Embark target types that label a symbol rather than a bounded form.
+For these, `zetta-embark-pick-instance' walks every symbol in
+the buffer and keeps those whose embark identifier types include
+the captured type. So on a `function' target, the candidates are
+every callable symbol referenced in the buffer; on `variable',
+every variable; etc."
+    :type '(repeat symbol)
+    :group 'embark)
+
+  (defun zetta-embark--cheap-identifier-types (name)
+    "Fast classifier for elisp identifiers. Mirrors
+`embark--identifier-types' minus the slow library/package
+detection. Returns a list including any of: `command', `variable',
+`function', `face'; falls back to `(symbol)' or `(identifier)'."
+    (let ((symbol (intern-soft name)))
+      (if (not symbol) '(identifier)
+        (or (append
+             (and (commandp symbol) '(command))
+             (and (boundp symbol) (not (keywordp symbol)) '(variable))
+             (and (fboundp symbol) (not (commandp symbol)) '(function))
+             (and (facep symbol) '(face)))
+            '(symbol)))))
+
+  (defun zetta-embark--collect-symbols-of-embark-type (target-type)
+    "Walk buffer; return (BEG . END) bounds of every symbol whose
+embark identifier types include TARGET-TYPE. Uses an internal
+memo cache (per-call) because most identifiers repeat many times
+in a buffer -- without it the walk is unworkably slow on large
+files."
+    (let ((cache (make-hash-table :test 'equal))
+          bounds-list)
+      (save-excursion
+        (goto-char (point-min))
+        (while (re-search-forward "\\_<[[:alpha:]_-][[:alnum:]_-]*\\_>"
+                                  nil t)
+          (let* ((beg (match-beginning 0))
+                 (end (match-end 0))
+                 (name (buffer-substring-no-properties beg end))
+                 (types (or (gethash name cache)
+                            (puthash name
+                                     (zetta-embark--cheap-identifier-types
+                                      name)
+                                     cache))))
+            (when (memq target-type types)
+              (push (cons beg end) bounds-list)))))
+      (nreverse bounds-list)))
+
   (defun zetta-embark--collect-text-instances (text)
     "Walk buffer and return all (BEG . END) bounds of literal TEXT.
 Used as a fallback when the embark target type doesn't map to a
@@ -939,7 +982,12 @@ literal occurrences of the captured target's text."
         (message "No nav thing for embark type `%s'" type))
        (t
         (let* ((start (point))
-               (instances (zetta-embark--collect-instances-of-thing thing))
+               (symbol-target
+                (memq type zetta-embark-symbol-target-types))
+               (instances
+                (if symbol-target
+                    (zetta-embark--collect-symbols-of-embark-type type)
+                  (zetta-embark--collect-instances-of-thing thing)))
                (instances
                 (or instances
                     (when-let* ((b zetta-embark--current-target-bounds)

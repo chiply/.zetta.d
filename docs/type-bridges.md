@@ -52,7 +52,22 @@ read the matching scenario below.
                                         (C-e / C-S-e)
 
    active embark target  ──Bridge E──►  zetta-embark-nav-next / prev
-                                        (C-j / C-k in any embark map)
+                                        zetta-embark-nav-beg / end
+                                        (C-j / C-k / C-a / C-e)
+
+   active embark target  ──focus──────►  zetta-embark-focus-on-type
+                                        zetta-tap-set-local sync
+                                        (C-f in any embark map)
+
+   active embark target  ──highlight──►  zetta-embark-highlight-other-instances
+                                        (`*' in any embark map)
+                                        refreshes on every cycle
+
+   active embark target  ──region────►  zetta-embark-select-as-region
+                                        (C-v -- activate + exit)
+
+   prompt for type ──────────────────►  zetta-embark-jump-to-type
+                                        (s-x j -- top-level command)
 ```
 
 The three thing-at-point sources are equivalent at the *consumer* end:
@@ -67,19 +82,52 @@ cycles through.
 
 | Concept | File |
 |---|---|
-| Bridge A bounds providers (treesit → thing-at-point) | `modules/completion/tap.el` |
-| Bridge A navigation helper (`zetta-tap-forward-thing`) | `modules/completion/tap.el` |
-| Bridged thing symbols list (`zetta-treesit-bridged-things`) | `modules/completion/tap.el` |
-| Per-language thing extras table (`zetta-treesit-language-extras`) | `modules/lang/treesit.el` |
-| Generic hook applying the extras | `modules/lang/treesit.el` |
-| Bridge B factory (`zetta-embark-deftap-finder`) | `modules/completion/embark.el` |
-| Bridge C finder + node-type list | `modules/completion/embark.el` |
-| Bridge D expand-/contract-region commands | `modules/completion/embark.el` |
-| Bridge E per-target-type navigation + type map | `modules/completion/embark.el` |
-| Embark target cycle sort (innermost first) | `modules/completion/embark.el` |
-| `zetta-embark-act-contract` (reverse-cycle entry) | `modules/completion/embark.el` |
-| `C-,` single-key in-prompt back-step | `modules/completion/embark.el` |
-| Example user-defined thing (`brick`) | `modules/completion/tap.el` |
+| Bridge A bounds providers (treesit → thing-at-point) | [`modules/completion/tap.el`](../modules/completion/tap.el) |
+| Bridge A navigation helper (`zetta-tap-forward-thing`) | [`modules/completion/tap.el`](../modules/completion/tap.el) |
+| Bridged thing symbols list (`zetta-treesit-bridged-things`) | [`modules/completion/tap.el`](../modules/completion/tap.el) |
+| Per-language thing extras table (`zetta-treesit-language-extras`) | [`modules/lang/treesit.el`](../modules/lang/treesit.el) |
+| Generic hook applying the extras | [`modules/lang/treesit.el`](../modules/lang/treesit.el) |
+| Bridge B factory (`zetta-embark-deftap-finder`) | [`modules/completion/embark.el`](../modules/completion/embark.el) |
+| Bridge C finder + node-type list | [`modules/completion/embark.el`](../modules/completion/embark.el) |
+| Bridge D expand-/contract-region commands | [`modules/completion/embark.el`](../modules/completion/embark.el) |
+| Bridge E per-target-type navigation + type map | [`modules/completion/embark.el`](../modules/completion/embark.el) |
+| Embark target cycle sort (innermost first) | [`modules/completion/embark.el`](../modules/completion/embark.el) |
+| `zetta-embark-act-contract` (reverse-cycle entry) | [`modules/completion/embark.el`](../modules/completion/embark.el) |
+| `C-,` single-key in-prompt back-step | [`modules/completion/embark.el`](../modules/completion/embark.el) |
+| Focus integration (`zetta-embark-focus-on-type`, `embark-expression` smart-bounds thing) | [`modules/completion/embark.el`](../modules/completion/embark.el), [`modules/ui/focus.el`](../modules/ui/focus.el) |
+| Focus / tap sync (`zetta-tap-set-local` mirrors to `focus-current-thing`) | [`modules/completion/tap.el`](../modules/completion/tap.el) |
+| Highlight all instances of a type | [`modules/completion/embark.el`](../modules/completion/embark.el) |
+| Select-as-region (`C-v`) | [`modules/completion/embark.el`](../modules/completion/embark.el) |
+| Set current thing from active target (`C-t`) | [`modules/completion/embark.el`](../modules/completion/embark.el) |
+| Jump-to-type prompt (`zetta-embark-jump-to-type`, `s-x j`) | [`modules/completion/embark.el`](../modules/completion/embark.el) |
+| Single-space sentence boundaries (so `sentence` works in prose) | [`modules/core/prose.el`](../modules/core/prose.el) |
+| Tab-bar indicator (`zetta-tab-bar-current-thing`) | [`modules/core/tab-bar.el`](../modules/core/tab-bar.el) |
+| Example user-defined thing (`brick`) | [`modules/completion/tap.el`](../modules/completion/tap.el) |
+
+## Embark prompt commands
+
+All bound in [`embark-general-map`](../modules/completion/embark.el)
+so every action keymap inherits them. Aerospace owns the `alt-*`
+(`Meta`) keyspace on macOS, so every binding here uses `Ctrl` or
+single chars and is verified safe across embark's built-in maps.
+
+| Key | Command | Effect |
+|---|---|---|
+| `C-.` | `embark-act` | Open prompt; cycle forward through targets (innermost → outermost via size sort) |
+| `C-,` | `zetta-embark-back-cycle` | Cycle backward, one step. Single key, non-toggling |
+| `C-j` | `zetta-embark-nav-next` | Next instance of the current target's type. Repeatable — embark stays open on the new target |
+| `C-k` | `zetta-embark-nav-prev` | Previous instance. Repeatable |
+| `C-a` | `zetta-embark-nav-beg` | Goto start of current target's bounds. Repeatable |
+| `C-e` | `zetta-embark-nav-end` | Goto end (lands inside bounds, not past). Repeatable |
+| `C-t` | `zetta-embark-set-current-thing` | Set `zetta-tap-current-thing` to the active target's type (drives `s-j` / `s-k` from here on). Repeatable |
+| `C-f` | `zetta-embark-focus-on-type` | Activate `focus-mode` on the active target — dims everything else |
+| `*` | `zetta-embark-highlight-other-instances` | Overlay every OTHER instance of the type. Repeatable — embark stays open AND highlights refresh on each cycle |
+| `C-v` | `zetta-embark-select-as-region` | Mark+point over the bounds, activate region, exit embark |
+| `C-SPC` | `mark` *(embark built-in)* | Like `C-v` but stays in the prompt with type `region` |
+
+Outside the prompt, [`zetta-embark-jump-to-type`](../modules/completion/embark.el)
+(bound to `s-x j` in the tap keymap list) prompts for a type, jumps
+to the nearest instance, and opens `embark-act` there.
 
 ## Scenario 1 — text- or regex-defined thing
 
@@ -257,18 +305,32 @@ role; the bindings keep them side-by-side.
 
 ## Bridge E — per-target-type navigation in the prompter
 
-In any embark prompter, `C-j` jumps to the next instance of the
-current target's type, `C-k` to the previous. Bound in
-`embark-general-map` so every action keymap inherits the navigation.
+In any embark prompter, four repeatable nav keys step around inside
+the active target's bounds and through other instances of the same
+type. All bound in [`embark-general-map`](../modules/completion/embark.el)
+so every action keymap inherits them.
+
+| Key | Command | What it does |
+|---|---|---|
+| `C-j` | `zetta-embark-nav-next` | Next instance of the same type |
+| `C-k` | `zetta-embark-nav-prev` | Previous instance |
+| `C-a` | `zetta-embark-nav-beg` | Start of the current bounds |
+| `C-e` | `zetta-embark-nav-end` | End of the current bounds (lands inside, not past — so embark's repeat re-prompts on the same target) |
+
+All four are in `embark-repeat-actions`, so the prompt stays open
+on the new target after each press — pick an action key when you
+land where you want.
 
 Wiring:
 
 - `zetta-embark-nav-type-map` (defcustom) maps embark target types
   to thing-at-point things. Missing entries fall through to the type
   itself (works if the type is already a thing).
-- An `:always` hook on `embark-pre-action-hooks` captures the active
-  target's `:type` and `:bounds` into buffer-local vars before each
-  action invocation.
+- An `:always` hook on `embark-pre-action-hooks` captures the
+  active target's `:type` and `:bounds` into buffer-local vars
+  before each action invocation. Used by every action that needs
+  the current target metadata (nav, focus, highlight, set-thing,
+  select-as-region).
 - The nav commands read those vars, look up the thing, and call
   `zetta-tap-forward-thing`.
 
@@ -279,11 +341,6 @@ Effects:
 - On a `defun` target, `C-j` jumps to the next defun.
 - On a target whose type has no nav entry (e.g. `file`, `buffer`,
   `project`), the command messages and does nothing.
-
-Because nav is implemented as an embark action, embark exits the
-prompt after `C-j` / `C-k` runs. To navigate several scopes without
-re-pressing `C-.` each time, bind `embark-act-noquit` (defined at
-`embark.el:8`) to a separate key.
 
 ## Cycling order
 
@@ -330,6 +387,91 @@ between cycle iterations, so a bare `C-,` binding to
 marker + advice approach forces `prefix-arg = -1` unconditionally,
 and an after-advice on `embark--rotate` resets `prefix-arg` to nil
 after consumption so direction is per-press rather than sticky.
+
+## Focus-mode integration
+
+`focus-mode` (the [focus](https://github.com/larstvei/Focus) package,
+configured in [`modules/ui/focus.el`](../modules/ui/focus.el)) dims
+everything except a designated thing-at-point thing at point, given
+by `focus-current-thing`. Two integration points:
+
+**Sync from `zetta-tap-set-local`** ([`tap.el`](../modules/completion/tap.el)) —
+when you set the buffer's current thing via `M-x zetta-tap-set-local`
+(or `s-x t`), `focus-current-thing` is mirrored in the same call.
+So changing your nav thing (`s-j` / `s-k`) also retargets
+focus-mode. The forward-declaration of `focus-current-thing` in
+`focus.el` lets this work even before the (lazy) focus package
+loads.
+
+**Embark `C-f` action** — `zetta-embark-focus-on-type` in
+[`embark.el`](../modules/completion/embark.el):
+
+- Resolves the active embark target type via
+  `zetta-embark-nav-type-map` to a thing (e.g. `ts-call` → `call`).
+- Special-case for `expression`: focus uses a custom
+  `embark-expression` thing whose `bounds-of-thing-at-point` calls
+  embark's `embark-target-expression-at-point` (smart enclosing-form
+  bounds). Plain `bounds-of-thing-at-point 'sexp` would shrink to
+  the sub-sexp at point as you move inside; the smart version keeps
+  the dim region stable on the enclosing form. Nav uses plain `sexp`
+  separately, where `forward-sexp` is reliable.
+- Sets both `zetta-tap-current-thing` (nav) and
+  `focus-current-thing` (focus) to the resolved thing.
+- Snaps point to bounds.start before enabling focus-mode, so the
+  initial focus region matches what embark captured.
+
+`C-f` is unbound in every embark built-in map and unaffected by
+aerospace's bindings (which only take `alt-*` and `cmd-*`).
+
+## Highlight all instances of a type
+
+`zetta-embark-highlight-other-instances` (bound to `*` in
+[`embark-general-map`](../modules/completion/embark.el)) walks the
+buffer and overlays every other instance of the active target's
+resolved nav-thing with `zetta-embark-other-instance-face` (light
+yellow / dark amber, distinct from embark's highlight). The current
+target itself is skipped.
+
+The action is in `embark-repeat-actions`, so the prompt stays open
+after `*`. Two coordinated advice keep highlights live across
+cycling and clear them on exit:
+
+- **`:filter-return` on `embark--rotate`** — `embark-cycle` is
+  dispatched inline in the act loop and does NOT route through
+  `embark--act`, so pre/post-action hooks never fire on a cycle.
+  The advice catches the rotation, reads the new head target's
+  `:type` / `:bounds`, and re-paints highlights against the new
+  type. This is what makes the highlight set update as you press
+  `C-.` to cycle.
+- **`:around` on `embark-act`** — wraps the whole prompt session in
+  `unwind-protect`. Whenever `embark-act` exits (action picked,
+  `C-g`, completion), overlays are deleted and the enabled flag is
+  reset. Catches every exit path, including actions that happen to
+  be in `embark-repeat-actions` (where a post-action-hook would
+  not reliably distinguish "still cycling" from "final action").
+
+`M-x zetta-embark-clear-highlights` clears manually.
+
+## Jump-to-type and select-as-region
+
+Two more embark-integrated commands worth flagging:
+
+- **`zetta-embark-jump-to-type`** (bound to `s-x j` via
+  [`tap.el`](../modules/completion/tap.el)) — a top-level command
+  (not an embark action). Prompts for a type via `completing-read`
+  over the union of `zetta-embark-nav-type-map` entries and
+  `zetta-tap--things`. Finds the closest instance to point, jumps
+  there, and kicks off `embark-act` on it. Wrapped in
+  `unwind-protect` so `C-g` during either the read or the action
+  prompt restores point to the original position.
+
+- **`zetta-embark-select-as-region`** (bound to `C-v` in
+  [`embark-general-map`](../modules/completion/embark.el)) — sets
+  mark at the active target's `bounds.end`, point at `bounds.start`,
+  activates the region, and exits embark. The selection is
+  immediately usable for any region-based command. Distinct from
+  `C-SPC` (embark's built-in `mark`) which stays in the prompt with
+  type `region` so you can chain another action.
 
 ## Discovering tree-sitter node names
 
@@ -587,12 +729,62 @@ and that the `:around` advice on `embark-keymap-prompter` is active.
 
 1. Point inside one of several functions in the buffer.
 2. `C-.` (embark-act) on a function target.
-3. `C-j` → point jumps to start of next function. Embark exits.
-4. `C-.` again on the new function → `C-j` → next function.
-5. `C-.` then `C-k` → previous function.
+3. `C-j` → point jumps to start of next function. Embark STAYS OPEN
+   on the new function (the nav commands are repeatable).
+4. `C-j` again → next function, prompt still open.
+5. `C-k` → previous function, prompt still open.
+6. Press an action key (or `C-g`) → embark exits.
 
 Repeat for other types: on a call target, `C-j` walks calls; on a
 string target, `C-j` walks strings; on a defun, `C-j` walks defuns.
+
+### Test 16 — `C-a` / `C-e` jump to bounds start / end
+
+1. `C-.` on a long target (e.g. a function definition).
+2. `C-a` → point at the function's start. Prompt still open on the
+   same function (because `C-e` lands inside bounds, not past it,
+   the repeat re-prompts on the same target).
+3. `C-e` → point at the function's end character.
+
+### Test 17 — `C-t` sets current thing from active target
+
+1. `C-.` on a `sentence` target.
+2. `C-t` → echo area says `zetta-tap-current-thing = `sentence'`.
+3. Exit embark, then `s-j` / `s-k` outside the prompt — now walks
+   sentences (was probably `defun` before).
+4. Confirm via the tab-bar indicator: it should now show `[sentence]`.
+
+### Test 18 — `*` highlights all instances; auto-refresh on cycle
+
+1. `C-.` on a sentence target in prose. `*` → all OTHER sentences
+   in the buffer get a distinct overlay. Embark stays open.
+2. `C-.` again (cycle) → if the new target is a `paragraph`, the
+   overlays automatically refresh to highlight all paragraphs.
+3. Press any action key (or `C-g`) → overlays clear automatically.
+
+### Test 19 — `C-v` selects region
+
+1. `C-.` on any bounded target.
+2. `C-v` → embark exits; region is active over the captured bounds.
+3. Apply any region-based command (e.g. `M-w` to copy).
+
+### Test 20 — `C-f` focus on active target
+
+1. `C-.` on an expression in code. `C-f` → focus-mode activates;
+   the expression stays focused (smart enclosing-form bounds) even
+   as you move point inside it.
+2. Move point to a sibling expression — focus tracks to the new
+   enclosing form.
+3. `M-x focus-mode` to disable.
+
+### Test 21 — `s-x j` jump-to-type
+
+1. `M-x zetta-embark-jump-to-type` (or `s-x j` in the mapped keymap
+   list). Pick a type at the completing-read prompt.
+2. Point jumps to the nearest instance of that type. `embark-act`
+   opens on it.
+3. Cancel with `C-g` either at the read or the action prompt —
+   point returns to its original position.
 
 ### Diagnostic one-liners
 
@@ -622,12 +814,39 @@ zetta-tap-current-thing
 
 (zetta-embark--bounded-targets-at-point)
 ;; -> list of (BEG . END) bounds Bridge D would consider for expansion
+
+(lookup-key embark-general-map (kbd "C-f"))
+;; -> zetta-embark-focus-on-type if the focus action is bound
+
+(lookup-key embark-general-map (kbd "*"))
+;; -> zetta-embark-highlight-other-instances if highlight is bound
+
+(lookup-key embark-general-map (kbd "C-v"))
+;; -> zetta-embark-select-as-region if select-region is bound
+
+zetta-embark--highlights-enabled
+;; -> non-nil while the highlight overlay set is active
+
+(memq 'zetta-embark-highlight-other-instances embark-repeat-actions)
+;; -> non-nil if highlight is repeatable (prompt stays open)
+
+(advice-member-p 'embark--rotate@zetta-refresh-highlights
+                 'embark--rotate)
+;; -> the :filter-return advice that refreshes highlights on cycle
 ```
 
 ## References
 
 - [GNU Emacs Lisp Reference Manual — User-defined Things](https://www.gnu.org/software/emacs/manual/html_node/elisp/User_002ddefined-Things.html)
 - [Embark manual on ELPA](https://elpa.gnu.org/devel/doc/embark.html)
+- [Focus package on GitHub](https://github.com/larstvei/Focus)
 - [Tree-sitter in Emacs 30 — Yuan Fu](https://archive.casouri.cc/note/2024/emacs-30-tree-sitter/)
 - Emacs source: `lisp/thingatpt.el` — `forward-thing`, `bounds-of-thing-at-point`, the provider-alist machinery
 - Emacs source: `lisp/treesit.el` — `treesit-thing-settings`, `treesit-navigate-thing`, `treesit-thing-at-point`
+- Local source:
+  - [`modules/completion/embark.el`](../modules/completion/embark.el) — all bridges, target-finders, embark commands
+  - [`modules/completion/tap.el`](../modules/completion/tap.el) — `zetta-tap-*` nav helpers, `zetta-treesit-bridged-things`
+  - [`modules/lang/treesit.el`](../modules/lang/treesit.el) — per-language thing extras and apply hook
+  - [`modules/ui/focus.el`](../modules/ui/focus.el) — focus-mode integration and faces
+  - [`modules/core/prose.el`](../modules/core/prose.el) — `sentence-end-double-space = nil` default
+  - [`modules/core/tab-bar.el`](../modules/core/tab-bar.el) — `[<thing>]` indicator

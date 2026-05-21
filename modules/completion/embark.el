@@ -709,6 +709,22 @@ changes. Runs only when `zetta-embark--highlights-enabled' is non-nil."
   (define-key embark-general-map (kbd "C-t") #'zetta-embark-set-current-thing)
   (define-key embark-general-map (kbd "*")   #'zetta-embark-highlight-other-instances)
 
+  (defun zetta-embark-select-as-region ()
+    "Activate region over the current embark target's bounds.
+Mark goes at end, point at start, and the region is made active.
+Embark exits after (not added to `embark-repeat-actions') so the
+selection is immediately usable for any region-based command."
+    (interactive)
+    (if-let* ((bounds zetta-embark--current-target-bounds))
+        (let ((beg (car bounds))
+              (end (cdr bounds)))
+          (push-mark end nil t)
+          (goto-char beg)
+          (activate-mark))
+      (message "No embark target bounds captured")))
+
+  (define-key embark-general-map (kbd "C-v") #'zetta-embark-select-as-region)
+
   ;; Top-level command (not an embark action): prompt for a type,
   ;; jump to the closest instance, kick off `embark-act' there.
   ;; `unwind-protect' restores point if the read or action is

@@ -776,11 +776,21 @@ Useful for jumping to types that may not be present at point."
              ((null instances)
               (message "No instances of `%s' in buffer" thing))
              (t
-              (let ((closest (car (sort (copy-sequence instances)
-                                        (lambda (a b)
-                                          (< (abs (- (car a) start))
-                                             (abs (- (car b) start))))))))
-                (goto-char (car closest))
+              (let* ((closest (car (sort (copy-sequence instances)
+                                         (lambda (a b)
+                                           (< (abs (- (car a) start))
+                                              (abs (- (car b) start)))))))
+                     (beg (car closest))
+                     (end (cdr closest))
+                     (text (buffer-substring-no-properties beg end))
+                     ;; Force embark to dispatch on the picked TYPE
+                     ;; (not whatever it would auto-detect at the new
+                     ;; point). Replace the finder list with a single
+                     ;; finder that returns exactly this target.
+                     (embark-target-finders
+                      (list (lambda ()
+                              (cons sym (cons text (cons beg end)))))))
+                (goto-char beg)
                 (setq cancelled nil)
                 (call-interactively #'embark-act)))))
         (when cancelled (goto-char start)))))

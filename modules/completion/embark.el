@@ -671,6 +671,21 @@ changes. Runs only when `zetta-embark--highlights-enabled' is non-nil."
         (append (alist-get :always embark-pre-action-hooks)
                 (list #'zetta-embark--refresh-highlights-hook)))
 
+  ;; Clear highlights automatically once the user picks a NON-repeat
+  ;; action (i.e. embark is exiting the prompt). Repeatable actions
+  ;; -- the cycle / nav / highlight commands -- stay in the prompt,
+  ;; so we keep highlights alive through them.
+  (defun zetta-embark--clear-highlights-on-exit-hook (&rest plist)
+    (when (and zetta-embark--highlights-enabled
+               (let ((action (plist-get plist :action)))
+                 (not (memq action embark-repeat-actions))))
+      (zetta-embark--clear-instance-overlays)
+      (setq zetta-embark--highlights-enabled nil)))
+
+  (setf (alist-get :always embark-post-action-hooks)
+        (cons #'zetta-embark--clear-highlights-on-exit-hook
+              (alist-get :always embark-post-action-hooks)))
+
   (define-key embark-general-map (kbd "C-j") #'zetta-embark-nav-next)
   (define-key embark-general-map (kbd "C-k") #'zetta-embark-nav-prev)
   (define-key embark-general-map (kbd "C-a") #'zetta-embark-nav-beg)
@@ -734,7 +749,9 @@ Useful for jumping to types that may not be present at point."
   ;; current target's start / end -- with the prompt continuing on
   ;; each new target. Pick an action key when you find the right one.
   (dolist (cmd '(zetta-embark-nav-next zetta-embark-nav-prev
-                 zetta-embark-nav-beg zetta-embark-nav-end))
+                 zetta-embark-nav-beg zetta-embark-nav-end
+                 zetta-embark-set-current-thing
+                 zetta-embark-highlight-other-instances))
     (add-to-list 'embark-repeat-actions cmd))
 
   ;; project

@@ -153,6 +153,18 @@ TYPE is the embark target type reported; defaults to THING."
   (zetta-embark-deftap-finder block)
   (zetta-embark-deftap-finder brick)
 
+  ;; Register text-shaped scopes too. Embark's built-in `sentence',
+  ;; `paragraph', and `defun' finders are hardcoded to text / help /
+  ;; Info / man modes, so they never fire in eww-mode, org-mode,
+  ;; prog-mode, etc. Our deftap-finder has no such restriction, and
+  ;; the size-sort + ignore-errors + clamp make it safe to register
+  ;; globally. In modes where the things are also surfaced by a
+  ;; built-in finder, dedupe in `embark--targets' collapses the
+  ;; overlap to a single target.
+  (zetta-embark-deftap-finder line)
+  (zetta-embark-deftap-finder sentence)
+  (zetta-embark-deftap-finder paragraph)
+
   ;; A defun keymap so embark has somewhere to dispatch when its
   ;; built-in `embark-target-defun-at-point' fires (it ships no
   ;; defun-specific map by default; the keymap also covers the

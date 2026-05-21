@@ -124,7 +124,15 @@ TYPE is the embark target type reported; defaults to THING."
            (unless (or (minibufferp)
                        (derived-mode-p 'completion-list-mode
                                        'embark-collect-mode))
-             (when-let* ((bnds (bounds-of-thing-at-point ',thing-sym))
+             ;; `ignore-errors' around the bounds lookup: some
+             ;; user-defined providers call functions that signal
+             ;; rather than return nil when there is no thing here.
+             ;; For instance `brick-bounds-of-brick-at-point' calls
+             ;; `end-of-thing 'paragraph' which errors in org-mode
+             ;; on a heading or inside a property drawer. Treat any
+             ;; signal as "no target" so embark-act doesn't crash.
+             (when-let* ((bnds (ignore-errors
+                                 (bounds-of-thing-at-point ',thing-sym)))
                          ;; Clamp to buffer boundaries: some user-defined
                          ;; bounds functions (e.g. `brick' here) compute
                          ;; (+ 1 point-max), which would later crash

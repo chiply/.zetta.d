@@ -891,7 +891,17 @@ target. On cancel (C-g), restores point."
                           (snippet (truncate-string-to-width
                                     snippet 80 nil nil "…")))
                      (cons (format "L%-5d %s" line snippet) b)))
-                 instances)))
+                 instances))
+               ;; Rotate so the first candidate is the one at or
+               ;; after `start' -- presents the list as
+               ;; "from-here-onward, then wrap around to the top".
+               (pivot (cl-position-if
+                       (lambda (c) (>= (car (cdr c)) start))
+                       candidates))
+               (candidates (if pivot
+                               (append (nthcdr pivot candidates)
+                                       (cl-subseq candidates 0 pivot))
+                             candidates)))
           (cond
            ((null candidates)
             (message "No instances of type `%s' (thing `%s') in buffer"

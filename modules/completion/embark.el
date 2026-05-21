@@ -746,13 +746,13 @@ selection is immediately usable for any region-based command."
 
   (define-key embark-general-map (kbd "C-v") #'zetta-embark-select-as-region)
 
-  (defvar-local zetta-embark--pick-type-preview-overlay nil
+  (defvar-local zetta-embark--pick-preview-overlay nil
     "One-shot preview overlay for `zetta-embark--pick-target-type-do'.")
 
-  (defun zetta-embark--pick-type-clear-preview ()
-    (when (overlayp zetta-embark--pick-type-preview-overlay)
-      (delete-overlay zetta-embark--pick-type-preview-overlay))
-    (setq zetta-embark--pick-type-preview-overlay nil))
+  (defun zetta-embark--pick-clear-preview ()
+    (when (overlayp zetta-embark--pick-preview-overlay)
+      (delete-overlay zetta-embark--pick-preview-overlay))
+    (setq zetta-embark--pick-preview-overlay nil))
 
   (defun zetta-embark--pick-target-type-do (candidates)
     "Open consult to pick one of CANDIDATES. Runs *after* embark-act
@@ -769,7 +769,7 @@ currently-focused candidate's bounds with
                  (lambda (action cand)
                    (pcase action
                      ('preview
-                      (zetta-embark--pick-type-clear-preview)
+                      (zetta-embark--pick-clear-preview)
                       (when (and cand (stringp cand))
                         (when-let* ((tgt (cdr (assoc cand candidates)))
                                     (b (plist-get tgt :bounds)))
@@ -777,7 +777,7 @@ currently-focused candidate's bounds with
                             (overlay-put
                              ov 'face 'zetta-embark-other-instance-face)
                             (overlay-put ov 'zetta-embark-highlight t)
-                            (setq zetta-embark--pick-type-preview-overlay ov)
+                            (setq zetta-embark--pick-preview-overlay ov)
                             (goto-char (car b))))))))))
                (picked (cdr (assoc choice candidates))))
           (when picked
@@ -790,7 +790,7 @@ currently-focused candidate's bounds with
                     (list (lambda ()
                             (cons sym (cons text (cons beg end)))))))
               (call-interactively #'embark-act))))
-      (zetta-embark--pick-type-clear-preview)))
+      (zetta-embark--pick-clear-preview)))
 
   (defun zetta-embark-pick-target-type ()
     "Pick a target type from the ones at point, then re-enter embark.
@@ -820,7 +820,10 @@ after embark-act's prompt exits."
 
   (defun zetta-embark--pick-instance-do (type thing candidates start)
     "Open consult to pick one of CANDIDATES. Called *after* the
-outer embark-act exits, so we have a clean minibuffer context."
+outer embark-act exits, so we have a clean minibuffer context.
+Preview paints the focused candidate's bounds with
+`zetta-embark-other-instance-face' so the user can see in the
+buffer which instance is currently selected in the minibuffer."
     (let ((cancelled t))
       (unwind-protect
           (let* ((choice (consult--read
@@ -829,10 +832,20 @@ outer embark-act exits, so we have a clean minibuffer context."
                           :require-match t
                           :state
                           (lambda (action cand)
-                            (when (and (eq action 'preview)
-                                       cand (stringp cand))
-                              (when-let* ((b (cdr (assoc cand candidates))))
-                                (goto-char (car b)))))))
+                            (pcase action
+                              ('preview
+                               (zetta-embark--pick-clear-preview)
+                               (when (and cand (stringp cand))
+                                 (when-let* ((b (cdr (assoc cand candidates))))
+                                   (let ((ov (make-overlay (car b) (cdr b))))
+                                     (overlay-put
+                                      ov 'face
+                                      'zetta-embark-other-instance-face)
+                                     (overlay-put
+                                      ov 'zetta-embark-highlight t)
+                                     (setq zetta-embark--pick-preview-overlay
+                                           ov)
+                                     (goto-char (car b)))))))) ))
                  (picked (cdr (assoc choice candidates))))
             (when picked
               (let* ((beg (car picked))
@@ -844,6 +857,7 @@ outer embark-act exits, so we have a clean minibuffer context."
                 (goto-char beg)
                 (setq cancelled nil)
                 (call-interactively #'embark-act))))
+        (zetta-embark--pick-clear-preview)
         (when cancelled (goto-char start)))))
 
   (defun zetta-embark-pick-instance ()

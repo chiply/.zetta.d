@@ -698,6 +698,7 @@ turn off."
                          (> (cdr b) (car cur-bounds)))
               (let ((ov (make-overlay (car b) (cdr b))))
                 (overlay-put ov 'face 'zetta-embark-other-instance-face)
+                (overlay-put ov 'priority 100)
                 (overlay-put ov 'zetta-embark-highlight t)
                 (push ov zetta-embark--instance-overlays))))
           (message "Highlighted %d other `%s' instance(s)"
@@ -806,6 +807,7 @@ currently-focused candidate's bounds with
                           (let ((ov (make-overlay (car b) (cdr b))))
                             (overlay-put
                              ov 'face 'zetta-embark-other-instance-face)
+                            (overlay-put ov 'priority 100)
                             (overlay-put ov 'zetta-embark-highlight t)
                             (setq zetta-embark--pick-preview-overlay ov)
                             (goto-char (car b))))))))))
@@ -872,6 +874,7 @@ buffer which instance is currently selected in the minibuffer."
                                      (overlay-put
                                       ov 'face
                                       'zetta-embark-other-instance-face)
+                                     (overlay-put ov 'priority 100)
                                      (overlay-put
                                       ov 'zetta-embark-highlight t)
                                      (setq zetta-embark--pick-preview-overlay

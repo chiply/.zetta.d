@@ -194,8 +194,13 @@ TYPE is a character: ?a alphabetic, ?t timestamp, ?p priority, ?o TODO order."
    "<S-return>" 'org-edit-special
    "C-+" 'org-table-expand
    "C-_" 'org-table-shrink
-   "s-j" 'org-next-visible-heading
-   "s-k" 'org-previous-visible-heading
+   ;; `s-j' / `s-k' navigate by `zetta-tap-current-thing' (whatever
+   ;; M-x zetta-tap-set-local was last invoked with, default `defun').
+   ;; `s-J' / `s-K' still walk babel blocks. Old heading navigation
+   ;; (`org-next/previous-visible-heading') remains on `org-shiftup' /
+   ;; `org-shiftdown' and the standard org outline-cycle bindings.
+   "s-j" 'zetta-tap-next
+   "s-k" 'zetta-tap-prev
    "s-J" 'org-babel-next-src-block
    "s-K" 'org-babel-previous-src-block)
   (

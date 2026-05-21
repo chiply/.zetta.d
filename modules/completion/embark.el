@@ -891,6 +891,26 @@ buffer which instance is currently selected in the minibuffer."
         (zetta-embark--pick-clear-preview)
         (when cancelled (goto-char start)))))
 
+  (defun zetta-embark--collect-text-instances (text)
+    "Walk buffer and return all (BEG . END) bounds of literal TEXT.
+Used as a fallback when the embark target type doesn't map to a
+walkable thing-at-point or treesit thing -- e.g., elisp `function'
+targets where 'instances' means 'other occurrences of this
+symbol'. Uses symbol boundaries when TEXT looks like a single
+identifier, otherwise literal matching."
+    (when (and text (> (length text) 0))
+      (let* ((symbol-like
+              (string-match-p "\\`[[:alnum:]_-]+\\'" text))
+             (regexp (if symbol-like
+                         (concat "\\_<" (regexp-quote text) "\\_>")
+                       (regexp-quote text)))
+             bounds-list)
+        (save-excursion
+          (goto-char (point-min))
+          (while (re-search-forward regexp nil t)
+            (push (cons (match-beginning 0) (match-end 0)) bounds-list)))
+        (nreverse bounds-list))))
+
   (defun zetta-embark-pick-instance ()
     "List every instance of the active target's type; pick one and act.
 Computes the candidate list immediately, then defers the
@@ -898,7 +918,11 @@ Computes the candidate list immediately, then defers the
 exits its prompt. Otherwise the nested-minibuffer / embark-inject
 context prevents completion UIs from showing. On commit, jumps to
 the picked instance and re-enters `embark-act' filtered to that
-target. On cancel (C-g), restores point."
+target. On cancel (C-g), restores point.
+
+If the resolved thing isn't walkable (not a thing-at-point thing
+and not treesit-defined here), falls back to searching for
+literal occurrences of the captured target's text."
     (interactive)
     (let* ((type zetta-embark--current-target-type)
            (thing (and type (alist-get type zetta-embark-nav-type-map type))))
@@ -909,6 +933,12 @@ target. On cancel (C-g), restores point."
        (t
         (let* ((start (point))
                (instances (zetta-embark--collect-instances-of-thing thing))
+               (instances
+                (or instances
+                    (when-let* ((b zetta-embark--current-target-bounds)
+                                (text (buffer-substring-no-properties
+                                       (car b) (cdr b))))
+                      (zetta-embark--collect-text-instances text))))
                (candidates
                 (mapcar
                  (lambda (b)

@@ -1035,6 +1035,115 @@ literal occurrences of the captured target's text."
 
   (define-key embark-general-map (kbd "C-o") #'zetta-embark-pick-instance)
 
+  ;; ---- avy integration ----
+
+  (defun zetta-embark--collect-visible-instances (type thing)
+    "Return instances of TYPE (or its mapped THING) that intersect
+the selected window's visible range. Dispatches to the symbol
+collector for symbol-shaped types, the standard thing walker
+otherwise."
+    (let* ((win-beg (window-start))
+           (win-end (window-end nil t))
+           (all (if (memq type zetta-embark-symbol-target-types)
+                    (zetta-embark--collect-symbols-of-embark-type type)
+                  (zetta-embark--collect-instances-of-thing thing))))
+      (cl-remove-if-not
+       (lambda (b)
+         (and (>= (cdr b) win-beg)
+              (<= (car b) win-end)))
+       all)))
+
+  (defun zetta-embark--avy-pick-bounds (instances)
+    "Run `avy-process' over INSTANCES (list of BEG.END cons).
+Returns the picked (BEG . END) or nil on cancel/abort. Binds
+`avy-action' to `ignore' and captures the selection via
+`avy-pre-action' so the bounds (not just the position) survive
+the avy roundtrip."
+    (when (and (fboundp 'avy-process) instances)
+      (let* ((picked nil)
+             (avy-pre-action (lambda (res) (setq picked res)))
+             (avy-action #'ignore))
+        (avy-process instances)
+        (and (consp picked) (car picked)))))
+
+  (defun zetta-embark--avy-act (type bounds)
+    "Jump to BOUNDS, dispatch `embark-act' with a one-shot finder
+returning TYPE on BOUNDS."
+    (let* ((beg (car bounds))
+           (end (cdr bounds))
+           (text (buffer-substring-no-properties beg end))
+           (embark-target-finders
+            (list (lambda ()
+                    (cons type (cons text (cons beg end)))))))
+      (goto-char beg)
+      (call-interactively #'embark-act)))
+
+  (defun zetta-embark--avy-pick-instance-do (type thing start)
+    "After embark exits, collect visible instances, avy-pick, act."
+    (let ((instances (zetta-embark--collect-visible-instances type thing)))
+      (cond
+       ((null instances)
+        (message "No visible instances of `%s'" type)
+        (goto-char start))
+       (t
+        (if-let* ((bounds (zetta-embark--avy-pick-bounds instances)))
+            (zetta-embark--avy-act type bounds)
+          (goto-char start))))))
+
+  (defun zetta-embark-avy-pick-instance ()
+    "Avy-pick from visible instances of the active target's type.
+Deferred via `run-at-time' so avy opens after embark-act exits
+its prompt -- same trick as `pick-instance'. On pick, jumps and
+re-enters `embark-act' on the picked instance. On abort,
+restores point."
+    (interactive)
+    (let* ((type zetta-embark--current-target-type)
+           (thing (and type (alist-get type zetta-embark-nav-type-map type))))
+      (cond
+       ((null type) (message "No embark target captured"))
+       (t
+        (let ((start (point)))
+          (run-at-time 0 nil
+                       #'zetta-embark--avy-pick-instance-do
+                       type thing start))))))
+
+  (define-key embark-general-map (kbd "C-;") #'zetta-embark-avy-pick-instance)
+
+  (defun zetta-embark-avy-jump-to-type ()
+    "Prompt for a type with `consult--read', then avy-pick from
+visible instances of that type and dispatch `embark-act'. The
+top-level avy counterpart of `zetta-embark-jump-to-type'."
+    (interactive)
+    (let* ((start (point))
+           (candidates
+            (delete-dups
+             (mapcar #'symbol-name
+                     (cl-remove-if-not
+                      #'zetta-embark--jump-type-applicable-p
+                      (delq nil
+                            (append
+                             (mapcar #'car zetta-embark-nav-type-map)
+                             (mapcar #'cdr zetta-embark-nav-type-map)
+                             zetta-embark-symbol-target-types
+                             (when (boundp 'zetta-tap--things)
+                               (mapcar (lambda (s)
+                                         (and s (intern-soft s)))
+                                       zetta-tap--things)))))))))
+      (let* ((choice (consult--read candidates
+                                    :prompt "Avy-jump to type: "
+                                    :require-match t))
+             (sym (intern choice))
+             (thing (alist-get sym zetta-embark-nav-type-map sym))
+             (instances (zetta-embark--collect-visible-instances sym thing)))
+        (cond
+         ((null instances)
+          (message "No visible instances of `%s'" sym)
+          (goto-char start))
+         (t
+          (if-let* ((bounds (zetta-embark--avy-pick-bounds instances)))
+              (zetta-embark--avy-act sym bounds)
+            (goto-char start)))))))
+
   ;; Top-level command (not an embark action): prompt for a type,
   ;; jump to the closest instance, kick off `embark-act' there.
   ;; Uses `consult--read' so we get live preview: highlighting every

@@ -191,6 +191,7 @@ interactively, prompts from `zetta-tap--things'."
  "s-x V" 'zetta-tap-select
  "s-x t" 'zetta-tap-set-local
  "s-x j" 'zetta-embark-jump-to-type
+ "s-x a" 'zetta-embark-avy-jump-to-type
  "s-/" 'zetta-tap-comment
  )
 

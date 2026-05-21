@@ -37,7 +37,11 @@ avoided by going through `treesit-navigate-thing' directly."
         ;; and top-level things (where 'end+snap happened to work).
         (when-let* ((dest (treesit-navigate-thing (point) n 'beg thing)))
           (goto-char dest))
-      (forward-thing thing n)
+      ;; Legacy forward-thing path. Wrap in `ignore-errors' so
+      ;; `scan-error' ("Containing expression ends prematurely")
+      ;; from `forward-sexp' at buffer boundaries / inside partial
+      ;; forms becomes a no-op rather than crashing nav.
+      (ignore-errors (forward-thing thing n))
       ;; Legacy forward-op for defun-style things lands at the end
       ;; boundary; snap to bounds.start so the next call's "still
       ;; inside" check works.

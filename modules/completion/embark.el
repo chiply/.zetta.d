@@ -399,7 +399,7 @@ universal-argument family is already handled there."
   ;; `defun', C-j jumps to the next defun.
   (defcustom zetta-embark-nav-type-map
     '((identifier . symbol)
-      (expression . embark-expression)
+      (expression . sexp)
       (defun . defun)
       (paragraph . paragraph)
       (sentence . sentence)
@@ -512,12 +512,12 @@ current one."
   (put 'embark-expression 'bounds-of-thing-at-point
        'zetta-embark--expression-bounds)
 
-  ;; Navigation: delegate to `forward-sexp'. Combined with
-  ;; `zetta-tap-forward-thing's snap-to-bounds.start, each press
-  ;; lands on the start of the next / previous sibling sexp; the
-  ;; smart `bounds-of-thing-at-point' above then returns the
-  ;; enclosing form (not a sub-sexp).
-  (put 'embark-expression 'forward-op 'forward-sexp)
+  ;; `embark-expression' has bounds but intentionally NO `forward-op'.
+  ;; Use it only as a *focus* thing -- its smart bounds give stable
+  ;; "enclosing form" dimming as point moves around inside. For
+  ;; *navigation*, `zetta-embark-focus-on-type' sets
+  ;; `zetta-tap-current-thing' to plain `sexp' (via the nav-type-map),
+  ;; whose `forward-sexp' navigation is well-behaved.
 
   (defun zetta-embark-focus-on-type ()
     "Activate `focus-mode' on the current embark target's type.
@@ -540,7 +540,12 @@ focus follows."
        (t
         (setq-local zetta-tap-current-thing thing)
         (when (boundp 'focus-current-thing)
-          (setq-local focus-current-thing thing))
+          ;; For `expression' targets, focus uses `embark-expression'
+          ;; (smart enclosing-form bounds) even though nav uses plain
+          ;; `sexp'. This keeps focus stable as point moves inside an
+          ;; expression while letting nav rely on `forward-sexp'.
+          (setq-local focus-current-thing
+                      (if (eq type 'expression) 'embark-expression thing)))
         (when bounds (goto-char (car bounds)))
         (when (fboundp 'focus-mode) (focus-mode 1))
         (message "Focus on `%s'%s"

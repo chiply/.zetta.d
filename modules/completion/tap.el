@@ -37,18 +37,36 @@ avoided by going through `treesit-navigate-thing' directly."
         ;; and top-level things (where 'end+snap happened to work).
         (when-let* ((dest (treesit-navigate-thing (point) n 'beg thing)))
           (goto-char dest))
-      ;; Legacy forward-thing path. Wrap in `ignore-errors' so
-      ;; `scan-error' ("Containing expression ends prematurely")
-      ;; from `forward-sexp' at buffer boundaries / inside partial
-      ;; forms becomes a no-op rather than crashing nav.
-      (ignore-errors (forward-thing thing n))
-      ;; Legacy forward-op for defun-style things lands at the end
-      ;; boundary; snap to bounds.start so the next call's "still
-      ;; inside" check works.
-      (when (> n 0)
-        (skip-chars-forward " \t\n"))
-      (when-let* ((bnds (bounds-of-thing-at-point thing)))
-        (goto-char (car bnds))))))
+      ;; Legacy forward-thing path.
+      (let ((start-pos (point)))
+        ;; Step 1: try `forward-thing'. `ignore-errors' swallows
+        ;; `scan-error' at buffer boundaries / inside partial forms.
+        (ignore-errors (forward-thing thing n))
+        ;; Step 2: ESCAPE -- if step 1 didn't move (forward-sexp
+        ;; errored from inside a closing-paren position, say), jump
+        ;; past the current enclosing bounds in the requested
+        ;; direction so the next nav has somewhere to go.
+        (when (= (point) start-pos)
+          (when-let* ((bnds (bounds-of-thing-at-point thing)))
+            (goto-char (if (> n 0)
+                           (min (point-max) (1+ (cdr bnds)))
+                         (max (point-min) (1- (car bnds)))))))
+        ;; Step 3: skip inter-thing whitespace (forward direction
+        ;; only) so we land inside the next thing rather than on the
+        ;; gap.
+        (when (> n 0)
+          (skip-chars-forward " \t\n"))
+        ;; Step 4: snap to bounds.start of the thing at the new
+        ;; point. Anti-loop: only snap if it actually progresses in
+        ;; the requested direction -- otherwise an *enclosing* form's
+        ;; bounds (common for sexp / sentence / etc.) would pull
+        ;; point backward and the next call would re-enter the same
+        ;; form forever.
+        (when-let* ((bnds (bounds-of-thing-at-point thing))
+                    (snap-pos (car bnds)))
+          (when (or (and (> n 0) (> snap-pos start-pos))
+                    (and (< n 0) (< snap-pos start-pos)))
+            (goto-char snap-pos)))))))
 
 (defun zetta-intern-maybe (thing)
   (if (symbolp thing) thing (intern thing)))

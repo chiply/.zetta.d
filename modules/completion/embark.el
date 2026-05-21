@@ -418,7 +418,8 @@ universal-argument family is already handled there."
   ;; e.g. on a `ts-call' target, C-j jumps to the next call; on a
   ;; `defun', C-j jumps to the next defun.
   (defcustom zetta-embark-nav-type-map
-    '((identifier . symbol)
+    '((general . word)
+      (identifier . symbol)
       (expression . sexp)
       (defun . defun)
       (paragraph . paragraph)
@@ -822,7 +823,8 @@ cancel (C-g), restores point."
                          (goto-char (car b))))))))) ; close lambda, pcase, let* binding
           (cond
            ((null candidates)
-            (message "No instances of `%s' in buffer" thing))
+            (message "No instances of type `%s' (thing `%s') in buffer"
+                     type thing))
            (t
             (unwind-protect
                 (let* ((choice (consult--read (mapcar #'car candidates)

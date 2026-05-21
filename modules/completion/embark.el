@@ -473,6 +473,14 @@ pre-action hook; read by `zetta-embark-nav-next' / `nav-prev'.")
   (define-key embark-general-map (kbd "C-j") #'zetta-embark-nav-next)
   (define-key embark-general-map (kbd "C-k") #'zetta-embark-nav-prev)
 
+  ;; Mark the nav commands as repeatable so embark re-fetches targets
+  ;; at the new point and re-prompts with the same type preferred.
+  ;; Result: `C-.' once enters the prompt, then `C-j' / `C-k' step
+  ;; through instances of that type with the prompt continuing on
+  ;; each new target. Pick an action key when you find the right one.
+  (add-to-list 'embark-repeat-actions 'zetta-embark-nav-next)
+  (add-to-list 'embark-repeat-actions 'zetta-embark-nav-prev)
+
   ;; project
   (defvar-keymap embark-project-map :parent embark-general-map)
   (add-to-list 'embark-keymap-alist '(project embark-project-map))

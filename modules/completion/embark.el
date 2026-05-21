@@ -671,20 +671,36 @@ changes. Runs only when `zetta-embark--highlights-enabled' is non-nil."
         (append (alist-get :always embark-pre-action-hooks)
                 (list #'zetta-embark--refresh-highlights-hook)))
 
-  ;; Clear highlights automatically once the user picks a NON-repeat
-  ;; action (i.e. embark is exiting the prompt). Repeatable actions
-  ;; -- the cycle / nav / highlight commands -- stay in the prompt,
-  ;; so we keep highlights alive through them.
-  (defun zetta-embark--clear-highlights-on-exit-hook (&rest plist)
-    (when (and zetta-embark--highlights-enabled
-               (let ((action (plist-get plist :action)))
-                 (not (memq action embark-repeat-actions))))
-      (zetta-embark--clear-instance-overlays)
-      (setq zetta-embark--highlights-enabled nil)))
+  ;; Refresh highlights when the user cycles (C-. / C-,). embark
+  ;; handles `embark-cycle' inline in its act loop -- it does NOT
+  ;; route through `embark--act', so pre/post-action hooks never
+  ;; fire on a cycle. Instead, attach to `embark--rotate' (the
+  ;; function the cycle dispatches to): when it runs, the new head
+  ;; of the rotated targets list IS the new current target -- copy
+  ;; its :type / :bounds into the captured vars and re-paint.
+  (define-advice embark--rotate
+      (:filter-return (rotated-targets) zetta-refresh-highlights)
+    (when (and zetta-embark--highlights-enabled rotated-targets)
+      (when-let* ((new-head (car rotated-targets)))
+        (setq zetta-embark--current-target-type
+              (plist-get new-head :type)
+              zetta-embark--current-target-bounds
+              (plist-get new-head :bounds))
+        (zetta-embark-highlight-other-instances)))
+    rotated-targets)
 
-  (setf (alist-get :always embark-post-action-hooks)
-        (cons #'zetta-embark--clear-highlights-on-exit-hook
-              (alist-get :always embark-post-action-hooks)))
+  ;; Clear highlights when `embark-act' exits its prompt. Doing this
+  ;; via `:around' on `embark-act' itself catches every exit path --
+  ;; the user picking any action (repeatable or not), C-g cancellation,
+  ;; or completion. Post-action hooks are unreliable here because many
+  ;; built-in actions (forward-sentence, transpose-paragraphs, etc.)
+  ;; are themselves in `embark-repeat-actions'.
+  (define-advice embark-act
+      (:around (orig &rest args) zetta-clear-highlights-on-exit)
+    (unwind-protect (apply orig args)
+      (when zetta-embark--highlights-enabled
+        (zetta-embark--clear-instance-overlays)
+        (setq zetta-embark--highlights-enabled nil))))
 
   (define-key embark-general-map (kbd "C-j") #'zetta-embark-nav-next)
   (define-key embark-general-map (kbd "C-k") #'zetta-embark-nav-prev)

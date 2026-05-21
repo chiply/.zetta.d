@@ -830,6 +830,7 @@ buffer which instance is currently selected in the minibuffer."
                           (mapcar #'car candidates)
                           :prompt (format "Pick %s: " type)
                           :require-match t
+                          :sort nil
                           :state
                           (lambda (action cand)
                             (pcase action

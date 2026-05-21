@@ -496,10 +496,20 @@ current one."
     "Activate `focus-mode' targeting the current embark target's type.
 Resolves the type via `zetta-embark-nav-type-map' (so e.g. a
 `ts-call' target focuses on `call'), syncs both
-`zetta-tap-current-thing' and `focus-current-thing', then enables
-`focus-mode' buffer-locally."
+`zetta-tap-current-thing' and `focus-current-thing', and snaps
+point to the captured bounds' start before enabling `focus-mode'.
+
+The point snap matters: `focus-mode' re-runs
+`bounds-of-thing-at-point' on every post-command-hook, and that
+lookup is sensitive to point position. Embark's `expression'
+finder, for example, uses `syntax-ppss' + `scan-sexps' (smart
+sexp), which can return a different region than plain
+`bounds-of-thing-at-point 'sexp' at a deeper point inside the
+form. Snapping point to bounds.start makes the two converge on
+the same region the user selected in embark."
     (interactive)
     (let* ((type zetta-embark--current-target-type)
+           (bounds zetta-embark--current-target-bounds)
            (thing (alist-get type zetta-embark-nav-type-map type)))
       (cond
        ((null type)
@@ -510,8 +520,12 @@ Resolves the type via `zetta-embark-nav-type-map' (so e.g. a
         (setq-local zetta-tap-current-thing thing)
         (when (boundp 'focus-current-thing)
           (setq-local focus-current-thing thing))
+        (when bounds (goto-char (car bounds)))
         (when (fboundp 'focus-mode) (focus-mode 1))
-        (message "Focus on `%s'" thing)))))
+        (message "Focus on `%s'%s"
+                 thing
+                 (if (eq type thing) ""
+                   (format " (via embark `%s')" type)))))))
 
   (define-key embark-general-map (kbd "C-j") #'zetta-embark-nav-next)
   (define-key embark-general-map (kbd "C-k") #'zetta-embark-nav-prev)

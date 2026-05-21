@@ -577,11 +577,146 @@ that thing without going through M-x zetta-tap-set-local."
                  (if (eq type thing) ""
                    (format " (via embark `%s')" type)))))))
 
+  ;; Highlight all OTHER instances of the active target's type in the
+  ;; buffer. Toggles a buffer-local flag so subsequent embark-act
+  ;; cycles auto-refresh against the new type (via the :always
+  ;; pre-action hook below).
+  (defface zetta-embark-other-instance-face
+    '((((background dark))  :background "#3a2a00" :extend nil)
+      (((background light)) :background "#fff3b0" :extend nil))
+    "Face for other instances of the current embark target's type."
+    :group 'embark)
+
+  (defvar-local zetta-embark--instance-overlays nil
+    "Overlays painted by `zetta-embark-highlight-other-instances'.")
+
+  (defvar-local zetta-embark--highlights-enabled nil
+    "When non-nil, refresh highlights on every embark action.")
+
+  (defun zetta-embark--clear-instance-overlays ()
+    (mapc #'delete-overlay zetta-embark--instance-overlays)
+    (setq zetta-embark--instance-overlays nil))
+
+  (defun zetta-embark--collect-instances-of-thing (thing)
+    "Walk buffer and return all (BEG . END) bounds of THING."
+    (let (bounds-list)
+      (save-excursion
+        (goto-char (point-min))
+        (let ((last-end -1)
+              (last-point -1))
+          (while (and (< (point) (point-max))
+                      (/= (point) last-point))
+            (setq last-point (point))
+            (when-let* ((b (ignore-errors
+                             (bounds-of-thing-at-point thing))))
+              (when (and (>= (car b) last-end)
+                         (> (cdr b) (car b))) ; non-empty
+                (push b bounds-list)
+                (setq last-end (cdr b))))
+            (ignore-errors (forward-thing thing 1)))))
+      (nreverse bounds-list)))
+
+  (defun zetta-embark-highlight-other-instances ()
+    "Highlight all OTHER instances of the active embark target's type.
+Toggles `zetta-embark--highlights-enabled' so the :always
+pre-action hook re-runs this after each cycle, keeping highlights
+in sync with the currently active target type. Press again with
+no captured target (or invoke `zetta-embark-clear-highlights') to
+turn off."
+    (interactive)
+    (zetta-embark--clear-instance-overlays)
+    (let* ((type zetta-embark--current-target-type)
+           (cur-bounds zetta-embark--current-target-bounds)
+           (thing (alist-get type zetta-embark-nav-type-map type)))
+      (cond
+       ((null type)
+        (setq zetta-embark--highlights-enabled nil)
+        (message "Highlights cleared"))
+       ((not (symbolp thing))
+        (message "No nav thing for embark type `%s'" type))
+       (t
+        (setq zetta-embark--highlights-enabled t)
+        (let ((instances (zetta-embark--collect-instances-of-thing thing)))
+          (dolist (b instances)
+            ;; Skip overlay if it overlaps the current embark target.
+            ;; The walker's bounds may differ by 1 char from the
+            ;; captured ones (trailing whitespace etc.), so use
+            ;; "overlap" rather than "exact match".
+            (unless (and cur-bounds
+                         (< (car b) (cdr cur-bounds))
+                         (> (cdr b) (car cur-bounds)))
+              (let ((ov (make-overlay (car b) (cdr b))))
+                (overlay-put ov 'face 'zetta-embark-other-instance-face)
+                (overlay-put ov 'zetta-embark-highlight t)
+                (push ov zetta-embark--instance-overlays))))
+          (message "Highlighted %d other `%s' instance(s)"
+                   (length zetta-embark--instance-overlays) thing))))))
+
+  (defun zetta-embark-clear-highlights ()
+    "Turn off `zetta-embark-highlight-other-instances'."
+    (interactive)
+    (setq zetta-embark--highlights-enabled nil)
+    (zetta-embark--clear-instance-overlays)
+    (message "Embark highlights cleared"))
+
+  (defun zetta-embark--refresh-highlights-hook (&rest _plist)
+    "Pre-action hook: refresh highlights when the active target type
+changes. Runs only when `zetta-embark--highlights-enabled' is non-nil."
+    (when zetta-embark--highlights-enabled
+      (zetta-embark-highlight-other-instances)))
+
+  ;; Add to :always AFTER the capture hook so we see the new type
+  ;; on each cycle.
+  (setf (alist-get :always embark-pre-action-hooks)
+        (append (alist-get :always embark-pre-action-hooks)
+                (list #'zetta-embark--refresh-highlights-hook)))
+
   (define-key embark-general-map (kbd "C-j") #'zetta-embark-nav-next)
   (define-key embark-general-map (kbd "C-k") #'zetta-embark-nav-prev)
   (define-key embark-general-map (kbd "C-a") #'zetta-embark-nav-beg)
   (define-key embark-general-map (kbd "C-e") #'zetta-embark-nav-end)
   (define-key embark-general-map (kbd "C-t") #'zetta-embark-set-current-thing)
+  (define-key embark-general-map (kbd "*")   #'zetta-embark-highlight-other-instances)
+
+  ;; Top-level command (not an embark action): prompt for a type,
+  ;; jump to the closest instance, kick off `embark-act' there.
+  ;; `unwind-protect' restores point if the read or action is
+  ;; cancelled (e.g. C-g).
+  (defun zetta-embark-jump-to-type ()
+    "Prompt for a type, jump to its closest instance, then `embark-act'.
+Restores point to the original position on cancellation (C-g).
+Useful for jumping to types that may not be present at point."
+    (interactive)
+    (let* ((start (point))
+           (cancelled t)
+           (candidates
+            (delete-dups
+             (mapcar #'symbol-name
+                     (delq nil
+                           (append
+                            (mapcar #'car zetta-embark-nav-type-map)
+                            (mapcar #'cdr zetta-embark-nav-type-map)
+                            (when (boundp 'zetta-tap--things)
+                              (mapcar (lambda (s)
+                                        (and s (intern-soft s)))
+                                      zetta-tap--things))))))))
+      (unwind-protect
+          (let* ((choice (completing-read "Jump to type: " candidates nil t))
+                 (sym (intern choice))
+                 (thing (alist-get sym zetta-embark-nav-type-map sym))
+                 (instances (zetta-embark--collect-instances-of-thing thing)))
+            (cond
+             ((null instances)
+              (message "No instances of `%s' in buffer" thing))
+             (t
+              (let ((closest (car (sort (copy-sequence instances)
+                                        (lambda (a b)
+                                          (< (abs (- (car a) start))
+                                             (abs (- (car b) start))))))))
+                (goto-char (car closest))
+                (setq cancelled nil)
+                (call-interactively #'embark-act)))))
+        (when cancelled (goto-char start)))))
   ;; `C-f' for focus-mode activation:
   ;; - `F' is bound in five embark built-in maps
   ;;   (prose / sentence / paragraph / region / file / encode),

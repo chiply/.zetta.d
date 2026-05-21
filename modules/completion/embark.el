@@ -422,6 +422,13 @@ universal-argument family is already handled there."
       (identifier . symbol)
       (expression . sexp)
       (defun . defun)
+      ;; Embark's `function' target in elisp tags a callable symbol,
+      ;; not a definition. Map it to `defun' so nav/pick walk all
+      ;; function definitions in the buffer. In treesit buffers
+      ;; `function' is also a defined treesit thing, so the
+      ;; ts-function_definition entry above remains authoritative
+      ;; for the treesit path.
+      (function . defun)
       (paragraph . paragraph)
       (sentence . sentence)
       (ts-string . str-lit)

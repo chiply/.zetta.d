@@ -165,6 +165,26 @@ TYPE is the embark target type reported; defaults to THING."
   (zetta-embark-deftap-finder sentence)
   (zetta-embark-deftap-finder paragraph)
 
+  ;; `orgtree' is defined in `modules/org/org.el' as a thing whose
+  ;; `forward-op' calls `org-next-visible-heading'. Registering it
+  ;; as an embark target lets `C-.' / `*' / `C-j' / `C-k' work on
+  ;; whole subtrees in org buffers. Bounds default to the
+  ;; `forward-op'-derived span (heading + body until the next
+  ;; heading at the same or higher level).
+  (zetta-embark-deftap-finder orgtree)
+
+  ;; Extend `embark-org--types' with element types that the upstream
+  ;; embark-org explicitly leaves out (see comments at
+  ;; embark-org.el:42). Each becomes an `org-<type>' target via
+  ;; `embark-org-target-element-context'. Bind a keymap in
+  ;; `embark-keymap-alist' if you want type-specific actions; the
+  ;; default falls back to `embark-general-map'.
+  (with-eval-after-load 'embark-org
+    (dolist (type '(drawer property-drawer quote-block example-block
+                    comment-block verse-block keyword planning
+                    latex-environment latex-fragment))
+      (cl-pushnew type embark-org--types)))
+
   ;; A defun keymap so embark has somewhere to dispatch when its
   ;; built-in `embark-target-defun-at-point' fires (it ships no
   ;; defun-specific map by default; the keymap also covers the

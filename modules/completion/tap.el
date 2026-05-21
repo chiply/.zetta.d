@@ -51,11 +51,31 @@ avoided by going through `treesit-navigate-thing' directly."
             (goto-char (if (> n 0)
                            (min (point-max) (1+ (cdr bnds)))
                          (max (point-min) (1- (car bnds)))))))
-        ;; Step 3: skip inter-thing whitespace (forward direction
-        ;; only) so we land inside the next thing rather than on the
-        ;; gap.
-        (when (> n 0)
-          (skip-chars-forward " \t\n"))
+        ;; Step 3: skip inter-thing gap so we land inside the
+        ;; destination thing rather than on it.
+        ;;
+        ;; For `line': skip blank lines in the direction of motion --
+        ;; symmetric, and stops at the previous/next content line
+        ;; without over-crossing into the line beyond. Plain
+        ;; `skip-chars-backward " \t\n"' would walk past the entire
+        ;; previous content line's leading whitespace too.
+        ;;
+        ;; For everything else: skip whitespace forward (matches the
+        ;; original behaviour). Backward is not skipped because
+        ;; `forward-thing' typically lands at the start of the
+        ;; destination already.
+        (cond
+         ((eq thing 'line)
+          (let ((step (if (> n 0) 1 -1)))
+            (while (and (save-excursion
+                          (beginning-of-line)
+                          (looking-at-p "^[ \t]*$"))
+                        (if (> n 0)
+                            (< (point) (point-max))
+                          (> (point) (point-min))))
+              (forward-line step))))
+         ((> n 0)
+          (skip-chars-forward " \t\n")))
         ;; Step 4: snap to bounds.start of the thing at the new
         ;; point. Anti-loop: only snap if it actually progresses in
         ;; the requested direction -- otherwise an *enclosing* form's

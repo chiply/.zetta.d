@@ -38,6 +38,12 @@
 
   (defun zetta-eww-mode-functions ()
     (setq-local truncate-lines nil)
+    ;; Rendered HTML uses single-space sentence endings (modern
+    ;; convention); the default `sentence-end-double-space = t' then
+    ;; treats whole paragraphs as one sentence, which breaks
+    ;; `forward-sentence', `bounds-of-thing-at-point 'sentence', and
+    ;; the embark `sentence' target finder.
+    (setq-local sentence-end-double-space nil)
     (olivetti-mode -1))
 
   (add-hook 'eww-after-render-hook 'zetta-eww-after-render-functions)

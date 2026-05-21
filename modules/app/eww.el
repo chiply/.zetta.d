@@ -69,6 +69,8 @@
    "<return>" 'zetta-eww-follow-link
    "x" '(lambda () (interactive) (kill-buffer (current-buffer)))
    "s-i" 'eww-toggle-images
+   "s-j" 'zetta-tap-next
+   "s-k" 'zetta-tap-prev
    )
   (
    :keymaps 'menu-lookup-map

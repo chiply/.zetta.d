@@ -193,16 +193,6 @@ interactively, prompts from `zetta-tap--things'."
  "s-/" 'zetta-tap-comment
  )
 
-;; Org-mode: C-j / C-k as next/prev thing navigation. Scoped to evil
-;; normal / visual states so insert-state defaults
-;; (`org-return-and-maybe-indent', `org-kill-line') still work while
-;; typing.
-(general-define-key
- :states '(normal visual)
- :keymaps '(org-mode-map)
- "C-j" 'zetta-tap-next
- "C-k" 'zetta-tap-prev)
-
 (use-package expand-region
   :general
   (

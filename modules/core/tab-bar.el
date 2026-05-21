@@ -85,6 +85,11 @@
           (format " ai:%d " num-processes)
         ""))))
 
+(defun zetta-tab-bar-current-thing ()
+  "Tab-bar item: shows the buffer-local `zetta-tap-current-thing'."
+  (when (and (boundp 'zetta-tap-current-thing) zetta-tap-current-thing)
+    (format "[%s] " zetta-tap-current-thing)))
+
 (setq tab-bar-format '(;; everything here on will be aligned on the right
                        ;;zetta-tab-bar-hydra
                        zetta-buffer-name
@@ -106,6 +111,7 @@
                        blinker-tab-bar
 
                        tab-bar-format-align-right
+                       zetta-tab-bar-current-thing
                        tab-bar-keycast
                        zetta-insert-space
                        zetta-tab-bar-recursion-level

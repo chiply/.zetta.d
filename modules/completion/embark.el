@@ -619,23 +619,53 @@ that thing without going through M-x zetta-tap-set-local."
     (setq zetta-embark--instance-overlays nil))
 
   (defun zetta-embark--collect-instances-of-thing (thing)
-    "Walk buffer and return all (BEG . END) bounds of THING."
-    (let (bounds-list)
-      (save-excursion
-        (goto-char (point-min))
-        (let ((last-end -1)
-              (last-point -1))
-          (while (and (< (point) (point-max))
-                      (/= (point) last-point))
-            (setq last-point (point))
-            (when-let* ((b (ignore-errors
-                             (bounds-of-thing-at-point thing))))
-              (when (and (>= (car b) last-end)
-                         (> (cdr b) (car b))) ; non-empty
-                (push b bounds-list)
-                (setq last-end (cdr b))))
-            (ignore-errors (forward-thing thing 1)))))
-      (nreverse bounds-list)))
+    "Walk buffer and return all (BEG . END) bounds of THING.
+For treesit-defined things (where `forward-thing' is a no-op),
+walks via `treesit-navigate-thing' instead."
+    (let ((treesit-defined (and (fboundp 'treesit-thing-defined-p)
+                                (treesit-parser-list)
+                                (treesit-thing-defined-p
+                                 thing (treesit-language-at (point))))))
+      (if treesit-defined
+          ;; Treesit walker: jump from BEG to next BEG via
+          ;; `treesit-navigate-thing'.
+          (let (bounds-list)
+            (save-excursion
+              (goto-char (point-min))
+              ;; Land on the first instance.
+              (when-let* ((first (treesit-navigate-thing
+                                  (point) 1 'beg thing)))
+                (goto-char first)
+                (let ((last-point -1))
+                  (while (and (< (point) (point-max))
+                              (/= (point) last-point))
+                    (setq last-point (point))
+                    (when-let* ((b (ignore-errors
+                                     (bounds-of-thing-at-point thing))))
+                      (when (> (cdr b) (car b))
+                        (push b bounds-list)))
+                    (if-let* ((next (treesit-navigate-thing
+                                     (point) 1 'beg thing)))
+                        (goto-char next)
+                      (goto-char (point-max)))))))
+            (nreverse bounds-list))
+        ;; Non-treesit walker: forward-thing path.
+        (let (bounds-list)
+          (save-excursion
+            (goto-char (point-min))
+            (let ((last-end -1)
+                  (last-point -1))
+              (while (and (< (point) (point-max))
+                          (/= (point) last-point))
+                (setq last-point (point))
+                (when-let* ((b (ignore-errors
+                                 (bounds-of-thing-at-point thing))))
+                  (when (and (>= (car b) last-end)
+                             (> (cdr b) (car b))) ; non-empty
+                    (push b bounds-list)
+                    (setq last-end (cdr b))))
+                (ignore-errors (forward-thing thing 1)))))
+          (nreverse bounds-list)))))
 
   (defun zetta-embark-highlight-other-instances ()
     "Highlight all OTHER instances of the active embark target's type.

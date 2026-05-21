@@ -553,10 +553,35 @@ focus follows."
                  (if (eq type thing) ""
                    (format " (via embark `%s')" type)))))))
 
+  (defun zetta-embark-set-current-thing ()
+    "Set `zetta-tap-current-thing' to the active embark target's type.
+Resolves the type via `zetta-embark-nav-type-map' (same mapping the
+nav and focus actions use), syncs `focus-current-thing' too so
+focus-mode tracks the new thing if active. Lets you `C-.' on a
+sentence / call / paragraph / function and then drive s-j / s-k by
+that thing without going through M-x zetta-tap-set-local."
+    (interactive)
+    (let* ((type zetta-embark--current-target-type)
+           (thing (alist-get type zetta-embark-nav-type-map type)))
+      (cond
+       ((null type)
+        (message "No embark target captured"))
+       ((not (symbolp thing))
+        (message "No nav thing for embark type `%s'" type))
+       (t
+        (setq-local zetta-tap-current-thing thing)
+        (when (boundp 'focus-current-thing)
+          (setq-local focus-current-thing thing))
+        (message "zetta-tap-current-thing = `%s'%s"
+                 thing
+                 (if (eq type thing) ""
+                   (format " (via embark `%s')" type)))))))
+
   (define-key embark-general-map (kbd "C-j") #'zetta-embark-nav-next)
   (define-key embark-general-map (kbd "C-k") #'zetta-embark-nav-prev)
   (define-key embark-general-map (kbd "C-a") #'zetta-embark-nav-beg)
   (define-key embark-general-map (kbd "C-e") #'zetta-embark-nav-end)
+  (define-key embark-general-map (kbd "C-t") #'zetta-embark-set-current-thing)
   ;; `C-f' for focus-mode activation:
   ;; - `F' is bound in five embark built-in maps
   ;;   (prose / sentence / paragraph / region / file / encode),

@@ -492,10 +492,32 @@ current one."
           (goto-char (max beg (1- end))))
       (message "No embark target bounds captured")))
 
+  (defun zetta-embark-focus-on-type ()
+    "Activate `focus-mode' targeting the current embark target's type.
+Resolves the type via `zetta-embark-nav-type-map' (so e.g. a
+`ts-call' target focuses on `call'), syncs both
+`zetta-tap-current-thing' and `focus-current-thing', then enables
+`focus-mode' buffer-locally."
+    (interactive)
+    (let* ((type zetta-embark--current-target-type)
+           (thing (alist-get type zetta-embark-nav-type-map type)))
+      (cond
+       ((null type)
+        (message "No embark target captured"))
+       ((not (symbolp thing))
+        (message "No nav thing for embark type `%s'" type))
+       (t
+        (setq-local zetta-tap-current-thing thing)
+        (when (boundp 'focus-current-thing)
+          (setq-local focus-current-thing thing))
+        (when (fboundp 'focus-mode) (focus-mode 1))
+        (message "Focus on `%s'" thing)))))
+
   (define-key embark-general-map (kbd "C-j") #'zetta-embark-nav-next)
   (define-key embark-general-map (kbd "C-k") #'zetta-embark-nav-prev)
   (define-key embark-general-map (kbd "C-a") #'zetta-embark-nav-beg)
   (define-key embark-general-map (kbd "C-e") #'zetta-embark-nav-end)
+  (define-key embark-general-map (kbd "F") #'zetta-embark-focus-on-type)
 
   ;; Mark the nav commands as repeatable so embark re-fetches targets
   ;; at the new point and re-prompts with the same type preferred.

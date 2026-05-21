@@ -9,8 +9,8 @@
 
 (defvar-local zetta-tap-current-thing 'defun
   "Buffer-local thing-at-point symbol used by zetta-tap navigation.
-Set via `zetta-set-local-thing'. Consumed by s-j/s-k (next/prev),
-s-h/s-l (start/end), `zetta-pulse', `zetta-select', `zetta-comment',
+Set via `zetta-tap-set-local'. Consumed by s-j/s-k (next/prev),
+s-h/s-l (start/end), `zetta-tap-pulse', `zetta-tap-select', `zetta-tap-comment',
 and `zetta-narrow-or-widen'.")
 
 (defun zetta-tap-forward-thing (n)
@@ -49,13 +49,17 @@ avoided by going through `treesit-navigate-thing' directly."
 (defun zetta-intern-maybe (thing)
   (if (symbolp thing) thing (intern thing)))
 
-(defun zetta-set-local-thing (&optional thing)
-  "This is run as a hook on each relevant major-mode and can also be
-used to override thing at point for whatever reason"
+(defun zetta-tap-set-local (&optional thing)
+  "Set the local current thing-at-point thing for zetta-tap navigation.
+Also mirrors to `focus-current-thing' so `focus-mode' (when active)
+dims around the same thing. THING may be a symbol or a string;
+interactively, prompts from `zetta-tap--things'."
   (interactive)
-  (setq-local zetta-tap-current-thing
-              (zetta-intern-maybe
-               (or thing (completing-read "What thing? " zetta-tap--things)))))
+  (let ((sym (zetta-intern-maybe
+              (or thing (completing-read "What thing? " zetta-tap--things)))))
+    (setq-local zetta-tap-current-thing sym)
+    (when (boundp 'focus-current-thing)
+      (setq-local focus-current-thing sym))))
 
 (defun zetta-locate-thing (&optional thing)
   (interactive)
@@ -79,7 +83,7 @@ used to override thing at point for whatever reason"
       (buffer-substring-no-properties (region-beginning) (region-end))
     (buffer-substring-no-properties (zetta-locate-thing-beg thing) (zetta-locate-thing-end thing))))
 
-(defun zetta-pulse (&optional thing)
+(defun zetta-tap-pulse (&optional thing)
   (interactive)
   ;; available things: generic + mode
   (let* ((bnds (zetta-locate-thing thing)))
@@ -87,18 +91,48 @@ used to override thing at point for whatever reason"
      (car bnds) (cadr bnds)
      '(:background "black" :foreground "gray"))))
 
-(defun zetta-select (&optional thing)
+(defun zetta-tap-select (&optional thing)
   (interactive)
   (let ((bnds (zetta-locate-thing thing)))
     (set-mark (car bnds))
     (goto-char (cadr bnds))))
 
-(defun zetta-comment (&optional thing)
+(defun zetta-tap-comment (&optional thing)
   (interactive)
   (save-excursion
-    (zetta-select)
+    (zetta-tap-select)
     (call-interactively 'comment-or-uncomment-region)
     )
+  )
+
+(defun zetta-next-thing ()
+  (interactive)
+  (if (buffer-narrowed-p)
+      (progn (call-interactively 'zetta-narrow-or-widen)
+             (zetta-tap-forward-thing 1)
+             (call-interactively 'zetta-narrow-or-widen))
+    (zetta-tap-forward-thing 1)))
+
+(defun zetta-prev-thing ()
+  (interactive)
+  (if (buffer-narrowed-p)
+      (progn (call-interactively 'zetta-narrow-or-widen)
+             (zetta-tap-forward-thing -1)
+             (call-interactively 'zetta-narrow-or-widen))
+    (zetta-tap-forward-thing -1)))
+
+
+(defun zetta-beg-thing ()
+  (interactive)
+  (beginning-of-thing zetta-tap-current-thing))
+
+(defun zetta-end-thing ()
+  (interactive)
+  (end-of-thing zetta-tap-current-thing)
+  ;; to take care of skipping whitespace, not sure why this
+  ;; happens
+  (re-search-backward "[^[:space:]\n]")
+  (evil-end-of-line)
   )
 
 (general-define-key
@@ -107,31 +141,14 @@ used to override thing at point for whatever reason"
             emacs-lisp-mode-map elisp python-ts-mode-map
             yaml-mode-map sh-mode-map shell-command-mode-map
             lark-mode-map)
- "s-j" '(lambda () (interactive)
-          (if (buffer-narrowed-p)
-              (progn (call-interactively 'zetta-narrow-or-widen)
-                     (zetta-tap-forward-thing 1)
-                     (call-interactively 'zetta-narrow-or-widen))
-            (zetta-tap-forward-thing 1)))
- "s-k" '(lambda () (interactive)
-          (if (buffer-narrowed-p)
-              (progn (call-interactively 'zetta-narrow-or-widen)
-                     (zetta-tap-forward-thing -1)
-                     (call-interactively 'zetta-narrow-or-widen))
-            (zetta-tap-forward-thing -1)))
- "s-h" '(lambda () (interactive)
-          (beginning-of-thing zetta-tap-current-thing))
- "s-l" '(lambda () (interactive)
-          (end-of-thing zetta-tap-current-thing)
-          ;; to take care of skipping whitespace, not sure why this
-          ;; happens
-          (re-search-backward "[^[:space:]\n]")
-          (evil-end-of-line)
-          )
- "s-x v" 'zetta-pulse
- "s-x V" 'zetta-select
- "s-x t" 'zetta-set-local-thing
- "s-/" 'zetta-comment
+ "s-j" 'zetta-tap-next
+ "s-k" 'zetta-tap-prev
+ "s-h" 'zetta-tap-beg
+ "s-l" 'zetta-tap-end
+ "s-x v" 'zetta-tap-pulse
+ "s-x V" 'zetta-tap-select
+ "s-x t" 'zetta-tap-set-local
+ "s-/" 'zetta-tap-comment
  )
 
 (use-package expand-region
@@ -155,13 +172,13 @@ used to override thing at point for whatever reason"
    "C-M-e" 'er/expand-region
    "C-S-e" 'zetta-embark-contract-region))
 
-(defun zetta-thing-at-bobp ()
+(defun zetta-tap-at-bobp ()
   (interactive)
   (eq 1 (save-excursion
           (beginning-of-thing zetta-tap-current-thing)
           (point))))
 
-(defun zetta-thing-at-eobp ()
+(defun zetta-tap-at-eobp ()
   (interactive)
   (save-excursion
     (end-of-thing zetta-tap-current-thing)

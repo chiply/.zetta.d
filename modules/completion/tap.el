@@ -105,7 +105,7 @@ interactively, prompts from `zetta-tap--things'."
     )
   )
 
-(defun zetta-next-thing ()
+(defun zetta-tap-next ()
   (interactive)
   (if (buffer-narrowed-p)
       (progn (call-interactively 'zetta-narrow-or-widen)
@@ -113,7 +113,7 @@ interactively, prompts from `zetta-tap--things'."
              (call-interactively 'zetta-narrow-or-widen))
     (zetta-tap-forward-thing 1)))
 
-(defun zetta-prev-thing ()
+(defun zetta-tap-prev ()
   (interactive)
   (if (buffer-narrowed-p)
       (progn (call-interactively 'zetta-narrow-or-widen)
@@ -122,11 +122,11 @@ interactively, prompts from `zetta-tap--things'."
     (zetta-tap-forward-thing -1)))
 
 
-(defun zetta-beg-thing ()
+(defun zetta-tap-beg ()
   (interactive)
   (beginning-of-thing zetta-tap-current-thing))
 
-(defun zetta-end-thing ()
+(defun zetta-tap-end ()
   (interactive)
   (end-of-thing zetta-tap-current-thing)
   ;; to take care of skipping whitespace, not sure why this
@@ -150,6 +150,16 @@ interactively, prompts from `zetta-tap--things'."
  "s-x t" 'zetta-tap-set-local
  "s-/" 'zetta-tap-comment
  )
+
+;; Org-mode: C-j / C-k as next/prev thing navigation. Scoped to evil
+;; normal / visual states so insert-state defaults
+;; (`org-return-and-maybe-indent', `org-kill-line') still work while
+;; typing.
+(general-define-key
+ :states '(normal visual)
+ :keymaps '(org-mode-map)
+ "C-j" 'zetta-tap-next
+ "C-k" 'zetta-tap-prev)
 
 (use-package expand-region
   :general

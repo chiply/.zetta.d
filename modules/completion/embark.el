@@ -478,10 +478,18 @@ pre-action hook; read by `zetta-embark-nav-next' / `nav-prev'.")
       (message "No embark target bounds captured")))
 
   (defun zetta-embark-nav-end ()
-    "Move point to the end of the current embark target's bounds."
+    "Move point to the end of the current embark target's bounds.
+Lands at the last position INSIDE the bounds (one before
+`(cdr bounds)') so embark's repeat re-prompts on the same target,
+not the thing that starts at the boundary. Concretely matters for
+`line': bounds end is the start of the *next* line, so landing
+there would re-target the next line instead of staying on the
+current one."
     (interactive)
     (if zetta-embark--current-target-bounds
-        (goto-char (cdr zetta-embark--current-target-bounds))
+        (let ((beg (car zetta-embark--current-target-bounds))
+              (end (cdr zetta-embark--current-target-bounds)))
+          (goto-char (max beg (1- end))))
       (message "No embark target bounds captured")))
 
   (define-key embark-general-map (kbd "C-j") #'zetta-embark-nav-next)

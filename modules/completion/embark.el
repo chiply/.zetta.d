@@ -746,12 +746,59 @@ selection is immediately usable for any region-based command."
 
   (define-key embark-general-map (kbd "C-v") #'zetta-embark-select-as-region)
 
+  (defvar-local zetta-embark--pick-type-preview-overlay nil
+    "One-shot preview overlay for `zetta-embark--pick-target-type-do'.")
+
+  (defun zetta-embark--pick-type-clear-preview ()
+    (when (overlayp zetta-embark--pick-type-preview-overlay)
+      (delete-overlay zetta-embark--pick-type-preview-overlay))
+    (setq zetta-embark--pick-type-preview-overlay nil))
+
+  (defun zetta-embark--pick-target-type-do (candidates)
+    "Open consult to pick one of CANDIDATES. Runs *after* embark-act
+exits so the consult UI shows cleanly. Preview paints the
+currently-focused candidate's bounds with
+`zetta-embark-other-instance-face'."
+    (unwind-protect
+        (let* ((choice
+                (consult--read
+                 (mapcar #'car candidates)
+                 :prompt "Pick target type: "
+                 :require-match t
+                 :state
+                 (lambda (action cand)
+                   (pcase action
+                     ('preview
+                      (zetta-embark--pick-type-clear-preview)
+                      (when (and cand (stringp cand))
+                        (when-let* ((tgt (cdr (assoc cand candidates)))
+                                    (b (plist-get tgt :bounds)))
+                          (let ((ov (make-overlay (car b) (cdr b))))
+                            (overlay-put
+                             ov 'face 'zetta-embark-other-instance-face)
+                            (overlay-put ov 'zetta-embark-highlight t)
+                            (setq zetta-embark--pick-type-preview-overlay ov)
+                            (goto-char (car b))))))))))
+               (picked (cdr (assoc choice candidates))))
+          (when picked
+            (let* ((sym (plist-get picked :type))
+                   (text (plist-get picked :target))
+                   (b (plist-get picked :bounds))
+                   (beg (car b))
+                   (end (cdr b))
+                   (embark-target-finders
+                    (list (lambda ()
+                            (cons sym (cons text (cons beg end)))))))
+              (call-interactively #'embark-act))))
+      (zetta-embark--pick-type-clear-preview)))
+
   (defun zetta-embark-pick-target-type ()
     "Pick a target type from the ones at point, then re-enter embark.
 Skips the cycling step when many types are stacked at the same
-point: shows a `completing-read' with every bounded target,
-filters embark-target-finders to just the picked one, then calls
-`embark-act' which dispatches directly to that type's action map."
+point. Uses `consult--read' with preview: as you move through
+candidates the corresponding bounds are highlighted in the buffer.
+Defers the read via `run-at-time' so the consult UI opens cleanly
+after embark-act's prompt exits."
     (interactive)
     (let* ((targets (embark--targets))
            (candidates
@@ -766,30 +813,47 @@ filters embark-target-finders to just the picked one, then calls
                       tgt))))
       (if (null candidates)
           (message "No bounded targets at point")
-        (let* ((choice (completing-read "Pick target type: "
-                                        (mapcar #'car candidates) nil t))
-               (picked (cdr (assoc choice candidates))))
-          (when picked
-            (let* ((sym (plist-get picked :type))
-                   (text (plist-get picked :target))
-                   (b (plist-get picked :bounds))
-                   (beg (car b))
-                   (end (cdr b))
-                   (embark-target-finders
-                    (list (lambda ()
-                            (cons sym (cons text (cons beg end)))))))
-              (call-interactively #'embark-act)))))))
+        (run-at-time 0 nil
+                     #'zetta-embark--pick-target-type-do candidates))))
 
   (define-key embark-general-map (kbd "C-l") #'zetta-embark-pick-target-type)
 
+  (defun zetta-embark--pick-instance-do (type thing candidates start)
+    "Open consult to pick one of CANDIDATES. Called *after* the
+outer embark-act exits, so we have a clean minibuffer context."
+    (let ((cancelled t))
+      (unwind-protect
+          (let* ((choice (consult--read
+                          (mapcar #'car candidates)
+                          :prompt (format "Pick %s: " type)
+                          :require-match t
+                          :state
+                          (lambda (action cand)
+                            (when (and (eq action 'preview)
+                                       cand (stringp cand))
+                              (when-let* ((b (cdr (assoc cand candidates))))
+                                (goto-char (car b)))))))
+                 (picked (cdr (assoc choice candidates))))
+            (when picked
+              (let* ((beg (car picked))
+                     (end (cdr picked))
+                     (text (buffer-substring-no-properties beg end))
+                     (embark-target-finders
+                      (list (lambda ()
+                              (cons type (cons text (cons beg end)))))))
+                (goto-char beg)
+                (setq cancelled nil)
+                (call-interactively #'embark-act))))
+        (when cancelled (goto-char start)))))
+
   (defun zetta-embark-pick-instance ()
     "List every instance of the active target's type; pick one and act.
-Inside an embark prompt, opens a `consult--read' over every
-instance of the current target's resolved nav-thing in the
-buffer (formatted as `L<line>: <snippet>'). Preview jumps point
-to each instance as you navigate. On commit, jumps to the picked
-instance and re-enters `embark-act' filtered to that target. On
-cancel (C-g), restores point."
+Computes the candidate list immediately, then defers the
+`consult--read' via `run-at-time' so it opens AFTER embark-act
+exits its prompt. Otherwise the nested-minibuffer / embark-inject
+context prevents completion UIs from showing. On commit, jumps to
+the picked instance and re-enters `embark-act' filtered to that
+target. On cancel (C-g), restores point."
     (interactive)
     (let* ((type zetta-embark--current-target-type)
            (thing (and type (alist-get type zetta-embark-nav-type-map type))))
@@ -799,7 +863,6 @@ cancel (C-g), restores point."
         (message "No nav thing for embark type `%s'" type))
        (t
         (let* ((start (point))
-               (cancelled t)
                (instances (zetta-embark--collect-instances-of-thing thing))
                (candidates
                 (mapcar
@@ -813,44 +876,19 @@ cancel (C-g), restores point."
                           (snippet (truncate-string-to-width
                                     snippet 80 nil nil "…")))
                      (cons (format "L%-5d %s" line snippet) b)))
-                 instances))
-               (preview-state
-                (lambda (action cand)
-                  (pcase action
-                    ('preview
-                     (when (and cand (stringp cand))
-                       (when-let* ((b (cdr (assoc cand candidates))))
-                         (goto-char (car b))))))))) ; close lambda, pcase, let* binding
+                 instances)))
           (cond
            ((null candidates)
             (message "No instances of type `%s' (thing `%s') in buffer"
                      type thing))
            (t
-            (unwind-protect
-                (let* ((choice
-                        ;; embark's pre-action `inject' prefills our
-                        ;; minibuffer with the target string, which
-                        ;; hides candidates. Add a one-shot hook that
-                        ;; clears the minibuffer right after embark's
-                        ;; inject runs.
-                        (minibuffer-with-setup-hook
-                            (lambda () (delete-minibuffer-contents))
-                          (consult--read (mapcar #'car candidates)
-                                         :prompt (format "Pick %s: " type)
-                                         :require-match t
-                                         :state preview-state)))
-                       (picked (cdr (assoc choice candidates))))
-                  (when picked
-                    (let* ((beg (car picked))
-                           (end (cdr picked))
-                           (text (buffer-substring-no-properties beg end))
-                           (embark-target-finders
-                            (list (lambda ()
-                                    (cons type (cons text (cons beg end)))))))
-                      (goto-char beg)
-                      (setq cancelled nil)
-                      (call-interactively #'embark-act))))
-              (when cancelled (goto-char start))))))))))
+            ;; Defer to run AFTER embark-act exits its prompt.
+            ;; `run-at-time' with 0 delay schedules for the next
+            ;; idle moment, by which point embark-act has unwound.
+            (run-at-time
+             0 nil
+             #'zetta-embark--pick-instance-do
+             type thing candidates start))))))))
 
   (define-key embark-general-map (kbd "C-o") #'zetta-embark-pick-instance)
 

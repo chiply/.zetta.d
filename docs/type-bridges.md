@@ -22,9 +22,9 @@ read the matching scenario below.
    How the type is defined                   What it becomes
 
   symbol-property mechanism          ──┐
-  (put 'block 'bounds-of-thing-at-point …)│
-  (put 'block 'forward-op …)             │
-   ── used by tap-block.el / tap.el      │
+  (put 'brick 'bounds-of-thing-at-point …)│
+  (put 'brick 'forward-op …)             │
+   ── used by tap.el                     │
                                          ├─►  bounds-of-thing-at-point
   provider-alist mechanism               │     forward-thing
   (setf (alist-get 'X                    │     beginning-of-thing
@@ -79,7 +79,7 @@ cycles through.
 | Embark target cycle sort (innermost first) | `modules/completion/embark.el` |
 | `zetta-embark-act-contract` (reverse-cycle entry) | `modules/completion/embark.el` |
 | `C-,` single-key in-prompt back-step | `modules/completion/embark.el` |
-| Example user-defined things (`block`, `brick`) | `modules/completion/tap-block.el`, `tap.el` |
+| Example user-defined thing (`brick`) | `modules/completion/tap.el` |
 
 ## Scenario 1 — text- or regex-defined thing
 
@@ -112,10 +112,9 @@ That is the whole integration. `(thing-at-point 'my-thing)`,
 `zetta-tap-current-thing` set to `'my-thing`, and `C-.` action menus
 all work.
 
-The existing `block` (defined in `modules/completion/tap-block.el:104`)
-and `brick` (defined in `modules/completion/tap.el:237`) use exactly
-this pattern. Both are registered with embark via Bridge B in
-`modules/completion/embark.el`.
+The existing `brick` thing (defined in `modules/completion/tap.el`)
+uses exactly this pattern and is registered with embark via Bridge B
+in `modules/completion/embark.el`.
 
 ## Scenario 2 — tree-sitter AST node usable everywhere
 
@@ -402,7 +401,7 @@ the current target.
 `bounds-of-thing-at-point`. In completion UIs (the minibuffer,
 `embark-collect-mode`, etc.) some bounds functions (e.g.
 `brick-bounds-of-brick-at-point`) happily compute bounds against
-candidate text, so the brick/block target would steal the default
+candidate text, so the brick target would steal the default
 cycle slot from the project/file/buffer target that the user
 actually wants. Gating completion contexts out lets embark's own
 minibuffer finders classify them correctly.
@@ -528,8 +527,8 @@ extras.
    **not** `Act on brick …` or similar.
 4. Press `f` → opens find-file scoped to that project.
 
-This is the path that broke when the `block`/`brick` finders were
-not gated out of completion UIs. If `f` says "not bound to an
+This is the path that broke when the `brick` finder was not gated
+out of completion UIs. If `f` says "not bound to an
 action", the finder guard in `zetta-embark-deftap-finder` regressed.
 
 ### Test 10 — `C-h B` survey

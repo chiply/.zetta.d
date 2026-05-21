@@ -1,11 +1,11 @@
 ;;; tap.el --- Configure tap -*- lexical-binding: t; -*-
 
 ;; All the things
-(setq zetta-tap--things '("block" "brick" "symbol" "list" "sexp"
-                      "defun" "filename" "url"
-                      "email" "uuid" "word"
-                      "sentence" "whitespace" "line"
-                      "page" "orgtree" "paragraph" "button"))
+(setq zetta-tap--things '("brick" "symbol" "list" "sexp"
+                          "defun" "filename" "url"
+                          "email" "uuid" "word"
+                          "sentence" "whitespace" "line"
+                          "page" "orgtree" "paragraph" "button"))
 
 (defvar-local zetta-tap-current-thing 'defun
   "Buffer-local thing-at-point symbol used by zetta-tap navigation.
@@ -287,10 +287,10 @@ not defined in `treesit-thing-settings' for the current language."
 
 (defcustom zetta-treesit-bridged-things
   '(defun sexp list sentence text comment paragraph
-    function class method
-    loop conditional decorator call
-    parameter parameter_list argument_list
-    str-lit statement)
+          function class method
+          loop conditional decorator call
+          parameter parameter_list argument_list
+          str-lit statement)
   "Symbols bridged between thing-at-point and tree-sitter.
 For each symbol: a bounds provider is registered globally; a forward
 provider is registered buffer-locally (in treesit buffers) only when

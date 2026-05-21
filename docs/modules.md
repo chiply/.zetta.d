@@ -50,7 +50,6 @@ Minibuffer completion framework. The default stack is Vertico + Consult + Orderl
 | embark-consult.el | embark-consult | Embark + Consult integration |
 | consult.el | consult | Search and navigation commands |
 | tap.el | tap | Completion tap |
-| tap-block.el | tap-block | Block completion |
 | vertico.el | vertico | Vertical minibuffer completion UI |
 | prescient.el | prescient | Frequency/recency sorting |
 | mono-complete.el | mono-complete | Single-candidate completion |

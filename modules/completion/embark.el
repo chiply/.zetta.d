@@ -147,10 +147,10 @@ TYPE is the embark target type reported; defaults to THING."
                            (cons beg end))))))
          (add-to-list 'embark-target-finders #',name))))
 
-  ;; Register finders for the user-defined things in `tap.el' that
-  ;; embark would not otherwise see (block/brick come from tap-block.el
-  ;; and tap.el via `put ... bounds-of-thing-at-point').
-  (zetta-embark-deftap-finder block)
+  ;; Register a finder for the user-defined `brick' thing from
+  ;; `tap.el' (blank-line-delimited paragraph; uses `put ...
+  ;; bounds-of-thing-at-point'). Embark's built-in finders don't
+  ;; surface custom things via the symbol-property mechanism.
   (zetta-embark-deftap-finder brick)
 
   ;; Register text-shaped scopes too. Embark's built-in `sentence',
@@ -419,7 +419,6 @@ universal-argument family is already handled there."
       (ts-while_statement . loop)
       (ts-if_statement . conditional)
       (ts-decorator . decorator)
-      (block . block)
       (brick . brick))
     "Map embark target types to thing-at-point things for navigation.
 Missing entries fall through to the type itself, in case the type

@@ -57,7 +57,7 @@ in the order they appear in the `zetta-modules!' declaration.")
              "bufler.el" "line-utils.el" "helpful.el" "elisp-mode.el" "prose.el"))
     (completion . ("completion.el" "cape.el" "dabbrev.el" "recursion-indicator.el"
                    "helm.el" "marginalia.el" "orderless.el" "embark.el"
-                   "embark-consult.el" "consult.el" "tap.el" "tap-block.el"
+                   "embark-consult.el" "consult.el" "tap.el"
                    "vertico.el" "corfu.el" "prescient.el" "mono-complete.el"
                    "consult-gh.el" "consult-lsp.el" "consult-dash.el" "consult-ls-git.el"))
     (ui . ("display.el" "hud.el" "highlight-indent-guides.el" "ultra-scroll.el"

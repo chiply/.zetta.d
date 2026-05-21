@@ -517,15 +517,15 @@ Resolves the type via `zetta-embark-nav-type-map' (so e.g. a
   (define-key embark-general-map (kbd "C-k") #'zetta-embark-nav-prev)
   (define-key embark-general-map (kbd "C-a") #'zetta-embark-nav-beg)
   (define-key embark-general-map (kbd "C-e") #'zetta-embark-nav-end)
-  ;; `M-f' rather than `F': `F' is bound in several built-in embark
-  ;; maps (`embark-prose-map' -> `whitespace-cleanup-region',
-  ;; `embark-region-map' -> same, `embark-file-map' ->
-  ;; `find-file-literally', `embark-encode-map' ->
-  ;; `format-decode-region') and those bindings shadow the
-  ;; `embark-general-map' fallback for the matching target types.
-  ;; `M-f' is unbound in every built-in map, so our binding wins
-  ;; uniformly. Mnemonic: meta-Focus.
-  (define-key embark-general-map (kbd "M-f") #'zetta-embark-focus-on-type)
+  ;; `C-f' for focus-mode activation:
+  ;; - `F' is bound in five embark built-in maps
+  ;;   (prose / sentence / paragraph / region / file / encode),
+  ;;   shadowing any `embark-general-map' fallback.
+  ;; - `M-f' (alt-f) collides with aerospace's fullscreen on macOS.
+  ;; - `C-f' is unbound in every embark built-in map AND aerospace
+  ;;   only takes alt-/cmd- combos, so it is free at both layers.
+  ;; Mnemonic: ctrl-Focus.
+  (define-key embark-general-map (kbd "C-f") #'zetta-embark-focus-on-type)
 
   ;; Mark the nav commands as repeatable so embark re-fetches targets
   ;; at the new point and re-prompts with the same type preferred.

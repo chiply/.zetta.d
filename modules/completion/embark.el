@@ -1086,10 +1086,17 @@ jumps and runs `embark-act' filtered to that type. On cancel
                             (append
                              (mapcar #'car zetta-embark-nav-type-map)
                              (mapcar #'cdr zetta-embark-nav-type-map)
+                             zetta-embark-symbol-target-types
                              (when (boundp 'zetta-tap--things)
                                (mapcar (lambda (s)
                                          (and s (intern-soft s)))
                                        zetta-tap--things))))))))
+           (collect-for-sym
+            (lambda (sym)
+              (if (memq sym zetta-embark-symbol-target-types)
+                  (zetta-embark--collect-symbols-of-embark-type sym)
+                (let ((thing (alist-get sym zetta-embark-nav-type-map sym)))
+                  (zetta-embark--collect-instances-of-thing thing)))))
            (preview-state
             (lambda (action cand)
               (pcase action
@@ -1097,9 +1104,8 @@ jumps and runs `embark-act' filtered to that type. On cancel
                  (zetta-embark--clear-instance-overlays)
                  (when (and cand (stringp cand) (> (length cand) 0))
                    (let* ((sym (intern cand))
-                          (thing (alist-get sym zetta-embark-nav-type-map sym))
                           (instances (ignore-errors
-                                       (zetta-embark--collect-instances-of-thing thing))))
+                                       (funcall collect-for-sym sym))))
                      (when instances
                        (zetta-embark--jump-to-type-paint instances)
                        (when-let* ((closest (zetta-embark--jump-to-type-closest
@@ -1114,7 +1120,7 @@ jumps and runs `embark-act' filtered to that type. On cancel
                                         :state preview-state))
                  (sym (intern choice))
                  (thing (alist-get sym zetta-embark-nav-type-map sym))
-                 (instances (zetta-embark--collect-instances-of-thing thing)))
+                 (instances (funcall collect-for-sym sym)))
             (cond
              ((null instances)
               (message "No instances of `%s' in buffer" thing))

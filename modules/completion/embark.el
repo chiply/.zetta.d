@@ -783,12 +783,32 @@ filters embark-target-finders to just the picked one, then calls
 
   ;; Top-level command (not an embark action): prompt for a type,
   ;; jump to the closest instance, kick off `embark-act' there.
-  ;; `unwind-protect' restores point if the read or action is
-  ;; cancelled (e.g. C-g).
+  ;; Uses `consult--read' so we get live preview: highlighting every
+  ;; instance of the previewed type and moving point to the closest
+  ;; one. On C-g (cancel) the original point is restored and the
+  ;; preview overlays are torn down.
+  (defun zetta-embark--jump-to-type-closest (instances anchor)
+    "Return the (BEG . END) in INSTANCES nearest to ANCHOR position."
+    (car (sort (copy-sequence instances)
+               (lambda (a b)
+                 (< (abs (- (car a) anchor))
+                    (abs (- (car b) anchor)))))))
+
+  (defun zetta-embark--jump-to-type-paint (instances)
+    "Paint INSTANCES with `zetta-embark-other-instance-face' overlays.
+Reuses `zetta-embark--instance-overlays' so the existing clear path
+applies."
+    (dolist (b instances)
+      (let ((ov (make-overlay (car b) (cdr b))))
+        (overlay-put ov 'face 'zetta-embark-other-instance-face)
+        (overlay-put ov 'zetta-embark-highlight t)
+        (push ov zetta-embark--instance-overlays))))
+
   (defun zetta-embark-jump-to-type ()
-    "Prompt for a type, jump to its closest instance, then `embark-act'.
-Restores point to the original position on cancellation (C-g).
-Useful for jumping to types that may not be present at point."
+    "Prompt for a type with `consult--read'; preview highlights every
+instance of the type and moves point to the closest. On commit,
+jumps and runs `embark-act' filtered to that type. On cancel
+(C-g), restores point and clears preview overlays."
     (interactive)
     (let* ((start (point))
            (cancelled t)
@@ -802,9 +822,29 @@ Useful for jumping to types that may not be present at point."
                             (when (boundp 'zetta-tap--things)
                               (mapcar (lambda (s)
                                         (and s (intern-soft s)))
-                                      zetta-tap--things))))))))
+                                      zetta-tap--things)))))))
+           (preview-state
+            (lambda (action cand)
+              (pcase action
+                ('preview
+                 (zetta-embark--clear-instance-overlays)
+                 (when (and cand (stringp cand) (> (length cand) 0))
+                   (let* ((sym (intern cand))
+                          (thing (alist-get sym zetta-embark-nav-type-map sym))
+                          (instances (ignore-errors
+                                       (zetta-embark--collect-instances-of-thing thing))))
+                     (when instances
+                       (zetta-embark--jump-to-type-paint instances)
+                       (when-let* ((closest (zetta-embark--jump-to-type-closest
+                                             instances start)))
+                         (goto-char (car closest)))))))
+                ('exit
+                 (zetta-embark--clear-instance-overlays))))))
       (unwind-protect
-          (let* ((choice (completing-read "Jump to type: " candidates nil t))
+          (let* ((choice (consult--read candidates
+                                        :prompt "Jump to type: "
+                                        :require-match t
+                                        :state preview-state))
                  (sym (intern choice))
                  (thing (alist-get sym zetta-embark-nav-type-map sym))
                  (instances (zetta-embark--collect-instances-of-thing thing)))
@@ -812,17 +852,10 @@ Useful for jumping to types that may not be present at point."
              ((null instances)
               (message "No instances of `%s' in buffer" thing))
              (t
-              (let* ((closest (car (sort (copy-sequence instances)
-                                         (lambda (a b)
-                                           (< (abs (- (car a) start))
-                                              (abs (- (car b) start)))))))
+              (let* ((closest (zetta-embark--jump-to-type-closest instances start))
                      (beg (car closest))
                      (end (cdr closest))
                      (text (buffer-substring-no-properties beg end))
-                     ;; Force embark to dispatch on the picked TYPE
-                     ;; (not whatever it would auto-detect at the new
-                     ;; point). Replace the finder list with a single
-                     ;; finder that returns exactly this target.
                      (embark-target-finders
                       (list (lambda ()
                               (cons sym (cons text (cons beg end)))))))

@@ -124,6 +124,8 @@ single chars and is verified safe across embark's built-in maps.
 | `*` | `zetta-embark-highlight-other-instances` | Overlay every OTHER instance of the type. Repeatable — embark stays open AND highlights refresh on each cycle |
 | `C-v` | `zetta-embark-select-as-region` | Mark+point over the bounds, activate region, exit embark |
 | `C-SPC` | `mark` *(embark built-in)* | Like `C-v` but stays in the prompt with type `region` |
+| `C-l` | `zetta-embark-pick-target-type` | `consult--read` over every bounded target at point; preview paints the focused candidate's bounds in the buffer. Pick to dispatch `embark-act` filtered to that type |
+| `C-o` | `zetta-embark-pick-instance` | `consult--read` over every instance of the active target's type in the buffer (document order, rotated to start from point onward). Preview moves point and paints the focused candidate. Pick to jump and re-enter `embark-act` on that target |
 
 Outside the prompt, [`zetta-embark-jump-to-type`](../modules/completion/embark.el)
 (bound to `s-x j` in the tap keymap list) prompts for a type, jumps
@@ -458,12 +460,14 @@ Two more embark-integrated commands worth flagging:
 
 - **`zetta-embark-jump-to-type`** (bound to `s-x j` via
   [`tap.el`](../modules/completion/tap.el)) — a top-level command
-  (not an embark action). Prompts for a type via `completing-read`
-  over the union of `zetta-embark-nav-type-map` entries and
-  `zetta-tap--things`. Finds the closest instance to point, jumps
-  there, and kicks off `embark-act` on it. Wrapped in
-  `unwind-protect` so `C-g` during either the read or the action
-  prompt restores point to the original position.
+  (not an embark action). Prompts for a type via `consult--read`
+  over the union of `zetta-embark-nav-type-map` keys/values,
+  `zetta-embark-symbol-target-types`, and `zetta-tap--things`,
+  filtered by `zetta-embark--jump-type-applicable-p` (drops org-*
+  outside org-mode, ts-* without a treesit parser). Preview
+  highlights every instance of the focused type and moves point
+  to the closest; on commit, jumps and dispatches `embark-act`.
+  `unwind-protect` restores point on `C-g`.
 
 - **`zetta-embark-select-as-region`** (bound to `C-v` in
   [`embark-general-map`](../modules/completion/embark.el)) — sets
@@ -472,6 +476,43 @@ Two more embark-integrated commands worth flagging:
   immediately usable for any region-based command. Distinct from
   `C-SPC` (embark's built-in `mark`) which stays in the prompt with
   type `region` so you can chain another action.
+
+## Symbol-target types (function / command / variable / …)
+
+Embark's `embark-target-identifier-at-point` labels an elisp symbol
+with one or more of `function`, `command`, `variable`, `face`,
+`library`, `package`, `symbol`, `identifier` depending on what the
+symbol *is* (via `embark--identifier-types`). These are labels on
+the same underlying symbol target — bounds are the symbol's
+bounds, not a definition's.
+
+For these types, walking via `bounds-of-thing-at-point` / `forward-
+thing` makes no sense (no such thing-at-point). The
+`zetta-embark-symbol-target-types` defcustom names the set;
+`zetta-embark--collect-symbols-of-embark-type` walks every identifier
+in the buffer and keeps those whose embark types include the captured
+type. Both `C-o` (`pick-instance`) and `s-x j` (`jump-to-type`) branch
+on this list: when the type is symbol-shaped, they use the symbol
+collector; otherwise they fall back to the thing/treesit walker.
+
+So on a `function` target: `C-o` lists every callable symbol referenced
+in the buffer; `s-x j` → pick `function` highlights every callable.
+On a `variable` target: every variable. Etc.
+
+A per-call memo cache in the walker makes classification cheap
+(~ms on large elisp files), since the same identifiers repeat many
+times. A custom `zetta-embark--cheap-identifier-types` mirrors
+embark's classifier but skips the `ffap-el-mode` library probe to
+keep the walk fast.
+
+### `zetta-embark--collect-instances-of-thing` (treesit-aware)
+
+For non-symbol types, the walker branches on
+`treesit-thing-defined-p`: if the resolved thing is a defined
+treesit thing for the buffer's language, it iterates via
+`treesit-navigate-thing` (since `forward-thing` is a no-op for
+treesit-only things). Otherwise it falls back to the
+`forward-thing` loop.
 
 ## Discovering tree-sitter node names
 

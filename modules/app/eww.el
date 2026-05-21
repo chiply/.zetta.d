@@ -34,7 +34,11 @@
              "reddit\\|xkcd\\|orgmode\\.org"
              (eww-current-url))
       (eww-readable))
-    (setq-local truncate-lines nil))
+    (setq-local truncate-lines nil)
+    ;; Single-space sentence endings -- same reasoning as in
+    ;; `zetta-eww-mode-functions'. Set here too so it survives
+    ;; `eww-readable' and applies on every render, not just mode init.
+    (setq-local sentence-end-double-space nil))
 
   (defun zetta-eww-mode-functions ()
     (setq-local truncate-lines nil)

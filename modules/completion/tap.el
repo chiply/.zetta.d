@@ -182,7 +182,7 @@ interactively, prompts from `zetta-tap--things'."
             sql-mode-map lisp-mode-map lisp-interaction-mode-map
             emacs-lisp-mode-map elisp python-ts-mode-map
             yaml-mode-map sh-mode-map shell-command-mode-map
-            lark-mode-map)
+            lark-mode-map org-mode-map)
  "s-j" 'zetta-tap-next
  "s-k" 'zetta-tap-prev
  "s-h" 'zetta-tap-beg

@@ -745,6 +745,42 @@ selection is immediately usable for any region-based command."
 
   (define-key embark-general-map (kbd "C-v") #'zetta-embark-select-as-region)
 
+  (defun zetta-embark-pick-target-type ()
+    "Pick a target type from the ones at point, then re-enter embark.
+Skips the cycling step when many types are stacked at the same
+point: shows a `completing-read' with every bounded target,
+filters embark-target-finders to just the picked one, then calls
+`embark-act' which dispatches directly to that type's action map."
+    (interactive)
+    (let* ((targets (embark--targets))
+           (candidates
+            (cl-loop for tgt in targets
+                     when (plist-get tgt :bounds)
+                     collect
+                     (cons
+                      (format "%-30s %s"
+                              (plist-get tgt :type)
+                              (truncate-string-to-width
+                               (or (plist-get tgt :target) "") 60 nil nil "…"))
+                      tgt))))
+      (if (null candidates)
+          (message "No bounded targets at point")
+        (let* ((choice (completing-read "Pick target type: "
+                                        (mapcar #'car candidates) nil t))
+               (picked (cdr (assoc choice candidates))))
+          (when picked
+            (let* ((sym (plist-get picked :type))
+                   (text (plist-get picked :target))
+                   (b (plist-get picked :bounds))
+                   (beg (car b))
+                   (end (cdr b))
+                   (embark-target-finders
+                    (list (lambda ()
+                            (cons sym (cons text (cons beg end)))))))
+              (call-interactively #'embark-act)))))))
+
+  (define-key embark-general-map (kbd "C-l") #'zetta-embark-pick-target-type)
+
   ;; Top-level command (not an embark action): prompt for a type,
   ;; jump to the closest instance, kick off `embark-act' there.
   ;; `unwind-protect' restores point if the read or action is

@@ -804,6 +804,20 @@ applies."
         (overlay-put ov 'zetta-embark-highlight t)
         (push ov zetta-embark--instance-overlays))))
 
+  (defun zetta-embark--jump-type-applicable-p (sym)
+    "Return non-nil if SYM is plausibly relevant in the current buffer.
+Filters obvious mismatches by name prefix: `org-*' types and
+`orgtree' only in `org-mode'; `ts-*' types only when a tree-sitter
+parser is active. Falls through to t for generic things."
+    (let ((name (symbol-name sym)))
+      (cond
+       ((or (string-prefix-p "org-" name)
+            (eq sym 'orgtree))
+        (derived-mode-p 'org-mode))
+       ((string-prefix-p "ts-" name)
+        (and (fboundp 'treesit-parser-list) (treesit-parser-list)))
+       (t t))))
+
   (defun zetta-embark-jump-to-type ()
     "Prompt for a type with `consult--read'; preview highlights every
 instance of the type and moves point to the closest. On commit,
@@ -815,14 +829,16 @@ jumps and runs `embark-act' filtered to that type. On cancel
            (candidates
             (delete-dups
              (mapcar #'symbol-name
-                     (delq nil
-                           (append
-                            (mapcar #'car zetta-embark-nav-type-map)
-                            (mapcar #'cdr zetta-embark-nav-type-map)
-                            (when (boundp 'zetta-tap--things)
-                              (mapcar (lambda (s)
-                                        (and s (intern-soft s)))
-                                      zetta-tap--things)))))))
+                     (cl-remove-if-not
+                      #'zetta-embark--jump-type-applicable-p
+                      (delq nil
+                            (append
+                             (mapcar #'car zetta-embark-nav-type-map)
+                             (mapcar #'cdr zetta-embark-nav-type-map)
+                             (when (boundp 'zetta-tap--things)
+                               (mapcar (lambda (s)
+                                         (and s (intern-soft s)))
+                                       zetta-tap--things))))))))
            (preview-state
             (lambda (action cand)
               (pcase action

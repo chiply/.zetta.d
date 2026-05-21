@@ -512,6 +512,13 @@ current one."
   (put 'embark-expression 'bounds-of-thing-at-point
        'zetta-embark--expression-bounds)
 
+  ;; Navigation: delegate to `forward-sexp'. Combined with
+  ;; `zetta-tap-forward-thing's snap-to-bounds.start, each press
+  ;; lands on the start of the next / previous sibling sexp; the
+  ;; smart `bounds-of-thing-at-point' above then returns the
+  ;; enclosing form (not a sub-sexp).
+  (put 'embark-expression 'forward-op 'forward-sexp)
+
   (defun zetta-embark-focus-on-type ()
     "Activate `focus-mode' on the current embark target's type.
 Resolves the embark type via `zetta-embark-nav-type-map' to a

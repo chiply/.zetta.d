@@ -492,21 +492,32 @@ current one."
           (goto-char (max beg (1- end))))
       (message "No embark target bounds captured")))
 
-  (defun zetta-embark-focus-on-type ()
-    "Activate `focus-mode' targeting the current embark target's type.
-Resolves the type via `zetta-embark-nav-type-map' (so e.g. a
-`ts-call' target focuses on `call'), syncs both
-`zetta-tap-current-thing' and `focus-current-thing', and snaps
-point to the captured bounds' start before enabling `focus-mode'.
+  ;; Static-bounds "thing" for the focus action. Focus-mode normally
+  ;; tracks point dynamically by re-running `bounds-of-thing-at-point'
+  ;; on every post-command-hook -- which means dimming SHRINKS as
+  ;; point moves into smaller sexps inside the captured expression.
+  ;; For C-f's "focus on what I selected" semantics, freeze the
+  ;; bounds: define a thing whose `bounds-of-thing-at-point' just
+  ;; returns the buffer-local `zetta-embark--focus-bounds'. Each
+  ;; activation of the focus action overwrites this var, so multiple
+  ;; buffers can have independent frozen-focus targets.
+  (defvar-local zetta-embark--focus-bounds nil
+    "Static bounds returned by the `zetta-embark-focus-target' thing.")
 
-The point snap matters: `focus-mode' re-runs
-`bounds-of-thing-at-point' on every post-command-hook, and that
-lookup is sensitive to point position. Embark's `expression'
-finder, for example, uses `syntax-ppss' + `scan-sexps' (smart
-sexp), which can return a different region than plain
-`bounds-of-thing-at-point 'sexp' at a deeper point inside the
-form. Snapping point to bounds.start makes the two converge on
-the same region the user selected in embark."
+  (defun zetta-embark--focus-target-bounds ()
+    "Return the static bounds for `zetta-embark-focus-target'."
+    zetta-embark--focus-bounds)
+
+  (put 'zetta-embark-focus-target 'bounds-of-thing-at-point
+       'zetta-embark--focus-target-bounds)
+
+  (defun zetta-embark-focus-on-type ()
+    "Activate `focus-mode' on the current embark target's bounds.
+Freezes focus on the EXACT bounds embark captured (using a static
+`zetta-embark-focus-target' thing), not on the type-resolved
+`bounds-of-thing-at-point' which would shrink as point moves
+inside the target. Also syncs `zetta-tap-current-thing' to the
+resolved nav thing so s-j/s-k continue to work after focus exits."
     (interactive)
     (let* ((type zetta-embark--current-target-type)
            (bounds zetta-embark--current-target-bounds)
@@ -514,18 +525,18 @@ the same region the user selected in embark."
       (cond
        ((null type)
         (message "No embark target captured"))
-       ((not (symbolp thing))
-        (message "No nav thing for embark type `%s'" type))
+       ((null bounds)
+        (message "No bounds for type `%s' -- focus needs a region" type))
        (t
-        (setq-local zetta-tap-current-thing thing)
+        (when (symbolp thing)
+          (setq-local zetta-tap-current-thing thing))
+        (setq-local zetta-embark--focus-bounds bounds)
         (when (boundp 'focus-current-thing)
-          (setq-local focus-current-thing thing))
-        (when bounds (goto-char (car bounds)))
+          (setq-local focus-current-thing 'zetta-embark-focus-target))
+        (goto-char (car bounds))
         (when (fboundp 'focus-mode) (focus-mode 1))
-        (message "Focus on `%s'%s"
-                 thing
-                 (if (eq type thing) ""
-                   (format " (via embark `%s')" type)))))))
+        (message "Focus on `%s' selection (%d..%d)"
+                 type (car bounds) (cdr bounds))))))
 
   (define-key embark-general-map (kbd "C-j") #'zetta-embark-nav-next)
   (define-key embark-general-map (kbd "C-k") #'zetta-embark-nav-prev)

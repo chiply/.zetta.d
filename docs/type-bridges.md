@@ -535,6 +535,51 @@ instead.
 Gated by mode list — programming buffers stay on the `identifier`
 / `symbol` finders where symbol semantics are the better fit.
 
+## Treesit types in the modal editors
+
+The same AST nodes that Bridges A / B / C surface as embark
+targets are also addressable from evil and meow via their
+standard text-object / thing grammars. Two packages do the
+plumbing:
+
+- [`modules/editor/evil-textobj-tree-sitter.el`](../modules/editor/evil-textobj-tree-sitter.el)
+  ([upstream](https://github.com/meain/evil-textobj-tree-sitter))
+  binds tree-sitter text objects into `evil-outer-text-objects-map`
+  and `evil-inner-text-objects-map`. Default key set:
+
+  | Outer / inner key | Unit | Example use |
+  |---|---|---|
+  | `f` | function | `daf` deletes around function, `vif` selects inside |
+  | `c` | class | `cic` changes inside class |
+  | `a` | parameter | `daa` deletes around parameter |
+  | `l` | loop | `vil` selects loop body |
+  | `i` | conditional | `dai` deletes around `if` / `match` / etc. |
+  | `C` | comment | `daC` deletes around comment |
+  | `v` | assignment | `civ` changes inside assignment RHS |
+  | `/` | call | `vi/` selects call args region |
+
+- [`modules/editor/meow-tree-sitter.el`](../modules/editor/meow-tree-sitter.el)
+  ([upstream](https://github.com/skissue/meow-tree-sitter))
+  registers the same AST units (function / class / parameter /
+  comment / call) as meow *things*, so `meow-inner-of-thing`
+  (`,`) and `meow-bounds-of-thing` (`.`) work on them. With
+  meow's expand grammar, `, f` selects inside a function and
+  `. f` selects around it; the result is grabbable by any
+  meow operator (delete, change, copy, etc.).
+
+Both packages bundle the underlying tree-sitter queries; no
+extra setup beyond a live parser in the buffer.
+
+How this composes with the type bridges:
+
+- **Embark** answers "what *type* is at point" (Bridges A/B/C).
+- **Modal text objects** answer "operate on the *type* at point
+  using vim/meow grammar."
+- The two see the same AST nodes — `function` in embark, `function`
+  in `evil-textobj-tree-sitter`'s query, `function` in meow's
+  thing table — so the model is consistent across the prompt-
+  driven and modal-driven entry points.
+
 ## Type-aware folding ([`tap-fold.el`](../modules/editor/tap-fold.el))
 
 Runs alongside kirigami (which unifies the *structural* backends

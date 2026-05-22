@@ -573,6 +573,43 @@ instead.
 Gated by mode list — programming buffers stay on the `identifier`
 / `symbol` finders where symbol semantics are the better fit.
 
+## Type-aware folding ([`tap-fold.el`](../modules/editor/tap-fold.el))
+
+Runs alongside kirigami (which unifies the *structural* backends
+— outline / hs / treesit-fold / org / markdown). This layer
+folds the bounds of any **type** known to the bridge: paragraph,
+sentence, defun, sexp, function, orgtree, brick, word, line, or
+the currently active embark target.
+
+Mechanism: a single `invisible` overlay with the spec key
+`zetta-fold`, registered with ellipsis. Because invisibility is
+character-based, folds are **not line-snapped** — fold a sentence
+inside a line and the rest of that line stays on the same line,
+with `…` where the hidden span was. None of kirigami's structural
+backends do this — they all work line-wise.
+
+| Binding | Command | Effect |
+|---|---|---|
+| `s-x f` | `zetta-fold-thing-at-point` | Prompt for a thing (from `zetta-fold-things`), fold its bounds at point |
+| `s-x F` | `zetta-unfold-at-point` | Unfold the span enclosing point |
+| `s-x M-f` | `zetta-unfold-all` | Remove every `zetta-fold` overlay in the buffer |
+| `s-x C-f` | `zetta-fold-current-thing` | Fold `zetta-tap-current-thing` at point |
+| `C-z` (in embark prompt) | `zetta-embark-fold` | Fold the active embark target's bounds |
+
+Composability — anywhere the bridge gives you bounds, `tap-fold`
+gives you a fold:
+
+- Hit `C-.` → cycle to the target type you want → `C-z`. Hides
+  exactly that type.
+- Hit `C-.` → `*` first to see all instances of a type, then
+  `C-z` to fold the current one.
+- `s-x j` → pick a type → after jumping, `s-x f` then pick the
+  same type to fold around the new point.
+
+Isearch auto-unfolds matches via `isearch-open-invisible`.
+Overlays are `evaporate t` so they self-clean when their
+underlying bounds collapse.
+
 ## Discovering tree-sitter node names
 
 Drop a sample buffer in the target mode and harvest the type names:

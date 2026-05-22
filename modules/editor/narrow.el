@@ -41,10 +41,10 @@ of tap), then toggle the closest fold"
            (fold-at-point fold)
            ;; if at first thing, take 1 as lower bound, otherwise
            ;; beginning of thing - 1.
-           (beg (if (zetta-thing-at-bobp)
+           (beg (if (zetta-tap-at-bobp)
                     1
                   (- (ov-beg fold-at-point) 1)))
-           (end (if (zetta-thing-at-eobp)
+           (end (if (zetta-tap-at-eobp)
                     (save-excursion (end-of-buffer) (point))
                   (+ 1 (ov-end fold-at-point))))
            )
@@ -55,7 +55,7 @@ of tap), then toggle the closest fold"
     (let (
           ;; if at first thing, take 1 as lower bound, otherwise
           ;; beginning of thing - 1.
-          (beg (if (zetta-thing-at-bobp)
+          (beg (if (zetta-tap-at-bobp)
                    1
                  (save-excursion
                    (beginning-of-thing zetta-tap-current-thing)
@@ -63,7 +63,7 @@ of tap), then toggle the closest fold"
                    (beginning-of-line)
                    (- (point) 1)
                    )))
-          (end (if (zetta-thing-at-eobp)
+          (end (if (zetta-tap-at-eobp)
                    (save-excursion (end-of-buffer) (point))
                  (+ 1 (cdr (bounds-of-thing-at-point zetta-tap-current-thing)))))
           )

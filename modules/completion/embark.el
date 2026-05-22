@@ -1094,16 +1094,29 @@ filtered out via `zetta-embark--compound-bound-p'."
               (cl-remove-if-not #'zetta-embark--compound-bound-p bounds)
             bounds))))))
 
+  (defcustom zetta-embark-avy-style 'pre
+    "Value of `avy-style' to use within zetta avy commands.
+The default `pre' places the hint character via a before-string
+overlay (the underlying character stays visible immediately
+after the hint), whereas avy's normal default `at' overwrites
+the character at the target position. Set to `at', `at-full',
+`post', or any other `avy-style' value to override."
+    :type 'symbol
+    :group 'embark)
+
   (defun zetta-embark--avy-pick-bounds (instances)
     "Run `avy-process' over INSTANCES (list of BEG.END cons).
 Returns the picked (BEG . END) or nil on cancel/abort. Binds
 `avy-action' to `ignore' and captures the selection via
 `avy-pre-action' so the bounds (not just the position) survive
-the avy roundtrip."
+the avy roundtrip. `avy-style' is bound to
+`zetta-embark-avy-style' (default `pre') so hint chars don't
+obscure the buffer text underneath them."
     (when (and (fboundp 'avy-process) instances)
       (let* ((picked nil)
              (avy-pre-action (lambda (res) (setq picked res)))
-             (avy-action #'ignore))
+             (avy-action #'ignore)
+             (avy-style zetta-embark-avy-style))
         (avy-process instances)
         (and (consp picked) (car picked)))))
 

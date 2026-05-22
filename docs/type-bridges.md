@@ -126,10 +126,18 @@ single chars and is verified safe across embark's built-in maps.
 | `C-SPC` | `mark` *(embark built-in)* | Like `C-v` but stays in the prompt with type `region` |
 | `C-l` | `zetta-embark-pick-target-type` | `consult--read` over every bounded target at point; preview paints the focused candidate's bounds in the buffer. Pick to dispatch `embark-act` filtered to that type |
 | `C-o` | `zetta-embark-pick-instance` | `consult--read` over every instance of the active target's type in the buffer (document order, rotated to start from point onward). Preview moves point and paints the focused candidate. Pick to jump and re-enter `embark-act` on that target |
+| `C-;` | `zetta-embark-avy-pick-instance` | Avy over every VISIBLE instance of the active target's type. Navigation-only — point jumps to the picked instance, embark-act is not re-entered |
 
-Outside the prompt, [`zetta-embark-jump-to-type`](../modules/completion/embark.el)
-(bound to `s-x j` in the tap keymap list) prompts for a type, jumps
-to the nearest instance, and opens `embark-act` there.
+Outside the prompt, two top-level commands (bound in
+[`tap.el`](../modules/completion/tap.el)) round out type-driven
+navigation:
+
+- **`s-x j`** — `zetta-embark-jump-to-type`: consult-read for a type;
+  preview highlights all instances and moves point to the closest;
+  on commit jumps there and opens `embark-act`.
+- **`s-x a`** — `zetta-embark-avy-jump-to-type`: consult-read for a
+  type; then avy over the visible instances of that type. Navigation-
+  only — jumps to the picked instance, no `embark-act` re-entry.
 
 ## Scenario 1 — text- or regex-defined thing
 
@@ -513,6 +521,57 @@ treesit thing for the buffer's language, it iterates via
 `treesit-navigate-thing` (since `forward-thing` is a no-op for
 treesit-only things). Otherwise it falls back to the
 `forward-thing` loop.
+
+## Avy integration
+
+`C-;` (`zetta-embark-avy-pick-instance`, inside an embark prompt)
+and `s-x a` (`zetta-embark-avy-jump-to-type`, top-level) both
+route picking through avy over the **visible** instance set in
+the selected window. Unlike `C-o` and `s-x j`, these are
+navigation-only: point jumps to the picked instance and that's
+it — `embark-act` is not re-entered. If you want to act after
+avy-jumping, invoke `C-.` yourself.
+
+Helpers:
+
+- **`zetta-embark--collect-visible-instances`** filters the
+  buffer-wide collector results to `[window-start, window-end]`.
+  Symbol-shaped types reuse the symbol collector; everything else
+  goes through `zetta-embark--collect-bounds-by-scan`.
+- **`zetta-embark--collect-bounds-by-scan`** walks every position
+  in the visible range and takes `bounds-of-thing-at-point` at
+  each, then dedups. Because `bounds-of-thing-at-point` returns
+  the *smallest* containing instance, scan + dedup naturally
+  yields nested bounds — inner sexps inside outer sexps each
+  become separate avy targets, which the forward-thing walker
+  (with its `last-end` non-overlap filter) misses.
+- **`zetta-embark--compound-bound-p`** filters atom-sexps out for
+  `sexp` / `embark-expression`: only bounds starting at an open-
+  delimiter character (syntax class `?(`) survive, so on `(foo (bar baz) (qux))`
+  avy offers 3 targets (outer, `(bar baz)`, `(qux)`), not 7.
+- **`zetta-embark--avy-pick-bounds`** runs `avy-process` with a
+  let-bound `avy-pre-action` that captures the picked candidate
+  into a closure var, and `avy-action` = `ignore`. This is the
+  trick that recovers the full `(BEG . END)` after avy — the
+  default action only gets the start position.
+
+The avy commands don't fight the user's own `avy-style` /
+`avy-keys` / faces — those are read from their global values.
+
+## `word` as a prose-mode target
+
+[`zetta-embark-target-word-at-point`](../modules/completion/embark.el)
+adds `word` as a first-class embark target type in text-shaped
+modes (`text-mode`, `org-mode`, `eww-mode`, `help-mode`,
+`Info-mode`, `Man-mode`). Embark's built-in identifier finder
+labels org words as `identifier`, conflating them with elisp /
+python symbols and routing them through programming-oriented
+action maps. The dedicated `word` finder keeps prose distinct,
+so `embark-act` on an org word lands in `embark-word-map`
+instead.
+
+Gated by mode list — programming buffers stay on the `identifier`
+/ `symbol` finders where symbol semantics are the better fit.
 
 ## Discovering tree-sitter node names
 

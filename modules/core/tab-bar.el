@@ -90,42 +90,24 @@
   (when (and (boundp 'zetta-tap-current-thing) zetta-tap-current-thing)
     (format "[%s] " zetta-tap-current-thing)))
 
-(setq tab-bar-format '(;; everything here on will be aligned on the right
-                       ;;zetta-tab-bar-hydra
-                       zetta-buffer-name
-                       zmc-modeline-indicator
-                       zetta-pyvenv-activate-poetry-modeline
-                       ;; doesn't work in tab bar as it doesn't get
-                       ;; updated reliably... note that even when
-                       ;; using the entry and exist hooks it doesn't
-                       ;; work
-                       ;;key-state
-                       ;;zetta-nyan
-                       new-line
-                       zetta-tab-bar-spot-mode-line-string
-                       new-line
-                       zetta-tab-bar-modal
-                       zetta-gptel-processes
-
-                       ;;zetta-fish
-                       blinker-tab-bar
-
-                       tab-bar-format-align-right
-                       zetta-tab-bar-current-thing
-                       tab-bar-keycast
-                       zetta-insert-space
-                       zetta-tab-bar-recursion-level
-                       recursion-indicator--string
-                       ;;"  "
-                       tab-bar-format-global
-                       repeat-indicator-icon ;; (?)
-                       ;; these go together
-                       ;; TODO add current map
-                       internal-echo-keystrokes-prefix ;; universal arg
-                       zetta-insert-space
-                       zetta-current-prefix
-                       zetta-insert-space
-                       space-tree-modeline-lighter))
+(setq tab-bar-format
+      '(
+        ;; line 1
+        zetta-buffer-name zmc-modeline-indicator
+        zetta-pyvenv-activate-poetry-modeline
+        ;; line 2
+        new-line zetta-tab-bar-spot-mode-line-string
+        ;; line 3 left-aligned
+        new-line zetta-tab-bar-modal zetta-gptel-processes
+        blinker-tab-bar
+        ;; line 3 right-aligned
+        tab-bar-format-align-right tab-bar-keycast zetta-insert-space
+        zetta-tab-bar-current-thing zetta-tab-bar-recursion-level
+        recursion-indicator--string tab-bar-format-global
+        internal-echo-keystrokes-prefix
+        zetta-insert-space zetta-current-prefix zetta-insert-space
+        space-tree-modeline-lighter
+        ))
 
 (add-to-list 'brushup-styles
              '(set-face-attribute 'tab-bar nil :box nil :inherit nil :background brushup-bg)

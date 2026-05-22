@@ -1040,21 +1040,45 @@ literal occurrences of the captured target's text."
 
   ;; ---- avy integration ----
 
+  (defun zetta-embark--collect-bounds-by-scan (thing beg end)
+    "Walk every position in BEG..END, returning every distinct
+bounds of THING. At each position `bounds-of-thing-at-point'
+returns the smallest containing instance, so scanning + dedup
+naturally yields nested/overlapping bounds (inner sexps inside
+outer ones, etc.) -- which the forward-thing walker would miss
+due to its `last-end' non-overlap filter."
+    (let ((seen (make-hash-table :test 'equal))
+          results)
+      (save-excursion
+        (cl-loop for p from beg below end do
+                 (goto-char p)
+                 (when-let* ((b (ignore-errors
+                                  (bounds-of-thing-at-point thing))))
+                   (when (and (> (cdr b) (car b))
+                              (not (gethash b seen)))
+                     (puthash b t seen)
+                     (push b results)))))
+      (sort results (lambda (a b)
+                      (if (= (car a) (car b))
+                          (< (cdr a) (cdr b))
+                        (< (car a) (car b)))))))
+
   (defun zetta-embark--collect-visible-instances (type thing)
-    "Return instances of TYPE (or its mapped THING) that intersect
-the selected window's visible range. Dispatches to the symbol
-collector for symbol-shaped types, the standard thing walker
-otherwise."
+    "Return instances of TYPE (or its mapped THING) intersecting the
+selected window's visible range. Uses a position-scan walker
+that captures nested/overlapping bounds (inner sexps inside outer
+sexps, etc.) -- important for avy where each nesting level
+should be its own pick target."
     (let* ((win-beg (window-start))
-           (win-end (window-end nil t))
-           (all (if (memq type zetta-embark-symbol-target-types)
-                    (zetta-embark--collect-symbols-of-embark-type type)
-                  (zetta-embark--collect-instances-of-thing thing))))
-      (cl-remove-if-not
-       (lambda (b)
-         (and (>= (cdr b) win-beg)
-              (<= (car b) win-end)))
-       all)))
+           (win-end (window-end nil t)))
+      (if (memq type zetta-embark-symbol-target-types)
+          ;; Symbol targets don't nest -- one bounds per occurrence.
+          (cl-remove-if-not
+           (lambda (b)
+             (and (>= (cdr b) win-beg)
+                  (<= (car b) win-end)))
+           (zetta-embark--collect-symbols-of-embark-type type))
+        (zetta-embark--collect-bounds-by-scan thing win-beg win-end))))
 
   (defun zetta-embark--avy-pick-bounds (instances)
     "Run `avy-process' over INSTANCES (list of BEG.END cons).

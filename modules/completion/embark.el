@@ -687,7 +687,10 @@ turn off."
         (message "No nav thing for embark type `%s'" type))
        (t
         (setq zetta-embark--highlights-enabled t)
-        (let ((instances (zetta-embark--collect-instances-of-thing thing)))
+        (let ((instances
+               (if (memq type zetta-embark-symbol-target-types)
+                   (zetta-embark--collect-symbols-of-embark-type type)
+                 (zetta-embark--collect-instances-of-thing thing))))
           (dolist (b instances)
             ;; Skip overlay if it overlaps the current embark target.
             ;; The walker's bounds may differ by 1 char from the

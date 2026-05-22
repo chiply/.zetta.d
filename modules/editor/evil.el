@@ -49,10 +49,10 @@
    )
   (
    :states '(normal visual)
-   "C-S-j" (lambda () (interactive) (evil-scroll-down nil))
-   "C-S-k" (lambda () (interactive) (evil-scroll-up nil))
-   "C-j" (lambda () (interactive) (evil-scroll-line-down 1))
-   "C-k" (lambda () (interactive) (evil-scroll-line-up 1))
+   "C-S-j" 'evil-scroll-down
+   "C-S-k" 'evil-scroll-up
+   "C-j"   'evil-scroll-line-down
+   "C-k"   'evil-scroll-line-up
    )
 
   :brushup

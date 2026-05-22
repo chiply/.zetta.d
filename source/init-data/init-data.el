@@ -44,7 +44,6 @@
    "completion/embark-consult.el"
    "completion/consult.el"
    "completion/tap.el"
-   "completion/tap-block.el"
    "completion/vertico.el"
    "completion/corfu.el"
    "completion/prescient.el"

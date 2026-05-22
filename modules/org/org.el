@@ -127,6 +127,47 @@ TYPE is a character: ?a alphabetic, ?t timestamp, ?p priority, ?o TODO order."
 
   (put 'orgtree 'forward-op 'orgtree-forward-orgtree)
 
+  ;; Make org element types usable as thing-at-point things (bounds +
+  ;; forward-op) so they work with `zetta-tap-forward-thing',
+  ;; `bounds-of-thing-at-point' walkers, embark highlight (`*'), and
+  ;; embark per-target-type nav (`C-j' / `C-k'). embark-org already
+  ;; produces typed targets (e.g. `org-src-block') but supplies only
+  ;; bounds via the target plist; thing-at-point itself doesn't know
+  ;; how to find or move over them. This bridges that gap.
+  (defun zetta-org-element-bounds (type)
+    "Return (BEG . END) of nearest enclosing org element of TYPE at point."
+    (when-let* ((elt (org-element-lineage (org-element-context)
+                                          (list type) t)))
+      (cons (org-element-property :begin elt)
+            (org-element-property :end elt))))
+
+  (defun zetta-org-define-element-thing (type forward-fn)
+    "Define `org-TYPE' as a thing-at-point thing.
+Bounds come from `zetta-org-element-bounds'; navigation uses
+FORWARD-FN which must accept a numeric arg (positive = forward,
+negative = backward)."
+    (let ((sym (intern (format "org-%s" type))))
+      (put sym 'bounds-of-thing-at-point
+           (lambda () (zetta-org-element-bounds type)))
+      (put sym 'forward-op forward-fn)
+      sym))
+
+  (defun zetta-org-forward-src-block (n)
+    "Move N src blocks forward (negative for back)."
+    (interactive "p")
+    (if (>= n 0)
+        (dotimes (_ n) (org-babel-next-src-block 1))
+      (dotimes (_ (abs n)) (org-babel-previous-src-block 1))))
+
+  (zetta-org-define-element-thing 'src-block
+                                  'zetta-org-forward-src-block)
+
+  ;; Map the embark target type onto the now-defined thing, so
+  ;; Bridge E's C-j / C-k pick the right nav.
+  (with-eval-after-load 'embark
+    (setf (alist-get 'org-src-block zetta-embark-nav-type-map)
+          'org-src-block))
+
   (defun zett-org-get-title (file)
     (let (title)
       (when file
@@ -194,8 +235,13 @@ TYPE is a character: ?a alphabetic, ?t timestamp, ?p priority, ?o TODO order."
    "<S-return>" 'org-edit-special
    "C-+" 'org-table-expand
    "C-_" 'org-table-shrink
-   "s-j" 'org-next-visible-heading
-   "s-k" 'org-previous-visible-heading
+   ;; `s-j' / `s-k' navigate by `zetta-tap-current-thing' (whatever
+   ;; M-x zetta-tap-set-local was last invoked with, default `defun').
+   ;; `s-J' / `s-K' still walk babel blocks. Old heading navigation
+   ;; (`org-next/previous-visible-heading') remains on `org-shiftup' /
+   ;; `org-shiftdown' and the standard org outline-cycle bindings.
+   "s-j" 'zetta-tap-next
+   "s-k" 'zetta-tap-prev
    "s-J" 'org-babel-next-src-block
    "s-K" 'org-babel-previous-src-block)
   (

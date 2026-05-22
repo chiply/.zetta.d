@@ -1,7 +1,25 @@
 ;;; vimish-fold.el --- Configure vimish-fold -*- lexical-binding: t; -*-
 
+;; Kirigami (modules/editor/kirigami.el) owns the unified `z'-prefix
+;; folding bindings now.  Vimish-fold remains installed for ad-hoc
+;; region folding via M-x or future custom bindings; the `:general'
+;; block was removed during the migration and is intentionally left
+;; for you to re-wire as desired.  The `zetta-vimish-fold-tap' helper
+;; is preserved below.
+
 (use-package vimish-fold
-  :commands (vimish-fold vimish-fold-mode vimish-fold-toggle vimish-fold-avy)
+  :commands (vimish-fold
+             vimish-fold-mode
+             vimish-fold-toggle
+             vimish-fold-toggle-all
+             vimish-fold-avy
+             vimish-fold-delete
+             vimish-fold-delete-all
+             vimish-fold-next-fold
+             vimish-fold-previous-fold
+             vimish-fold-refold-all
+             vimish-fold-unfold-all
+             zetta-vimish-fold-tap)
   :init
   (defun zetta-vimish-fold-tap (&optional thing)
     "If fold exists within tap, then toggle, otherwise create fold
@@ -63,31 +81,5 @@ of tap), then toggle the closest fold"
       )
     )
 
-  (setq vimish-fold-header-width 70)
-
-  :general
-  (
-   :states '(normal visual)
-   :prefix "z"
-   "z" 'vimish-fold-avy
-   "t" 'vimish-fold-toggle
-   "T" 'vimish-fold-toggle-all
-   "d" 'vimish-fold-delete
-   "D" 'vimish-fold-delete-all
-   "j" 'vimish-fold-next-fold
-   "k" 'vimish-fold-previous-fold
-   "m" 'vimish-fold-mode
-   "f" 'vimish-fold-refold-all
-   "F" 'vimish-fold-unfold-all
-   )
-  (
-   :states '(normal)
-   :keymaps '(
-              python-ts-mode-map emacs-lisp-mode-map
-              lisp-interaction-mode-map sql-mode-map yaml-mode-map
-              css-mode-map dockerfile-mode-map terraform-mode-map)
-   "<tab>" 'zetta-vimish-fold-tap
-   "<S-tab>" 'vimish-fold-toggle-all
-   )
-  )
+  (setq vimish-fold-header-width 70))
 ;;; vimish-fold.el ends here

@@ -1,13 +1,9 @@
 * Feeds                                                              :elfeed:
 
-** [[https://rss.app/feeds/OYDPQ8NQR3NOVLJ1.xml][Arianna Huffington (@Gartner_inc) / Twitter]] :twitter:
-** [[https://rss.app/feeds/zCyaqj9XE4J27bvN.xml][#dataengineering - Twitter Search / Twitter]] :twitter:dataengineering:data:
-** [[https://rss.app/feeds/4jZWL4flfzgi1oyX.xml][Mickey Petersen (@mickeynp) / Twitter]] :twitter:
-** [[https://rss.app/feeds/QzriqACyiEobEdLw.xml][Google News - Search]]
-** [[https://www.nejm.org/trends/cited/recent?viewType=Rss][Most Cited: NEJM Most Cited Articles - Recent]] :science:research:
-** [[https://www.nejm.org/trends/viewed/last1Week?viewType=Rss][Most Viewed: NEJM Most Viewed Articles - Week]] :science:research:
-** [[https://netflixtechblog.com/feed][netflix technical blog]] :faangblog:
-** [[https://towardsdatascience.com/feed/tagged/data-engineering][towards data science: dataengineering]] :dataengineering:data:medium:
+** [[https://nitter.net/Gartner_inc/rss][Gartner (@Gartner_inc)]] :twitter:nitter:
+** [[https://www.masteringemacs.org/feed][Mastering Emacs (Mickey Petersen)]] :emacs:mickeynp:
+** [[https://news.google.com/rss/search?q=technology+news&hl=en-US&gl=US&ceid=US:en][Google News: technology]] :news:technology:
+** [[https://netflixtechblog.medium.com/feed][netflix technical blog]] :faangblog:
 ** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCYO_jab_esuFRV4b17AJtAw][3Blue1Brown]] :youtube:
 ** [[https://allinchamathjason.libsyn.com/rss][all-in]] :podcast:
 ** [[https://feeds.npr.org/2025/rss.xml][NPR: Video Games]] :npr:fun:news:
@@ -21,17 +17,14 @@
 ** [[https://css-tricks.com/feed/][css-tricks]] :webdev:
 ** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCfLnv9X8jyHTe6gJ4hVBo9Q][dagster]] :youtube:dagster:
 ** [[https://www.databricks.com/feed][databricks blog]] :dataengineering:data:
-** [[https://www.reddit.com/r/dataengineering/.rss?][Data Engineering]] :dataengineering:data:reddit:
+** [[https://old.reddit.com/r/dataengineering/.rss][Data Engineering]] :dataengineering:data:reddit:
 ** [[https://dataskeptic.libsyn.com/rss][data skeptic]] :data:
 ** [[https://dnascience.plos.org/feed/][DNA Science]] :science:
-** [[https://duckdb.org/feed][duckdb blog]] :data:database:
+** [[https://duckdb.org/feed.xml][duckdb blog]] :data:database:
 ** [[https://embeddedartistry.com/feed/][Embedded Artistry]]
 ** [[https://engineering.fb.com/feed/][facebook engineering blog]] :faangblog:
 ** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCP4bf6IHJJQehibu6ai__cg][fireship]]
-** [[https://fivethirtyeight.com/economics/feed/][fivethirtyeight: economics]] :fivethirtyeight:
-** [[https://fivethirtyeight.com/life/feed/][fivethirtyeight: life]] :fivethirtyeight:
-** [[https://fivethirtyeight.com/contributors/nate-silver/feed/][fivethirtyeight: nate silver]] :fivethirtyeight:
-** [[https://fivethirtyeight.com/science/feed/][fivethirtyeight: science]] :science:fivethirtyeight:
+** [[https://www.natesilver.net/feed][Silver Bulletin (Nate Silver)]] :natesilver:
 ** [[https://flowingdata.com/feed][FlowingData]] :data:dataviz:
 ** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCJetJ7nDNLlEzDLXv7KIo0w][Gavin Freeborn]] :youtube:
 ** [[https://www.google.com/alerts/feeds/13130175312220372401/9762467059344056332][Google Alert - genedx]] :googlealert:
@@ -66,13 +59,13 @@
 ** [[https://podcast.nejm.org/nejm_audio_summaries.xml][nejm audio summaries]] :science:research:
 ** [[https://podcast.nejm.org/nejm_audio_interview.xml][nejm audo interview]] :science:research:
 ** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCoxcjq-8xIDTYp3uz647V5A][Numberphile]] :youtube:math:
-** [[https://www.reddit.com/r/orgmode/.rss?][Org-mode]] :emacs:org:reddit:
+** [[https://old.reddit.com/r/orgmode/.rss][Org-mode]] :emacs:org:reddit:
 ** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCtESv1e7ntJaLJYKIO1FoYw][Periodic Videos]] :youtube:science:
 ** [[https://pitchfork.com/rss/news/][pitchfork]] :music:
 ** [[https://changelog.com/practicalai/feed][practical ai]] :data:ai:
 ** [[https://www.precisely.com/feed][precicely blog]] :data:ai:
 ** [[https://protesilaos.com/codelog.xml][prots blog]] :emacs:prot:
-** [[https://www.reddit.com/r/Python/.rss?][Python]] :python:reddit:
+** [[https://old.reddit.com/r/Python/.rss][Python]] :python:reddit:
 ** [[https://realpython.com/atom.xml][real python]] :python:
 ** [[https://github.com/org-roam/org-roam/commits.atom][Recent Commits to org-roam:main]] :org:emacs:
 ** [[https://github.com/org-roam/org-roam/releases.atom][Release notes from org-roam]] :org:emacs:
@@ -138,8 +131,8 @@
 ** [[https://mshibanami.github.io/GitHubTrendingRSS/weekly/emacs-lisp.xml][GitHub Emacs Lisp Weekly Trending]] :emacs:githubtrending:
 ** [[https://hnrss.org/newest?q=emacs][hn: emacs]] :emacs:hackernews:
 ** [[https://planet.emacslife.com/atom.xml][planet emacslife]] :emacs:
-** [[https://www.reddit.com/r/DoomEmacs/.rss?][r/doomemacs]] :reddit:emacs:
-** [[https://www.reddit.com/r/emacs/.rss?][r/emacs]] :reddit:emacs:
+** [[https://old.reddit.com/r/DoomEmacs/.rss][r/doomemacs]] :reddit:emacs:
+** [[https://old.reddit.com/r/emacs/.rss][r/emacs]] :reddit:emacs:
 ** [[https://github.com/great-expectations/great_expectations/commits.atom][Recent Commits to great_expectations:develop]] :greatexpectations:repo:data:dataengineering:
 ** [[https://github.com/great-expectations/great_expectations/releases.atom][Release notes from great_expectations]] :greatexpectations:repo:data:dataengineering:
 ** [[https://github.com/great-expectations/great_expectations/tags.atom][Tags from great_expectations]] :greatexpectations:repo:data:dataengineering:
@@ -167,36 +160,36 @@
 ** [[https://mshibanami.github.io/GitHubTrendingRSS/daily/rust.xml][GitHub Rust Daily Trending]] :githubtrending:rust:
 ** [[https://mshibanami.github.io/GitHubTrendingRSS/monthly/rust.xml][GitHub Rust Monthly Trending]] :githubtrending:rust:
 ** [[https://mshibanami.github.io/GitHubTrendingRSS/weekly/rust.xml][GitHub Rust Weekly Trending]] :githubtrending:rust:
-** [[https://www.reddit.com/r/archlinux/.rss?][r/archlinux]] :reddit:archlinux:linux:
-** [[https://www.reddit.com/r/aws/.rss?][r/aws]] :reddit:aws:
-** [[https://www.reddit.com/r/dataisbeautiful/.rss?][r/dataisbeautiful]] :reddit:data:dataviz:
-** [[https://www.reddit.com/r/datascience/.rss?][r/datascience]] :reddit:ai:
-** [[https://www.reddit.com/r/docker/.rss?][r/docker]] :reddit:docker:container:
-** [[https://www.reddit.com/r/Guitar/.rss?][r/Guitar]] :reddit:music:guitar:
-** [[https://www.reddit.com/r/guitarlessons/.rss?][r/guitarlessons]] :reddit:music:guitar:
-** [[https://www.reddit.com/r/healthIT/.rss?][r/healthIT]] :reddit:healthit:data:
-** [[https://www.reddit.com/r/javascript/.rss?][r/javascript]] :reddit:javascript:
-** [[https://www.reddit.com/r/jazzguitar/.rss?][r/jazzguitar]] :reddit:music:guitar:
-** [[https://www.reddit.com/r/jazztheory/.rss?][r/jazztheory]] :reddit:music:guitar:
-** [[https://www.reddit.com/r/jazzyhiphop/.rss?][r/jazzyhiphop]] :reddit:music:
-** [[https://www.reddit.com/r/KnowledgeGraph/.rss?][r/KnowledgeGraph]] :reddit:infomanagement:knowledgegraph:
-** [[https://www.reddit.com/r/MachineLearning/.rss?][r/MachineLearning]] :reddit:data:ai:
-** [[https://www.reddit.com/r/planetemacs/.rss?][r/planetemacs]] :reddit:emacs:
-** [[https://www.reddit.com/r/programming/.rss?][r/programming]] :reddit:technology:
-** [[https://www.reddit.com/r/SQL/.rss?][r/SQL]] :reddit:data:sql:
-** [[https://www.reddit.com/r/vim/.rss?][r/vim]] :reddit:vim:
-** [[https://www.reddit.com/r/visualization/.rss?][r/visualization]] :reddit:data:dataviz:
-** [[https://www.reddit.com/r/Watches/.rss?][r/Watches]] :reddit:watches:
-** [[https://www.reddit.com/r/webdev/.rss?][r/webdev]] :reddit:webdev:
+** [[https://old.reddit.com/r/archlinux/.rss][r/archlinux]] :reddit:archlinux:linux:
+** [[https://old.reddit.com/r/aws/.rss][r/aws]] :reddit:aws:
+** [[https://old.reddit.com/r/dataisbeautiful/.rss][r/dataisbeautiful]] :reddit:data:dataviz:
+** [[https://old.reddit.com/r/datascience/.rss][r/datascience]] :reddit:ai:
+** [[https://old.reddit.com/r/docker/.rss][r/docker]] :reddit:docker:container:
+** [[https://old.reddit.com/r/Guitar/.rss][r/Guitar]] :reddit:music:guitar:
+** [[https://old.reddit.com/r/guitarlessons/.rss][r/guitarlessons]] :reddit:music:guitar:
+** [[https://old.reddit.com/r/healthIT/.rss][r/healthIT]] :reddit:healthit:data:
+** [[https://old.reddit.com/r/javascript/.rss][r/javascript]] :reddit:javascript:
+** [[https://old.reddit.com/r/jazzguitar/.rss][r/jazzguitar]] :reddit:music:guitar:
+** [[https://old.reddit.com/r/jazztheory/.rss][r/jazztheory]] :reddit:music:guitar:
+** [[https://old.reddit.com/r/jazzyhiphop/.rss][r/jazzyhiphop]] :reddit:music:
+** [[https://old.reddit.com/r/KnowledgeGraph/.rss][r/KnowledgeGraph]] :reddit:infomanagement:knowledgegraph:
+** [[https://old.reddit.com/r/MachineLearning/.rss][r/MachineLearning]] :reddit:data:ai:
+** [[https://old.reddit.com/r/planetemacs/.rss][r/planetemacs]] :reddit:emacs:
+** [[https://old.reddit.com/r/programming/.rss][r/programming]] :reddit:technology:
+** [[https://old.reddit.com/r/SQL/.rss][r/SQL]] :reddit:data:sql:
+** [[https://old.reddit.com/r/vim/.rss][r/vim]] :reddit:vim:
+** [[https://old.reddit.com/r/visualization/.rss][r/visualization]] :reddit:data:dataviz:
+** [[https://old.reddit.com/r/Watches/.rss][r/Watches]] :reddit:watches:
+** [[https://old.reddit.com/r/webdev/.rss][r/webdev]] :reddit:webdev:
 ** [[https://feeds.simplecast.com/_IjaDYAj][Cal Newport Deep Questions]] :podcast:
 ** [[https://calnewport.com/blog/feed/][Cal Newport Blog]] :blog:productivity:
 ** [[https://feeds.megaphone.fm/hubermanlab][Huberman Lab]] :podcast:
 ** [[https://feeds.megaphone.fm/thediaryofaceo][Diary of a CEO with Steven Bartlett]] :podcast:
 ** [[https://feeds.megaphone.fm/ridehome][Techmeme Ride Home]] :podcast:technology:
-** [[https://podnews.net/podcast/iplq][Wall Street Breakfast]] :podcast:
 ** [[https://lexfridman.com/feed/podcast/][Lex Fridman Podcast]] :podcast:
 ** [[https://serve.podhome.fm/rss/c9abdd38-a5dc-5eb2-96fd-f833f93208a7][AI Engineering Podcast]] :podcast:data:ai:
 ** [[https://serve.podhome.fm/rss/1c0357c0-6aba-5766-a2d5-2090d8dab6bc][Data Engineering Podcast]] :podcast:data:dataengineering:
 ** [[https://peterattiadrive.libsyn.com/rss][Peter Attia The Drive]] :podcast:
-** [[https://www.reddit.com/r/eink/.rss?][r/eink]] :reddit:eink:
+** [[https://old.reddit.com/r/eink/.rss][r/eink]] :reddit:eink:
 ** [[https://www.chiply.dev/rss.xml][Charlie Holland's Blog]] :myblog:
+** [[https://toobnix.org/feeds/videos.xml?videoChannelName=screwtape_channel][Lispy Gopher Climate extras]] :peertube:lisp:emacs:

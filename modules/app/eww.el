@@ -34,10 +34,20 @@
              "reddit\\|xkcd\\|orgmode\\.org"
              (eww-current-url))
       (eww-readable))
-    (setq-local truncate-lines nil))
+    (setq-local truncate-lines nil)
+    ;; Single-space sentence endings -- same reasoning as in
+    ;; `zetta-eww-mode-functions'. Set here too so it survives
+    ;; `eww-readable' and applies on every render, not just mode init.
+    (setq-local sentence-end-double-space nil))
 
   (defun zetta-eww-mode-functions ()
     (setq-local truncate-lines nil)
+    ;; Rendered HTML uses single-space sentence endings (modern
+    ;; convention); the default `sentence-end-double-space = t' then
+    ;; treats whole paragraphs as one sentence, which breaks
+    ;; `forward-sentence', `bounds-of-thing-at-point 'sentence', and
+    ;; the embark `sentence' target finder.
+    (setq-local sentence-end-double-space nil)
     (olivetti-mode -1))
 
   (add-hook 'eww-after-render-hook 'zetta-eww-after-render-functions)
@@ -59,6 +69,8 @@
    "<return>" 'zetta-eww-follow-link
    "x" '(lambda () (interactive) (kill-buffer (current-buffer)))
    "s-i" 'eww-toggle-images
+   "s-j" 'zetta-tap-next
+   "s-k" 'zetta-tap-prev
    )
   (
    :keymaps 'menu-lookup-map

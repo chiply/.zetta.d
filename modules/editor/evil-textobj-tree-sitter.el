@@ -17,6 +17,22 @@
 ;; time, so the pairs cannot be unfolded with a runtime loop -- each
 ;; binding is spelled out instead.
 
+;; Upstream bundles queries that use `"X"? @cap' (quantifier
+;; directly on a string literal) -- Emacs's `treesit-query-compile'
+;; rejects this with `treesit-query-error "Syntax error at"'.
+;; The standard equivalent is `("X" @cap)?'. Patch query strings at
+;; load time so every language file gets the fix without editing the
+;; bundled .scm files. Outside `use-package' so the advice installs
+;; whenever this file loads, not just on the first package load.
+(with-eval-after-load 'evil-textobj-tree-sitter
+  (define-advice evil-textobj-tree-sitter--get-query-from-dir
+      (:filter-return (s) zetta-fix-quantified-string)
+    (when (stringp s)
+      (replace-regexp-in-string
+       "\\(\"[^\"]+\"\\)\\([?*+]\\)\\(\\s-+@[A-Za-z._-]+\\)"
+       "(\\1\\3)\\2"
+       s))))
+
 (use-package evil-textobj-tree-sitter
   :ensure (:host github :repo "meain/evil-textobj-tree-sitter")
   :after (evil treesit)
@@ -62,4 +78,5 @@
               (evil-textobj-tree-sitter-get-textobj "call.outer"))
   (define-key evil-inner-text-objects-map "/"
               (evil-textobj-tree-sitter-get-textobj "call.inner")))
+
 ;;; evil-textobj-tree-sitter.el ends here

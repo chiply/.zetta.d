@@ -73,8 +73,8 @@
     (setq-local convention-repl-target repl-target)))
 
 (defun convention-associate-text-buffer (arg to)
-  "Associates a text buffer TO either a conatiner or process buffer that is connected
-   to a convention contaier"
+  "Associates a text buffer TO either a container or process buffer that is connected
+   to a convention container"
   (if (equal to "repl")
       (convention-associate-text-buffer-to-repl arg)
     (convention-associate-text-buffer-to-container arg)))
@@ -109,7 +109,7 @@
   (convention-exec-in-repl arg))
 
 (defun convention-format-run-lang-cmd (container-name)
-  "Returns a string reprenting the command used to execute code contained in a file"
+  "Returns a string representing the command used to execute code contained in a file"
   (let ((run-lang-cmd (convention-query-lang-info container-name "run-lang-cmd")))
     (if (convention-is-sql container-name)
         (s-format run-lang-cmd 'aget `(("password" . ,convention-db-password)
@@ -127,7 +127,7 @@
 
 (defun convention-exec-as-file (arg &optional region)
   "Executes code contained in either the entire buffer or a REGION in a
-   a runing container.  This code is executed as a file int he container"
+   a running container.  This code is executed as a file int he container"
   ;;(convention-associate-text-buffer arg "container")
   (convention-associate-text-buffer-to-program arg)
   (let*  (

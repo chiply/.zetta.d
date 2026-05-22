@@ -535,57 +535,21 @@ instead.
 Gated by mode list — programming buffers stay on the `identifier`
 / `symbol` finders where symbol semantics are the better fit.
 
-## Treesit types in the modal editors
+## Treesit types in meow
 
 The same AST nodes that Bridges A / B / C surface as embark
-targets are also addressable from evil and meow via their
-standard text-object / thing grammars. Two packages do the
-plumbing:
+targets are also addressable from meow's thing grammar via
+[`modules/editor/meow-tree-sitter.el`](../modules/editor/meow-tree-sitter.el)
+([upstream](https://github.com/skissue/meow-tree-sitter)). It
+registers AST units (function / class / parameter / comment /
+call) into meow's thing table, so `meow-inner-of-thing` (`,`)
+and `meow-bounds-of-thing` (`.`) work on them. With meow's
+expand grammar, `, f` selects inside a function and `. f`
+selects around it; the result is grabbable by any meow operator
+(delete, change, copy, etc.).
 
-- [`modules/editor/evil-ts-obj.el`](../modules/editor/evil-ts-obj.el)
-  ([upstream](https://github.com/dvzubarev/evil-ts-obj))
-  is purpose-built for Emacs's *built-in* treesit (rather than
-  translating helix/nvim queries the way `evil-textobj-tree-sitter`
-  does, which trips on Emacs's stricter `treesit-query-compile`
-  parser). It exposes four universal *things* combined with evil's
-  inner/outer modifiers:
-
-  | Thing | Key | Example use |
-  |---|---|---|
-  | compound | `e` | `vie` selects inside function/loop/conditional/class; `dae` deletes around |
-  | statement | `s` | `cis` changes inside a single statement / RHS / boolean expr |
-  | parameter | `a` | `daa` deletes around parameter, `via` selects inside |
-  | string | `q` | `ciq` changes inside string (literal / raw / heredoc) |
-
-  Plus movement keys (M-a/e/f/b/n/p), and structural edit
-  operators (drag, swap, raise, slurp, barf, extract, inject,
-  convolute). See the upstream README for the full set.
-
-  Activated per-buffer via `evil-ts-obj-mode`, hooked into
-  `python-ts-mode`, `bash-ts-mode`, `sh-mode`, `c-ts-mode`,
-  `c++-ts-mode`, `rust-ts-mode`, `nix-mode`, `yaml-ts-mode`.
-
-- [`modules/editor/meow-tree-sitter.el`](../modules/editor/meow-tree-sitter.el)
-  ([upstream](https://github.com/skissue/meow-tree-sitter))
-  registers the same AST units (function / class / parameter /
-  comment / call) as meow *things*, so `meow-inner-of-thing`
-  (`,`) and `meow-bounds-of-thing` (`.`) work on them. With
-  meow's expand grammar, `, f` selects inside a function and
-  `. f` selects around it; the result is grabbable by any
-  meow operator (delete, change, copy, etc.).
-
-Both packages bundle the underlying tree-sitter queries; no
-extra setup beyond a live parser in the buffer.
-
-How this composes with the type bridges:
-
-- **Embark** answers "what *type* is at point" (Bridges A/B/C).
-- **Modal text objects** answer "operate on the *type* at point
-  using vim/meow grammar."
-- The two see the same AST nodes — `function` in embark, `function`
-  in `evil-textobj-tree-sitter`'s query, `function` in meow's
-  thing table — so the model is consistent across the prompt-
-  driven and modal-driven entry points.
+Queries are bundled in the package; no extra setup beyond a live
+tree-sitter parser in the buffer.
 
 ## Type-aware folding ([`tap-fold.el`](../modules/editor/tap-fold.el))
 

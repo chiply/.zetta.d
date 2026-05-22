@@ -34,8 +34,14 @@ ellipsis enabled, idempotently."
   (let ((entry (cons zetta-fold--spec t)))
     (cond
      ((eq buffer-invisibility-spec t)
-      ;; t means "everything invisible" -- replace with a list
-      ;; that includes our entry plus t for back-compat semantics.
+      ;; Bare `t' hides any non-nil `invisible' property but never
+      ;; renders an ellipsis -- we need the alist form to get the
+      ;; ellipsis on our overlays. This narrows the spec from
+      ;; "hide anything non-nil" to "hide entries in this list",
+      ;; which can affect other code in this buffer that relies on
+      ;; the bare-`t' fallback. In practice that combination is rare
+      ;; (`buffer-invisibility-spec' starts as `t' but is replaced by
+      ;; almost every package that uses overlay invisibility).
       (setq buffer-invisibility-spec (list entry)))
      ((not (member entry buffer-invisibility-spec))
       (add-to-invisibility-spec entry)))))

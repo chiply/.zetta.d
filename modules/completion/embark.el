@@ -1063,22 +1063,36 @@ due to its `last-end' non-overlap filter."
                           (< (cdr a) (cdr b))
                         (< (car a) (car b)))))))
 
+  (defun zetta-embark--compound-bound-p (b)
+    "Non-nil if bounds B start with an open-delimiter character.
+Used to filter out atom-sexps (`foo', `bar') so only list-like
+expressions become avy targets."
+    (let ((ch (char-after (car b))))
+      (and ch (eq (char-syntax ch) ?\())))
+
   (defun zetta-embark--collect-visible-instances (type thing)
     "Return instances of TYPE (or its mapped THING) intersecting the
 selected window's visible range. Uses a position-scan walker
 that captures nested/overlapping bounds (inner sexps inside outer
 sexps, etc.) -- important for avy where each nesting level
-should be its own pick target."
+should be its own pick target. For sexp-shaped types, atoms are
+filtered out via `zetta-embark--compound-bound-p'."
     (let* ((win-beg (window-start))
            (win-end (window-end nil t)))
-      (if (memq type zetta-embark-symbol-target-types)
-          ;; Symbol targets don't nest -- one bounds per occurrence.
-          (cl-remove-if-not
-           (lambda (b)
-             (and (>= (cdr b) win-beg)
-                  (<= (car b) win-end)))
-           (zetta-embark--collect-symbols-of-embark-type type))
-        (zetta-embark--collect-bounds-by-scan thing win-beg win-end))))
+      (cond
+       ((memq type zetta-embark-symbol-target-types)
+        ;; Symbol targets don't nest -- one bounds per occurrence.
+        (cl-remove-if-not
+         (lambda (b)
+           (and (>= (cdr b) win-beg)
+                (<= (car b) win-end)))
+         (zetta-embark--collect-symbols-of-embark-type type)))
+       (t
+        (let ((bounds (zetta-embark--collect-bounds-by-scan
+                       thing win-beg win-end)))
+          (if (memq thing '(sexp embark-expression))
+              (cl-remove-if-not #'zetta-embark--compound-bound-p bounds)
+            bounds))))))
 
   (defun zetta-embark--avy-pick-bounds (instances)
     "Run `avy-process' over INSTANCES (list of BEG.END cons).

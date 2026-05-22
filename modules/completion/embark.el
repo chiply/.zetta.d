@@ -1094,30 +1094,56 @@ filtered out via `zetta-embark--compound-bound-p'."
               (cl-remove-if-not #'zetta-embark--compound-bound-p bounds)
             bounds))))))
 
-  (defcustom zetta-embark-avy-style 'pre
+  (defcustom zetta-embark-avy-style 'at
     "Value of `avy-style' to use within zetta avy commands.
-The default `pre' places the hint character via a before-string
-overlay (the underlying character stays visible immediately
-after the hint), whereas avy's normal default `at' overwrites
-the character at the target position. Set to `at', `at-full',
-`post', or any other `avy-style' value to override."
+Default `at' overwrites the underlying character with the hint
+(no text shift / jitter). The `--avy-pick-bounds' wrapper also
+remaps the `avy-lead-face*' faces to a faked-transparent style
+so the hint looks airier and less obstructive. Override here to
+go back to `pre' (jitter, no overlap) or other styles."
     :type 'symbol
+    :group 'embark)
+
+  (defcustom zetta-embark-avy-lead-face-remap
+    '(:background unspecified
+                  :foreground "#fac200"
+                  :weight normal
+                  :box (:line-width -1 :color "#fac200"))
+    "Face attributes spliced onto `avy-lead-face*' during the
+zetta avy pick. Removing the filled background and adding a thin
+box gives the hint a transparent-LOOKING outlined effect -- the
+buffer's normal background shows through the hint's interior,
+even though the underlying character itself is still hidden by
+the `display' overlay avy uses for `at' style."
+    :type 'plist
     :group 'embark)
 
   (defun zetta-embark--avy-pick-bounds (instances)
     "Run `avy-process' over INSTANCES (list of BEG.END cons).
-Returns the picked (BEG . END) or nil on cancel/abort. Binds
-`avy-action' to `ignore' and captures the selection via
-`avy-pre-action' so the bounds (not just the position) survive
-the avy roundtrip. `avy-style' is bound to
-`zetta-embark-avy-style' (default `pre') so hint chars don't
-obscure the buffer text underneath them."
+Returns the picked (BEG . END) or nil on cancel/abort.
+- Binds `avy-action' to `ignore' and captures the selection via
+  `avy-pre-action' so the bounds (not just the start position)
+  survive the avy roundtrip.
+- Binds `avy-style' to `zetta-embark-avy-style' (default `at').
+- Remaps `avy-lead-face*' to `zetta-embark-avy-lead-face-remap'
+  via `face-remap-add-relative' so the hint chars look outlined
+  rather than filled. Cookies are removed in `unwind-protect'."
     (when (and (fboundp 'avy-process) instances)
       (let* ((picked nil)
              (avy-pre-action (lambda (res) (setq picked res)))
              (avy-action #'ignore)
-             (avy-style zetta-embark-avy-style))
-        (avy-process instances)
+             (avy-style zetta-embark-avy-style)
+             (cookies
+              (mapcar (lambda (f)
+                        (face-remap-add-relative
+                         f zetta-embark-avy-lead-face-remap))
+                      '(avy-lead-face
+                        avy-lead-face-0
+                        avy-lead-face-1
+                        avy-lead-face-2))))
+        (unwind-protect
+            (avy-process instances)
+          (dolist (c cookies) (face-remap-remove-relative c)))
         (and (consp picked) (car picked)))))
 
   (defun zetta-embark--avy-act (_type bounds)

@@ -85,15 +85,65 @@ Returns the overlay."
       (zetta-fold-region (car b) (cdr b))
     (user-error "No `%s' at point" thing)))
 
-(defun zetta-fold-thing-at-point (thing)
-  "Fold the bounds of THING at point. Prompts from `zetta-fold-things'
-when called interactively."
-  (interactive
-   (list (intern (completing-read
-                  "Fold thing: "
-                  (mapcar #'symbol-name zetta-fold-things)
-                  nil nil))))
-  (zetta-fold-thing thing))
+(defface zetta-fold-preview-face
+  '((((background dark))  :background "#3a2a00" :extend nil)
+    (((background light)) :background "#fff3b0" :extend nil))
+  "Face used to highlight the candidate bounds in
+`zetta-fold-thing-at-point''s consult preview.")
+
+(defvar-local zetta-fold--preview-overlay nil
+  "One-shot preview overlay during `zetta-fold-thing-at-point'.")
+
+(defun zetta-fold--clear-preview ()
+  (when (overlayp zetta-fold--preview-overlay)
+    (delete-overlay zetta-fold--preview-overlay))
+  (setq zetta-fold--preview-overlay nil))
+
+(defun zetta-fold--candidates-at-point ()
+  "Return alist of (NAME . (BEG . END)) for each thing in
+`zetta-fold-things' that has bounds at point."
+  (delq nil
+        (mapcar (lambda (thing)
+                  (when-let* ((b (ignore-errors
+                                   (bounds-of-thing-at-point thing))))
+                    (when (and (car b) (cdr b) (< (car b) (cdr b)))
+                      (cons (symbol-name thing) b))))
+                zetta-fold-things)))
+
+(defun zetta-fold-thing-at-point ()
+  "Pick a thing at point with consult and fold its bounds.
+Only things whose `bounds-of-thing-at-point' returns a real span
+at point appear as candidates. Preview paints the candidate's
+bounds with `zetta-fold-preview-face' so you can see exactly what
+would be folded before committing."
+  (interactive)
+  (let ((candidates (zetta-fold--candidates-at-point)))
+    (cond
+     ((null candidates)
+      (user-error "Nothing foldable at point"))
+     (t
+      (unwind-protect
+          (let* ((choice
+                  (consult--read
+                   (mapcar #'car candidates)
+                   :prompt "Fold: "
+                   :require-match t
+                   :sort nil
+                   :state
+                   (lambda (action cand)
+                     (pcase action
+                       ('preview
+                        (zetta-fold--clear-preview)
+                        (when (and cand (stringp cand))
+                          (when-let* ((b (cdr (assoc cand candidates))))
+                            (let ((ov (make-overlay (car b) (cdr b))))
+                              (overlay-put ov 'face
+                                           'zetta-fold-preview-face)
+                              (overlay-put ov 'priority 100)
+                              (setq zetta-fold--preview-overlay ov))))) ))))
+                 (b (cdr (assoc choice candidates))))
+            (when b (zetta-fold-region (car b) (cdr b))))
+        (zetta-fold--clear-preview))))))
 
 (defun zetta-fold-toggle-thing-at-point (thing)
   "If there's a fold at point, unfold it; otherwise fold THING here."

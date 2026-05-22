@@ -47,10 +47,6 @@ read the matching scenario below.
 
                                        Then beyond classification:
 
-   all bounded targets   ──Bridge D──►  zetta-embark-expand-region
-   at point                             zetta-embark-contract-region
-                                        (C-e / C-S-e)
-
    active embark target  ──Bridge E──►  zetta-embark-nav-next / prev
                                         zetta-embark-nav-beg / end
                                         (C-j / C-k / C-a / C-e)
@@ -89,7 +85,6 @@ cycles through.
 | Generic hook applying the extras | [`modules/lang/treesit.el`](../modules/lang/treesit.el) |
 | Bridge B factory (`zetta-embark-deftap-finder`) | [`modules/completion/embark.el`](../modules/completion/embark.el) |
 | Bridge C finder + node-type list | [`modules/completion/embark.el`](../modules/completion/embark.el) |
-| Bridge D expand-/contract-region commands | [`modules/completion/embark.el`](../modules/completion/embark.el) |
 | Bridge E per-target-type navigation + type map | [`modules/completion/embark.el`](../modules/completion/embark.el) |
 | Embark target cycle sort (innermost first) | [`modules/completion/embark.el`](../modules/completion/embark.el) |
 | `zetta-embark-act-contract` (reverse-cycle entry) | [`modules/completion/embark.el`](../modules/completion/embark.el) |
@@ -279,39 +274,6 @@ cycle when stepping through structural scopes (identifier → string
 → argument_list → call → function …). The default action stays on
 the innermost because the cycle is sorted ascending by bounds size
 (see "Cycling order" below).
-
-## Bridge D — expand-region using embark targets
-
-`zetta-embark-expand-region` (bound to `C-e` in normal/visual states
-of `tap.el`'s curated keymap list) grows the active region to the
-next-smallest bounds that strictly contains the current region (or
-point). `zetta-embark-contract-region` (`C-S-e`) walks back through
-a buffer-local history. `er/expand-region` itself is still available
-on `C-M-e` for comparison.
-
-Algorithm per press of `C-e`:
-
-1. Collect bounded targets via every `embark-target-finders` entry,
-   plus every treesit ancestor whose node type is in
-   `zetta-embark-treesit-types` (the AST ancestor walk fills in
-   intermediate structural scopes that Bridge C's finder only
-   surfaces as separate targets, not as bounds-of-anything).
-2. Filter to bounds that strictly contain the current region.
-3. Pick the smallest; tie-break by closeness of `start` to current
-   `start` (minimises visible jump).
-4. Push prior region onto the history; set mark + point to the new
-   bounds.
-
-The history clears on buffer modification (`after-change-functions`
-hook installed on first push).
-
-Difference from `er/expand-region`: the "what units exist at point"
-question is answered by embark's classifier stack, not a hand-curated
-per-mode try-list. So Bridge D grows uniformly over every Bridge A /
-B / C target without per-mode tuning -- but it lacks expand-region's
-specialised inside-vs-outside-quotes / pair distinctions and its
-arbitration that minimises point/mark movement. Both tools have a
-role; the bindings keep them side-by-side.
 
 ## Bridge E — per-target-type navigation in the prompter
 
@@ -817,18 +779,6 @@ action available at point, grouped by target type. Useful to confirm
 which keymaps are participating (`ts-call`, `ts-string`, `defun`,
 etc.).
 
-### Test 11 — expand-region via embark (Bridge D)
-
-1. Point inside a string literal, e.g. `"hello"` inside a call.
-2. `C-e` repeatedly grows the active region:
-   inner content → full string → argument list → call → function.
-3. `C-S-e` walks back through the history.
-4. `C-M-e` runs the classic `er/expand-region` for comparison.
-
-Failure mode: if `C-e` does nothing or jumps too far, the
-buffer's mode probably lacks treesit bridging *and* doesn't have a
-useful thing-at-point provider for the relevant unit.
-
 ### Test 12 — embark cycle order is innermost → outermost
 
 1. Point inside a string literal.
@@ -944,13 +894,10 @@ zetta-tap-current-thing
 ;; -> non-nil if the per-language extras hook is wired
 
 (lookup-key embark-general-map (kbd "C-,"))
-;; -> zetta-embark-back-cycle if Bridge D's back-step is bound
+;; -> zetta-embark-back-cycle (single-key back-step)
 
 (lookup-key embark-general-map (kbd "C-j"))
 ;; -> zetta-embark-nav-next if Bridge E's nav is bound
-
-(zetta-embark--bounded-targets-at-point)
-;; -> list of (BEG . END) bounds Bridge D would consider for expansion
 
 (lookup-key embark-general-map (kbd "C-f"))
 ;; -> zetta-embark-focus-on-type if the focus action is bound

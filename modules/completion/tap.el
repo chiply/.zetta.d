@@ -212,8 +212,7 @@ interactively, prompts from `zetta-tap--things'."
               compilation-mode-map lark-mode-map css-mode-map
               fundamental-mode-map lisp-data-mode-map prog-mode-map
               )
-   "C-e"   'er/expand-region
-   "C-S-e" 'zetta-embark-contract-region))
+   "C-e"   'er/expand-region))
 
 (defun zetta-tap-at-bobp ()
   (interactive)

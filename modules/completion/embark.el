@@ -723,6 +723,17 @@ selection is immediately usable for any region-based command."
 
   (define-key embark-general-map (kbd "C-v") #'zetta-embark-select-as-region)
 
+  (defun zetta-embark-narrow-to-target ()
+    "Narrow the buffer to the current embark target's bounds.
+Widen first with \\[widen] (`C-x n w'). Unbounded targets (minibuffer
+candidates etc.) are rejected with a message."
+    (interactive)
+    (if-let* ((bounds zetta-embark--current-target-bounds))
+        (narrow-to-region (car bounds) (cdr bounds))
+      (message "No embark target bounds captured")))
+
+  (define-key embark-general-map (kbd "C-n") #'zetta-embark-narrow-to-target)
+
   (defvar-local zetta-embark--pick-preview-overlay nil
     "One-shot preview overlay for `zetta-embark--pick-target-type-do'.")
 

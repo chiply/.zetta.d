@@ -542,21 +542,28 @@ targets are also addressable from evil and meow via their
 standard text-object / thing grammars. Two packages do the
 plumbing:
 
-- [`modules/editor/evil-textobj-tree-sitter.el`](../modules/editor/evil-textobj-tree-sitter.el)
-  ([upstream](https://github.com/meain/evil-textobj-tree-sitter))
-  binds tree-sitter text objects into `evil-outer-text-objects-map`
-  and `evil-inner-text-objects-map`. Default key set:
+- [`modules/editor/evil-ts-obj.el`](../modules/editor/evil-ts-obj.el)
+  ([upstream](https://github.com/dvzubarev/evil-ts-obj))
+  is purpose-built for Emacs's *built-in* treesit (rather than
+  translating helix/nvim queries the way `evil-textobj-tree-sitter`
+  does, which trips on Emacs's stricter `treesit-query-compile`
+  parser). It exposes four universal *things* combined with evil's
+  inner/outer modifiers:
 
-  | Outer / inner key | Unit | Example use |
+  | Thing | Key | Example use |
   |---|---|---|
-  | `f` | function | `daf` deletes around function, `vif` selects inside |
-  | `c` | class | `cic` changes inside class |
-  | `a` | parameter | `daa` deletes around parameter |
-  | `l` | loop | `vil` selects loop body |
-  | `i` | conditional | `dai` deletes around `if` / `match` / etc. |
-  | `C` | comment | `daC` deletes around comment |
-  | `v` | assignment | `civ` changes inside assignment RHS |
-  | `/` | call | `vi/` selects call args region |
+  | compound | `e` | `vie` selects inside function/loop/conditional/class; `dae` deletes around |
+  | statement | `s` | `cis` changes inside a single statement / RHS / boolean expr |
+  | parameter | `a` | `daa` deletes around parameter, `via` selects inside |
+  | string | `q` | `ciq` changes inside string (literal / raw / heredoc) |
+
+  Plus movement keys (M-a/e/f/b/n/p), and structural edit
+  operators (drag, swap, raise, slurp, barf, extract, inject,
+  convolute). See the upstream README for the full set.
+
+  Activated per-buffer via `evil-ts-obj-mode`, hooked into
+  `python-ts-mode`, `bash-ts-mode`, `sh-mode`, `c-ts-mode`,
+  `c++-ts-mode`, `rust-ts-mode`, `nix-mode`, `yaml-ts-mode`.
 
 - [`modules/editor/meow-tree-sitter.el`](../modules/editor/meow-tree-sitter.el)
   ([upstream](https://github.com/skissue/meow-tree-sitter))

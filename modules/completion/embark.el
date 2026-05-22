@@ -165,6 +165,31 @@ TYPE is the embark target type reported; defaults to THING."
   (zetta-embark-deftap-finder sentence)
   (zetta-embark-deftap-finder paragraph)
 
+  ;; `word' as a first-class embark target in prose modes. Embark's
+  ;; built-in identifier finder labels org-mode words as `identifier',
+  ;; which conflates them with elisp/python symbols and routes them
+  ;; through programming-oriented action maps. A separate `word'
+  ;; type keeps the prose / code distinction clean. Gated to text /
+  ;; doc-style modes so it doesn't add noise in prog-mode buffers
+  ;; where symbol semantics are preferred.
+  (defun zetta-embark-target-word-at-point ()
+    "Embark target finder for `word' in prose / text modes."
+    (when (and (not (or (minibufferp)
+                        (derived-mode-p 'completion-list-mode
+                                        'embark-collect-mode)))
+               (or (derived-mode-p 'text-mode 'org-mode)
+                   (memq major-mode
+                         '(eww-mode help-mode Info-mode Man-mode))))
+      (when-let* ((b (ignore-errors (bounds-of-thing-at-point 'word)))
+                  (beg (max (point-min) (car b)))
+                  (end (min (point-max) (cdr b)))
+                  ((< beg end)))
+        (cons 'word
+              (cons (buffer-substring-no-properties beg end)
+                    (cons beg end))))))
+
+  (add-to-list 'embark-target-finders #'zetta-embark-target-word-at-point)
+
   ;; `orgtree' is defined in `modules/org/org.el' as a thing whose
   ;; `forward-op' calls `org-next-visible-heading'. Registering it
   ;; as an embark target lets `C-.' / `*' / `C-j' / `C-k' work on

@@ -15,6 +15,7 @@
 (use-package meow-tree-sitter
   :ensure (:host github :repo "skissue/meow-tree-sitter")
   :after meow
+  :demand t
   :config
   ;; `meow-tree-sitter-register-defaults' wires the standard set
   ;; (function, class, parameter, comment, call) into meow's

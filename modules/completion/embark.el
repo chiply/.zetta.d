@@ -1069,17 +1069,11 @@ the avy roundtrip."
         (avy-process instances)
         (and (consp picked) (car picked)))))
 
-  (defun zetta-embark--avy-act (type bounds)
-    "Jump to BOUNDS, dispatch `embark-act' with a one-shot finder
-returning TYPE on BOUNDS."
-    (let* ((beg (car bounds))
-           (end (cdr bounds))
-           (text (buffer-substring-no-properties beg end))
-           (embark-target-finders
-            (list (lambda ()
-                    (cons type (cons text (cons beg end)))))))
-      (goto-char beg)
-      (call-interactively #'embark-act)))
+  (defun zetta-embark--avy-act (_type bounds)
+    "Jump point to BOUNDS' start. The avy entry points are
+navigation only -- they do NOT re-enter `embark-act' on the
+picked target."
+    (goto-char (car bounds)))
 
   (defun zetta-embark--avy-pick-instance-do (type thing start)
     "After embark exits, collect visible instances, avy-pick, act."

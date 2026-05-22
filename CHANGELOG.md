@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.1](https://github.com/chiply/.zetta.d/compare/v0.1.0...v0.1.1) (2026-05-22)
+
+
+### Features
+
+* tap/treesit/embark integration for type-aware editing ([#13](https://github.com/chiply/.zetta.d/issues/13)) ([887f6ce](https://github.com/chiply/.zetta.d/commit/887f6ce4bd40f5c0a33cea114f86a3e3df1e8ce5))
+
+
+### Bug Fixes
+
+* typos in zettapkg ([#11](https://github.com/chiply/.zetta.d/issues/11)) ([972d84c](https://github.com/chiply/.zetta.d/commit/972d84c95387487dee3a32ab5e584a883fe74c15))
+
 ## 0.1.0 (2026-05-07)
 
 

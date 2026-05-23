@@ -173,11 +173,25 @@ TYPE is the embark target type reported; defaults to THING."
   ;; doc-style modes so it doesn't add noise in prog-mode buffers
   ;; where symbol semantics are preferred.
   (defun zetta-embark-target-word-at-point ()
-    "Embark target finder for `word' in prose / text modes."
+    "Embark target finder for `word'.
+
+Active in prose buffers (text/org/eww/help/Info/Man) AND in elisp
+buffers.  Elisp opts in because `-' is symbol-constituent there:
+inside `some-function-here', word=function (the sub-word the cursor
+is on) and symbol=some-function-here.  Both are useful targets and
+`zetta-embark--sort-targets-by-bounds' surfaces the smaller-bounds
+`word' first in the embark cycle, so embark-act lands on the
+sub-word by default.
+
+Still gated away from other prog-mode buffers where word and symbol
+would conflate noisily (the sort would still surface word first, but
+hyphens are not symbol-constituents in most languages so the
+distinction is less useful there)."
     (when (and (not (or (minibufferp)
                         (derived-mode-p 'completion-list-mode
                                         'embark-collect-mode)))
-               (or (derived-mode-p 'text-mode 'org-mode)
+               (or (derived-mode-p 'text-mode 'org-mode
+                                   'emacs-lisp-mode)
                    (memq major-mode
                          '(eww-mode help-mode Info-mode Man-mode))))
       (when-let* ((b (ignore-errors (bounds-of-thing-at-point 'word)))

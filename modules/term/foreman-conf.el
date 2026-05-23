@@ -250,7 +250,7 @@ READER is a form that reads user input and returns the value to store."
   (interactive)
   (let* (
          (innercmd (4mn-get-inner-cmd))
-         (thing (format "%s\n" (string-trim (zetta-get-thing thing))))
+         (thing (format "%s\n" (string-trim (treesit-tap-get-thing thing))))
          (code (format
                 "%s\n"
                 (string-trim

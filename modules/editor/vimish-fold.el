@@ -27,7 +27,7 @@ around tap.  If region active, then fold in this region.  If active
 folds in tap (eg tap itself isn't what is folded, but rather a subset
 of tap), then toggle the closest fold"
     (interactive)
-    (let* ((bnds (zetta-locate-thing thing))
+    (let* ((bnds (treesit-tap-locate-thing thing))
            (beg-thing (nth 0 bnds))
            (end-thing (nth 1 bnds))
            (bol (save-excursion (back-to-indentation) (point)))

@@ -6,7 +6,7 @@
 ;;
 ;; Adds zetta-specific integration:
 ;;   - Picker bindings in the minibuffer keymap (`M-i' / `C-c i').
-;;   - Tree-sitter types from `zetta-embark-treesit-types' registered
+;;   - Tree-sitter types from `treesit-tap-embark-types' registered
 ;;     into `present-types' (so picking accepts AST node types).
 ;;   - The richer zetta-embark visible-instance collector wired in as
 ;;     `present-collect-extra-fn' when embark is loaded.
@@ -24,8 +24,8 @@
   (present-mode 1)
 
   ;; Register tree-sitter presentation types from the embark side.
-  (when (boundp 'zetta-embark-treesit-types)
-    (dolist (ts-type zetta-embark-treesit-types)
+  (when (boundp 'treesit-tap-embark-types)
+    (dolist (ts-type treesit-tap-embark-types)
       (let ((sym (intern (format "ts-%s" ts-type))))
         (unless (alist-get sym present-types)
           (setf (alist-get sym present-types)

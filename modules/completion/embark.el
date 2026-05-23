@@ -235,82 +235,13 @@ distinction is less useful there)."
     "m" #'mark-defun)
   (setf (alist-get 'defun embark-keymap-alist) 'embark-defun-map)
 
-  ;; Bridge C: tree-sitter AST node -> embark target.
-  ;; Walks up from `treesit-node-at' until the node type is in
-  ;; `zetta-embark-treesit-types', then reports it as embark type
-  ;; `ts-<node-type>'. Action menus respond to the *exact* AST node
-  ;; under point (string literal, call expression, argument list, ...)
-  ;; rather than thing-at-point's coarser categories.
-  (defcustom zetta-embark-treesit-types
-    '("function_definition" "function_declaration"
-      "class_definition" "class_declaration"
-      "method_definition" "method_declaration"
-      "call" "call_expression"
-      "string" "string_literal"
-      "comment"
-      "decorator"
-      "argument_list" "parameter_list" "parameters"
-      "if_statement" "for_statement" "while_statement"
-      "import_statement" "import_from_statement")
-    "Tree-sitter node-type names Bridge C surfaces to embark.
-Each entry becomes a target of type `ts-<NAME>'; bind actions in
-`embark-keymap-alist' under that symbol. Node-type names vary by
-language (e.g. python `call' vs javascript `call_expression');
-include both spellings of any construct you want to target."
-    :type '(repeat string)
-    :group 'embark)
-
-  (defun zetta-embark-target-treesit-node-at-point ()
-    "Embark target finder: every recognised tree-sitter ancestor at point.
-Walks up from `treesit-node-at' and returns one bounded target per
-ancestor whose type is in `zetta-embark-treesit-types', innermost
-first. Returning all ancestors (not just the innermost) lets
-`embark-act' cycle through structural scopes the way
-`er/expand-region' does, with the size sort on `embark--targets'
-arranging them smallest -> largest."
-    (when (and (fboundp 'treesit-parser-list) (treesit-parser-list))
-      (let ((node (treesit-node-at (point)))
-            targets)
-        (while node
-          (when (member (treesit-node-type node)
-                        zetta-embark-treesit-types)
-            (let ((start (treesit-node-start node))
-                  (end (treesit-node-end node)))
-              (push (cons (intern (concat "ts-" (treesit-node-type node)))
-                          (cons (buffer-substring-no-properties start end)
-                                (cons start end)))
-                    targets)))
-          (setq node (treesit-node-parent node)))
-        (nreverse targets))))
-  (add-to-list 'embark-target-finders
-               #'zetta-embark-target-treesit-node-at-point)
-
-  ;; Alias function/method/class AST types to `embark-defun-map' so the
-  ;; existing eval/narrow/mark actions apply -- those commands are
-  ;; point-based and pick up the right region via Bridge A's bounds.
-  (dolist (sym '(ts-function_definition ts-function_declaration
-                 ts-method_definition ts-method_declaration
-                 ts-class_definition ts-class_declaration))
-    (setf (alist-get sym embark-keymap-alist) 'embark-defun-map))
-
-  ;; String literal: treat the node text as URL / path / kill-ring entry.
-  (defvar-keymap embark-ts-string-map
-    :parent embark-general-map
-    "u" #'browse-url
-    "f" #'find-file
-    "w" #'kill-new)
-  (dolist (sym '(ts-string ts-string_literal))
-    (setf (alist-get sym embark-keymap-alist) 'embark-ts-string-map))
-
-  ;; Call expression: jump-to-definition uses point (the call site),
-  ;; so xref / lsp / eglot variants all just work.
-  (defvar-keymap embark-ts-call-map
-    :parent embark-general-map
-    "d" #'xref-find-definitions
-    "r" #'xref-find-references
-    "w" #'kill-new)
-  (dolist (sym '(ts-call ts-call_expression))
-    (setf (alist-get sym embark-keymap-alist) 'embark-ts-call-map))
+  ;; Bridge C (treesit AST node -> embark target) and the related
+  ;; ts-* keymaps now live in `treesit-tap-embark' (under
+  ;; `source/zettapkg/treesit-tap/'), loaded by
+  ;; `modules/completion/treesit-tap.el' once embark is available.
+  ;; Aliases like `ts-function_definition' -> `embark-defun-map' are
+  ;; installed there; `embark-defun-map' itself is still defined just
+  ;; above so the aliases resolve.
 
   ;; Make `embark-act' cycling follow expand-region's innermost-outward
   ;; order: smallest-bounds target is the default; repeated `embark-act'
@@ -435,8 +366,8 @@ pre-action hook; read by `zetta-embark-nav-next' / `nav-prev'.")
        ((not (symbolp thing))
         (message "No nav thing mapped for embark type `%s'" type))
        (t
-        (let ((zetta-tap-current-thing thing))
-          (zetta-tap-forward-thing n))))))
+        (let ((treesit-tap-current-thing thing))
+          (treesit-tap-forward-thing n))))))
 
   (defun zetta-embark-nav-next ()
     "Move to next instance of current embark target's type."
@@ -494,14 +425,14 @@ current one."
   ;; Use it only as a *focus* thing -- its smart bounds give stable
   ;; "enclosing form" dimming as point moves around inside. For
   ;; *navigation*, `zetta-embark-focus-on-type' sets
-  ;; `zetta-tap-current-thing' to plain `sexp' (via the nav-type-map),
+  ;; `treesit-tap-current-thing' to plain `sexp' (via the nav-type-map),
   ;; whose `forward-sexp' navigation is well-behaved.
 
   (defun zetta-embark-focus-on-type ()
     "Activate `focus-mode' on the current embark target's type.
 Resolves the embark type via `zetta-embark-nav-type-map' to a
 thing-at-point thing (e.g. expression -> `embark-expression',
-ts-call -> call), syncs `zetta-tap-current-thing' and
+ts-call -> call), syncs `treesit-tap-current-thing' and
 `focus-current-thing', snaps point to the captured bounds' start,
 and enables `focus-mode'. Focus tracks point dynamically from
 there -- when you move into a different instance of the same type,
@@ -516,7 +447,7 @@ focus follows."
        ((not (symbolp thing))
         (message "No nav thing for embark type `%s'" type))
        (t
-        (setq-local zetta-tap-current-thing thing)
+        (setq-local treesit-tap-current-thing thing)
         (when (boundp 'focus-current-thing)
           ;; For `expression' targets, focus uses `embark-expression'
           ;; (smart enclosing-form bounds) even though nav uses plain
@@ -532,12 +463,12 @@ focus follows."
                    (format " (via embark `%s')" type)))))))
 
   (defun zetta-embark-set-current-thing ()
-    "Set `zetta-tap-current-thing' to the active embark target's type.
+    "Set `treesit-tap-current-thing' to the active embark target's type.
 Resolves the type via `zetta-embark-nav-type-map' (same mapping the
 nav and focus actions use), syncs `focus-current-thing' too so
 focus-mode tracks the new thing if active. Lets you `C-.' on a
 sentence / call / paragraph / function and then drive s-j / s-k by
-that thing without going through M-x zetta-tap-set-local."
+that thing without going through M-x treesit-tap-set-local."
     (interactive)
     (let* ((type zetta-embark--current-target-type)
            (thing (alist-get type zetta-embark-nav-type-map type)))
@@ -547,10 +478,10 @@ that thing without going through M-x zetta-tap-set-local."
        ((not (symbolp thing))
         (message "No nav thing for embark type `%s'" type))
        (t
-        (setq-local zetta-tap-current-thing thing)
+        (setq-local treesit-tap-current-thing thing)
         (when (boundp 'focus-current-thing)
           (setq-local focus-current-thing thing))
-        (message "zetta-tap-current-thing = `%s'%s"
+        (message "treesit-tap-current-thing = `%s'%s"
                  thing
                  (if (eq type thing) ""
                    (format " (via embark `%s')" type)))))))
@@ -1305,10 +1236,10 @@ top-level avy counterpart of `zetta-embark-jump-to-type'."
                              (mapcar #'car zetta-embark-nav-type-map)
                              (mapcar #'cdr zetta-embark-nav-type-map)
                              zetta-embark-symbol-target-types
-                             (when (boundp 'zetta-tap--things)
+                             (when (boundp 'treesit-tap-things)
                                (mapcar (lambda (s)
                                          (and s (intern-soft s)))
-                                       zetta-tap--things)))))))))
+                                       treesit-tap-things)))))))))
       (let* ((choice (consult--read candidates
                                     :prompt "Avy-jump to type: "
                                     :require-match t))
@@ -1379,10 +1310,10 @@ jumps and runs `embark-act' filtered to that type. On cancel
                              (mapcar #'car zetta-embark-nav-type-map)
                              (mapcar #'cdr zetta-embark-nav-type-map)
                              zetta-embark-symbol-target-types
-                             (when (boundp 'zetta-tap--things)
+                             (when (boundp 'treesit-tap-things)
                                (mapcar (lambda (s)
                                          (and s (intern-soft s)))
-                                       zetta-tap--things))))))))
+                                       treesit-tap-things))))))))
            (collect-for-sym
             (lambda (sym)
               (if (memq sym zetta-embark-symbol-target-types)

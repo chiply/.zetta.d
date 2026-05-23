@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.1.2](https://github.com/chiply/.zetta.d/compare/v0.1.1...v0.1.2) (2026-05-23)
+
+
+### Features
+
+* **present:** CLIM-style typed-presentation picker ([18db9f6](https://github.com/chiply/.zetta.d/commit/18db9f610995a100d9e5a8c4668095f0852d3603))
+* **present:** CLIM-style typed-presentation picker ([e750ec1](https://github.com/chiply/.zetta.d/commit/e750ec125db85b62c36b0e95ac3f47e1dc64380c))
+* **present:** command-map type detection, mode-aware URL finder, stable avy labels ([89cb1f3](https://github.com/chiply/.zetta.d/commit/89cb1f3fec22c58a0376f61bd23b05e2a76a8e33))
+* **present:** highlight candidates during picker (CLIM-style) ([e44bc8d](https://github.com/chiply/.zetta.d/commit/e44bc8d7e1be0fcd7da155fcd567251544336ae7))
+
+
+### Bug Fixes
+
+* **embark:** make zetta-embark--collect-visible-instances handle org-* link types ([19f1435](https://github.com/chiply/.zetta.d/commit/19f14350cd13695d12dffe21c571eb5ed9de0bf8))
+* **present,embark:** address Copilot PR review ([17291b9](https://github.com/chiply/.zetta.d/commit/17291b99f22951202a73fee27b96c01f949293e9))
+
+
+### Performance Improvements
+
+* **embark:** use regex sweep for URL/email visible-instance collection ([5dd9fca](https://github.com/chiply/.zetta.d/commit/5dd9fca3e5bed550451bf51cb348ba2a4402e343))
+
 ## [0.1.1](https://github.com/chiply/.zetta.d/compare/v0.1.0...v0.1.1) (2026-05-22)
 
 

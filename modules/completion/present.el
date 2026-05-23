@@ -38,7 +38,7 @@
   ;; (TYPE THING) and it operates on the currently-selected window, so
   ;; we briefly switch into the window being scanned.
   (with-eval-after-load 'embark
-    (when (fboundp 'embark-by-type-collect-visible-instances)
+    (when (fboundp 'embark-scope-collect-visible-instances)
       (setq present-collect-extra-fn
             (lambda (expected win buf _beg _end)
               (when (and expected
@@ -48,7 +48,7 @@
                          ;; produces dupes to dedupe.
                          (not (present-type-prop expected :finder))
                          ;; And skip when the type carries no embark/thing
-                         ;; mapping — `embark-by-type-collect-visible-instances'
+                         ;; mapping — `embark-scope-collect-visible-instances'
                          ;; would otherwise be called with `string' / a root
                          ;; type and return nothing useful (or error).
                          (or (present-type-prop expected :embark)
@@ -61,7 +61,7 @@
                         (with-selected-window win
                           (with-current-buffer buf
                             (ignore-errors
-                              (embark-by-type-collect-visible-instances
+                              (embark-scope-collect-visible-instances
                                embark-type thing))))))
                   (mapcar
                    (lambda (b)

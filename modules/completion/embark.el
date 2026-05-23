@@ -3,10 +3,10 @@
 ;; The bulk of the zetta-flavored embark extensions -- type-aware
 ;; nav/pick/act, cycle sort, collectors, capture-mode, the
 ;; deftap-finder macro, the word target finder -- now live in the
-;; `embark-by-type' package (under `source/zettapkg/').  This file
+;; `embark-scope' package (under `source/zettapkg/').  This file
 ;; wraps embark itself, keeps the project-map and a few small zetta
 ;; utilities, and configures the keybindings.  See
-;; `modules/completion/embark-by-type.el' for the package wrapper.
+;; `modules/completion/embark-scope.el' for the package wrapper.
 
 (use-package embark
   :ensure (:wait t)

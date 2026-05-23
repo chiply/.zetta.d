@@ -6,9 +6,9 @@
 
 Read [Strategic challenge: the case for stepping back](#strategic-challenge-the-case-for-stepping-back) first. The devil's-advocate review made a strong case for NOT factoring most of this code. Three live options:
 
-1. **Proceed with full plan**: Phase 0 → Phase 1 (`treesit-tap`) → Phase 1.5 (upstream) → Phase 2 (`embark-by-type`) → Phase 3 (`tap-fold`). v3 plan covers this path.
+1. **Proceed with full plan**: Phase 0 → Phase 1 (`treesit-tap`) → Phase 1.5 (upstream) → Phase 2 (`embark-scope`) → Phase 3 (`tap-fold`). v3 plan covers this path.
 2. **Minimal factoring**: Phase 0 only (LICENSE backfill); ship `present` + `treesit-textobj` to MELPA; keep the rest in `modules/`; write `docs/type-bridges.md` as a reference architecture essay. Reviewer #2's explicit recommendation.
-3. **Middle path**: do Phase 0 + Phase 1 (`treesit-tap` is genuinely audience-useful and the smallest scope) but defer or drop `embark-by-type` and `tap-fold`. Keeps the most reusable piece, avoids the heaviest coordination burden.
+3. **Middle path**: do Phase 0 + Phase 1 (`treesit-tap` is genuinely audience-useful and the smallest scope) but defer or drop `embark-scope` and `tap-fold`. Keeps the most reusable piece, avoids the heaviest coordination burden.
 
 The remaining open questions ([§Open questions](#open-questions-remaining-user-decisions-needed)) only matter under options 1 or 3.
 
@@ -18,11 +18,11 @@ Round-2 devil's-advocate review pushed back on factoring with concrete numbers a
 
 **Velocity tax (concrete).** 9 of the last 29 commits in the past 60 days touched the candidate files. If those packages were already factored, those 9 commits would have become 9 cross-repo PRs, ~90 minutes of extra CI waiting, and at least 3 coordinated two-PR releases. Estimated tax: **25-40% slowdown on the most active third of the user's Emacs work.**
 
-**Audience reality.** The intersection of (uses embark) ∩ (uses treesit aggressively) ∩ (wants typed cycle/pick UX) ∩ (won't just copy from a blog post) is tiny. No package as opinionated as `embark-by-type` exists in MELPA — which is signal that it's *too niche*, not an untapped market. `present` is the only candidate with broad appeal.
+**Audience reality.** The intersection of (uses embark) ∩ (uses treesit aggressively) ∩ (wants typed cycle/pick UX) ∩ (won't just copy from a blog post) is tiny. No package as opinionated as `embark-scope` exists in MELPA — which is signal that it's *too niche*, not an untapped market. `present` is the only candidate with broad appeal.
 
 **Coupling doesn't go away — it relocates.** Six of the v2 coupling findings (#2, #5, #6, #8, #11, #12) describe couplings that survive factoring; they just turn from in-tree function calls into cross-package contracts. Harder to refactor, not easier.
 
-**Minimal-defaults + wrapper-restores-behavior = bad MELPA UX.** A non-zetta installer downloads `embark-by-type`, enables `embark-by-type-mode`, runs a command, gets nothing. They have to read the README and reproduce ~50 lines of wrapper config to get the same behavior the in-tree zetta config has out-of-box. That's worse UX than the status quo for the audience the factoring is supposed to serve.
+**Minimal-defaults + wrapper-restores-behavior = bad MELPA UX.** A non-zetta installer downloads `embark-scope`, enables `embark-scope-mode`, runs a command, gets nothing. They have to read the README and reproduce ~50 lines of wrapper config to get the same behavior the in-tree zetta config has out-of-box. That's worse UX than the status quo for the audience the factoring is supposed to serve.
 
 **Maintenance multiplication.** 3 Eask files, 3 CI matrices, 3 release-please configs, 3 CHANGELOGs, 3 issue trackers. Every cross-cutting change becomes a coordinated 3-PR dance. For a one-person config, that's ~10% of available Emacs-tinkering time vaporized into release plumbing.
 
@@ -32,7 +32,7 @@ Round-2 devil's-advocate review pushed back on factoring with concrete numbers a
 
 **Reverse alternative.** A `docs/type-bridges.md` essay + blog post would reach more people with 1% of the effort. Readers cherry-pick what fits their config rather than installing a soft-dep-laden meta-package.
 
-**Reviewer's recommendation, verbatim**: *"Step back. Ship `present` + `treesit-textobj` (with LICENSE backfill), write `docs/type-bridges.md` as a reference architecture essay, and keep the rest in `modules/`. Revisit only if a real external user files an issue asking for `embark-by-type` as a package."*
+**Reviewer's recommendation, verbatim**: *"Step back. Ship `present` + `treesit-textobj` (with LICENSE backfill), write `docs/type-bridges.md` as a reference architecture essay, and keep the rest in `modules/`. Revisit only if a real external user files an issue asking for `embark-scope` as a package."*
 
 The other two round-2 reviewers (implementation feasibility, end-user discoverability) operated under the assumption that factoring is happening and surfaced concrete fixes for that path. Their findings are folded into the rest of this plan in case option 1 or 3 is chosen.
 
@@ -82,18 +82,18 @@ Critical constraint: each factored package **must not reference any `zetta-*` sy
    - `modules/ui/focus.el` (focus-current-thing mirror)
    - `modules/completion/embark.el:438, 519, 525, 550, 552` — reads + setq-local writes from inside embark functions
 
-4. **Cross-package symbol dependency (NEW in v3, blocks v2 split).** `embark.el:438` does `(let ((zetta-tap-current-thing thing)) (zetta-tap-forward-thing n))`. After factoring, `embark-by-type` would either:
+4. **Cross-package symbol dependency (NEW in v3, blocks v2 split).** `embark.el:438` does `(let ((zetta-tap-current-thing thing)) (zetta-tap-forward-thing n))`. After factoring, `embark-scope` would either:
    - Hard-depend on `treesit-tap` (add to Package-Requires)
    - Move those nav functions into `treesit-tap`'s embark sub-extension (inverts plan's split)
    - Forward-declare via `(defvar treesit-tap-current-thing)` and rely on dynamic binding only when bound — fragile
 
-   v3 decision: **`embark-by-type` Package-Requires `treesit-tap`**. The nav family genuinely uses TAP-current state; pretending otherwise is wishful.
+   v3 decision: **`embark-scope` Package-Requires `treesit-tap`**. The nav family genuinely uses TAP-current state; pretending otherwise is wishful.
 
-5. **Capture infrastructure is TWO writers, NOT one.** Pre-action `:always` hook AND `:filter-return` advice on `embark--rotate`. `embark-by-type-capture-mode` must install/uninstall both. Advising private `embark--rotate` is policy-risky — upstream embark could break it in any release.
+5. **Capture infrastructure is TWO writers, NOT one.** Pre-action `:always` hook AND `:filter-return` advice on `embark--rotate`. `embark-scope-capture-mode` must install/uninstall both. Advising private `embark--rotate` is policy-risky — upstream embark could break it in any release.
 
 6. **Hook installation is non-idempotent in current code (NEW v3 blocker).** `embark.el:421-423` uses `(setf (alist-get :always embark-pre-action-hooks) (cons ...))`. Re-evaluating duplicates entries. There is no removal logic at all. The factored `capture-mode` toggle MUST be rewritten with proper `add-hook`/`remove-hook` semantics or explicit dedup; this is not a port — it's a redesign.
 
-7. **Hook ordering.** Capture hook must run BEFORE refresh-highlights consumer. Documented as part of `embark-by-type-capture-priority` defcustom.
+7. **Hook ordering.** Capture hook must run BEFORE refresh-highlights consumer. Documented as part of `embark-scope-capture-priority` defcustom.
 
 8. **Cross-file face reference.** `tap.el`'s consult preview falls back to `zetta-embark-other-instance-face`. Each package owns its own face with soft-fallback.
 
@@ -103,13 +103,13 @@ Critical constraint: each factored package **must not reference any `zetta-*` sy
 
 11. **`embark-org` is bundled INSIDE `embark`.** Not a separate MELPA dep. Gate org-link collectors via `(featurep 'embark-org)`.
 
-12. **`ts-*` taxonomy is implicit cross-package schema.** `treesit-tap`'s embark sub-extension owns the `ts-*` entries; `embark-by-type`'s default map ships with zero `ts-*` entries.
+12. **`ts-*` taxonomy is implicit cross-package schema.** `treesit-tap`'s embark sub-extension owns the `ts-*` entries; `embark-scope`'s default map ships with zero `ts-*` entries.
 
 13. **`present` wrapper update is THREE references, not one** (v3 finding): `modules/completion/present.el` collector name + treesit-types source, PLUS `source/zettapkg/present/present.el:142, 749` (docstrings), PLUS `source/zettapkg/present/README.md:174`.
 
-14. **Hand-written embark target finders missed from macro inventory (NEW v3).** `zetta-embark-target-word-at-point` (`embark.el:175`) is hand-written, NOT generated by `deftap-finder`. Its prose+elisp gating logic moves with it as a separate function in `embark-by-type`.
+14. **Hand-written embark target finders missed from macro inventory (NEW v3).** `zetta-embark-target-word-at-point` (`embark.el:175`) is hand-written, NOT generated by `deftap-finder`. Its prose+elisp gating logic moves with it as a separate function in `embark-scope`.
 
-15. **Embark sub-keymaps are silently public API (NEW v3).** `embark-defun-map`, `embark-ts-string-map`, `embark-ts-call-map` (`embark.el:231-236, 297-303, 307-313`) — user's live keybindings into these will silently break on rename. Add to rename inventory: `embark-by-type-defun-map`, etc.
+15. **Embark sub-keymaps are silently public API (NEW v3).** `embark-defun-map`, `embark-ts-string-map`, `embark-ts-call-map` (`embark.el:231-236, 297-303, 307-313`) — user's live keybindings into these will silently break on rename. Add to rename inventory: `embark-scope-defun-map`, etc.
 
 16. **Autoload coordination (NEW v3 blocker).** `treesit-tap`'s embark sub-extension installs `ts-*` entries at LOAD time. With `;;;###autoload` only on commands, registration never fires until a command runs. Options: (a) `treesit-tap-embark-setup` autoloaded function the wrapper calls, (b) `;;;###autoload` on a `with-eval-after-load` form (rare pattern), (c) **ship as a separate file `treesit-tap-embark.el` users `require` explicitly**. v3 decision: **option (c)**, mirrors `embark-consult` pattern.
 
@@ -135,7 +135,7 @@ Three new packages, phased smallest → largest.
 - `treesit-tap-setup` (NEW v3) — convenience function that enables `treesit-tap-mode` and sets a sensible default current thing.
 - **Embark sub-extension as separate file** `treesit-tap-embark.el` (NEW v3, resolves autoload coordination blocker):
   - `treesit-tap-embark-target-node-at-point` — embark finder
-  - At `require` time: adds finder to `embark-target-finders`, registers `ts-*` entries into `embark-by-type-nav-type-map` (gated by `boundp`)
+  - At `require` time: adds finder to `embark-target-finders`, registers `ts-*` entries into `embark-scope-nav-type-map` (gated by `boundp`)
 
 **Defcustoms** (with `:type` and `:options` per discoverability review):
 ```elisp
@@ -158,46 +158,46 @@ Example: (\"function_definition\" \"call_expression\" \"if_statement\")"
 
 **LOC estimate**: 300-400.
 
-### Package 2: `embark-by-type`
+### Package 2: `embark-scope`
 
 **One-liner**: turn embark into a type-aware structural navigation system.
 
 **Public commands** (three families per round-1 API review):
 
-*Nav family* (`embark-by-type-nav-*`): `nav-next` / `-prev` / `-beg` / `-end`. **All four guarded with `(unless embark-by-type-capture-mode (user-error "Enable embark-by-type-capture-mode first"))`** (NEW v3 per discoverability review).
+*Nav family* (`embark-scope-nav-*`): `nav-next` / `-prev` / `-beg` / `-end`. **All four guarded with `(unless embark-scope-capture-mode (user-error "Enable embark-scope-capture-mode first"))`** (NEW v3 per discoverability review).
 
-*Pick family* (`embark-by-type-pick-*`): `pick-target-type` (consult+preview), `pick-target-type-key` (transient), `pick-instance`, `avy-pick-instance`.
+*Pick family* (`embark-scope-pick-*`): `pick-target-type` (consult+preview), `pick-target-type-key` (transient), `pick-instance`, `avy-pick-instance`.
 
-*Act family* (`embark-by-type-act-*`): `act-focus`, `act-highlight-instances`, `act-select-as-region`, `act-narrow`. **Same capture-mode guard.**
+*Act family* (`embark-scope-act-*`): `act-focus`, `act-highlight-instances`, `act-select-as-region`, `act-narrow`. **Same capture-mode guard.**
 
-**Public collector facade**: `embark-by-type-collect-visible TYPE THING`. Internal collectors are private.
+**Public collector facade**: `embark-scope-collect-visible TYPE THING`. Internal collectors are private.
 
 **Capture infrastructure**:
-- `embark-by-type-last-target-type` (defvar)
-- `embark-by-type-last-target-bounds` (defvar)
-- `embark-by-type-capture-mode` (global minor mode) — installs **both** the pre-action hook AND the `embark--rotate` advice via proper `add-hook`/`remove-hook` semantics (NEW v3; this is a redesign, not a port — see coupling finding #6)
+- `embark-scope-last-target-type` (defvar)
+- `embark-scope-last-target-bounds` (defvar)
+- `embark-scope-capture-mode` (global minor mode) — installs **both** the pre-action hook AND the `embark--rotate` advice via proper `add-hook`/`remove-hook` semantics (NEW v3; this is a redesign, not a port — see coupling finding #6)
 
-**Bridge B macro**: `embark-by-type-deftap-finder THING [TYPE]`. Generated names: `embark-by-type-target-<thing>-at-point`.
+**Bridge B macro**: `embark-scope-deftap-finder THING [TYPE]`. Generated names: `embark-scope-target-<thing>-at-point`.
 
-**Hand-written finders** (NEW v3 — not macro-generated, must move explicitly): `embark-by-type-target-word-at-point` (prose+elisp gated).
+**Hand-written finders** (NEW v3 — not macro-generated, must move explicitly): `embark-scope-target-word-at-point` (prose+elisp gated).
 
-**Embark sub-keymap renames** (NEW v3): `embark-by-type-defun-map`, `embark-by-type-ts-string-map`, `embark-by-type-ts-call-map`. Document in MIGRATION.md.
+**Embark sub-keymap renames** (NEW v3): `embark-scope-defun-map`, `embark-scope-ts-string-map`, `embark-scope-ts-call-map`. Document in MIGRATION.md.
 
 **Modes the user opts into**:
-- `embark-by-type-sort-by-bounds-mode` — cycle-sort advice
-- `embark-by-type-capture-mode` — capture infra (REQUIRED for nav/act)
-- `embark-by-type-install-default-bindings` — function (not a mode) to install bindings into `embark-general-map`
+- `embark-scope-sort-by-bounds-mode` — cycle-sort advice
+- `embark-scope-capture-mode` — capture infra (REQUIRED for nav/act)
+- `embark-scope-install-default-bindings` — function (not a mode) to install bindings into `embark-general-map`
 
-**Setup convenience** (NEW v3): `embark-by-type-setup` — enables `capture-mode`, optionally `sort-by-bounds-mode`, optionally calls `install-default-bindings`. Single function for one-line user setup.
+**Setup convenience** (NEW v3): `embark-scope-setup` — enables `capture-mode`, optionally `sort-by-bounds-mode`, optionally calls `install-default-bindings`. Single function for one-line user setup.
 
 **Defcustoms** (with `:type`, `:options`, and worked examples in docstrings):
-- `embark-by-type-nav-type-map` — `(alist :key-type symbol :value-type symbol)`, no `ts-*` entries default. Docstring: `"Example: ((function . defun) (class . class) (call . sexp))"`.
-- `embark-by-type-symbol-target-types` — `(repeat symbol)`, default subset
-- `embark-by-type-org-link-collectors` — `(alist :key-type symbol :value-type regexp)`
-- `embark-by-type-other-instance-face`
-- `embark-by-type-default-bindings`
-- `embark-by-type-install-default-bindings-p` — boolean default nil
-- `embark-by-type-capture-priority` (NEW v3) — controls hook ordering relative to consumers
+- `embark-scope-nav-type-map` — `(alist :key-type symbol :value-type symbol)`, no `ts-*` entries default. Docstring: `"Example: ((function . defun) (class . class) (call . sexp))"`.
+- `embark-scope-symbol-target-types` — `(repeat symbol)`, default subset
+- `embark-scope-org-link-collectors` — `(alist :key-type symbol :value-type regexp)`
+- `embark-scope-other-instance-face`
+- `embark-scope-default-bindings`
+- `embark-scope-install-default-bindings-p` — boolean default nil
+- `embark-scope-capture-priority` (NEW v3) — controls hook ordering relative to consumers
 
 **Hard deps**: `((emacs "29.1") (embark "1.0") (treesit-tap "0.1"))`. The `treesit-tap` dep is NEW in v3 — required because the nav family lex-binds `treesit-tap-current-thing` (coupling finding #4).
 
@@ -207,12 +207,12 @@ Example: (\"function_definition\" \"call_expression\" \"if_statement\")"
 
 ### Package 3: `tap-fold`
 
-Unchanged from v2. Soft-depends on `embark-by-type-capture-mode` being on; provides clear `user-error` when invoked while mode is off.
+Unchanged from v2. Soft-depends on `embark-scope-capture-mode` being on; provides clear `user-error` when invoked while mode is off.
 
 ## What NOT to factor
 
 - `avy-action-embark` — community snippet, document in README.
-- Highlight-on-cycle refresh hook — kept as sub-feature of `embark-by-type-act-highlight-instances`.
+- Highlight-on-cycle refresh hook — kept as sub-feature of `embark-scope-act-highlight-instances`.
 
 ## Cross-cutting concerns
 
@@ -221,7 +221,7 @@ Unchanged from v2. Soft-depends on `embark-by-type-capture-mode` being on; provi
 | Package | v1 → v2 → v3 | Reason |
 |---|---|---|
 | Tree-sitter bridge | `treesit-thing` → **`treesit-tap`** | Clearer purpose, no built-in collision |
-| Embark extension | `embark-cycle` → **`embark-by-type`** | v1 collided with built-in `embark-cycle` |
+| Embark extension | `embark-cycle` → **`embark-scope`** | v1 collided with built-in `embark-cycle` |
 | Folding | `tap-fold` (unchanged) | Clean |
 
 ### License (resolved)
@@ -234,22 +234,22 @@ No package installs hooks/advices/bindings on `require`. Each ships a `*-setup` 
 
 ### Capture-mode guards (NEW v3)
 
-Every `embark-by-type-nav-*` and `embark-by-type-act-*` command begins with:
+Every `embark-scope-nav-*` and `embark-scope-act-*` command begins with:
 ```elisp
-(unless embark-by-type-capture-mode
-  (user-error "Enable `embark-by-type-capture-mode' first"))
+(unless embark-scope-capture-mode
+  (user-error "Enable `embark-scope-capture-mode' first"))
 ```
 This is the discoverability fix for the silent-prerequisite UX problem.
 
 ### Migration support (NEW v3)
 
 Each package ships `MIGRATION.md` with a `zetta-* → new-*` symbol table covering:
-- `zetta-embark-*` → `embark-by-type-*` (or `treesit-tap-*` for nav vars)
+- `zetta-embark-*` → `embark-scope-*` (or `treesit-tap-*` for nav vars)
 - `zetta-tap-*` → `treesit-tap-*`
-- Sub-keymap renames (`embark-defun-map` → `embark-by-type-defun-map`)
+- Sub-keymap renames (`embark-defun-map` → `embark-scope-defun-map`)
 - Hand-written finder renames
 
-Optional: ship `embark-by-type-compat.el` providing `defalias` for one release cycle.
+Optional: ship `embark-scope-compat.el` providing `defalias` for one release cycle.
 
 ### Documentation per-package
 
@@ -257,13 +257,13 @@ Optional: ship `embark-by-type-compat.el` providing `defalias` for one release c
 - One-line "what is this" elevator pitch
 - For `treesit-tap`: explicit two-feature breakdown (bounds bridge + per-buffer current-thing)
 - Install snippet (zettapkg form + MELPA form)
-- Single one-liner `(treesit-tap-setup)` / `(embark-by-type-setup)` user calls
-- For `embark-by-type`: use-case → command table (e.g. "Switch active type → `pick-target-type`"; "Jump within current type → `pick-instance`")
+- Single one-liner `(treesit-tap-setup)` / `(embark-scope-setup)` user calls
+- For `embark-scope`: use-case → command table (e.g. "Switch active type → `pick-target-type`"; "Jump within current type → `pick-instance`")
 - Soft-dep matrix
 
 ### Test strategy
 
-CI matrix per package: `treesit-tap` (30.1 / snapshot), `embark-by-type` (29.4 / 30.x / snapshot), `tap-fold` (29.4 / 30.x / snapshot). Ubuntu + macOS.
+CI matrix per package: `treesit-tap` (30.1 / snapshot), `embark-scope` (29.4 / 30.x / snapshot), `tap-fold` (29.4 / 30.x / snapshot). Ubuntu + macOS.
 
 ERT smoke tests cover public API. Plan budgets 1-2 days/package writing time.
 
@@ -287,13 +287,13 @@ Add GPL-3-or-later LICENSE + header to `source/zettapkg/present/` and `source/ze
 
 ### Phase 1.5: upstream embark issue (parallel, NOT a gate)
 
-File issue proposing `embark-sort-targets-by-bounds` as built-in defcustom on embark. **30-day timeout**; if no response or declined, ship in `embark-by-type`. Phase 2 proceeds in parallel — sort-mode is independent of capture-mode + nav + pick + act work.
+File issue proposing `embark-sort-targets-by-bounds` as built-in defcustom on embark. **30-day timeout**; if no response or declined, ship in `embark-scope`. Phase 2 proceeds in parallel — sort-mode is independent of capture-mode + nav + pick + act work.
 
-### Phase 2: `embark-by-type`
+### Phase 2: `embark-scope`
 
 Sub-phases:
 1. Pure utilities (collectors, `--assign-type-keys`).
-2. **`embark-by-type-capture-mode` redesigned for clean toggle** (NEW v3 — this is the rewrite). Install/uninstall both pre-action hook AND rotate advice with proper semantics + dedup.
+2. **`embark-scope-capture-mode` redesigned for clean toggle** (NEW v3 — this is the rewrite). Install/uninstall both pre-action hook AND rotate advice with proper semantics + dedup.
 3. Sort advice (only if upstream declined Phase 1.5).
 4. Collector dispatcher (gates org-link via `featurep`).
 5. Type pickers.
@@ -303,7 +303,7 @@ Sub-phases:
 9. Bridge B macro.
 10. Hand-written finders (word-at-point).
 11. Sub-keymap renames.
-12. Default-bindings installer + `embark-by-type-setup` convenience fn.
+12. Default-bindings installer + `embark-scope-setup` convenience fn.
 13. README + MIGRATION.md.
 14. Wrapper updates: `modules/completion/embark.el` (wrapper), `modules/completion/present.el` (collector + treesit-types source), `source/zettapkg/present/present.el` (docstrings:142, 749), `source/zettapkg/present/README.md:174`, `modules/org/org.el:167-169` (consider register-mapping API).
 15. Smoke test asserting post-wrapper-load keymap state.
@@ -338,10 +338,10 @@ Only if external interest emerges. Straightforward port.
 
 If proceeding (options 1 or 3 above):
 
-1. **Name confirmation**: confirm `treesit-tap` and `embark-by-type`.
+1. **Name confirmation**: confirm `treesit-tap` and `embark-scope`.
 2. **License confirmation**: GPL-3-or-later.
 3. **Phase 1.5 scope**: file upstream issue first (30-day timeout) or skip entirely and ship sort-mode in-package immediately?
-4. **`org.el` registration API**: extend `embark-by-type-nav-type-map` directly OR add public `embark-by-type-register-nav-mapping` API?
+4. **`org.el` registration API**: extend `embark-scope-nav-type-map` directly OR add public `embark-scope-register-nav-mapping` API?
 5. **`treesit-tap`'s embark sub-extension**: ship as `treesit-tap-embark.el` (v3 default per autoload coordination decision) or in-package with `with-eval-after-load`?
 6. **Compat layer**: ship `*-compat.el` with `defalias` for one release cycle, or rely solely on MIGRATION.md?
 
@@ -361,7 +361,7 @@ After each phase: existing CI green; live-test the pre-factor behaviors document
 **v2 → v3 changes driven by round-2 reviews:**
 
 *From implementation-feasibility review (blockers + concrete issues):*
-- Added coupling finding #4: `embark-by-type` HARD-depends on `treesit-tap` (lex-binding at `embark.el:438`) — Package 2 deps updated.
+- Added coupling finding #4: `embark-scope` HARD-depends on `treesit-tap` (lex-binding at `embark.el:438`) — Package 2 deps updated.
 - Added coupling finding #6: capture-mode hook installation needs redesign for clean toggle (not just port).
 - Added coupling finding #13 expansion: `present/README.md:174` also needs update.
 - Added coupling finding #14: hand-written finders (`-target-word-at-point`) missed from rename.
@@ -373,11 +373,11 @@ After each phase: existing CI green; live-test the pre-factor behaviors document
 - Documented private-symbol advising risk (`embark--rotate`).
 
 *From end-user discoverability review (UX gaps):*
-- Added `treesit-tap-setup` and `embark-by-type-setup` convenience functions per package.
+- Added `treesit-tap-setup` and `embark-scope-setup` convenience functions per package.
 - Added `user-error` guards on `nav-*` / `act-*` commands when capture-mode is off.
 - Specified `:options` + worked docstring examples for every user-facing defcustom.
 - Added `MIGRATION.md` to per-package checklist.
-- Added README Quick Start template requirements (use-case table for embark-by-type, two-feature breakdown for treesit-tap).
+- Added README Quick Start template requirements (use-case table for embark-scope, two-feature breakdown for treesit-tap).
 - New open question #6: compat layer (`defalias` `*-compat.el`)?
 
 *From devil's-advocate review (strategic challenge):*

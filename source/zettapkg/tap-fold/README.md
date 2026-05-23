@@ -33,7 +33,7 @@ Then `s-x f` at any point: pick from things that have bounds at point
 | `tap-fold-unfold-at-point` | Remove the fold at point |
 | `tap-fold-unfold-all` | Clear every fold in buffer |
 | `tap-fold-current-thing` | Fold `treesit-tap-current-thing` (requires `treesit-tap`) |
-| `tap-fold-embark-target` | Fold the captured embark target's bounds (requires `embark-by-type-capture-mode` on) |
+| `tap-fold-embark-target` | Fold the captured embark target's bounds (requires `embark-scope-capture-mode` on) |
 
 ## Customization
 
@@ -60,8 +60,8 @@ integrations fire when the relevant package is loaded:
 - **treesit-tap** — `tap-fold-current-thing` folds the buffer-local
   `treesit-tap-current-thing`. Useful when you've set the current
   thing via `treesit-tap-set-local` and want to fold instances of it.
-- **embark-by-type** — `tap-fold-embark-target` folds the captured
-  embark target's bounds. Requires `embark-by-type-capture-mode` to
+- **embark-scope** — `tap-fold-embark-target` folds the captured
+  embark target's bounds. Requires `embark-scope-capture-mode` to
   be on; signals a `user-error` with a clear message otherwise.
 
 ## Why "tap-fold"?

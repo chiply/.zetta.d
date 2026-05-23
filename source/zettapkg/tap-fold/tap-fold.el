@@ -46,9 +46,9 @@
 ;;                exactly which bounds will be folded as you narrow
 ;;   - treesit-tap -- `tap-fold-current-thing' folds
 ;;                    `treesit-tap-current-thing'
-;;   - embark-by-type -- `tap-fold-embark-target' folds the captured
+;;   - embark-scope -- `tap-fold-embark-target' folds the captured
 ;;                       embark target's bounds (requires
-;;                       `embark-by-type-capture-mode' to be on)
+;;                       `embark-scope-capture-mode' to be on)
 
 ;;; Code:
 
@@ -58,8 +58,8 @@
 ;; Forward declarations for optional packages.
 (declare-function consult--read "consult" (table &rest options))
 (defvar treesit-tap-current-thing)
-(defvar embark-by-type-capture-mode)
-(defvar embark-by-type-last-target-bounds)
+(defvar embark-scope-capture-mode)
+(defvar embark-scope-last-target-bounds)
 
 (defgroup tap-fold nil
   "Overlay-based folding of thing-at-point things."
@@ -240,7 +240,7 @@ so you can see exactly what will be folded.  Falls back to plain
     (tap-fold-thing thing)))
 
 
-;;;; Optional integrations: treesit-tap + embark-by-type
+;;;; Optional integrations: treesit-tap + embark-scope
 ;; ----------------------------------------------------------------
 
 ;;;###autoload
@@ -262,22 +262,22 @@ and `treesit-tap-current-thing' to be set in this buffer."
 (defun tap-fold-embark-target ()
   "Fold the captured embark target's bounds.
 
-Soft dependency: requires the `embark-by-type' package and its
-`embark-by-type-capture-mode' to be on (the capture machinery is
-what populates `embark-by-type-last-target-bounds')."
+Soft dependency: requires the `embark-scope' package and its
+`embark-scope-capture-mode' to be on (the capture machinery is
+what populates `embark-scope-last-target-bounds')."
   (interactive)
   (cond
-   ((not (boundp 'embark-by-type-capture-mode))
+   ((not (boundp 'embark-scope-capture-mode))
     (user-error
-     "embark-by-type not loaded -- (require \\='embark-by-type)"))
-   ((not embark-by-type-capture-mode)
+     "embark-scope not loaded -- (require \\='embark-scope)"))
+   ((not embark-scope-capture-mode)
     (user-error
-     "Enable `embark-by-type-capture-mode' first (needed to capture target bounds)"))
-   ((not (and (boundp 'embark-by-type-last-target-bounds)
-              embark-by-type-last-target-bounds))
+     "Enable `embark-scope-capture-mode' first (needed to capture target bounds)"))
+   ((not (and (boundp 'embark-scope-last-target-bounds)
+              embark-scope-last-target-bounds))
     (message "No bounds on active embark target"))
    (t
-    (let ((b embark-by-type-last-target-bounds))
+    (let ((b embark-scope-last-target-bounds))
       (tap-fold-region (car b) (cdr b))))))
 
 

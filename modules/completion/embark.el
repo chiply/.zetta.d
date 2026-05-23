@@ -1024,6 +1024,30 @@ expressions become avy targets."
     (let ((ch (char-after (car b))))
       (and ch (eq (char-syntax ch) ?\())))
 
+  (defconst zetta-embark--url-regex
+    "\\b\\(?:https?\\|ftp\\|file\\)://[^ \t\n\r<>\"'`]+[^ \t\n\r<>\"'`.,;:!?)]"
+    "Plain-URL regex used by `zetta-embark--collect-bounds-by-regex'.")
+
+  (defconst zetta-embark--email-regex
+    "\\b[[:alnum:]._%+-]+@[[:alnum:].-]+\\.[[:alpha:]]\\{2,\\}\\b"
+    "Email regex used by `zetta-embark--collect-bounds-by-regex'.")
+
+  (defun zetta-embark--collect-bounds-by-regex (regex beg end)
+    "Fast collector: list of (BEG . END) cons for each REGEX match in [BEG, END].
+
+A one-pass regex sweep — orders of magnitude faster than
+`zetta-embark--collect-bounds-by-scan' for things whose extent
+can be characterized by a regex (URL, email, UUID, integer).  The
+generic scan walker calls `bounds-of-thing-at-point' at every
+position in the visible region, which on a large window is tens
+of thousands of redundant calls."
+    (let (results)
+      (save-excursion
+        (goto-char beg)
+        (while (re-search-forward regex end t)
+          (push (cons (match-beginning 0) (match-end 0)) results)))
+      (nreverse results)))
+
   (defun zetta-embark--collect-org-links-of-scheme (scheme-regex beg end)
     "Collect bounds of `[[LINK][...]]' / `[[LINK]]' regions in [BEG, END]
 whose LINK matches SCHEME-REGEX.  Returns a list of (BEG . END) cons
@@ -1057,18 +1081,28 @@ their TYPE has no thing-at-point provider."
     (let* ((win-beg (window-start))
            (win-end (window-end nil t)))
       (cond
-       ;; embark-org classifies raw URLs in org buffers as org-url-link
-       ;; (via org-mode's link face on plain URLs), AND bracketed links
-       ;; `[[URL][...]]'.  Cover both: thing-at-point catches the raw
-       ;; URL form, the scheme-regex helper catches the bracketed form.
+       ;; URL types: regex sweep instead of per-position thing-at-point
+       ;; scan -- the latter walks every character in the visible region
+       ;; and is dominated by `bounds-of-thing-at-point' calls on
+       ;; non-URL text.  `'url' alone, `'org-url-link' (which embark-org
+       ;; assigns to org-fontified URLs and to bracketed [[URL]] forms),
+       ;; and `org-email-link' all benefit.
+       ((eq type 'url)
+        (zetta-embark--collect-bounds-by-regex
+         zetta-embark--url-regex win-beg win-end))
        ((eq type 'org-url-link)
         (append
-         (zetta-embark--collect-bounds-by-scan 'url win-beg win-end)
+         (zetta-embark--collect-bounds-by-regex
+          zetta-embark--url-regex win-beg win-end)
          (zetta-embark--collect-org-links-of-scheme
           "\\`\\(?:https?\\|ftp\\)://" win-beg win-end)))
+       ((eq type 'email)
+        (zetta-embark--collect-bounds-by-regex
+         zetta-embark--email-regex win-beg win-end))
        ((eq type 'org-email-link)
         (append
-         (zetta-embark--collect-bounds-by-scan 'email win-beg win-end)
+         (zetta-embark--collect-bounds-by-regex
+          zetta-embark--email-regex win-beg win-end)
          (zetta-embark--collect-org-links-of-scheme
           "\\`mailto:" win-beg win-end)))
        ((eq type 'org-file-link)

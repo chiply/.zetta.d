@@ -165,7 +165,7 @@ negative = backward)."
   ;; Map the embark target type onto the now-defined thing, so
   ;; Bridge E's C-j / C-k pick the right nav.
   (with-eval-after-load 'embark
-    (setf (alist-get 'org-src-block embark-by-type-nav-type-map)
+    (setf (alist-get 'org-src-block embark-scope-nav-type-map)
           'org-src-block))
 
   (defun zett-org-get-title (file)

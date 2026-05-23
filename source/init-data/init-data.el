@@ -42,7 +42,7 @@
    "completion/orderless.el"
    "completion/treesit-tap.el"
    "completion/embark.el"
-   "completion/embark-by-type.el"
+   "completion/embark-scope.el"
    "completion/embark-consult.el"
    "completion/consult.el"
    "completion/vertico.el"

@@ -155,7 +155,7 @@ so the user can see which regions are clickable (CLIM-style: every
 accepting presentation lights up).  For `present-pick-completing-read',
 paints a preview overlay on the currently-focused candidate as the user
 narrows in the minibuffer (matches the consult `:state' pattern of
-`embark-by-type-pick-target-type').
+`embark-scope-pick-target-type').
 
 Overlays are installed inside `unwind-protect' and cleared on exit, so
 no churn persists past the picker."
@@ -762,7 +762,7 @@ overlays on all candidates while the picker is active (CLIM-style)."
 
 When `consult--read' is available, uses its `:state' callback to paint
 a preview overlay on the currently-focused candidate (matching
-`embark-by-type-pick-target-type's UI).  Without consult, falls back to
+`embark-scope-pick-target-type's UI).  Without consult, falls back to
 plain `completing-read' with no preview."
   (let* ((table (present--make-completion-table presentations))
          (preview-overlay nil)

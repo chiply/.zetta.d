@@ -74,10 +74,10 @@
 
 ;;;; Soft-dep guards
 
-(ert-deftest tap-fold/embark-target-errors-without-embark-by-type ()
-  "`tap-fold-embark-target' user-errors if embark-by-type isn't loaded."
-  (let ((embark-by-type-capture-mode nil))
-    (makunbound 'embark-by-type-capture-mode)
+(ert-deftest tap-fold/embark-target-errors-without-embark-scope ()
+  "`tap-fold-embark-target' user-errors if embark-scope isn't loaded."
+  (let ((embark-scope-capture-mode nil))
+    (makunbound 'embark-scope-capture-mode)
     (should-error (tap-fold-embark-target) :type 'user-error)))
 
 (ert-deftest tap-fold/current-thing-errors-without-treesit-tap ()

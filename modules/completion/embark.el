@@ -1024,16 +1024,58 @@ expressions become avy targets."
     (let ((ch (char-after (car b))))
       (and ch (eq (char-syntax ch) ?\())))
 
+  (defun zetta-embark--collect-org-links-of-scheme (scheme-regex beg end)
+    "Collect bounds of `[[LINK][...]]' / `[[LINK]]' regions in [BEG, END]
+whose LINK matches SCHEME-REGEX.  Returns a list of (BEG . END) cons
+covering the full bracketed region.
+
+Used to back specialized collectors for embark-org target types
+(`org-url-link', `org-email-link', `org-file-link') that have no
+corresponding `thing-at-point' provider — so the generic
+`zetta-embark--collect-bounds-by-scan' would otherwise return nothing."
+    (let ((re "\\[\\[\\([^][]+\\)\\]\\(?:\\[[^][]+\\]\\)?\\]")
+          results)
+      (save-excursion
+        (goto-char beg)
+        (while (re-search-forward re end t)
+          (when (string-match-p scheme-regex
+                                (match-string-no-properties 1))
+            (push (cons (match-beginning 0) (match-end 0)) results))))
+      (nreverse results)))
+
   (defun zetta-embark--collect-visible-instances (type thing)
     "Return instances of TYPE (or its mapped THING) intersecting the
 selected window's visible range. Uses a position-scan walker
 that captures nested/overlapping bounds (inner sexps inside outer
 sexps, etc.) -- important for avy where each nesting level
 should be its own pick target. For sexp-shaped types, atoms are
-filtered out via `zetta-embark--compound-bound-p'."
+filtered out via `zetta-embark--compound-bound-p'.
+
+embark-org link types (`org-url-link' etc.) bypass `thing-at-point'
+and use `zetta-embark--collect-org-links-of-scheme' instead, since
+their TYPE has no thing-at-point provider."
     (let* ((win-beg (window-start))
            (win-end (window-end nil t)))
       (cond
+       ;; embark-org classifies raw URLs in org buffers as org-url-link
+       ;; (via org-mode's link face on plain URLs), AND bracketed links
+       ;; `[[URL][...]]'.  Cover both: thing-at-point catches the raw
+       ;; URL form, the scheme-regex helper catches the bracketed form.
+       ((eq type 'org-url-link)
+        (append
+         (zetta-embark--collect-bounds-by-scan 'url win-beg win-end)
+         (zetta-embark--collect-org-links-of-scheme
+          "\\`\\(?:https?\\|ftp\\)://" win-beg win-end)))
+       ((eq type 'org-email-link)
+        (append
+         (zetta-embark--collect-bounds-by-scan 'email win-beg win-end)
+         (zetta-embark--collect-org-links-of-scheme
+          "\\`mailto:" win-beg win-end)))
+       ((eq type 'org-file-link)
+        (append
+         (zetta-embark--collect-bounds-by-scan 'filename win-beg win-end)
+         (zetta-embark--collect-org-links-of-scheme
+          "\\`\\(?:file:\\|attachment:\\|[./]\\)" win-beg win-end)))
        ((memq type zetta-embark-symbol-target-types)
         ;; Symbol targets don't nest -- one bounds per occurrence.
         (cl-remove-if-not

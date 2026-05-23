@@ -1024,16 +1024,100 @@ expressions become avy targets."
     (let ((ch (char-after (car b))))
       (and ch (eq (char-syntax ch) ?\())))
 
+  (defconst zetta-embark--url-regex
+    "\\b\\(?:https?\\|ftp\\|file\\)://[^ \t\n\r<>\"'`]+[^ \t\n\r<>\"'`.,;:!?)]"
+    "Plain-URL regex used by `zetta-embark--collect-bounds-by-regex'.")
+
+  (defconst zetta-embark--email-regex
+    "\\b[[:alnum:]._%+-]+@[[:alnum:].-]+\\.[[:alpha:]]\\{2,\\}\\b"
+    "Email regex used by `zetta-embark--collect-bounds-by-regex'.")
+
+  (defun zetta-embark--collect-bounds-by-regex (regex beg end)
+    "Fast collector: list of (BEG . END) cons for each REGEX match in [BEG, END].
+
+A one-pass regex sweep — orders of magnitude faster than
+`zetta-embark--collect-bounds-by-scan' for things whose extent
+can be characterized by a regex (URL, email, UUID, integer).  The
+generic scan walker calls `bounds-of-thing-at-point' at every
+position in the visible region, which on a large window is tens
+of thousands of redundant calls."
+    (let (results)
+      (save-excursion
+        (goto-char beg)
+        (while (re-search-forward regex end t)
+          (push (cons (match-beginning 0) (match-end 0)) results)))
+      (nreverse results)))
+
+  (defun zetta-embark--collect-org-links-of-scheme (scheme-regex beg end)
+    "Collect bounds of `[[LINK][DESC]]' / `[[LINK]]' regions in [BEG, END]
+whose LINK matches SCHEME-REGEX.  Returns a list of (BEG . END) cons
+covering the *visible* portion of each link -- the DESC region when
+present, else the LINK region.  This matters with
+`org-link-descriptive' (default t): the `[[' / URL portion is hidden
+by a display property, so anchoring at the full match start would
+land avy labels on invisible text.
+
+Used to back specialized collectors for embark-org target types
+(`org-url-link', `org-email-link', `org-file-link') that have no
+corresponding `thing-at-point' provider — so the generic
+`zetta-embark--collect-bounds-by-scan' would otherwise return nothing."
+    (let ((re "\\[\\[\\([^][]+\\)\\]\\(?:\\[\\([^][]+\\)\\]\\)?\\]")
+          results)
+      (save-excursion
+        (goto-char beg)
+        (while (re-search-forward re end t)
+          (when (string-match-p scheme-regex
+                                (match-string-no-properties 1))
+            ;; Prefer description bounds (visible); fall back to
+            ;; the LINK bounds when no DESC is present.
+            (let ((vb (or (match-beginning 2) (match-beginning 1)))
+                  (ve (or (match-end 2)       (match-end 1))))
+              (push (cons vb ve) results)))))
+      (nreverse results)))
+
   (defun zetta-embark--collect-visible-instances (type thing)
     "Return instances of TYPE (or its mapped THING) intersecting the
 selected window's visible range. Uses a position-scan walker
 that captures nested/overlapping bounds (inner sexps inside outer
 sexps, etc.) -- important for avy where each nesting level
 should be its own pick target. For sexp-shaped types, atoms are
-filtered out via `zetta-embark--compound-bound-p'."
+filtered out via `zetta-embark--compound-bound-p'.
+
+embark-org link types (`org-url-link' etc.) bypass `thing-at-point'
+and use `zetta-embark--collect-org-links-of-scheme' instead, since
+their TYPE has no thing-at-point provider."
     (let* ((win-beg (window-start))
            (win-end (window-end nil t)))
       (cond
+       ;; URL types: regex sweep instead of per-position thing-at-point
+       ;; scan -- the latter walks every character in the visible region
+       ;; and is dominated by `bounds-of-thing-at-point' calls on
+       ;; non-URL text.  `'url' alone, `'org-url-link' (which embark-org
+       ;; assigns to org-fontified URLs and to bracketed [[URL]] forms),
+       ;; and `org-email-link' all benefit.
+       ((eq type 'url)
+        (zetta-embark--collect-bounds-by-regex
+         zetta-embark--url-regex win-beg win-end))
+       ((eq type 'org-url-link)
+        (append
+         (zetta-embark--collect-bounds-by-regex
+          zetta-embark--url-regex win-beg win-end)
+         (zetta-embark--collect-org-links-of-scheme
+          "\\`\\(?:https?\\|ftp\\)://" win-beg win-end)))
+       ((eq type 'email)
+        (zetta-embark--collect-bounds-by-regex
+         zetta-embark--email-regex win-beg win-end))
+       ((eq type 'org-email-link)
+        (append
+         (zetta-embark--collect-bounds-by-regex
+          zetta-embark--email-regex win-beg win-end)
+         (zetta-embark--collect-org-links-of-scheme
+          "\\`mailto:" win-beg win-end)))
+       ((eq type 'org-file-link)
+        (append
+         (zetta-embark--collect-bounds-by-scan 'filename win-beg win-end)
+         (zetta-embark--collect-org-links-of-scheme
+          "\\`\\(?:file:\\|attachment:\\|[./]\\)" win-beg win-end)))
        ((memq type zetta-embark-symbol-target-types)
         ;; Symbol targets don't nest -- one bounds per occurrence.
         (cl-remove-if-not

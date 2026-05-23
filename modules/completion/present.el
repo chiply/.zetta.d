@@ -46,7 +46,13 @@
                          ;; finder is already comprehensive (e.g. URL in
                          ;; eww/org/plain), and double-collection just
                          ;; produces dupes to dedupe.
-                         (not (present-type-prop expected :finder)))
+                         (not (present-type-prop expected :finder))
+                         ;; And skip when the type carries no embark/thing
+                         ;; mapping — `zetta-embark--collect-visible-instances'
+                         ;; would otherwise be called with `string' / a root
+                         ;; type and return nothing useful (or error).
+                         (or (present-type-prop expected :embark)
+                             (present-type-prop expected :thing)))
                 (let* ((embark-type (or (present-type-prop expected :embark)
                                         expected))
                        (thing (or (present-type-prop expected :thing)

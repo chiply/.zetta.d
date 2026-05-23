@@ -1049,22 +1049,30 @@ of thousands of redundant calls."
       (nreverse results)))
 
   (defun zetta-embark--collect-org-links-of-scheme (scheme-regex beg end)
-    "Collect bounds of `[[LINK][...]]' / `[[LINK]]' regions in [BEG, END]
+    "Collect bounds of `[[LINK][DESC]]' / `[[LINK]]' regions in [BEG, END]
 whose LINK matches SCHEME-REGEX.  Returns a list of (BEG . END) cons
-covering the full bracketed region.
+covering the *visible* portion of each link -- the DESC region when
+present, else the LINK region.  This matters with
+`org-link-descriptive' (default t): the `[[' / URL portion is hidden
+by a display property, so anchoring at the full match start would
+land avy labels on invisible text.
 
 Used to back specialized collectors for embark-org target types
 (`org-url-link', `org-email-link', `org-file-link') that have no
 corresponding `thing-at-point' provider — so the generic
 `zetta-embark--collect-bounds-by-scan' would otherwise return nothing."
-    (let ((re "\\[\\[\\([^][]+\\)\\]\\(?:\\[[^][]+\\]\\)?\\]")
+    (let ((re "\\[\\[\\([^][]+\\)\\]\\(?:\\[\\([^][]+\\)\\]\\)?\\]")
           results)
       (save-excursion
         (goto-char beg)
         (while (re-search-forward re end t)
           (when (string-match-p scheme-regex
                                 (match-string-no-properties 1))
-            (push (cons (match-beginning 0) (match-end 0)) results))))
+            ;; Prefer description bounds (visible); fall back to
+            ;; the LINK bounds when no DESC is present.
+            (let ((vb (or (match-beginning 2) (match-beginning 1)))
+                  (ve (or (match-end 2)       (match-end 1))))
+              (push (cons vb ve) results)))))
       (nreverse results)))
 
   (defun zetta-embark--collect-visible-instances (type thing)

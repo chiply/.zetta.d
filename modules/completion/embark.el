@@ -173,11 +173,25 @@ TYPE is the embark target type reported; defaults to THING."
   ;; doc-style modes so it doesn't add noise in prog-mode buffers
   ;; where symbol semantics are preferred.
   (defun zetta-embark-target-word-at-point ()
-    "Embark target finder for `word' in prose / text modes."
+    "Embark target finder for `word'.
+
+Active in prose buffers (text/org/eww/help/Info/Man) AND in elisp
+buffers.  Elisp opts in because `-' is symbol-constituent there:
+inside `some-function-here', word=function (the sub-word the cursor
+is on) and symbol=some-function-here.  Both are useful targets and
+`zetta-embark--sort-targets-by-bounds' surfaces the smaller-bounds
+`word' first in the embark cycle, so embark-act lands on the
+sub-word by default.
+
+Still gated away from other prog-mode buffers where word and symbol
+would conflate noisily (the sort would still surface word first, but
+hyphens are not symbol-constituents in most languages so the
+distinction is less useful there)."
     (when (and (not (or (minibufferp)
                         (derived-mode-p 'completion-list-mode
                                         'embark-collect-mode)))
-               (or (derived-mode-p 'text-mode 'org-mode)
+               (or (derived-mode-p 'text-mode 'org-mode
+                                   'emacs-lisp-mode)
                    (memq major-mode
                          '(eww-mode help-mode Info-mode Man-mode))))
       (when-let* ((b (ignore-errors (bounds-of-thing-at-point 'word)))
@@ -806,6 +820,99 @@ after embark-act's prompt exits."
                      #'zetta-embark--pick-target-type-do candidates))))
 
   (define-key embark-general-map (kbd "C-l") #'zetta-embark-pick-target-type)
+
+  (defun zetta-embark--assign-type-keys (types)
+    "Assign unique single-char keys to TYPES (list of symbols).
+
+For each TYPE, try each char of its symbol-name in order; pick the
+first alphanumeric char not already taken.  When all chars of a name
+are taken, fall back to the next free char from a-z.  Returns an
+alist of (CHAR . TYPE) preserving TYPES order."
+    (let ((used (make-hash-table))
+          result)
+      (dolist (type types)
+        (let* ((name (symbol-name type))
+               (key (or (cl-some
+                         (lambda (c)
+                           (and (or (and (>= c ?a) (<= c ?z))
+                                    (and (>= c ?0) (<= c ?9)))
+                                (not (gethash c used))
+                                c))
+                         (string-to-list name))
+                        (cl-some
+                         (lambda (c)
+                           (unless (gethash c used) c))
+                         (number-sequence ?a ?z)))))
+          (when key
+            (puthash key t used)
+            (push (cons key type) result))))
+      (nreverse result)))
+
+  (defun zetta-embark--pick-target-type-key-do (choices key->type targets)
+    "Read a single key and re-enter `embark-act' on the picked target.
+Runs *after* the outer `embark-act' exits so `read-multiple-choice'
+has a clean minibuffer/echo-area context."
+    (let* ((picked (read-multiple-choice "Pick: " choices))
+           (key (car picked))
+           (type (alist-get key key->type))
+           (tgt (cl-find type targets
+                         :key (lambda (tgt) (plist-get tgt :type)))))
+      (when tgt
+        (let* ((sym (plist-get tgt :type))
+               (text (plist-get tgt :target))
+               (b (plist-get tgt :bounds))
+               (beg (car b))
+               (end (cdr b))
+               (embark-target-finders
+                (list (lambda ()
+                        (cons sym (cons text (cons beg end)))))))
+          (call-interactively #'embark-act)))))
+
+  (defun zetta-embark-pick-target-type-key ()
+    "Pick a target type at point via a single-key transient menu.
+
+Like `zetta-embark-pick-target-type' but uses `read-multiple-choice'
+to read a single key instead of opening a `consult--read' UI.  Fast
+when you already know the type you want and don't need a preview.
+
+Keys are inferred dynamically from the available types: for each
+type, the first free char of its symbol-name wins (so `url' is `u',
+`org-url-link' falls through to `o', `line' is `l', `defun' is `d').
+
+Defers the read via `run-at-time' so the menu opens cleanly after
+embark-act's prompt exits."
+    (interactive)
+    (let* ((targets (cl-remove-if-not
+                     (lambda (tgt) (plist-get tgt :bounds))
+                     (embark--targets)))
+           (types (mapcar (lambda (tgt) (plist-get tgt :type)) targets))
+           (key->type (zetta-embark--assign-type-keys types))
+           (choices (mapcar
+                     (lambda (entry)
+                       (let* ((c (car entry))
+                              (type (cdr entry))
+                              (tgt (cl-find type targets
+                                            :key (lambda (tgt)
+                                                   (plist-get tgt :type))))
+                              (text (truncate-string-to-width
+                                     (or (plist-get tgt :target) "")
+                                     30 nil nil "…")))
+                         (list c (format "%s %s" type text))))
+                     key->type)))
+      (cond
+       ((null targets)
+        (message "No bounded targets at point"))
+       ((null choices)
+        (message "No key could be assigned to any target type"))
+       (t
+        (run-at-time 0 nil
+                     #'zetta-embark--pick-target-type-key-do
+                     choices key->type targets)))))
+
+  ;; `,' would collide with the global `launch-key' prefix.  `;' pairs
+  ;; naturally with `C-;' (zetta-embark-avy-pick-instance) which is
+  ;; already in this map.
+  (define-key embark-general-map (kbd ";") #'zetta-embark-pick-target-type-key)
 
   (defun zetta-embark--pick-instance-do (type thing candidates start)
     "Open consult to pick one of CANDIDATES. Called *after* the

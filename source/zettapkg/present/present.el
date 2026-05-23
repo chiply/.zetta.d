@@ -131,6 +131,21 @@ Heuristics are fragile; off by default."
   :type 'boolean
   :group 'present)
 
+(defcustom present-pick-highlight t
+  "Non-nil to highlight candidate regions while the picker is active.
+
+For `present-pick-avy', paints `present-match-face' on every candidate
+so the user can see which regions are clickable (CLIM-style: every
+accepting presentation lights up).  For `present-pick-completing-read',
+paints a preview overlay on the currently-focused candidate as the user
+narrows in the minibuffer (matches the consult `:state' pattern of
+`zetta-embark-pick-target-type').
+
+Overlays are installed inside `unwind-protect' and cleared on exit, so
+no churn persists past the picker."
+  :type 'boolean
+  :group 'present)
+
 (defcustom present-avy-style 'de-bruijn
   "Override for `avy-style' during `present-pick-avy'.
 
@@ -585,6 +600,25 @@ subtypes; otherwise return all detectable presentations."
         (char-to-string (aref alpha i))
       (format "%d" i))))
 
+(defun present--install-highlights (presentations)
+  "Paint `present-match-face' overlays on each presentation's bounds.
+Returns the overlay list for later `present--remove-highlights'."
+  (mapcar
+   (lambda (p)
+     (let ((ov (make-overlay (plist-get p :beg)
+                             (plist-get p :end)
+                             (plist-get p :buffer))))
+       (overlay-put ov 'face 'present-match-face)
+       (overlay-put ov 'priority 100)
+       (overlay-put ov 'present-highlight t)
+       ov))
+   presentations))
+
+(defun present--remove-highlights (overlays)
+  "Delete OVERLAYS installed by `present--install-highlights'."
+  (mapc (lambda (ov) (when (overlayp ov) (delete-overlay ov)))
+        overlays))
+
 (defun present--pick-with-fallback (presentations)
   "Built-in picker: overlay labels + `read-char'.  Returns chosen presentation."
   (let ((overlays nil)
@@ -617,22 +651,29 @@ subtypes; otherwise return all detectable presentations."
 
 Uses the dual-binding pattern: `avy-pre-action' captures the
 selection (so we keep window info); `avy-action' is bound to
-`ignore' so avy does not navigate point into the target window."
+`ignore' so avy does not navigate point into the target window.
+
+When `present-pick-highlight' is non-nil, paints `present-match-face'
+overlays on all candidates while the picker is active (CLIM-style)."
   (let* ((candidates (mapcar
                       (lambda (p)
                         (cons (cons (plist-get p :beg) (plist-get p :end))
                               (plist-get p :window)))
                       presentations))
          (original-window (selected-window))
+         (highlights (when present-pick-highlight
+                       (present--install-highlights presentations)))
          picked)
-    (condition-case nil
-        (let ((avy-pre-action (lambda (res) (setq picked res)))
-              (avy-action #'ignore)
-              (avy-style (or present-avy-style
-                             (and (boundp 'avy-style) avy-style))))
-          (avy-process candidates))
-      (quit nil)
-      (error nil))
+    (unwind-protect
+        (condition-case nil
+            (let ((avy-pre-action (lambda (res) (setq picked res)))
+                  (avy-action #'ignore)
+                  (avy-style (or present-avy-style
+                                 (and (boundp 'avy-style) avy-style))))
+              (avy-process candidates))
+          (quit nil)
+          (error nil))
+      (present--remove-highlights highlights))
     (when (window-live-p original-window)
       (select-window original-window))
     (when picked
@@ -682,11 +723,45 @@ selection (so we keep window info); `avy-action' is bound to
         (complete-with-action action candidates str pred)))))
 
 (defun present--pick-with-completing-read (presentations)
-  "Pick from PRESENTATIONS via `completing-read'.  Returns chosen."
+  "Pick from PRESENTATIONS via `completing-read'.  Returns chosen.
+
+When `consult--read' is available, uses its `:state' callback to paint
+a preview overlay on the currently-focused candidate (matching
+`zetta-embark-pick-target-type's UI).  Without consult, falls back to
+plain `completing-read' with no preview."
   (let* ((table (present--make-completion-table presentations))
-         (choice (completing-read "Insert: " table nil t))
-         (p (get-text-property 0 'present-presentation choice)))
-    p))
+         (preview-overlay nil)
+         (clear-preview
+          (lambda ()
+            (when (overlayp preview-overlay)
+              (delete-overlay preview-overlay)
+              (setq preview-overlay nil))))
+         (state-fn
+          (lambda (action cand)
+            (when (eq action 'preview)
+              (funcall clear-preview)
+              (when (and present-pick-highlight (stringp cand))
+                (when-let* ((p (get-text-property
+                                0 'present-presentation cand)))
+                  (let ((ov (make-overlay (plist-get p :beg)
+                                          (plist-get p :end)
+                                          (plist-get p :buffer))))
+                    (overlay-put ov 'face 'present-match-face)
+                    (overlay-put ov 'priority 100)
+                    (overlay-put ov 'present-highlight t)
+                    (setq preview-overlay ov))))))))
+    (unwind-protect
+        (let ((choice (if (fboundp 'consult--read)
+                          (consult--read
+                           table
+                           :prompt "Insert: "
+                           :require-match t
+                           :sort nil
+                           :category 'present-target
+                           :state state-fn)
+                        (completing-read "Insert: " table nil t))))
+          (get-text-property 0 'present-presentation choice))
+      (funcall clear-preview))))
 
 
 ;;;; Layer 4: Accept API + detection + insertion

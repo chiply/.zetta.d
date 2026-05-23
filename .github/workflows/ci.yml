@@ -1,8 +1,13 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
+  # CI runs on PRs only.  The merge commit on main is byte-for-byte
+  # identical to the PR's last-tested commit, so re-testing on push to
+  # main catches nothing new -- but doubles CI usage per merge, and
+  # quadruples it across a feature-PR -> release-PR cycle.  Branch
+  # protection requires PR review, so direct pushes to main are not a
+  # supported flow.  release-please still fires on push to main via
+  # release.yml; that workflow is unaffected.
   pull_request:
     branches: [main]
 

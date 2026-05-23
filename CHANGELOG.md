@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/chiply/.zetta.d/compare/v0.1.2...v0.1.3) (2026-05-23)
+
+
+### Features
+
+* faster + more visual target-type picking across avy/embark/tap ([#17](https://github.com/chiply/.zetta.d/issues/17)) ([8849075](https://github.com/chiply/.zetta.d/commit/88490753a6027c08c47ea57c7554bee38264c812))
+
 ## [0.1.2](https://github.com/chiply/.zetta.d/compare/v0.1.1...v0.1.2) (2026-05-23)
 
 

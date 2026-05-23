@@ -18,6 +18,11 @@
               ("M-i"   . present-pick-avy)
               ("C-c i" . present-pick-completing-read))
   :config
+  ;; Capture the calling command at minibuffer setup so we can recover
+  ;; an expected type for bare `read-string' prompts via
+  ;; `present-command-type-map' (e.g. browse-url → url).
+  (present-mode 1)
+
   ;; Register tree-sitter presentation types from the embark side.
   (when (boundp 'zetta-embark-treesit-types)
     (dolist (ts-type zetta-embark-treesit-types)
@@ -36,7 +41,12 @@
     (when (fboundp 'zetta-embark--collect-visible-instances)
       (setq present-collect-extra-fn
             (lambda (expected win buf _beg _end)
-              (when expected
+              (when (and expected
+                         ;; Skip when the type has its own :finder — that
+                         ;; finder is already comprehensive (e.g. URL in
+                         ;; eww/org/plain), and double-collection just
+                         ;; produces dupes to dedupe.
+                         (not (present-type-prop expected :finder)))
                 (let* ((embark-type (or (present-type-prop expected :embark)
                                         expected))
                        (thing (or (present-type-prop expected :thing)

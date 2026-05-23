@@ -91,14 +91,81 @@ avoided by going through `treesit-navigate-thing' directly."
 (defun zetta-intern-maybe (thing)
   (if (symbolp thing) thing (intern thing)))
 
+(defvar-local zetta-tap--preview-overlay nil
+  "Overlay used by `zetta-tap-set-local' preview.")
+
+(defun zetta-tap--clear-preview ()
+  "Delete `zetta-tap--preview-overlay' if any."
+  (when (overlayp zetta-tap--preview-overlay)
+    (delete-overlay zetta-tap--preview-overlay))
+  (setq zetta-tap--preview-overlay nil))
+
+(defun zetta-tap--first-bounds-for (thing)
+  "Return bounds for an instance of THING in the current buffer.
+At point if available; otherwise the first instance found by scanning
+forward from `window-start' up to `window-end'.  Used by the
+`zetta-tap-set-local' preview to show what each candidate type looks
+like in the buffer."
+  (or (ignore-errors (bounds-of-thing-at-point thing))
+      (let ((win-beg (window-start))
+            (win-end (window-end nil t))
+            found)
+        (save-excursion
+          (goto-char win-beg)
+          (while (and (< (point) win-end) (not found))
+            (let ((b (ignore-errors (bounds-of-thing-at-point thing))))
+              (if b
+                  (setq found b)
+                (forward-char 1)))))
+        found)))
+
+(defun zetta-tap--show-preview (sym)
+  "Paint the preview overlay for thing SYM, if an instance is locatable."
+  (when-let* ((b (zetta-tap--first-bounds-for sym)))
+    (let ((ov (make-overlay (car b) (cdr b))))
+      (overlay-put ov 'face
+                   (if (facep 'zetta-embark-other-instance-face)
+                       'zetta-embark-other-instance-face
+                     'highlight))
+      (overlay-put ov 'priority 100)
+      (setq zetta-tap--preview-overlay ov))))
+
 (defun zetta-tap-set-local (&optional thing)
   "Set the local current thing-at-point thing for zetta-tap navigation.
 Also mirrors to `focus-current-thing' so `focus-mode' (when active)
-dims around the same thing. THING may be a symbol or a string;
-interactively, prompts from `zetta-tap--things'."
+dims around the same thing.  THING may be a symbol or a string;
+interactively, prompts from `zetta-tap--things'.
+
+Interactive selection uses `consult--read' (when available) with a
+preview that highlights an instance of each candidate thing in the
+buffer as you narrow -- the same UI pattern as
+`zetta-embark-pick-target-type'.  Falls back to plain
+`completing-read' without preview when consult is not loaded."
   (interactive)
-  (let ((sym (zetta-intern-maybe
-              (or thing (completing-read "What thing? " zetta-tap--things)))))
+  (let* ((picked
+          (or thing
+              (cond
+               ((fboundp 'consult--read)
+                (unwind-protect
+                    (consult--read
+                     zetta-tap--things
+                     :prompt "What thing? "
+                     :require-match t
+                     :sort nil
+                     :state
+                     (lambda (action cand)
+                       (pcase action
+                         ('preview
+                          (zetta-tap--clear-preview)
+                          (when (and cand (stringp cand))
+                            (zetta-tap--show-preview
+                             (zetta-intern-maybe cand))))
+                         ((or 'exit 'return)
+                          (zetta-tap--clear-preview)))))
+                  (zetta-tap--clear-preview)))
+               (t
+                (completing-read "What thing? " zetta-tap--things)))))
+         (sym (zetta-intern-maybe picked)))
     (setq-local zetta-tap-current-thing sym)
     (when (boundp 'focus-current-thing)
       (setq-local focus-current-thing sym))))

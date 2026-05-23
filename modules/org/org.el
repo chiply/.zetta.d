@@ -128,7 +128,7 @@ TYPE is a character: ?a alphabetic, ?t timestamp, ?p priority, ?o TODO order."
   (put 'orgtree 'forward-op 'orgtree-forward-orgtree)
 
   ;; Make org element types usable as thing-at-point things (bounds +
-  ;; forward-op) so they work with `zetta-tap-forward-thing',
+  ;; forward-op) so they work with `treesit-tap-forward-thing',
   ;; `bounds-of-thing-at-point' walkers, embark highlight (`*'), and
   ;; embark per-target-type nav (`C-j' / `C-k'). embark-org already
   ;; produces typed targets (e.g. `org-src-block') but supplies only
@@ -235,13 +235,13 @@ negative = backward)."
    "<S-return>" 'org-edit-special
    "C-+" 'org-table-expand
    "C-_" 'org-table-shrink
-   ;; `s-j' / `s-k' navigate by `zetta-tap-current-thing' (whatever
-   ;; M-x zetta-tap-set-local was last invoked with, default `defun').
+   ;; `s-j' / `s-k' navigate by `treesit-tap-current-thing' (whatever
+   ;; M-x treesit-tap-set-local was last invoked with, default `defun').
    ;; `s-J' / `s-K' still walk babel blocks. Old heading navigation
    ;; (`org-next/previous-visible-heading') remains on `org-shiftup' /
    ;; `org-shiftdown' and the standard org outline-cycle bindings.
-   "s-j" 'zetta-tap-next
-   "s-k" 'zetta-tap-prev
+   "s-j" 'treesit-tap-next
+   "s-k" 'treesit-tap-prev
    "s-J" 'org-babel-next-src-block
    "s-K" 'org-babel-previous-src-block)
   (

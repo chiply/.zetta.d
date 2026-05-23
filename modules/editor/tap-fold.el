@@ -163,12 +163,12 @@ would be folded before committing."
     (zetta-fold-thing thing)))
 
 (defun zetta-fold-current-thing ()
-  "Fold `zetta-tap-current-thing' at point, if set."
+  "Fold `treesit-tap-current-thing' at point, if set."
   (interactive)
   (cond
-   ((not (and (boundp 'zetta-tap-current-thing) zetta-tap-current-thing))
-    (user-error "`zetta-tap-current-thing' is not set"))
-   (t (zetta-fold-thing zetta-tap-current-thing))))
+   ((not (and (boundp 'treesit-tap-current-thing) treesit-tap-current-thing))
+    (user-error "`treesit-tap-current-thing' is not set"))
+   (t (zetta-fold-thing treesit-tap-current-thing))))
 
 ;; ----------------------------------------------------------------------
 ;; Embark integration: fold the active embark target's bounds.

@@ -2,9 +2,9 @@
 ;;
 ;; `focus-mode' dims everything except the current "thing" (as
 ;; determined by `focus-current-thing' or, as a fallback,
-;; `focus-mode-to-thing'). The sync between `zetta-tap-current-thing'
-;; and `focus-current-thing' lives in `zetta-tap-set-local'
-;; (`modules/completion/tap.el'), so M-x zetta-tap-set-local RET
+;; `focus-mode-to-thing'). The sync between `treesit-tap-current-thing'
+;; and `focus-current-thing' lives in `treesit-tap-set-local'
+;; (`modules/completion/tap.el'), so M-x treesit-tap-set-local RET
 ;; function RET immediately retargets focus-mode at functions.
 
 ;; Forward declaration so `(setq-local focus-current-thing …)' works
@@ -12,7 +12,7 @@
 ;; `defvar-local' of the same name is then idempotent.
 (defvar-local focus-current-thing nil
   "Thing-at-point symbol focus-mode dims around.
-Forward-declared here; set by `zetta-tap-set-local' so changes to
+Forward-declared here; set by `treesit-tap-set-local' so changes to
 the tap thing propagate to focus-mode automatically.")
 
 (use-package focus

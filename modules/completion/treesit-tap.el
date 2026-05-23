@@ -116,8 +116,8 @@ Used by `modules/tools/lsp.el'."
  "s-x v" 'treesit-tap-pulse
  "s-x V" 'treesit-tap-select
  "s-x t" 'treesit-tap-set-local
- "s-x j" 'zetta-embark-jump-to-type
- "s-x a" 'zetta-embark-avy-jump-to-type
+ "s-x j" 'embark-by-type-jump-to-type
+ "s-x a" 'embark-by-type-avy-jump-to-type
  "s-/" 'treesit-tap-comment)
 
 ;;; treesit-tap.el ends here

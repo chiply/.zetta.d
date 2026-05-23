@@ -834,6 +834,26 @@ alist of (CHAR . TYPE) preserving TYPES order."
             (push (cons key type) result))))
       (nreverse result)))
 
+  (defun zetta-embark--pick-target-type-key-do (choices key->type targets)
+    "Read a single key and re-enter `embark-act' on the picked target.
+Runs *after* the outer `embark-act' exits so `read-multiple-choice'
+has a clean minibuffer/echo-area context."
+    (let* ((picked (read-multiple-choice "Pick: " choices))
+           (key (car picked))
+           (type (alist-get key key->type))
+           (tgt (cl-find type targets
+                         :key (lambda (tgt) (plist-get tgt :type)))))
+      (when tgt
+        (let* ((sym (plist-get tgt :type))
+               (text (plist-get tgt :target))
+               (b (plist-get tgt :bounds))
+               (beg (car b))
+               (end (cdr b))
+               (embark-target-finders
+                (list (lambda ()
+                        (cons sym (cons text (cons beg end)))))))
+          (call-interactively #'embark-act)))))
+
   (defun zetta-embark-pick-target-type-key ()
     "Pick a target type at point via a single-key transient menu.
 
@@ -843,7 +863,10 @@ when you already know the type you want and don't need a preview.
 
 Keys are inferred dynamically from the available types: for each
 type, the first free char of its symbol-name wins (so `url' is `u',
-`org-url-link' falls through to `o', `line' is `l', `defun' is `d')."
+`org-url-link' falls through to `o', `line' is `l', `defun' is `d').
+
+Defers the read via `run-at-time' so the menu opens cleanly after
+embark-act's prompt exits."
     (interactive)
     (let* ((targets (cl-remove-if-not
                      (lambda (tgt) (plist-get tgt :bounds))
@@ -868,23 +891,14 @@ type, the first free char of its symbol-name wins (so `url' is `u',
        ((null choices)
         (message "No key could be assigned to any target type"))
        (t
-        (let* ((picked (read-multiple-choice "Pick: " choices))
-               (key (car picked))
-               (type (alist-get key key->type))
-               (tgt (cl-find type targets
-                             :key (lambda (tgt) (plist-get tgt :type)))))
-          (when tgt
-            (let* ((sym (plist-get tgt :type))
-                   (text (plist-get tgt :target))
-                   (b (plist-get tgt :bounds))
-                   (beg (car b))
-                   (end (cdr b))
-                   (embark-target-finders
-                    (list (lambda ()
-                            (cons sym (cons text (cons beg end)))))))
-              (call-interactively #'embark-act))))))))
+        (run-at-time 0 nil
+                     #'zetta-embark--pick-target-type-key-do
+                     choices key->type targets)))))
 
-  (define-key embark-general-map (kbd ",") #'zetta-embark-pick-target-type-key)
+  ;; `,' would collide with the global `launch-key' prefix.  `;' pairs
+  ;; naturally with `C-;' (zetta-embark-avy-pick-instance) which is
+  ;; already in this map.
+  (define-key embark-general-map (kbd ";") #'zetta-embark-pick-target-type-key)
 
   (defun zetta-embark--pick-instance-do (type thing candidates start)
     "Open consult to pick one of CANDIDATES. Called *after* the

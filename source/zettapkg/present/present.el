@@ -37,6 +37,7 @@
 ;; Forward declarations for optional packages.
 (defvar avy-action)
 (defvar avy-pre-action)
+(defvar avy-style)
 (declare-function avy-process "avy" (candidates &optional overlay-fn cleanup-fn))
 
 (defgroup present nil
@@ -70,7 +71,9 @@
 
 (defcustom present-types
   '((string         :parent nil)
-    (url            :parent string  :embark url     :regex present--re-url)
+    (url            :parent string  :embark url
+                    :finder present--find-urls
+                    :regex present--re-url)
     (file-path      :parent string  :embark file    :thing filename)
     (existing-file  :parent file-path :predicate file-exists-p)
     (buffer-name    :parent string  :embark buffer)
@@ -88,6 +91,9 @@
   "Presentation type lattice.
 Each entry is (TYPE PROP VAL PROP VAL ...).  Recognized props:
 
+  :finder           Fn (WINDOW BUFFER BEG END) -> list of presentation
+                    plists.  Highest-priority source; supersedes the
+                    other source props when present.
   :parent           Parent type symbol, or nil for root.
   :embark           Embark target type for pull-mode finding when
                     `embark' is loaded.
@@ -123,6 +129,58 @@ Each entry is (TYPE PROP VAL PROP VAL ...).  Recognized props:
   "Non-nil to infer presentation type from prompt-text keywords.
 Heuristics are fragile; off by default."
   :type 'boolean
+  :group 'present)
+
+(defcustom present-avy-style 'de-bruijn
+  "Override for `avy-style' during `present-pick-avy'.
+
+`de-bruijn' uses a fixed-length label sequence: each candidate gets a
+stable multi-char label assigned upfront, and each keystroke
+deterministically advances to the next char.  Labels do not reshuffle
+as you narrow — which is the behavior CLIM-style picking wants.
+
+Set to nil to inherit avy's global `avy-style' (which defaults to
+`at-full' and relabels survivors after each keystroke)."
+  :type '(choice (const :tag "De Bruijn (stable, recommended)" de-bruijn)
+                 (const :tag "At" at)
+                 (const :tag "At-full" at-full)
+                 (const :tag "Pre" pre)
+                 (const :tag "Post" post)
+                 (const :tag "Words" words)
+                 (const :tag "Inherit avy default" nil))
+  :group 'present)
+
+(defcustom present-command-type-map
+  '((browse-url            . url)
+    (browse-url-of-buffer  . url)
+    (browse-url-of-file    . file-path)
+    (browse-url-emacs      . url)
+    (eww                   . url)
+    (find-file             . file-path)
+    (find-file-other-window . file-path)
+    (find-file-other-frame . file-path)
+    (find-file-read-only   . file-path)
+    (write-file            . file-path)
+    (insert-file           . file-path)
+    (load-file             . file-path)
+    (load-library          . file-path)
+    (kill-buffer           . buffer-name)
+    (switch-to-buffer      . buffer-name)
+    (switch-to-buffer-other-window . buffer-name)
+    (switch-to-buffer-other-frame  . buffer-name)
+    (describe-function     . function-name)
+    (describe-variable     . variable-name)
+    (describe-command      . command-name)
+    (describe-symbol       . symbol)
+    (find-function         . function-name)
+    (find-variable         . variable-name)
+    (apropos-command       . command-name)
+    (apropos-function      . function-name)
+    (apropos-variable      . variable-name))
+  "Map a calling command (symbol) to the presentation type it accepts.
+Consulted by `present--detect-expected-type' for prompts that do not
+carry a `completion-metadata' category (e.g. bare `read-string')."
+  :type '(alist :key-type symbol :value-type symbol)
   :group 'present)
 
 (defcustom present-prompt-keyword-map
@@ -306,12 +364,145 @@ TYPE's :symbol-predicate."
              (t (forward-char 1)))))))
     (nreverse results)))
 
+;; URL finders: mode-aware sources for the `url' type.
+;; ----------------------------------------------------------------
+
+(defconst present--re-org-link
+  "\\[\\[\\(\\(?:https?\\|ftp\\|file\\|mailto\\):[^]]+\\)\\]\\(?:\\[\\([^]]+\\)\\]\\)?\\]"
+  "Regex matching an org-mode link with a URL-like target.
+Group 1 is the URL; group 2 is the optional description.")
+
+(defconst present--shr-url-rendering-modes
+  '(eww-mode nov-mode devdocs-mode elfeed-show-mode helpful-mode
+             Info-mode notmuch-show-mode)
+  "Major modes that render hyperlinks via shr-style text properties
+rather than as raw URLs in buffer text.  In these buffers the
+plain-text URL regex is skipped (it would find nothing useful).")
+
+(defun present--find-urls-via-shr (window buffer beg end)
+  "Find URL presentations via the `shr-url' text property.
+
+Works in eww, nov.el, devdocs, elfeed, and any package layering on
+`shr'.  The visible text is taken as the presentation's :text (link
+description); the URL stored in the property becomes :value, so
+picking inserts the URL and not the description."
+  (let (results)
+    (save-excursion
+      (goto-char beg)
+      (while (< (point) end)
+        (let* ((next (or (next-single-char-property-change
+                          (point) 'shr-url buffer end)
+                         end))
+               (url (get-char-property (point) 'shr-url)))
+          (when (and url (stringp url))
+            (push (list :type 'url
+                        :value url
+                        :buffer buffer
+                        :window window
+                        :beg (point)
+                        :end next
+                        :text (buffer-substring-no-properties
+                               (point) next))
+                  results))
+          (goto-char next))))
+    (nreverse results)))
+
+(defun present--find-urls-org (window buffer beg end)
+  "Find URL presentations from org-mode link syntax.
+
+Matches `[[URL][DESC]]' and `[[URL]]' where URL has a URI scheme.
+:value is the URL; :text is the description (or the URL).  Bounds are
+deliberately positioned on the *visible* portion of the link so the
+avy label renders on visible text even when `org-link-descriptive' is
+non-nil (which hides the `[[URL][' / `]]' brackets):
+
+  - `[[URL][DESC]]' → bounds cover DESC.
+  - `[[URL]]'       → bounds cover the URL (no description; the URL
+                      itself is what the user sees rendered).
+
+Each returned plist also carries `:link-bounds' — the full bracket
+region — so `present--find-urls' can suppress plain-regex matches that
+fall inside an org link (avoiding double-counting bracketed URLs)."
+  (let (results)
+    (save-excursion
+      (goto-char beg)
+      (while (re-search-forward present--re-org-link end t)
+        (let* ((url       (match-string-no-properties 1))
+               (desc      (match-string-no-properties 2))
+               (desc-beg  (match-beginning 2))
+               (desc-end  (match-end 2))
+               (url-beg   (match-beginning 1))
+               (url-end   (match-end 1))
+               (link-beg  (match-beginning 0))
+               (link-end  (match-end 0))
+               (visible-beg (or desc-beg url-beg))
+               (visible-end (or desc-end url-end)))
+          (push (list :type 'url
+                      :value url
+                      :buffer buffer
+                      :window window
+                      :beg visible-beg
+                      :end visible-end
+                      :text (or desc url)
+                      :link-bounds (cons link-beg link-end))
+                results))))
+    (nreverse results)))
+
+(defun present--find-urls (window buffer beg end)
+  "Mode-aware URL finder; the URL type's :finder.
+
+Layers, concatenated and deduped by exact bounds at the top level:
+
+1. `shr-url' text properties (eww, nov, devdocs, elfeed, helpful, Info).
+2. Org-mode link syntax (only in org buffers): `[[URL][DESC]]'.
+3. Plain-text URL regex.  In shr-rendered buffers, skipped entirely
+   (no raw URLs to find).  In org-mode buffers, plain matches whose
+   bounds fall *inside* an org link's bracket region are dropped —
+   that avoids double-counting `[[https://x][text]]' as both an
+   org-link presentation and a raw `https://x' presentation, while
+   still picking up bare URLs that appear outside any org link."
+  (with-current-buffer buffer
+    (let (results org-results)
+      ;; Layer 1: shr-url text property.
+      (setq results
+            (nconc results
+                   (present--find-urls-via-shr window buffer beg end)))
+      ;; Layer 2: org-link syntax.  Capture results separately so we
+      ;; can extract link-bound zones for layer-3 filtering.
+      (when (derived-mode-p 'org-mode 'org-agenda-mode)
+        (setq org-results (present--find-urls-org window buffer beg end))
+        (setq results (nconc results org-results)))
+      ;; Layer 3: plain-text URL regex.
+      (unless (apply #'derived-mode-p present--shr-url-rendering-modes)
+        (let* ((plain (present--scan-regex
+                       'url '(:regex present--re-url)
+                       window buffer beg end))
+               (zones (delq nil (mapcar
+                                 (lambda (p) (plist-get p :link-bounds))
+                                 org-results)))
+               (filtered (if zones
+                             (cl-remove-if
+                              (lambda (p)
+                                (let ((pb (plist-get p :beg))
+                                      (pe (plist-get p :end)))
+                                  (cl-some
+                                   (lambda (z)
+                                     (and (>= pb (car z))
+                                          (<= pe (cdr z))))
+                                   zones)))
+                              plain)
+                           plain)))
+          (setq results (nconc results filtered))))
+      results)))
+
 (defun present--collect-type-in-window (type window buffer beg end)
   "Collect presentations of TYPE in WINDOW between BEG and END.
 Dispatches on the first matching source prop in priority order:
-:regex, :thing, :symbol-predicate."
+:finder, :regex, :thing, :symbol-predicate."
   (let ((props (alist-get type present-types)))
     (cond
+     ((plist-get props :finder)
+      (funcall (plist-get props :finder) window buffer beg end))
      ((plist-get props :regex)
       (present--scan-regex type props window buffer beg end))
      ((plist-get props :thing)
@@ -436,7 +627,9 @@ selection (so we keep window info); `avy-action' is bound to
          picked)
     (condition-case nil
         (let ((avy-pre-action (lambda (res) (setq picked res)))
-              (avy-action #'ignore))
+              (avy-action #'ignore)
+              (avy-style (or present-avy-style
+                             (and (boundp 'avy-style) avy-style))))
           (avy-process candidates))
       (quit nil)
       (error nil))
@@ -503,6 +696,23 @@ selection (so we keep window info); `avy-action' is bound to
   "Dynamic override consulted by `present--detect-expected-type'.
 Set via `present-with-expected-type' or by `present-read'.")
 
+(defvar-local present--minibuffer-opener nil
+  "Command that triggered the current minibuffer.
+
+Captured at `minibuffer-setup-hook' time by
+`present--capture-minibuffer-opener', enabled by `present-mode'.
+Consulted by `present--type-from-command' to look up an expected
+presentation type for un-instrumented `read-string'-style prompts.")
+
+(defun present--capture-minibuffer-opener ()
+  "Record `this-command' into `present--minibuffer-opener' (local)."
+  (setq-local present--minibuffer-opener this-command))
+
+(defun present--type-from-command ()
+  "Return a presentation type from `present--minibuffer-opener', or nil."
+  (when (minibufferp)
+    (alist-get present--minibuffer-opener present-command-type-map)))
+
 (defun present--type-from-prompt (prompt)
   "Return a presentation type inferred from PROMPT text, or nil."
   (when prompt
@@ -525,9 +735,16 @@ Set via `present-with-expected-type' or by `present-read'.")
       (and cat (alist-get cat present-category-type-map)))))
 
 (defun present--detect-expected-type ()
-  "Cascade: override → category → prompt heuristic → nil."
+  "Cascade: override → category → command-map → prompt heuristic → nil.
+
+Category is the most reliable signal (only present when the caller
+went through `completing-read').  The command map fills the gap for
+bare `read-string' prompts where the calling command implies a type
+(e.g. `browse-url' → `url').  The prompt heuristic is a last-resort
+fallback off by default — enable via `present-heuristic-prompt-detection'."
   (or present--expected-type-override
       (present--type-from-category)
+      (present--type-from-command)
       (and present-heuristic-prompt-detection
            (minibufferp)
            (present--type-from-prompt (minibuffer-prompt)))))
@@ -653,6 +870,25 @@ presentation (display text vs. typed value can differ)."
   (when (bound-and-true-p present-highlight-mode)
     (present--highlight-setup)
     (add-hook 'minibuffer-exit-hook #'present--highlight-clear nil t)))
+
+;;;###autoload
+(define-minor-mode present-mode
+  "Activate per-prompt presentation-type detection.
+
+Installs a `minibuffer-setup-hook' that records `this-command' (the
+opener) into a minibuffer-local variable, so `present--detect-expected-type'
+can look up un-instrumented prompts (e.g. `browse-url') in
+`present-command-type-map'.
+
+Cheap (one `setq-local' per minibuffer); off by default in the package
+so the standalone package has no load-time hooks."
+  :global t
+  :group 'present
+  (if present-mode
+      (add-hook 'minibuffer-setup-hook
+                #'present--capture-minibuffer-opener)
+    (remove-hook 'minibuffer-setup-hook
+                 #'present--capture-minibuffer-opener)))
 
 ;;;###autoload
 (define-minor-mode present-highlight-mode

@@ -807,6 +807,85 @@ after embark-act's prompt exits."
 
   (define-key embark-general-map (kbd "C-l") #'zetta-embark-pick-target-type)
 
+  (defun zetta-embark--assign-type-keys (types)
+    "Assign unique single-char keys to TYPES (list of symbols).
+
+For each TYPE, try each char of its symbol-name in order; pick the
+first alphanumeric char not already taken.  When all chars of a name
+are taken, fall back to the next free char from a-z.  Returns an
+alist of (CHAR . TYPE) preserving TYPES order."
+    (let ((used (make-hash-table))
+          result)
+      (dolist (type types)
+        (let* ((name (symbol-name type))
+               (key (or (cl-some
+                         (lambda (c)
+                           (and (or (and (>= c ?a) (<= c ?z))
+                                    (and (>= c ?0) (<= c ?9)))
+                                (not (gethash c used))
+                                c))
+                         (string-to-list name))
+                        (cl-some
+                         (lambda (c)
+                           (unless (gethash c used) c))
+                         (number-sequence ?a ?z)))))
+          (when key
+            (puthash key t used)
+            (push (cons key type) result))))
+      (nreverse result)))
+
+  (defun zetta-embark-pick-target-type-key ()
+    "Pick a target type at point via a single-key transient menu.
+
+Like `zetta-embark-pick-target-type' but uses `read-multiple-choice'
+to read a single key instead of opening a `consult--read' UI.  Fast
+when you already know the type you want and don't need a preview.
+
+Keys are inferred dynamically from the available types: for each
+type, the first free char of its symbol-name wins (so `url' is `u',
+`org-url-link' falls through to `o', `line' is `l', `defun' is `d')."
+    (interactive)
+    (let* ((targets (cl-remove-if-not
+                     (lambda (tgt) (plist-get tgt :bounds))
+                     (embark--targets)))
+           (types (mapcar (lambda (tgt) (plist-get tgt :type)) targets))
+           (key->type (zetta-embark--assign-type-keys types))
+           (choices (mapcar
+                     (lambda (entry)
+                       (let* ((c (car entry))
+                              (type (cdr entry))
+                              (tgt (cl-find type targets
+                                            :key (lambda (tgt)
+                                                   (plist-get tgt :type))))
+                              (text (truncate-string-to-width
+                                     (or (plist-get tgt :target) "")
+                                     30 nil nil "…")))
+                         (list c (format "%s %s" type text))))
+                     key->type)))
+      (cond
+       ((null targets)
+        (message "No bounded targets at point"))
+       ((null choices)
+        (message "No key could be assigned to any target type"))
+       (t
+        (let* ((picked (read-multiple-choice "Pick: " choices))
+               (key (car picked))
+               (type (alist-get key key->type))
+               (tgt (cl-find type targets
+                             :key (lambda (tgt) (plist-get tgt :type)))))
+          (when tgt
+            (let* ((sym (plist-get tgt :type))
+                   (text (plist-get tgt :target))
+                   (b (plist-get tgt :bounds))
+                   (beg (car b))
+                   (end (cdr b))
+                   (embark-target-finders
+                    (list (lambda ()
+                            (cons sym (cons text (cons beg end)))))))
+              (call-interactively #'embark-act))))))))
+
+  (define-key embark-general-map (kbd ",") #'zetta-embark-pick-target-type-key)
+
   (defun zetta-embark--pick-instance-do (type thing candidates start)
     "Open consult to pick one of CANDIDATES. Called *after* the
 outer embark-act exits, so we have a clean minibuffer context.

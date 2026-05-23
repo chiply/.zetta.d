@@ -526,13 +526,17 @@ Dispatches on the first matching source prop in priority order:
       (present--scan-symbols type props window buffer beg end)))))
 
 (defun present--dedupe (presentations)
-  "Dedupe PRESENTATIONS by (buffer beg end)."
+  "Dedupe PRESENTATIONS by (buffer beg end type).
+Including :type in the key preserves distinct typed presentations
+that happen to share bounds (e.g. `integer' and `number' regexes
+matching the same digit run)."
   (let ((seen (make-hash-table :test 'equal))
         result)
     (dolist (p presentations)
       (let ((key (list (plist-get p :buffer)
                        (plist-get p :beg)
-                       (plist-get p :end))))
+                       (plist-get p :end)
+                       (plist-get p :type))))
         (unless (gethash key seen)
           (puthash key t seen)
           (push p result))))
@@ -594,11 +598,14 @@ subtypes; otherwise return all detectable presentations."
   "Letters used for fallback picker labels (home-row-first).")
 
 (defun present--label-for-index (i)
-  "Return a label string for index I (single char up to length of alphabet)."
+  "Return a single-char label string for index I, or nil if out of range.
+The fallback picker reads one char via `read-char', so multi-char
+labels would be unreachable; callers (`present--pick-with-fallback')
+truncate the candidate list to the alphabet length when avy is
+absent."
   (let ((alpha present--fallback-label-alphabet))
-    (if (< i (length alpha))
-        (char-to-string (aref alpha i))
-      (format "%d" i))))
+    (and (< i (length alpha))
+         (char-to-string (aref alpha i)))))
 
 (defun present--install-highlights (presentations)
   "Paint `present-match-face' overlays on each presentation's bounds.
@@ -620,25 +627,37 @@ Returns the overlay list for later `present--remove-highlights'."
         overlays))
 
 (defun present--pick-with-fallback (presentations)
-  "Built-in picker: overlay labels + `read-char'.  Returns chosen presentation."
-  (let ((overlays nil)
-        (label->p nil)
-        (i 0)
-        chosen)
+  "Built-in picker: overlay single-char labels + `read-char'.  Returns chosen.
+
+Truncates PRESENTATIONS to `present--fallback-label-alphabet's length
+(one char per candidate; `read-char' reads one keystroke).  Without
+this cap, indices past the alphabet would get multi-char labels that
+the user could never type.  When the list is truncated, a warning is
+emitted so the user knows to install `avy' for full coverage."
+  (let* ((alpha-len (length present--fallback-label-alphabet))
+         (truncated-p (> (length presentations) alpha-len))
+         (subset (if truncated-p (cl-subseq presentations 0 alpha-len)
+                   presentations))
+         (overlays nil)
+         (label->p nil)
+         (i 0)
+         chosen)
+    (when truncated-p
+      (message "present: %d candidates; fallback picker showing first %d (install `avy' for all)"
+               (length presentations) alpha-len))
     (unwind-protect
         (progn
-          (dolist (p presentations)
-            (with-current-buffer (plist-get p :buffer)
-              (let* ((label (present--label-for-index i))
-                     (ov (make-overlay (plist-get p :beg)
-                                       (plist-get p :end)
-                                       (plist-get p :buffer))))
-                (overlay-put ov 'before-string
-                             (propertize label 'face 'present-label-face))
-                (overlay-put ov 'face 'present-match-face)
-                (push (cons label p) label->p)
-                (push ov overlays)
-                (cl-incf i))))
+          (dolist (p subset)
+            (let* ((label (present--label-for-index i))
+                   (ov (make-overlay (plist-get p :beg)
+                                     (plist-get p :end)
+                                     (plist-get p :buffer))))
+              (overlay-put ov 'before-string
+                           (propertize label 'face 'present-label-face))
+              (overlay-put ov 'face 'present-match-face)
+              (push (cons label p) label->p)
+              (push ov overlays)
+              (cl-incf i)))
           (let* ((input (char-to-string
                          (read-char (format "Pick (%d): " i))))
                  (match (assoc input label->p)))
@@ -831,12 +850,16 @@ fallback off by default — enable via `present-heuristic-prompt-detection'."
      ,@body))
 
 (defun present--insert-value (p)
-  "Insert presentation P's value at point in the current buffer."
+  "Insert presentation P's value at point in the current buffer.
+Normalizes non-string values via `format' so non-string `:value's
+(e.g. integers pushed via `present-insert-typed') don't error in
+`insert', which only accepts strings and characters."
   (let* ((type (plist-get p :type))
          (inserter (present-type-prop type :inserter))
-         (s (if inserter
-                (funcall inserter p)
-              (or (plist-get p :value) (plist-get p :text)))))
+         (raw (if inserter
+                  (funcall inserter p)
+                (or (plist-get p :value) (plist-get p :text))))
+         (s (if (stringp raw) raw (format "%s" raw))))
     (insert s)))
 
 ;;;###autoload

@@ -180,8 +180,8 @@ would be folded before committing."
 `:always' pre-action hook in `embark.el', so works for any
 bounded target."
     (interactive)
-    (if-let* ((b (and (boundp 'zetta-embark--current-target-bounds)
-                      zetta-embark--current-target-bounds)))
+    (if-let* ((b (and (boundp 'embark-by-type-last-target-bounds)
+                      embark-by-type-last-target-bounds)))
         (zetta-fold-region (car b) (cdr b))
       (message "No bounds on active target")))
 
@@ -189,7 +189,7 @@ bounded target."
 
 ;; ----------------------------------------------------------------------
 ;; Top-level bindings on the launch-map (s-x prefix).  Mirrors the
-;; pattern used by zetta-embark-jump-to-type / -avy-jump-to-type.
+;; pattern used by embark-by-type-jump-to-type / -avy-jump-to-type.
 ;; ----------------------------------------------------------------------
 
 (with-eval-after-load 'general

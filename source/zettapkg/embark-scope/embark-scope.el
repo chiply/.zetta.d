@@ -383,6 +383,24 @@ during cycling.  Required by every `embark-scope-nav-*' and
 
 ;;;; Nav commands
 ;; ----------------------------------------------------------------
+;; The nav family is meant to run as repeatable embark actions:
+;; `embark-scope-setup' registers them in `embark-repeat-actions'
+;; so embark does NOT exit after one.  Instead it re-finds targets
+;; at the new point (the highlight follows, the menu stays open)
+;; and restarts the target cycle at the same type -- so you keep
+;; walking instances of the thing and can take further actions on
+;; whichever one you land on.
+
+(defcustom embark-scope-repeat-actions
+  '(embark-scope-nav-next
+    embark-scope-nav-prev
+    embark-scope-nav-beg
+    embark-scope-nav-end)
+  "Nav commands `embark-scope-setup' adds to `embark-repeat-actions'.
+Running one as an embark action keeps embark active on the
+navigated-to target."
+  :type '(repeat function)
+  :group 'embark-scope)
 
 (defun embark-scope--nav (n)
   "Move N instances forward (negative = back) of current target's type."
@@ -1130,72 +1148,138 @@ Returns the picked (BEG . END) or nil on cancel/abort.  Binds
         (push ov overlays)))
     overlays))
 
-(defun embark-scope--jump-type-applicable-p (sym)
-  "Non-nil if SYM is a thing the buffer has visible instances of."
-  (let* ((win-beg (window-start))
-         (win-end (window-end nil t)))
-    (save-excursion
-      (goto-char win-beg)
-      (cl-loop while (< (point) win-end)
-               for bnds = (ignore-errors (bounds-of-thing-at-point sym))
-               when (and bnds (>= (car bnds) win-beg)
-                         (<= (cdr bnds) win-end))
-               return t
-               do (forward-char 1)))))
+(defun embark-scope--jump-type-at-point-p (sym)
+  "Non-nil if SYM has `bounds-of-thing-at-point' bounds AT point.
+
+One O(1) probe.  Used by `embark-scope-jump-to-type' to SORT
+candidates (at-point-applicable first) rather than as a hard
+filter -- filtering pre-open required walking the visible region
+for every candidate symbol and was prohibitively slow."
+  (ignore-errors (bounds-of-thing-at-point sym)))
+
+(defun embark-scope--jump-to-type-candidate-syms ()
+  "Build the candidate symbol list for `embark-scope-jump-to-type'.
+Pulls from `embark-scope-nav-type-map' (both embark types AND their
+mapped things), `embark-scope-symbol-target-types', and (when
+loaded) `treesit-tap-things'."
+  (delq nil
+        (delete-dups
+         (append
+          (mapcar #'car embark-scope-nav-type-map)
+          (mapcar #'cdr embark-scope-nav-type-map)
+          embark-scope-symbol-target-types
+          (and (boundp 'treesit-tap-things)
+               (mapcar (lambda (s) (and s (intern-soft s)))
+                       treesit-tap-things))))))
+
+(defun embark-scope--jump-collect-for-sym (sym)
+  "Return all instances of SYM in the current buffer.
+Uses the symbol-classifier for `embark-scope-symbol-target-types';
+falls back to the buffer-wide thing scan for everything else."
+  (if (memq sym embark-scope-symbol-target-types)
+      (embark-scope--collect-symbols-of-embark-type sym)
+    (let ((thing (alist-get sym embark-scope-nav-type-map sym)))
+      (embark-scope--collect-instances-of-thing thing))))
 
 ;;;###autoload
 (defun embark-scope-jump-to-type ()
-  "Top-level: prompt for a type, then consult-pick a visible instance.
-No embark-act needed.  Useful when you know what kind of thing you
-want without already being at an embark target."
+  "Prompt for a type via `consult--read'; the preview highlights every
+instance of the focused type and moves point to the closest.  On
+commit, point jumps to the closest instance and `embark-act' fires
+filtered to that type.  On cancel (C-g), point and overlays restore.
+
+Useful when you know what kind of thing you want without already
+being at an embark target."
   (interactive)
-  (let* ((all-things (delete-dups
-                      (append
-                       (mapcar #'cdr embark-scope-nav-type-map)
-                       embark-scope-symbol-target-types)))
-         (applicable (cl-remove-if-not
-                      #'embark-scope--jump-type-applicable-p
-                      all-things))
-         (choice (and applicable
-                      (intern (completing-read
-                               "Jump to type: "
-                               (mapcar #'symbol-name applicable)
-                               nil t)))))
-    (when choice
-      (let* ((instances (embark-scope-collect-visible-instances
-                         choice choice))
-             (candidates
-              (mapcar (lambda (b)
-                        (cons (truncate-string-to-width
-                               (buffer-substring-no-properties (car b) (cdr b))
-                               60 nil nil "…")
-                              b))
-                      instances))
-             (start (point)))
-        (if (null candidates)
-            (message "No visible instances of `%s'" choice)
-          (embark-scope--pick-instance-do choice choice
-                                            candidates start))))))
+  (let* ((start (point))
+         (cancelled t)
+         (all-syms (embark-scope--jump-to-type-candidate-syms))
+         ;; Partition: at-point-applicable first, then the rest.  No
+         ;; hard filter -- shows everything but biases the default.
+         (at-point (cl-remove-if-not
+                    #'embark-scope--jump-type-at-point-p all-syms))
+         (others   (cl-remove-if
+                    #'embark-scope--jump-type-at-point-p all-syms))
+         (candidates (mapcar #'symbol-name (append at-point others)))
+         (preview-state
+          (lambda (action cand)
+            (pcase action
+              ('preview
+               (embark-scope--clear-instance-overlays)
+               (when (and cand (stringp cand) (> (length cand) 0))
+                 (let* ((sym (intern cand))
+                        (instances (ignore-errors
+                                     (embark-scope--jump-collect-for-sym sym))))
+                   (when instances
+                     (setq embark-scope--instance-overlays
+                           (embark-scope--jump-to-type-paint instances))
+                     (when-let* ((closest (embark-scope--jump-to-type-closest
+                                           instances start)))
+                       (goto-char (car closest)))))))
+              ('exit
+               (embark-scope--clear-instance-overlays))))))
+    (cond
+     ((null candidates)
+      (message "No applicable types in buffer"))
+     (t
+      (unwind-protect
+          (let* ((choice (consult--read
+                          candidates
+                          :prompt "Jump to type: "
+                          :require-match t
+                          :state preview-state))
+                 (sym (intern choice))
+                 (thing (alist-get sym embark-scope-nav-type-map sym))
+                 (instances (embark-scope--jump-collect-for-sym sym)))
+            (cond
+             ((null instances)
+              (message "No instances of `%s' in buffer" thing))
+             (t
+              ;; Sort instances by proximity to point so RET on the
+              ;; instance picker picks the closest one by default.
+              (setq instances
+                    (sort instances
+                          (lambda (a b)
+                            (< (abs (- (car a) start))
+                               (abs (- (car b) start))))))
+              ;; Clear the type-picker preview overlays; the
+              ;; instance picker installs its own single-focus
+              ;; preview via `embark-scope--pick-instance-do'.
+              (embark-scope--clear-instance-overlays)
+              (let* ((candidates
+                      (mapcar
+                       (lambda (b)
+                         (cons (truncate-string-to-width
+                                (buffer-substring-no-properties
+                                 (car b) (cdr b))
+                                60 nil nil "…")
+                               b))
+                       instances)))
+                (setq cancelled nil)
+                (embark-scope--pick-instance-do sym thing
+                                                candidates start)))))
+        (when cancelled (goto-char start)))))))
 
 ;;;###autoload
 (defun embark-scope-avy-jump-to-type ()
-  "Top-level: prompt for a type, then avy-pick a visible instance."
+  "Prompt for a type, then avy-pick a visible instance.
+Same candidate set as `embark-scope-jump-to-type' but the post-pick
+UI is avy labels over visible instances rather than a consult menu."
   (interactive)
-  (let* ((all-things (delete-dups
-                      (append
-                       (mapcar #'cdr embark-scope-nav-type-map)
-                       embark-scope-symbol-target-types)))
-         (applicable (cl-remove-if-not
-                      #'embark-scope--jump-type-applicable-p
-                      all-things))
-         (choice (and applicable
+  (let* ((all-syms (embark-scope--jump-to-type-candidate-syms))
+         (at-point (cl-remove-if-not
+                    #'embark-scope--jump-type-at-point-p all-syms))
+         (others   (cl-remove-if
+                    #'embark-scope--jump-type-at-point-p all-syms))
+         (candidates (mapcar #'symbol-name (append at-point others)))
+         (choice (and candidates
                       (intern (completing-read
                                "Jump to type: "
-                               (mapcar #'symbol-name applicable)
-                               nil t))))
+                               candidates nil t))))
          (start (point)))
     (when choice
-      (embark-scope--avy-pick-instance-do choice choice start))))
+      (let ((thing (alist-get choice embark-scope-nav-type-map choice)))
+        (embark-scope--avy-pick-instance-do choice thing start)))))
 
 
 ;;;; Default bindings + setup
@@ -1229,14 +1313,19 @@ want without already being at an embark target."
 ;;;###autoload
 (defun embark-scope-setup ()
   "One-call setup: enable capture-mode + sort-by-bounds-mode +
-back-cycle-mode, install default bindings, and register
-`embark-scope-defun-map' for `defun' targets."
+back-cycle-mode, install default bindings, register
+`embark-scope-defun-map' for `defun' targets, and mark the nav
+family repeatable so embark stays active while navigating."
   (interactive)
   (embark-scope-capture-mode 1)
   (embark-scope-sort-by-bounds-mode 1)
   (embark-scope-back-cycle-mode 1)
   (embark-scope-install-default-bindings)
   (setf (alist-get 'defun embark-keymap-alist) 'embark-scope-defun-map)
+  ;; Keep embark active after a nav action: it re-finds the target at
+  ;; the new point (highlight follows) and resumes the same type cycle.
+  (dolist (cmd embark-scope-repeat-actions)
+    (add-to-list 'embark-repeat-actions cmd))
   ;; Refresh-highlights advice piggybacks on capture-mode.
   (advice-add 'embark--rotate :filter-return
               #'embark-scope--refresh-highlights-on-rotate))

@@ -102,9 +102,75 @@ Three keymaps wire useful actions:
 
 | Target type | Map | Actions |
 |---|---|---|
-| `ts-function_definition` &c. | `embark-defun-map` (from embark) | `e` eval, `n` narrow, `m` mark |
+| `ts-function_definition` &c. | `treesit-tap-embark-defun-map` | `e` eval, `n` narrow, `m` mark |
 | `ts-string` / `ts-string_literal` | `treesit-tap-embark-string-map` | `u` browse-url, `f` find-file, `w` kill-new |
 | `ts-call` / `ts-call_expression` | `treesit-tap-embark-call-map` | `d` find-def, `r` find-refs, `w` kill-new |
+
+## Commands
+
+### Bridge (Bridge A: treesit → thing-at-point)
+
+| Command | What |
+|---|---|
+| `treesit-tap-mode` (global minor mode) | Install/uninstall the `bounds-of-thing-at-point' provider + per-language extras hook |
+| `treesit-tap-setup` | One-call enable: `(treesit-tap-mode 1)' |
+| `treesit-tap-bounds THING` | Public bounds-provider fn.  Returns `(BEG . END)' for THING via tree-sitter or nil |
+| `treesit-tap-extend-language LANG EXTRAS` | Buffer-local appender for per-language thing → node-type entries |
+
+### Current-thing nav
+
+| Command | What |
+|---|---|
+| `treesit-tap-set-local [THING]` | Set buffer-local `treesit-tap-current-thing'.  Interactive prompt with consult preview; programmatic with explicit THING |
+| `treesit-tap-next` / `treesit-tap-prev` | Step forward / back by one instance of the current thing |
+| `treesit-tap-forward-thing N` | Move N (negative for back); dispatches treesit-aware when possible |
+| `treesit-tap-beg` / `treesit-tap-end` | Jump to the bounds of the current thing at point |
+| `treesit-tap-pulse` | Briefly highlight the current-thing bounds at point |
+| `treesit-tap-select` | Activate the region over the current-thing bounds |
+| `treesit-tap-comment` | Toggle comment on the current-thing region |
+| `treesit-tap-locate-thing [THING]` | Return (BEG . END) of THING (or current thing) at point |
+| `treesit-tap-get-thing [THING]` | Return the buffer text of THING (or current thing, or active region) |
+| `treesit-tap-at-bobp` / `treesit-tap-at-eobp` | Non-nil if the current thing begins at point-min / ends at point-max.  Useful for paging-style commands |
+
+### Embark (only after `(require 'treesit-tap-embark)`)
+
+| Command / variable | What |
+|---|---|
+| `treesit-tap-embark-target-node-at-point` | Embark target finder; surfaces every tree-sitter ancestor whose node-type is in `treesit-tap-embark-types' as a `ts-<TYPE>' target |
+| `treesit-tap-embark-types` (defcustom) | Node-type names exposed as embark targets |
+| `treesit-tap-embark-defun-map` | Embark keymap for `ts-function_definition' / `-method_definition' / `-class_definition' (eval / narrow / mark) |
+| `treesit-tap-embark-string-map` | For `ts-string' / `ts-string_literal' (browse-url / find-file / kill-new) |
+| `treesit-tap-embark-call-map` | For `ts-call' / `ts-call_expression' (xref-find-definitions / -references / kill-new) |
+
+## Extending with a new thing
+
+Adding a thing that's normalized across languages (e.g. `return-stmt`):
+
+```elisp
+;; 1. Pick a symbol that does NOT collide with a built-in function name.
+;;    `treesit-node-match-p' (a C function) tries to call a thing
+;;    symbol as a predicate BEFORE consulting `treesit-thing-settings',
+;;    so symbols like `string' or `list' crash with a `characterp'
+;;    error.  Check with `(functionp 'YOUR-SYMBOL)' -- must be nil.
+;;    Hence the shipped `str-lit' instead of `string'.
+(push 'return-stmt treesit-tap-bridged-things)
+
+;; 2. Add per-language node-type regexes.  Anchor with `\\=`' and `\\='.
+(push '(python
+        (return-stmt "\\`return_statement\\'"))
+      treesit-tap-language-extras)
+(push '(typescript
+        (return-stmt "\\`return_statement\\'"))
+      treesit-tap-language-extras)
+
+;; 3. (Optional) surface in embark too.
+(push "return_statement" treesit-tap-embark-types)
+```
+
+After step 3, `(bounds-of-thing-at-point 'return-stmt)` works in
+python-ts-mode + typescript-ts-mode, `treesit-tap-set-local
+'return-stmt` makes `treesit-tap-next` walk return statements, and
+embark-act surfaces `ts-return_statement` as a target.
 
 ## Customization
 

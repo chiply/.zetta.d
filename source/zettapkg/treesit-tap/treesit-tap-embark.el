@@ -37,9 +37,8 @@
 ;; `treesit-tap-embark-call-map' -- that wire useful actions
 ;; (browse-url / find-file / xref-find-definitions / kill-new) onto
 ;; common AST types (`ts-string' / `ts-string_literal' / `ts-call' /
-;; `ts-call_expression').  Aliases function/method/class AST types to
-;; `embark-defun-map' (eval / narrow / mark) so the standard defun
-;; actions work on AST scopes.
+;; `ts-call_expression').  A `treesit-tap-embark-defun-map' covers
+;; function/method/class AST types with eval / narrow / mark.
 ;;
 ;; Usage:
 ;;
@@ -111,6 +110,17 @@ structural scopes the way `er/expand-region' does."
 ;;;; Per-type keymaps + dispatch
 ;; ----------------------------------------------------------------
 
+;; Defun-shaped AST types (function / method / class): treat as
+;; standard defun targets -- eval / narrow / mark.  Embark itself
+;; ships no defun-specific keymap, so we define one here rather than
+;; aliasing to an external `embark-defun-map' that may not exist.
+(defvar-keymap treesit-tap-embark-defun-map
+  :doc "Embark actions for ts-function / ts-class / ts-method targets."
+  :parent embark-general-map
+  "e" #'eval-defun
+  "n" #'narrow-to-defun
+  "m" #'mark-defun)
+
 ;; String literal: treat the node text as URL / path / kill-ring entry.
 (defvar-keymap treesit-tap-embark-string-map
   :doc "Embark actions for `ts-string' / `ts-string_literal' targets."
@@ -137,12 +147,10 @@ structural scopes the way `er/expand-region' does."
 (add-to-list 'embark-target-finders
              #'treesit-tap-embark-target-node-at-point)
 
-;; Alias function/method/class AST types to `embark-defun-map' so the
-;; existing eval/narrow/mark actions apply.
 (dolist (sym '(ts-function_definition ts-function_declaration
                ts-method_definition ts-method_declaration
                ts-class_definition ts-class_declaration))
-  (setf (alist-get sym embark-keymap-alist) 'embark-defun-map))
+  (setf (alist-get sym embark-keymap-alist) 'treesit-tap-embark-defun-map))
 
 (dolist (sym '(ts-string ts-string_literal))
   (setf (alist-get sym embark-keymap-alist) 'treesit-tap-embark-string-map))

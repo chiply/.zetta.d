@@ -1,7 +1,9 @@
 ;;; bootstrap-repeatable-lite.el --- Configure repeatable-lite -*- lexical-binding: t; -*-
 
 (use-package repeatable-lite
-  :ensure (:host github :repo "chiply/repeatable-lite" :wait t)
+  ;; Local development checkout (was :host github :repo "chiply/repeatable-lite").
+  ;; To pick up new commits: M-x elpaca-pull repeatable-lite (fetch + rebuild).
+  :ensure (:repo "/Users/charlieholland/source_code/repeatable-lite" :wait t)
   :demand t)
 
 ;; Fallback when package is unavailable (e.g., CI with stale/missing cache):

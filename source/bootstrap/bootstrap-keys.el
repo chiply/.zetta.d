@@ -211,6 +211,16 @@ Finally, show the buffer."
   ;; launcher?  maybe but keep this around for now
   (setq meow-keypad-leader-dispatch "C-c")
 
+  ;; Disable expand-hint overlays after motions like e/b. The digit keys
+  ;; still work as expand-by-N, but no number overlays are drawn.
+  (setq meow-expand-hint-counts
+        '((word . 0)
+          (line . 0)
+          (block . 0)
+          (find . 0)
+          (till . 0)
+          (symbol . 0)))
+
   )
 
 (defun zetta-state-evil ()

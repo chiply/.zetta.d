@@ -146,5 +146,118 @@ is nil."
       (should (equal "quick" (buffer-substring (car b) (cdr b)))))))
 
 
+;;;; locate-thing has no -1 off-by-one (regression guard)
+
+(ert-deftest treesit-tap/locate-thing-bounds-exact ()
+  "REGRESSION: pre-rename `zetta-locate-thing' returned (BEG . END-1),
+which made `treesit-tap-get-thing' on a word return one char short
+of the actual word.  The fix uses proper Emacs (BEG . END)
+convention.  This test locks that fix in."
+  (with-temp-buffer
+    (insert "alpha beta gamma")
+    (goto-char 8)  ; in the middle of "beta"
+    (treesit-tap-set-local 'word)
+    (let ((b (treesit-tap-locate-thing)))
+      (should (equal "beta"
+                     (buffer-substring (car b) (cdr b)))))))
+
+
+;;;; treesit-tap-forward-thing fallback path
+
+(ert-deftest treesit-tap/forward-thing-fallback-moves-by-thing ()
+  "In a non-treesit buffer, forward-thing fallback path moves point
+to the next thing instance."
+  (with-temp-buffer
+    (insert "first sentence.  second sentence.  third sentence.")
+    (goto-char (point-min))
+    (treesit-tap-set-local 'sentence)
+    (treesit-tap-forward-thing 1)
+    ;; Point should have moved forward into the second sentence.
+    (should (> (point) 1))))
+
+(ert-deftest treesit-tap/forward-thing-no-error-empty-buffer ()
+  "Calling `forward-thing' in a buffer with no instances of the
+current thing does not signal -- silent no-op is acceptable."
+  (with-temp-buffer
+    (insert "   ")
+    (goto-char 2)
+    (treesit-tap-set-local 'defun)
+    (should-not (condition-case err
+                    (progn (treesit-tap-forward-thing 1) nil)
+                  (error err)))))
+
+
+;;;; next / prev navigate properly
+
+(ert-deftest treesit-tap/next-then-prev-returns-to-start ()
+  "next + prev round-trip lands back at the starting sentence."
+  (with-temp-buffer
+    (insert "first sentence.  second sentence.  third sentence.")
+    (goto-char 4)
+    (treesit-tap-set-local 'sentence)
+    (let ((start (point)))
+      (treesit-tap-next)
+      (let ((after-next (point)))
+        (treesit-tap-prev)
+        ;; Some forward-thing implementations drift by whitespace --
+        ;; the round-trip should at least put us back in the first
+        ;; sentence (point < after-next).
+        (should (< (point) after-next))))))
+
+
+;;;; get-thing with active region returns region text
+
+(ert-deftest treesit-tap/get-thing-with-region-returns-region ()
+  "When the region is active, `get-thing' returns the region's text,
+ignoring `treesit-tap-current-thing'."
+  (with-temp-buffer
+    (insert "alpha beta gamma delta")
+    (treesit-tap-set-local 'word)
+    (push-mark 3 t t)
+    (goto-char 11)
+    (activate-mark)
+    (should (equal "pha beta" (treesit-tap-get-thing)))))
+
+
+;;;; at-bobp / at-eobp
+;; `at-bobp' / `at-eobp' check whether the CURRENT THING begins at
+;; point-min / ends at point-max -- not whether point itself is at the
+;; buffer edge.  Multi-sentence buffer needed to distinguish.
+
+(ert-deftest treesit-tap/at-bobp ()
+  (with-temp-buffer
+    (insert "first sentence.  second sentence.  third sentence.")
+    (treesit-tap-set-local 'sentence)
+    (goto-char 5)   ; in first sentence -> begins at 1 -> t
+    (should (treesit-tap-at-bobp))
+    (goto-char 22)  ; in second sentence -> doesn't begin at 1 -> nil
+    (should-not (treesit-tap-at-bobp))))
+
+(ert-deftest treesit-tap/at-eobp ()
+  (with-temp-buffer
+    (insert "first sentence.  second sentence.  third sentence.")
+    (treesit-tap-set-local 'sentence)
+    (goto-char 5)   ; first sentence -> doesn't end at point-max
+    (should-not (treesit-tap-at-eobp))
+    (goto-char 45)  ; third (last) sentence -> ends at point-max
+    (should (treesit-tap-at-eobp))))
+
+
+;;;; --first-bounds-for scan fallback (window scan when at-point fails)
+
+(ert-deftest treesit-tap/first-bounds-for-scan-fallback ()
+  "When the thing isn't at point, `--first-bounds-for' scans forward
+from `window-start' to find the first instance."
+  (with-temp-buffer
+    (insert "no urls here for a while.  then https://x.io appears.")
+    (goto-char 3)  ; on " urls"; not on the URL
+    (cl-letf (((symbol-function 'window-start) (lambda (&rest _) (point-min)))
+              ((symbol-function 'window-end) (lambda (&rest _) (point-max))))
+      (let ((b (treesit-tap--first-bounds-for 'url)))
+        (should b)
+        (should (equal "https://x.io"
+                       (buffer-substring (car b) (cdr b))))))))
+
+
 (provide 'treesit-tap-test)
 ;;; treesit-tap-test.el ends here

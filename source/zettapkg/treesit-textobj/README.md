@@ -49,6 +49,24 @@ After MELPA release (future):
   :hook ((python-ts-mode typescript-ts-mode ...) . treesit-textobj-mode))
 ```
 
+## Commands
+
+The primary interface is evil text-object keys (`vif` / `daf` / `2vac`
+/ &c.), not standalone commands.  The keys come from the `i` and `a`
+prefixes in `evil-inner-text-objects-map` / `-outer-text-objects-map`
+combined with the per-thing key from `treesit-textobj-keys`.
+
+| Command | What |
+|---|---|
+| `treesit-textobj-mode` (buffer-local minor mode) | Self-gates the generated text-object commands.  Turn on per `:hook` (see install snippet) |
+| `treesit-textobj-install-bindings` | Re-install bindings into `evil-{inner,outer}-text-objects-map`.  Run after customizing `treesit-textobj-keys` or `treesit-textobj-things` |
+| `treesit-textobj-find-ancestor THING [COUNT]` | Public helper.  Returns the COUNT-th tree-sitter ancestor at point matching THING, or nil.  Useful for building your own commands (e.g. movement) without duplicating the lookup logic |
+
+Generated text-object commands (named `treesit-textobj-inner-<thing>`
+and `treesit-textobj-outer-<thing>`) are wired into evil's maps under
+the keys in `treesit-textobj-keys`.  You normally invoke them via
+operator/visual state (`vif`, `dac`, etc.), not by name.
+
 ## Customization
 
 - `treesit-textobj-things` — alist of `(THING . ((MAJOR-MODE . NODE-TYPES) …))`.

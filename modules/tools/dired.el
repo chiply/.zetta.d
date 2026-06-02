@@ -249,8 +249,8 @@ Version 2019-11-04"
 
   (general-define-key
    :keymaps 'menu-run-map
-   "d" (repeatable-wrap zetta-soda-drink-dired)
-   "D" (repeatable-wrap zetta-soda-cap-dired))
+   "d" (** zetta-soda-drink-dired)
+   "D" (** zetta-soda-cap-dired))
 
   :general
   (:keymaps '(dired-mode-map)

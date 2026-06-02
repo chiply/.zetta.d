@@ -29,16 +29,16 @@
    :keymaps 'menu-project-map
    ;; TODO see if this works
    "w" 'menu-window-map
-   "a" (repeatable-wrap consult-ripgrep)
-   "p" (repeatable-wrap consult-project-switch-project)
-   "d" (repeatable-wrap project-find-dir)
-   "f" (repeatable-wrap consult-project-extra-find)
-   "r" (repeatable-wrap project-remember-project)
+   "a" (** consult-ripgrep)
+   "p" (** consult-project-switch-project)
+   "d" (** project-find-dir)
+   "f" (** consult-project-extra-find)
+   "r" (** project-remember-project)
    )
 
   (general-define-key
    :keymaps 'menu-window-map
-   "p" (repeatable-wrap menu-project))
+   "p" (** menu-project))
   )
 
 ;; TODO seems like this is under active development, just enabling,

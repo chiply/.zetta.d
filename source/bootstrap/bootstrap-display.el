@@ -182,11 +182,11 @@ being displayed, otherwise returns nil"
 (when (fboundp 'repeatable-wrap)
   (general-define-key
    :keymaps 'menu-run-map
-   "m" (repeatable-wrap zetta-soda-drink-messages)
-   "c"  (repeatable-wrap calendar)
-   "i"  (repeatable-wrap info)
-   "M" (repeatable-wrap zetta-soda-cap-messages)
-   "I" (repeatable-wrap zetta-soda-cap-info)))
+   "m" (** zetta-soda-drink-messages)
+   "c"  (** calendar)
+   "i"  (** info)
+   "M" (** zetta-soda-cap-messages)
+   "I" (** zetta-soda-cap-info)))
 
 (provide 'bootstrap-display)
 ;;; bootstrap-display.el ends here

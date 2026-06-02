@@ -21,7 +21,7 @@
 
   (general-define-key
    :keymaps 'menu-run-map
-   "H" (repeatable-wrap zetta-soda-cap-help))
+   "H" (** zetta-soda-cap-help))
 
   :general
   (

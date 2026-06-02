@@ -15,5 +15,11 @@
     "Fallback: return function symbol when repeatable is not installed."
     `#',fn))
 
+;; Short in-config alias: `**' is how keybinding modules wrap a command to
+;; make it repeatable.  Defined here (after `repeatable-wrap' is guaranteed to
+;; exist, real or fallback) so it is available before any module loads.
+(defalias '** 'repeatable-wrap
+  "Alias for `repeatable-wrap': wrap a command to make it repeatable.")
+
 (provide 'bootstrap-repeatable)
 ;;; bootstrap-repeatable.el ends here

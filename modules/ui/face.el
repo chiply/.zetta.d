@@ -19,12 +19,12 @@
 
 (general-define-key
  :keymaps 'menu-theme-map
- "T" (repeatable-wrap zetta-theme-brushup))
+ "T" (** zetta-theme-brushup))
 
 (general-define-key
  :keymaps 'menu-window-map
  "t" 'menu-theme-map
- "T" (repeatable-wrap transparency))
+ "T" (** transparency))
 
 (add-hook 'help-mode-hook (lambda () (text-scale-set -2)))
 (add-hook 'Info-mode-hook (lambda () (text-scale-set -2)))

@@ -49,80 +49,9 @@
     ;; code.
     ))
 
-;; Table-driven extension of `treesit-thing-settings' across languages.
-;; Bridge A in `tap.el' surfaces a fixed taxonomy (function, class,
-;; loop, conditional, decorator, call, parameter, argument_list,
-;; str-lit, statement, ...) via thing-at-point / forward-thing /
-;; embark. Each language's grammar names its AST nodes differently, so
-;; we keep a per-language extras table and a single hook that applies
-;; them whenever a treesit parser is created in a buffer.
-;;
-;; Caveats baked into the regexes:
-;; - All anchored with \\` ... \\' so e.g. `string' matches only the
-;;   `string' node, not `string_content' / `string_start' / `string_end'.
-;; - Thing symbols must not collide with built-in function names --
-;;   `treesit-node-match-p' (C) tries `funcall' before consulting
-;;   settings. Hence `str-lit', not `string'.
+;; The per-language `treesit-thing-settings' extras table + the hook
+;; that applies it now live in the `treesit-tap' package (under
+;; `source/zettapkg/treesit-tap/').  Loaded via
+;; `modules/completion/treesit-tap.el' before this file.
 
-(defvar zetta-treesit-language-extras
-  (let ((typescript-extras
-         '((function "\\`\\(function_declaration\\|function_expression\\|arrow_function\\|method_definition\\|generator_function_declaration\\)\\'")
-           (class "\\`class_declaration\\'")
-           (method "\\`method_definition\\'")
-           (interface "\\`interface_declaration\\'")
-           (loop "\\`\\(for_statement\\|while_statement\\|for_in_statement\\|do_statement\\)\\'")
-           (conditional "\\`\\(if_statement\\|ternary_expression\\)\\'")
-           (decorator "\\`decorator\\'")
-           (call "\\`\\(call_expression\\|new_expression\\)\\'")
-           (parameter "\\`\\(required_parameter\\|optional_parameter\\)\\'")
-           (argument_list "\\`arguments\\'")
-           (str-lit "\\`\\(string\\|template_string\\)\\'")
-           (statement "_\\(statement\\|declaration\\)\\'"))))
-    `((python
-       (function "\\`function_definition\\'")
-       (class "\\`class_definition\\'")
-       (method "\\`function_definition\\'")
-       (loop "\\`\\(for_statement\\|while_statement\\)\\'")
-       (conditional "\\`if_statement\\'")
-       (decorator "\\`\\(decorator\\|decorated_definition\\)\\'")
-       (call "\\`call\\'")
-       (parameter "\\`\\(parameters\\|default_parameter\\|lambda_parameters\\|list_splat_pattern\\|dictionary_splat_pattern\\)\\'")
-       (argument_list "\\`argument_list\\'")
-       (str-lit "\\`string\\'")
-       (statement "_\\(statement\\|definition\\)\\'"))
-      (typescript ,@typescript-extras)
-      (tsx ,@typescript-extras)))
-  "Alist of (LANG . EXTRAS) augmenting `treesit-thing-settings'.
-Each EXTRAS is a list of (THING PREDICATE) entries in the same shape
-`treesit-thing-settings' accepts. Applied by
-`zetta-treesit-apply-language-extras' on `after-change-major-mode-hook'
-for every language with a parser in the current buffer.
-Add languages by pushing entries; the wiring is automatic.")
-
-(defun zetta-treesit-extend-language-things (lang extras)
-  "Append EXTRAS to LANG's section of `treesit-thing-settings'.
-Buffer-local. Idempotent: existing thing definitions are preserved."
-  (let ((existing (cdr (assq lang treesit-thing-settings))))
-    (dolist (extra extras)
-      (unless (assq (car extra) existing)
-        (setq existing (append existing (list extra)))))
-    (setq-local treesit-thing-settings
-                (cons (cons lang existing)
-                      (assq-delete-all
-                       lang
-                       (copy-sequence treesit-thing-settings))))))
-
-(defun zetta-treesit-apply-language-extras ()
-  "Apply `zetta-treesit-language-extras' to every parser language
-in this buffer. Safe in non-treesit buffers (no-op)."
-  (when (and (boundp 'treesit-thing-settings)
-             (fboundp 'treesit-parser-list)
-             (treesit-parser-list))
-    (dolist (parser (treesit-parser-list))
-      (when-let* ((lang (treesit-parser-language parser))
-                  (extras (alist-get lang zetta-treesit-language-extras)))
-        (zetta-treesit-extend-language-things lang extras)))))
-
-(add-hook 'after-change-major-mode-hook
-          #'zetta-treesit-apply-language-extras)
 ;;; treesit.el ends here

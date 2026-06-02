@@ -86,9 +86,9 @@
         ""))))
 
 (defun zetta-tab-bar-current-thing ()
-  "Tab-bar item: shows the buffer-local `zetta-tap-current-thing'."
-  (when (and (boundp 'zetta-tap-current-thing) zetta-tap-current-thing)
-    (format "[%s] " zetta-tap-current-thing)))
+  "Tab-bar item: shows the buffer-local `treesit-tap-current-thing'."
+  (when (and (boundp 'treesit-tap-current-thing) treesit-tap-current-thing)
+    (format "[%s] " treesit-tap-current-thing)))
 
 (setq tab-bar-format
       '(

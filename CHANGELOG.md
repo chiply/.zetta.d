@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.6](https://github.com/chiply/.zetta.d/compare/v0.1.5...v0.1.6) (2026-06-02)
+
+
+### Features
+
+* **isr:** semantic + generative ISR demos and fixes ([685e989](https://github.com/chiply/.zetta.d/commit/685e98956b89139fd40ab97104487ca9af1bcb5f))
+* **isr:** semantic + generative ISR demos and supporting fixes ([f14a3d8](https://github.com/chiply/.zetta.d/commit/f14a3d87027c77d9496465409788b8d84b9787ee))
+
 ## [0.1.5](https://github.com/chiply/.zetta.d/compare/v0.1.4...v0.1.5) (2026-06-02)
 
 

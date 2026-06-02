@@ -235,6 +235,10 @@ negative = backward)."
    "<S-return>" 'org-edit-special
    "C-+" 'org-table-expand
    "C-_" 'org-table-shrink
+   ;; org-mode binds C-, to `org-cycle-agenda-files' by default,
+   ;; which shadows the global launch-map prefix from
+   ;; `bootstrap-keys.el'.  Restore launch-map here.
+   "C-," 'launch-map
    ;; `s-j' / `s-k' navigate by `treesit-tap-current-thing' (whatever
    ;; M-x treesit-tap-set-local was last invoked with, default `defun').
    ;; `s-J' / `s-K' still walk babel blocks. Old heading navigation

@@ -109,17 +109,31 @@ Adding more:
                                           (and (>= n 0) (< n 65536)))))
 ```
 
-## Picker keys
+## Commands
 
-Bound in `minibuffer-local-map` by the install snippet above:
+| Command | What it does |
+|---|---|
+| `present-pick-avy` | Overlay avy labels on every visible presentation matching the inferred type; pick to insert |
+| `present-pick-completing-read` | Same candidate set, picked via consult/completing-read with marginalia annotations |
+| `present-read TYPE PROMPT` | Read a typed value from the minibuffer with picker keys available (typed `read-string`) |
+| `present-accept` | Alias of `present-read` (CLIM verb) |
+| `present-with-expected-type TYPE …BODY…` | Macro: wrap a `read-string` call so the picker knows what type the prompt wants |
+| `present-insert-typed TEXT TYPE [VALUE]` | Insert TEXT into current buffer as a push-mode typed presentation |
+| `present-mode` (global minor mode) | Captures `this-command` at minibuffer setup so `present-command-type-map` can resolve un-instrumented prompts |
+| `present-highlight-mode` (global minor mode) | Opt-in: paints `present-match-face` on visible matching presentations as soon as a typed prompt opens. Off by default |
+| `present-deftype NAME …PROPS…` | Macro: register/update a type in `present-types` |
+| `present-subtype-p SUB SUPER` | Lattice walk; returns non-nil if SUB is SUPER or descends from it |
+| `present-collect-visible [EXPECTED-TYPE]` | Public collector facade; returns plists for every visible presentation matching EXPECTED (and subtypes) |
+
+The picker commands `present-pick-avy` / `present-pick-completing-read`
+also work outside a minibuffer — they insert the chosen value at point.
+
+Recommended bindings (the install snippet above):
 
 | Key     | Command                          |
 |---------|----------------------------------|
 | `M-i`   | `present-pick-avy`               |
 | `C-c i` | `present-pick-completing-read`   |
-
-Both pickers work outside a minibuffer too — they will simply insert
-the chosen value at point in the current buffer.
 
 ## Type-aware reads (CLIM-style)
 
@@ -169,10 +183,11 @@ They are cheap (single text-property lookup) and exact.
 | `present-prompt-keyword-map`          | Heuristic keywords → presentation type.              |
 | `present-collect-extra-fn`            | Hook for plugging in an extra collector.            |
 
-For zetta-d's `embark` bridges, the wrapper in
-`modules/completion/present.el` wires `present-collect-extra-fn` to
-`zetta-embark--collect-visible-instances`, so AST-typed picks (tree-sitter
-node types) work out of the box.
+Set `present-collect-extra-fn` to any function taking
+`(EXPECTED-TYPE WINDOW BUFFER BEG END)` and returning a list of
+presentation plists.  Useful for plugging in richer external
+collectors (e.g. an embark-based visible-instance scanner) without
+modifying the package.
 
 ## Status
 

@@ -44,8 +44,14 @@ targets."
          nil nil t (lambda (binding)
                      (not (string-suffix-p "-argument" (cdr binding))))))))
 
+  ;; Minimal echo-area indicator instead of the which-key popup --
+  ;; eliminates the popup redraw that causes visible jitter when
+  ;; cycling embark-act through multiple targets.  `embark-bindings'
+  ;; (`C-h B') is the discoverability path.  `embark-which-key-indicator'
+  ;; is defined above and can be swapped in here when you want the
+  ;; popup explicitly.
   (setq embark-indicators
-        '(embark-which-key-indicator
+        '(embark-minimal-indicator
           embark-highlight-indicator
           embark-isearch-highlight-indicator))
 

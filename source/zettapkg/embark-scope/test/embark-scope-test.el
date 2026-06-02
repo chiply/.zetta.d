@@ -166,5 +166,225 @@
     (should-not (embark-scope-target-word-at-point))))
 
 
+;;;; Capture-on-rotate updates last-target vars
+
+(ert-deftest embark-scope/capture-on-rotate-updates-vars ()
+  "`--capture-on-rotate' updates `-last-target-type'/`-bounds' from
+the head of the rotated list and returns it unchanged."
+  (let ((embark-scope-last-target-type nil)
+        (embark-scope-last-target-bounds nil)
+        (rotated '((:type url :bounds (10 . 25) :target "https://x"))))
+    (let ((ret (embark-scope--capture-on-rotate rotated)))
+      (should (eq 'url embark-scope-last-target-type))
+      (should (equal '(10 . 25) embark-scope-last-target-bounds))
+      ;; Returns list unchanged (filter-return contract).
+      (should (eq rotated ret)))))
+
+(ert-deftest embark-scope/capture-on-rotate-empty-noop ()
+  "`--capture-on-rotate' on an empty list leaves vars alone."
+  (let ((embark-scope-last-target-type 'pre)
+        (embark-scope-last-target-bounds '(1 . 2)))
+    (embark-scope--capture-on-rotate nil)
+    (should (eq 'pre embark-scope-last-target-type))
+    (should (equal '(1 . 2) embark-scope-last-target-bounds))))
+
+
+;;;; require-capture-mode guards every nav/act command
+
+(ert-deftest embark-scope/all-guarded-commands-error-without-capture ()
+  "Every `nav-*'/`act-*' command must `user-error' when capture-mode
+is off.  Catches drift from the guard pattern."
+  (embark-scope-capture-mode -1)
+  (dolist (cmd '(embark-scope-nav-next
+                 embark-scope-nav-prev
+                 embark-scope-nav-beg
+                 embark-scope-nav-end
+                 embark-scope-act-focus
+                 embark-scope-act-set-current-thing
+                 embark-scope-act-highlight-instances
+                 embark-scope-act-select-as-region
+                 embark-scope-act-narrow
+                 embark-scope-pick-instance
+                 embark-scope-avy-pick-instance))
+    (should-error (funcall cmd) :type 'user-error)))
+
+
+;;;; collect-visible-instances dispatcher
+;; In batch the temp buffer isn't displayed in a window, so
+;; `(window-start)' / `(window-end)' return the selected window's
+;; bounds instead of the temp buffer's.  Stub them to (point-min) /
+;; (point-max) so the dispatcher scans the temp buffer.
+
+(defmacro embark-scope-test--with-stubbed-window-bounds (&rest body)
+  `(cl-letf (((symbol-function 'window-start) (lambda (&rest _) (point-min)))
+             ((symbol-function 'window-end) (lambda (&rest _) (point-max))))
+     ,@body))
+
+(ert-deftest embark-scope/collect-visible-dispatch-url ()
+  "Dispatcher for `'url' uses the regex sweep."
+  (with-temp-buffer
+    (insert "alpha https://x.io beta")
+    (embark-scope-test--with-stubbed-window-bounds
+     (let ((results (embark-scope-collect-visible-instances 'url 'url)))
+       (should (= 1 (length results)))
+       (should (equal "https://x.io"
+                      (buffer-substring (car (car results))
+                                        (cdr (car results)))))))))
+
+(ert-deftest embark-scope/collect-visible-dispatch-email ()
+  (with-temp-buffer
+    (insert "from alice@example.com to bob@example.org")
+    (embark-scope-test--with-stubbed-window-bounds
+     (let ((results (embark-scope-collect-visible-instances 'email 'email)))
+       (should (= 2 (length results)))))))
+
+(ert-deftest embark-scope/collect-visible-dispatch-org-url-link ()
+  "`'org-url-link' dispatcher runs BOTH the URL regex AND the
+bracketed-org-link scan -- so a buffer with one raw URL + one
+`[[URL][DESC]]' yields THREE hits: regex catches the raw URL +
+the URL inside the brackets; bracket scan adds the whole link."
+  (with-temp-buffer
+    (insert "raw https://a.com and [[https://b.com][Docs]] end")
+    (embark-scope-test--with-stubbed-window-bounds
+     (let ((results (embark-scope-collect-visible-instances
+                     'org-url-link 'org-url-link)))
+       (should (= 3 (length results)))))))
+
+
+;;;; --collect-bounds-by-scan captures nested bounds
+
+(ert-deftest embark-scope/collect-bounds-by-scan-nested-sexps ()
+  "Per-position scan captures EVERY nesting level (inner sexps inside
+outer ones), unlike the forward-thing walker which skips nested."
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (insert "(outer (middle (inner)))")
+    (let ((results (embark-scope-collect-bounds-by-scan
+                    'sexp (point-min) (point-max))))
+      ;; outer + middle + inner -- 3 distinct nesting levels.
+      (should (>= (length results) 3)))))
+
+
+;;;; --collect-symbols-of-embark-type
+
+(ert-deftest embark-scope/collect-symbols-by-embark-type ()
+  "Walks symbols, keeps those classified as the requested embark type."
+  (with-temp-buffer
+    (insert "car cdr nilxyz cl-loop")
+    (let ((results (embark-scope--collect-symbols-of-embark-type 'function)))
+      ;; Each result is (BEG . END); extract the symbol names.
+      (let ((names (mapcar (lambda (b)
+                             (buffer-substring (car b) (cdr b)))
+                           results)))
+        (should (member "car" names))
+        (should (member "cdr" names))
+        (should (member "cl-loop" names))
+        (should-not (member "nilxyz" names))))))
+
+
+;;;; --jump-type-at-point-p is O(1)
+
+(ert-deftest embark-scope/jump-type-at-point-p-cheap ()
+  "`--jump-type-at-point-p' is one O(1) probe -- no walking."
+  (with-temp-buffer
+    (insert "hello world")
+    (goto-char 3)
+    (should (embark-scope--jump-type-at-point-p 'word))
+    (should (embark-scope--jump-type-at-point-p 'sentence))
+    ;; A thing not at point: returns nil (or whatever
+    ;; bounds-of-thing-at-point returns for it -- which for a
+    ;; URL in a non-URL buffer is nil).
+    (should-not (embark-scope--jump-type-at-point-p 'url))))
+
+
+;;;; back-cycle-mode toggle (symmetry with capture-mode test)
+
+(ert-deftest embark-scope/back-cycle-mode-toggle ()
+  "Toggling installs/removes binding + two advices."
+  (unwind-protect
+      (progn
+        (embark-scope-back-cycle-mode 1)
+        (should (eq (lookup-key embark-general-map (kbd "C-,"))
+                    #'embark-scope-back-cycle))
+        (should (advice-member-p
+                 #'embark-scope--keymap-prompter-back-cycle
+                 'embark-keymap-prompter))
+        (should (advice-member-p
+                 #'embark-scope--reset-prefix-arg-after-rotate
+                 'embark--rotate))
+        (embark-scope-back-cycle-mode -1)
+        (should-not (eq (lookup-key embark-general-map (kbd "C-,"))
+                        #'embark-scope-back-cycle))
+        (should-not (advice-member-p
+                     #'embark-scope--keymap-prompter-back-cycle
+                     'embark-keymap-prompter))
+        (should-not (advice-member-p
+                     #'embark-scope--reset-prefix-arg-after-rotate
+                     'embark--rotate)))
+    (embark-scope-back-cycle-mode -1)))
+
+
+;;;; install-default-bindings
+
+(ert-deftest embark-scope/install-default-bindings ()
+  "Every binding in `embark-scope-default-bindings' lands in
+`embark-general-map'."
+  (unwind-protect
+      (let ((orig (copy-keymap embark-general-map)))
+        (embark-scope-install-default-bindings)
+        (dolist (b embark-scope-default-bindings)
+          (should (eq (cdr b)
+                      (lookup-key embark-general-map (kbd (car b)))))))
+    ;; Cleanup: remove bindings we installed.
+    (dolist (b embark-scope-default-bindings)
+      (define-key embark-general-map (kbd (car b)) nil))))
+
+
+;;;; deftap-finder macro: gating + clamping
+
+(ert-deftest embark-scope/deftap-finder-gates-on-minibuffer ()
+  "Generated finder returns nil in completion-list-mode."
+  (eval '(embark-scope-deftap-finder paragraph))
+  (with-temp-buffer
+    (insert "hello world.\n\nanother paragraph.")
+    (goto-char 5)
+    (should (consp (embark-scope-target-paragraph-at-point)))
+    (setq major-mode 'completion-list-mode)
+    (should-not (embark-scope-target-paragraph-at-point))))
+
+
+;;;; --assign-type-keys fallback path
+
+(ert-deftest embark-scope/assign-type-keys-falls-back-when-name-exhausted ()
+  "When every char of a type's name collides, falls through to a-z scan."
+  (let ((result (embark-scope--assign-type-keys
+                 ;; 'aa' has only 'a'; if 'a' is taken by first type,
+                 ;; second's only chars exhaust -> a-z fallback fires.
+                 '(a aa))))
+    (should (eq 'a (alist-get ?a result)))
+    ;; Second symbol gets some other char (b -- next free in a-z).
+    (should (eq 'aa (alist-get ?b result)))))
+
+
+;;;; Nav commands are repeatable embark actions
+
+(ert-deftest embark-scope/repeat-actions-lists-nav-family ()
+  "`embark-scope-repeat-actions' covers the whole nav family."
+  (dolist (cmd '(embark-scope-nav-next embark-scope-nav-prev
+                 embark-scope-nav-beg embark-scope-nav-end))
+    (should (memq cmd embark-scope-repeat-actions))))
+
+(ert-deftest embark-scope/nav-registered-as-embark-repeatable ()
+  "Registering `embark-scope-repeat-actions' makes embark treat the
+nav commands as repeatable (so it stays active after the action)."
+  (let ((embark-repeat-actions (copy-sequence embark-repeat-actions)))
+    (dolist (cmd embark-scope-repeat-actions)
+      (add-to-list 'embark-repeat-actions cmd))
+    (should (embark--action-repeatable-p 'embark-scope-nav-next))
+    (should (embark--action-repeatable-p 'embark-scope-nav-prev))
+    (should (embark--action-repeatable-p 'embark-scope-nav-beg))
+    (should (embark--action-repeatable-p 'embark-scope-nav-end))))
+
+
 (provide 'embark-scope-test)
 ;;; embark-scope-test.el ends here

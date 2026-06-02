@@ -98,5 +98,69 @@
     (should-not (tap-fold--overlay-at 8))))
 
 
+;;;; --ensure-spec idempotency, three branches
+
+(ert-deftest tap-fold/ensure-spec-from-bare-t ()
+  "When `buffer-invisibility-spec' starts as bare `t' (the default),
+`--ensure-spec' switches it to the alist form containing our entry."
+  (with-temp-buffer
+    (setq buffer-invisibility-spec t)
+    (tap-fold--ensure-spec)
+    (should (consp buffer-invisibility-spec))
+    (should (member (cons tap-fold--spec t) buffer-invisibility-spec))))
+
+(ert-deftest tap-fold/ensure-spec-from-alist-adds-entry ()
+  "When `buffer-invisibility-spec' is already an alist without our
+entry, `--ensure-spec' appends the entry."
+  (with-temp-buffer
+    (setq buffer-invisibility-spec '((other . t)))
+    (tap-fold--ensure-spec)
+    (should (member (cons tap-fold--spec t) buffer-invisibility-spec))
+    (should (member '(other . t) buffer-invisibility-spec))))
+
+(ert-deftest tap-fold/ensure-spec-already-present-noop ()
+  "When our entry is already in the spec, second call is a no-op
+(no duplicate)."
+  (with-temp-buffer
+    (setq buffer-invisibility-spec '((tap-fold . t)))
+    (tap-fold--ensure-spec)
+    (should (= 1 (cl-count (cons tap-fold--spec t)
+                           buffer-invisibility-spec
+                           :test #'equal)))))
+
+
+;;;; --overlay-at POS-1 (point-on-ellipsis)
+
+(ert-deftest tap-fold/overlay-at-finds-fold-from-after-end ()
+  "Point AT (not just inside) the position immediately after a fold
+should still find the fold -- supports point-on-ellipsis."
+  (with-temp-buffer
+    (insert "alpha beta gamma")
+    (tap-fold-region 7 11)  ; folds "beta"
+    ;; Point at 11 (just past the fold end) should still find it.
+    (should (tap-fold--overlay-at 11))))
+
+
+;;;; embark-target positive path (success when capture-mode + bounds)
+
+(ert-deftest tap-fold/embark-target-positive-path ()
+  "When capture-mode is on AND last-target-bounds is set,
+`tap-fold-embark-target' folds the right region.
+
+Sets the vars with `setq' rather than `let' so `(boundp ...)' inside
+the function sees them -- `let' on a forward-declared (defvar without
+value) special var doesn't make boundp return t reliably."
+  (with-temp-buffer
+    (insert "alpha beta gamma")
+    (unwind-protect
+        (progn
+          (setq embark-scope-capture-mode t
+                embark-scope-last-target-bounds '(7 . 11))
+          (tap-fold-embark-target)
+          (should (tap-fold--overlay-at 8)))
+      (makunbound 'embark-scope-capture-mode)
+      (makunbound 'embark-scope-last-target-bounds))))
+
+
 (provide 'tap-fold-test)
 ;;; tap-fold-test.el ends here

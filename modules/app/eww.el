@@ -18,6 +18,8 @@
   (setq shr-cookie-policy nil)
   (set-face-attribute 'shr-text nil :family "Terminus (TTF)")
 
+  (setopt eww-search-prefix "https://lite.duckduckgo.com/lite/?q=")
+
   ;; Per-URL image control
   (defun my-eww-inhibit-images-advice (orig-fun url &rest args)
     "Set shr-inhibit-images based on URL before calling eww."

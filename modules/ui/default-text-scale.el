@@ -5,8 +5,8 @@
   :general
   (
    :keymaps 'menu-window-map
-   "C-+" (repeatable-lite-wrap default-text-scale-increase)
-   "C-_" (repeatable-lite-wrap default-text-scale-decrease)
+   "C-+" (** default-text-scale-increase)
+   "C-_" (** default-text-scale-decrease)
    )
   )
 ;;; default-text-scale.el ends here

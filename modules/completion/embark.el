@@ -160,18 +160,18 @@ completing-read prompter."
 
 (defun zetta-embark-help-handler (km prefix)
   "Show embark bindings for KM via completing-read.
-PREFIX is saved so repeatable-lite can continue the loop."
-  (setq repeatable-lite-current-prefix prefix)
+PREFIX is saved so repeatable can continue the loop."
+  (setq repeatable-current-prefix prefix)
   (minibuffer-with-setup-hook
       (lambda ()
-        (repeatable-lite-setup-minibuffer-switches #'zetta-embark-help-handler))
+        (repeatable-setup-minibuffer-switches #'zetta-embark-help-handler))
     (let ((command (consult--read
                     (car (embark--formatted-bindings km))
                     :prompt "Act: "
                     :category 'embark-keybinding)))
       (call-interactively (intern (car (last (string-split command))))))))
 
-(add-to-list 'repeatable-lite-help-backends
+(add-to-list 'repeatable-help-backends
              '(?\C-\S-h "C-S-h" "embark" zetta-embark-help-handler)
              t)
 

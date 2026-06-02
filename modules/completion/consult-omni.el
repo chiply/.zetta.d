@@ -126,7 +126,109 @@ STYLE defaults to `consult-async-split-style'."
     (when (and (boundp 'gptel-backend) gptel-backend)
       (setq consult-omni-gptel-backend gptel-backend))
     (when (and (boundp 'gptel-model) gptel-model)
-      (setq consult-omni-gptel-model (format "%s" gptel-model))))
+      (setq consult-omni-gptel-model (format "%s" gptel-model)))
+    ;; The sync above only fires when gptel *loads*, which can precede the
+    ;; user setting `gptel-backend' -- leaving consult-omni-gptel-backend nil,
+    ;; so `(gptel-backend-name nil)' raises "error in calling :items of gptel
+    ;; source".  Sync at call time too, so the source always uses gptel's
+    ;; current backend/model (and picks up later backend switches).
+    (defun consult-omni--gptel-sync-backend (&rest _)
+      "Point the gptel source at gptel's current backend/model."
+      (when (and (boundp 'gptel-backend) (recordp gptel-backend))
+        (setq consult-omni-gptel-backend gptel-backend))
+      (when (boundp 'gptel-model)
+        (setq consult-omni-gptel-model (format "%s" gptel-model))))
+    (with-eval-after-load 'consult-omni-gptel
+      (advice-add 'consult-omni--gptel-fetch-results :before
+                  #'consult-omni--gptel-sync-backend)
+
+      ;; --- Multiple generated candidates (emphasize ISR) ------------------
+      ;; The built-in cand-title functions emit ONE candidate, and
+      ;; `gptel-request' has no `n' parameter.  So ask the model for several
+      ;; DISTINCT alternatives in a single (non-streamed) request and split
+      ;; the reply into N candidates -- one prompt, many suggestions, all
+      ;; rendered through the ordinary consult/Marginalia/Embark substrate.
+      (defcustom consult-omni-gptel-n-candidates 5
+        "How many alternative gptel candidates to request per query."
+        :group 'consult-omni :type 'integer)
+
+      (cl-defun consult-omni--gptel-make-titles-multi (input &rest args &key callback &allow-other-keys)
+        "Ask gptel for several DISTINCT candidates for INPUT and emit them all."
+        (pcase-let* ((`(,query . ,opts)
+                      (consult-omni--split-command
+                       input (if callback (seq-difference args (list :callback callback)) args)))
+                     (opts (car-safe opts))
+                     (source "gptel")
+                     (backend (and (plist-member opts :backend) (format "%s" (plist-get opts :backend))))
+                     (backend (and backend (car (seq-filter (lambda (item) (when (string-match (format "%s" backend) item) item)) (mapcar #'car gptel--known-backends)))))
+                     (backend (or backend (gptel-backend-name consult-omni-gptel-backend)))
+                     (backend-struct (cdr (assoc (format "%s" backend) gptel--known-backends)))
+                     (model (and (plist-member opts :model) (format "%s" (plist-get opts :model))))
+                     (model (or (and model backend-struct (member model (cl-struct-slot-value (type-of backend-struct) 'models backend-struct)) model)
+                                (and backend-struct (car (cl-struct-slot-value (type-of backend-struct) 'models backend-struct)))
+                                consult-omni-gptel-model))
+                     (stream nil)
+                     (gptel-backend backend-struct)
+                     ;; gptel-model must be a SYMBOL (the mode-line lighter
+                     ;; calls `gptel--model-name' on it); `model' is a string.
+                     (gptel-model (cond ((symbolp model) model)
+                                        ((stringp model) (intern model))
+                                        (t gptel-model)))
+                     (gptel-stream nil)
+                     (output))
+          (gptel-request query
+            :system (format "You are an autocomplete engine.  Provide exactly %d DISTINCT, concise alternative completions or answers for the user's input.  Return ONLY a numbered list (\"1.\", \"2.\", ...), one alternative per line, with no preamble, commentary, or code fences."
+                            consult-omni-gptel-n-candidates)
+            :callback
+            (lambda (response _)
+              ;; The LLM is slow, so an earlier fragment's reply ("what is")
+              ;; can arrive after the input moved on ("what is python").
+              ;; Drop it unless this request's QUERY is still what's typed.
+              (when (and (stringp response)
+                         (let ((cur (and (active-minibuffer-window)
+                                         (car (consult-omni--split-command
+                                               (with-current-buffer (window-buffer (active-minibuffer-window))
+                                                 (minibuffer-contents-no-properties)))))))
+                           (and cur (equal (string-trim query) (string-trim cur)))))
+                (let ((cands
+                       (delq nil
+                             (mapcar
+                              (lambda (line)
+                                (let ((item (string-trim (replace-regexp-in-string "\\`[ \t]*[0-9]+[.)]?[ \t]*" "" line))))
+                                  (when (> (length item) 0)
+                                    (propertize
+                                     (consult-omni--gptel-format-candidate
+                                      :source source :query query :title item
+                                      :model model :backend backend :stream stream)
+                                     :title item :source source :url nil :query query
+                                     :model model :stream stream :backend backend))))
+                              (split-string response "\n" t)))))
+                  (when (and cands (functionp callback)) (funcall callback cands))
+                  (setq output cands)))))
+          output))
+
+      (setq consult-omni-gptel-cand-title #'consult-omni--gptel-make-titles-multi)
+
+      ;; LLM calls are slow and cost money, so require a more substantial
+      ;; query before firing -- short fragments like "what is" should not
+      ;; trigger a request (and then arrive stale).
+      (when-let* ((src (assoc "gptel" consult-omni--sources-alist)))
+        (plist-put (cdr src) :min-input 8))
+
+      ;; consult-omni's gptel preview does `(setq-local gptel-model
+      ;; (format "%s" model))' -- a STRING.  Newer gptel's mode-line lighter
+      ;; calls `(gptel--model-name gptel-model)' which needs a SYMBOL, so the
+      ;; preview buffer errors on every redisplay ("wrong-type-argument
+      ;; symbolp ...").  Coerce the buffer-local value back to a symbol.
+      (defun consult-omni--gptel-fix-preview-model (buf)
+        "Coerce a string-valued buffer-local `gptel-model' in BUF to a symbol."
+        (when (buffer-live-p buf)
+          (with-current-buffer buf
+            (when (and (local-variable-p 'gptel-model) (stringp gptel-model))
+              (setq-local gptel-model (intern gptel-model)))))
+        buf)
+      (advice-add 'consult-omni--gptel-response-preview :filter-return
+                  #'consult-omni--gptel-fix-preview-model)))
 
   ;; embark integration
   (require 'consult-omni-embark)

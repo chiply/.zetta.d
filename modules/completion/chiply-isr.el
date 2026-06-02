@@ -21,9 +21,17 @@
 
 ;;; Code:
 
-(require 'consult)
 (require 'json)
 (require 'url)
+
+;; consult is required lazily in `chiply-isr-semantic-read' (the only command
+;; that needs it), not at load time -- so byte-compiling this module never
+;; depends on consult being built yet (matters on a cold CI cache).
+(declare-function consult--read "consult")
+(declare-function consult--dynamic-collection "consult")
+(declare-function consult--lookup-cdr "consult")
+(declare-function consult--jump-preview "consult")
+(declare-function general-define-key "general")
 
 (defgroup chiply-isr nil
   "Incremental Suggesting Read over a semantic index."
@@ -206,6 +214,7 @@ needed.  Run once (the database persists), or after editing the samples."
   "Incremental Suggesting Read: type a MEANING, open the matched post.
 Candidates are ranked by embedding similarity, not spelling."
   (interactive)
+  (require 'consult)
   (unless (chiply-isr-server-running-p)
     (user-error "chiply-isr: server not running -- M-x chiply-isr-start-server"))
   (let ((sel (consult--read

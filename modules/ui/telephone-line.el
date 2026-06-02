@@ -20,7 +20,10 @@
 
   (telephone-line-defsegment zt-icon-copilot ()
     (when (and (boundp 'copilot-mode) copilot-mode)
-      (all-the-icons-icon-for-mode 'copilot-mode)))
+      ;; `all-the-icons-icon-for-mode' only maps MAJOR modes, so for the
+      ;; copilot-mode minor mode it returned the symbol instead of an icon.
+      ;; Use the real Copilot octicon directly (SVG, like the siblings).
+      (all-the-icons-octicon "copilot" :face 'success)))
 
   (telephone-line-defsegment zt-icon-side-window ()
     (when (zetta-side-window-p (selected-window)) " {S} "))

@@ -63,6 +63,31 @@ file while sharing no words with it -- see the files for examples."
 A belt-and-suspenders guard so results stay in the intended corpus."
   :type 'string)
 
+(defcustom chiply-isr-index-sources
+  (list (cons (expand-file-name "corpus/" (expand-file-name "chiply-isr/" user-emacs-directory))
+              "\\.org\\'"))
+  "List of (DIRECTORY . FILE-REGEXP) pairs to index.
+Each DIRECTORY is searched recursively for files whose name matches
+FILE-REGEXP, and every match is sent to the semantic index.  Add your
+own notes, code, etc. here, e.g.:
+
+  \\='((\"~/org/\"  . \"\\\\.org\\\\\\='\")
+    (\"~/src/\"  . \"\\\\.py\\\\\\='\"))"
+  :type '(repeat (cons (directory :tag "Directory")
+                       (regexp :tag "File regexp"))))
+
+(defcustom chiply-isr-index-on-startup nil
+  "When non-nil, index `chiply-isr-index-sources' after Emacs starts.
+Starts the server if needed, waits for it, then indexes only files whose
+content changed since the last run (unchanged ones are skipped via an md5
+cache).  Set this in ~/.zetta.el before this module loads."
+  :type 'boolean)
+
+(defvar chiply-isr--md5-cache-file
+  (expand-file-name "index-md5.eld"
+                    (expand-file-name "db/" (expand-file-name "chiply-isr/" user-emacs-directory)))
+  "File caching FILENAME -> content-md5 so unchanged files are not re-embedded.")
+
 (defun chiply-isr-server-url ()
   "Base URL of the running org-db-v3 server."
   (format "http://%s:%d" chiply-isr-server-host chiply-isr-server-port))
@@ -121,35 +146,108 @@ from any other org-db install."
 
 ;;; Indexing ------------------------------------------------------------------
 
+(defun chiply-isr--gather-files (sources)
+  "Return all files matched by SOURCES, a list of (DIR . REGEXP) pairs.
+Each existing DIR is searched recursively for names matching REGEXP."
+  (apply #'append
+         (mapcar (lambda (pair)
+                   (let ((dir (expand-file-name (car pair))))
+                     (when (file-directory-p dir)
+                       (directory-files-recursively dir (cdr pair)))))
+                 sources)))
+
+(defun chiply-isr--post-file (filename content)
+  "Send FILENAME with CONTENT to /api/file.  Return non-nil on success.
+Content-only: the server embeds CONTENT directly for semantic search, so
+no org parsing happens here."
+  (let* ((url-request-method "POST")
+         (url-request-extra-headers '(("Content-Type" . "application/json")))
+         (url-request-data
+          (encode-coding-string
+           (json-encode `((filename . ,filename)
+                          (md5 . ,(md5 content))
+                          (file_size . ,(string-bytes content))
+                          (content . ,content)
+                          (headlines . ,[]) (links . ,[]) (keywords . ,[])
+                          (src_blocks . ,[]) (images . ,[]) (linked_files . ,[])))
+           'utf-8))
+         (buf (url-retrieve-synchronously
+               (concat (chiply-isr-server-url) "/api/file") t nil 120)))
+    (when buf (kill-buffer buf) t)))
+
+(defun chiply-isr--load-md5-cache ()
+  "Return the saved FILENAME -> md5 alist, or nil."
+  (when (file-exists-p chiply-isr--md5-cache-file)
+    (with-temp-buffer
+      (insert-file-contents chiply-isr--md5-cache-file)
+      (ignore-errors (read (current-buffer))))))
+
+(defun chiply-isr--save-md5-cache (alist)
+  "Persist ALIST (FILENAME -> md5) to `chiply-isr--md5-cache-file'."
+  (make-directory (file-name-directory chiply-isr--md5-cache-file) t)
+  (with-temp-file chiply-isr--md5-cache-file
+    (let ((print-length nil) (print-level nil))
+      (prin1 alist (current-buffer)))))
+
 ;;;###autoload
-(defun chiply-isr-index-corpus ()
-  "Index every .org file in `chiply-isr-corpus-dir' into the running server.
-Content-only: semantic search embeds the file body, so no org parsing is
-needed.  Run once (the database persists), or after editing the samples."
-  (interactive)
+(defun chiply-isr-index (&optional sources force)
+  "Index every file matched by SOURCES into the running server.
+SOURCES is a list of (DIRECTORY . FILE-REGEXP) pairs; it defaults to
+`chiply-isr-index-sources'.  Files whose content is unchanged since the
+last run are skipped (md5 cache); with prefix arg FORCE, re-index all.
+The database persists on disk, so this only needs to run when files change."
+  (interactive (list nil current-prefix-arg))
+  (setq sources (or sources chiply-isr-index-sources))
   (unless (chiply-isr-server-running-p)
     (user-error "chiply-isr: server not running -- M-x chiply-isr-start-server"))
-  (let ((files (directory-files chiply-isr-corpus-dir t "\\.org\\'"))
-        (n 0))
+  (let ((files (chiply-isr--gather-files sources))
+        (cache (unless force (chiply-isr--load-md5-cache)))
+        (seen nil) (indexed 0) (skipped 0))
     (dolist (f files)
       (let* ((content (with-temp-buffer (insert-file-contents f) (buffer-string)))
-             (url-request-method "POST")
-             (url-request-extra-headers '(("Content-Type" . "application/json")))
-             (url-request-data
-              (encode-coding-string
-               (json-encode `((filename . ,f)
-                              (md5 . ,(md5 content))
-                              (file_size . ,(string-bytes content))
-                              (content . ,content)
-                              ;; empty parsed-structure arrays -- the server
-                              ;; embeds `content' directly for semantic search
-                              (headlines . ,[]) (links . ,[]) (keywords . ,[])
-                              (src_blocks . ,[]) (images . ,[]) (linked_files . ,[])))
-               'utf-8))
-             (buf (url-retrieve-synchronously
-                   (concat (chiply-isr-server-url) "/api/file") t nil 120)))
-        (when buf (kill-buffer buf) (setq n (1+ n)))))
-    (message "chiply-isr: indexed %d file(s) from %s" n chiply-isr-corpus-dir)))
+             (sum (md5 content)))
+        (cond
+         ((and (not force) (equal (cdr (assoc f cache)) sum))
+          (push (cons f sum) seen) (setq skipped (1+ skipped)))
+         ((chiply-isr--post-file f content)
+          (push (cons f sum) seen) (setq indexed (1+ indexed))))))
+    ;; `seen' omits files that vanished from disk, so they age out of the cache.
+    (chiply-isr--save-md5-cache seen)
+    (message "chiply-isr: indexed %d, skipped %d unchanged, of %d file(s)"
+             indexed skipped (length files))
+    indexed))
+
+;;;###autoload
+(defun chiply-isr-index-corpus (&optional force)
+  "Index `chiply-isr-corpus-dir' (the demo sample files).
+Thin wrapper over `chiply-isr-index'; FORCE re-indexes unchanged files too."
+  (interactive "P")
+  (chiply-isr-index (list (cons chiply-isr-corpus-dir "\\.org\\'")) force))
+
+;;; Startup indexing ---------------------------------------------------------
+
+(defvar chiply-isr--startup-tries 0
+  "Internal counter for `chiply-isr--startup-attempt' retries.")
+
+(defun chiply-isr--startup-attempt ()
+  "Index sources once the server answers; retry briefly while it boots."
+  (cond
+   ((chiply-isr-server-running-p)
+    (setq chiply-isr--startup-tries 0)
+    (ignore-errors (chiply-isr-index)))
+   ((< (setq chiply-isr--startup-tries (1+ chiply-isr--startup-tries)) 30)
+    (run-with-timer 1 nil #'chiply-isr--startup-attempt))
+   (t (setq chiply-isr--startup-tries 0)
+      (message "chiply-isr: server did not come up; skipped startup index"))))
+
+(defun chiply-isr-maybe-startup-index ()
+  "If `chiply-isr-index-on-startup', start the server and index sources.
+Added to `emacs-startup-hook'; a no-op unless the option is enabled."
+  (when chiply-isr-index-on-startup
+    (chiply-isr-start-server)            ; no-op if already running
+    (chiply-isr--startup-attempt)))
+
+(add-hook 'emacs-startup-hook #'chiply-isr-maybe-startup-index)
 
 ;;; Semantic source ----------------------------------------------------------
 

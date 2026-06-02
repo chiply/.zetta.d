@@ -179,14 +179,14 @@ being displayed, otherwise returns nil"
   (interactive)
   (zetta-soda-cap "*info*"))
 
-(when (fboundp 'repeatable-lite-wrap)
+(when (fboundp 'repeatable-wrap)
   (general-define-key
    :keymaps 'menu-run-map
-   "m" (repeatable-lite-wrap zetta-soda-drink-messages)
-   "c"  (repeatable-lite-wrap calendar)
-   "i"  (repeatable-lite-wrap info)
-   "M" (repeatable-lite-wrap zetta-soda-cap-messages)
-   "I" (repeatable-lite-wrap zetta-soda-cap-info)))
+   "m" (repeatable-wrap zetta-soda-drink-messages)
+   "c"  (repeatable-wrap calendar)
+   "i"  (repeatable-wrap info)
+   "M" (repeatable-wrap zetta-soda-cap-messages)
+   "I" (repeatable-wrap zetta-soda-cap-info)))
 
 (provide 'bootstrap-display)
 ;;; bootstrap-display.el ends here

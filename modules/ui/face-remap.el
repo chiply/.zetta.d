@@ -20,10 +20,10 @@
   :general
   (
    :keymaps 'menu-window-map
-   "=" (repeatable-lite-wrap text-scale-increase)
-   "-" (repeatable-lite-wrap text-scale-decrease)
-   "+" (repeatable-lite-wrap zetta-big-zoom-in)
-   "_" (repeatable-lite-wrap zetta-big-zoom-out)
+   "=" (repeatable-wrap text-scale-increase)
+   "-" (repeatable-wrap text-scale-decrease)
+   "+" (repeatable-wrap zetta-big-zoom-in)
+   "_" (repeatable-wrap zetta-big-zoom-out)
    )
   )
 ;;; face-remap.el ends here

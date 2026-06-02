@@ -30,10 +30,10 @@
 ;; Keybindings available immediately (not deferred to :config)
 (general-define-key
  :keymaps 'menu-run-map
- "t" (repeatable-lite-wrap zetta-soda-drink-treemacs)
- "T" (repeatable-lite-wrap treemacs)
- "C-t" (repeatable-lite-wrap zetta-refresh-treemacs)
- "M-t" (repeatable-lite-wrap zetta-soda-toggle-treemacs-follow-mode))
+ "t" (repeatable-wrap zetta-soda-drink-treemacs)
+ "T" (repeatable-wrap treemacs)
+ "C-t" (repeatable-wrap zetta-refresh-treemacs)
+ "M-t" (repeatable-wrap zetta-soda-toggle-treemacs-follow-mode))
 
 (use-package treemacs
   :ensure (treemacs

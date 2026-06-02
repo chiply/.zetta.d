@@ -48,7 +48,7 @@ Evil mode is active by default.
 
 The `zetta-side` system manages side windows for buffers like Messages, compilation output, and help.
 
-Run menu commands (`**, r m` etc.) use the `**` repeatable-lite macro for quick toggling:
+Run menu commands (`**, r m` etc.) use the `**` repeatable macro for quick toggling:
 
 | Key | Command | Description |
 |-----|---------|-------------|
@@ -79,7 +79,7 @@ Standard vim keybindings apply. Zetta adds:
 
 ## Repeatable Commands
 
-The `repeatable-lite` system wraps commands so they can be repeated with a single key after the first invocation. Look for the `**` indicator in the tab bar when a repeatable command is active.
+The `repeatable` system wraps commands so they can be repeated with a single key after the first invocation. Look for the `**` indicator in the tab bar when a repeatable command is active.
 
 ## Customizing Keybindings
 

@@ -35,9 +35,9 @@
 
   (general-define-key
    :keymaps 'menu-project-map
-   "g" (repeatable-lite-wrap git-gutter)
-   "j" (repeatable-lite-wrap git-gutter:next-hunk)
-   "k" (repeatable-lite-wrap git-gutter:previous-hunk))
+   "g" (repeatable-wrap git-gutter)
+   "j" (repeatable-wrap git-gutter:next-hunk)
+   "k" (repeatable-wrap git-gutter:previous-hunk))
 
   :hook (use-package--git-gutter--post-config . brushup)
   )

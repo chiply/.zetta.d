@@ -34,10 +34,10 @@
    )
   (
    :keymaps 'menu-window-map
-   "v" (repeatable-lite-wrap zetta-split-window-v)
-   "V" (repeatable-lite-wrap zetta-split-window-V)
-   "h" (repeatable-lite-wrap zetta-split-window-h)
-   "H" (repeatable-lite-wrap zetta-split-window-H)
+   "v" (repeatable-wrap zetta-split-window-v)
+   "V" (repeatable-wrap zetta-split-window-V)
+   "h" (repeatable-wrap zetta-split-window-h)
+   "H" (repeatable-wrap zetta-split-window-H)
    ;; Emacs 31: new window layout commands (,w l prefix = layout)
    "l r" 'window-rotate
    "l f" 'window-flip

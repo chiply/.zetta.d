@@ -100,8 +100,8 @@
    )
   (
    :keymaps 'menu-window-map
-   "s" (repeatable-lite-wrap consult-ripgrep)
-   "S" (repeatable-lite-wrap consult-line)
+   "s" (repeatable-wrap consult-ripgrep)
+   "S" (repeatable-wrap consult-line)
    )
   (
    :keymaps 'launch-map

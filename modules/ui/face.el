@@ -10,7 +10,7 @@
 
 (defun zetta-theme-brushup ()
   (interactive)
-  (setq prefix-help-command 'repeatable-lite--versatile-C-h)
+  (setq prefix-help-command 'repeatable--versatile-C-h)
   (when debug-on-error
     (toggle-debug-on-error)
     (message "Debug-on-error is off"))
@@ -19,12 +19,12 @@
 
 (general-define-key
  :keymaps 'menu-theme-map
- "T" (repeatable-lite-wrap zetta-theme-brushup))
+ "T" (repeatable-wrap zetta-theme-brushup))
 
 (general-define-key
  :keymaps 'menu-window-map
  "t" 'menu-theme-map
- "T" (repeatable-lite-wrap transparency))
+ "T" (repeatable-wrap transparency))
 
 (add-hook 'help-mode-hook (lambda () (text-scale-set -2)))
 (add-hook 'Info-mode-hook (lambda () (text-scale-set -2)))

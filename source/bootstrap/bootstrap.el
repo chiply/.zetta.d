@@ -6,7 +6,7 @@
 (require 'bootstrap-utils)
 (require 'bootstrap-modules)
 (require 'bootstrap-keys)
-(require 'bootstrap-repeatable-lite)
+(require 'bootstrap-repeatable)
 (require 'bootstrap-brushup)
 (require 'bootstrap-display)
 

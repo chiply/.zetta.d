@@ -12,7 +12,7 @@ _A reproducible, batteries-included Emacs distribution. Pick what you want via a
 
 - **Triple-modal editing** — Switch between Evil, Meow, and vanilla Emacs with `s-z e` / `s-z m` / `s-z E`. No restart.
 - **brushup** — Parametric, theme-aware color gradient system. Faces auto-update when you change themes. ([chiply/brushup](https://github.com/chiply/brushup))
-- **repeatable-lite** — Repeatable prefix commands integrated with which-key. ([chiply/repeatable-lite](https://github.com/chiply/repeatable-lite))
+- **repeatable** — Repeatable prefix commands integrated with which-key. ([chiply/repeatable](https://github.com/chiply/repeatable))
 - **Module DSL** — Enable/disable categories or individual packages via the `zetta-modules!` macro in `~/.zetta.el`.
 - **Reproducible** — Elpaca lockfile pins every package to an exact commit.
 - **Compiled by default** — `bin/zetta install` byte-compiles modules and native-compiles packages ahead of first launch.
@@ -169,7 +169,7 @@ If you used chemacs2, also remove the `("zetta" ...)` entry from `~/.emacs-profi
 Several packages are written specifically for Zetta and live as separate public repos:
 
 - [`brushup`](https://github.com/chiply/brushup) — theme-aware parametric face gradients
-- [`repeatable-lite`](https://github.com/chiply/repeatable-lite) — which-key-integrated repeatable prefix commands
+- [`repeatable`](https://github.com/chiply/repeatable) — which-key-integrated repeatable prefix commands
 - [`spot`](https://github.com/chiply/spot) / [`spot4e`](https://github.com/chiply/spot4e) — Spotify control from Emacs
 - [`magneto`](https://github.com/chiply/magneto) — buffer/window magnetism
 - [`touchtype`](https://github.com/chiply/touchtype) — typing-speed practice

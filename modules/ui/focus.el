@@ -31,6 +31,6 @@ the tap thing propagate to focus-mode automatically.")
   :general
   (
    :keymaps 'menu-window-map
-   "C-f" (repeatable-lite-wrap focus-mode)
+   "C-f" (** focus-mode)
    ))
 ;;; focus.el ends here

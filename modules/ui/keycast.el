@@ -22,23 +22,23 @@
   (zetta-keycast-mode)
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  ;;                  repeatable-lite integration                      ;;
+  ;;                  repeatable integration                      ;;
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;;
-  ;; repeatable-lite's command loop bypasses post-command-hook, so
+  ;; repeatable's command loop bypasses post-command-hook, so
   ;; keycast never sees dispatched commands.  Three-part fix:
   ;;
-  ;; 1. :around call-interactively — sets a flag when a repeatable-lite-wrap wrapper is
+  ;; 1. :around call-interactively — sets a flag when a repeatable-wrap wrapper is
   ;;    called and updates keycast for real commands inside the loop.
   ;; 2. :around keycast--update — skips post-command-hook updates for
-  ;;    repeatable-lite-wrap wrappers so they don't overwrite the real command.
+  ;;    repeatable-wrap wrappers so they don't overwrite the real command.
   ;; 3. :around execute-kbd-macro — exit commands go through
   ;;    execute-kbd-macro (not call-interactively), so intercept and
   ;;    dispatch via call-interactively instead.
   ;;
-  ;; All advice is installed only after repeatable-lite loads.
+  ;; All advice is installed only after repeatable loads.
 
-  (with-eval-after-load 'repeatable-lite
+  (with-eval-after-load 'repeatable
     (defvar zetta-keycast--in-repeatable nil)
 
     (define-advice call-interactively
@@ -46,12 +46,12 @@
       (let ((zetta-keycast--in-repeatable
              (or zetta-keycast--in-repeatable
                  (and (symbolp cmd)
-                      (string-prefix-p "repeatable-lite-wrap" (symbol-name cmd))))))
+                      (string-prefix-p "repeatable-wrap" (symbol-name cmd))))))
         (prog1 (apply fn cmd args)
           (when (and zetta-keycast--in-repeatable
                      (bound-and-true-p zetta-keycast-mode)
                      (symbolp cmd)
-                     (not (string-prefix-p "repeatable-lite-wrap" (symbol-name cmd))))
+                     (not (string-prefix-p "repeatable-wrap" (symbol-name cmd))))
             (setq keycast--this-command-desc cmd
                   keycast--this-command-keys (this-single-command-keys)
                   keycast--command-repetitions 0)
@@ -60,7 +60,7 @@
     (define-advice keycast--update
         (:around (fn) zetta-skip-repeatable-wrappers)
       (if (and (symbolp this-command)
-               (string-prefix-p "repeatable-lite-wrap" (symbol-name this-command)))
+               (string-prefix-p "repeatable-wrap" (symbol-name this-command)))
           (force-mode-line-update t)
         (funcall fn)))
 

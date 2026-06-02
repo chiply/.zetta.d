@@ -3040,13 +3040,6 @@
                                 :protocol https :inherit t :depth
                                 treeless :ref
                                 "4805275937585102aba0047169f047032201c5b9"))
- (repeatable-lite :source "elpaca-menu-lock-file" :recipe
-                  (:source nil :package "repeatable-lite" :id
-                           repeatable-lite :host github :repo
-                           "chiply/repeatable-lite" :wait t :type git
-                           :protocol https :inherit t :depth treeless
-                           :ref
-                           "1d9e9fa12769e7d3a1248e73269de3f3296e10fe"))
  (request :source "elpaca-menu-lock-file"
    :recipe
    (:package "request" :repo "tkf/emacs-request" :fetcher github

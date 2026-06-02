@@ -94,3 +94,8 @@ speed-type/
 # touchtype
 touchtype-stats.el
 touchtype/
+
+# chiply-isr demo: rebuildable venv + runtime DB (source/elisp are tracked)
+chiply-isr/server/.venv/
+chiply-isr/server/**/__pycache__/
+chiply-isr/db/

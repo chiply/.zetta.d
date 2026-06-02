@@ -1,0 +1,14 @@
+#+TITLE: Trimming Latency from a Checkout Service
+
+Our checkout endpoint had crept up to nearly two seconds at the ninety-ninth
+percentile. A flame graph from the profiler pointed at a single culprit: each
+request issued dozens of small database round-trips, one per line item. We
+collapsed them into a single batched query and added a short-lived in-memory
+cache for catalog lookups.
+
+The tail dropped to under three hundred milliseconds. Users who had complained
+that the page felt sluggish now saw it respond almost the instant they clicked.
+The lesson that stuck with us: measure where the time actually goes before
+touching a line of code, because the bottleneck is almost never where intuition
+insists it must be. Throughput climbed as a side effect once the queue stopped
+backing up behind those serial round-trips.

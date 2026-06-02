@@ -61,10 +61,30 @@ M-x chiply-isr-index-corpus     ; only if db/ is empty or stale
 M-x chiply-isr-semantic-read    ; bound to the menu-lookup prefix + i
 #+end_src
 
+* Indexing your own files (and on startup)
+
+=chiply-isr-index-sources= is a list of =(DIRECTORY . FILE-REGEXP)= pairs. Each
+directory is searched recursively and every match is embedded:
+
+#+begin_src elisp
+;; in ~/.zetta.el (loads before the module)
+(setq chiply-isr-index-sources
+      '(("~/org/"  . "\\.org\\'")
+        ("~/src/"  . "\\.py\\'")))
+(setq chiply-isr-index-on-startup t)   ; index those on every Emacs start
+#+end_src
+
+- =M-x chiply-isr-index= indexes all sources; a prefix arg (=C-u=) forces a full
+  re-embed. Unchanged files are skipped via an md5 cache (=db/index-md5.eld=), so
+  re-running --- including on startup --- only re-embeds files that changed.
+- With =chiply-isr-index-on-startup= non-nil, the module starts the server (if
+  needed), waits for it, then indexes the sources --- a near no-op when nothing
+  changed.
+- =chiply-isr-index-corpus= is just =chiply-isr-index= scoped to the demo
+  =corpus/=.
+
 * Notes
 
-=index-corpus.sh= (and =M-x chiply-isr-index-corpus=) index only =corpus/=. If
-you ever point this at real notes instead, exclude anything private --- nothing
-here ships embeddings off the machine, but indexed text lands in =db/=.
-=EXPORT_FILE_NAME= targets =src/routes/private=. Private posts must never be
-embedded or indexed.
+Indexed text (the file contents) lands in =db/= as embeddings. Nothing leaves
+the machine, but if you point =chiply-isr-index-sources= at real notes, keep
+anything private out of the indexed directories.

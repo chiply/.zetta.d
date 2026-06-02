@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.4](https://github.com/chiply/.zetta.d/compare/v0.1.3...v0.1.4) (2026-06-02)
+
+
+### Features
+
+* **chiply-isr:** semantic completing-read (ISR) demo ([f20f60f](https://github.com/chiply/.zetta.d/commit/f20f60f7c6fa24118be03c0849347b980461b501))
+* **embark-by-type:** factor out type-aware embark UX as standalone package ([c58fae1](https://github.com/chiply/.zetta.d/commit/c58fae1113778d7b8112320cc822d3b9f748191d))
+* factor out zettapkg packages + test suites + chiply-isr ISR demo ([c389dc1](https://github.com/chiply/.zetta.d/commit/c389dc1875662bbb4d17b1732dae7ff36c57c590))
+* **tap-fold:** factor out as standalone package ([82a8260](https://github.com/chiply/.zetta.d/commit/82a8260ebb75147746260e6ea28e7c84c7c3c483))
+* **treesit-tap:** factor out as standalone package ([8a2b00c](https://github.com/chiply/.zetta.d/commit/8a2b00c5c729c0564e5116556cba22a557303cf2))
+* **zettapkg:** embark-scope nav/jump refinements, test suites, new modules ([ee45912](https://github.com/chiply/.zetta.d/commit/ee4591205ebad9f1625708925fa42fa5d294af79))
+
+
+### Bug Fixes
+
+* **chiply-isr:** defer consult require to runtime for clean byte-compile ([158cc06](https://github.com/chiply/.zetta.d/commit/158cc06951873f712b472b88bbf33008a927b687))
+* **repeatable-lite:** restore portable github recipe ([cd5dc55](https://github.com/chiply/.zetta.d/commit/cd5dc55bf232469568816c240f505097f81bd8d0))
+
 ## [0.1.3](https://github.com/chiply/.zetta.d/compare/v0.1.2...v0.1.3) (2026-05-23)
 
 

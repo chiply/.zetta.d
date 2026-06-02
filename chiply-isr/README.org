@@ -1,0 +1,70 @@
+#+TITLE: chiply-isr — Incremental Suggesting Read demo
+
+A worked example of *Incremental Suggesting Read* (ISR): a =completing-read=
+whose candidate /collection/ is a function that asks an embedding index by
+*meaning* instead of matching characters. The downstream stack — consult
+preview, Marginalia, Embark, muscle memory — is the ordinary ICR substrate,
+reused verbatim.
+
+Companion post: https://chiply.dev/post-incremental-suggesting-read
+
+* Layout
+
+| Path                                  | What                                              |
+|---------------------------------------+---------------------------------------------------|
+| =../modules/completion/chiply-isr.el= | The Emacs glue (commands + consult source).       |
+| =server/=                             | Vendored org-db-v3 backend (embeddings + vectors).|
+| =db/=                                 | The indexed demo database (gitignored).           |
+| =corpus/=                             | Sample .org files written for the demo (below).   |
+| =start-server.sh=                     | Launch the backend with the isolated demo DB.     |
+| =index-corpus.sh=                     | (Re)index =corpus/= into the DB.                  |
+
+* The sample corpus
+
+=corpus/= holds short notes on deliberately unrelated topics, each worded so a
+meaning-based query surfaces the right file while sharing /no words/ with it.
+Several files are lexical decoys for each other. The headline case:
+
+| Query (type this)        | Lexical match | Semantic match (what surfaces) |
+|--------------------------+---------------+--------------------------------|
+| =make my program quicker= | running.org   | *optimization.org*             |
+
+=running.org= is the only file containing the word "quicker" (it is about
+jogging); =optimization.org= is about cutting latency and never says
+"quick", "fast", or "run". Character matching points at the wrong note;
+meaning points at the right one. More to try: "a loyal four-legged companion"
+-> dogs, "this dish is way too spicy for me" -> chili, "the city is too bright
+to see the night sky" -> stargazing.
+
+* Attribution
+
+The embeddings and vector search are John Kitchin's *org-db-v3*
+(https://github.com/jkitchin/org-db-v3), MIT-licensed, vendored under
+=server/= (source only; the =.venv= is rebuilt locally). It runs a local
+=sentence-transformers= model (=all-MiniLM-L6-v2=) — no API key, no network.
+This project contributes only the consult wiring in =chiply-isr.el=.
+
+* Quick start
+
+#+begin_src bash
+cd ~/.zetta.d/chiply-isr
+uv --directory server sync      # build the venv (once; hardlinked from cache)
+./start-server.sh               # leave running
+./index-corpus.sh               # only if db/ is empty or stale
+#+end_src
+
+Then in Emacs (the module auto-loads in the =completion= category):
+
+#+begin_src text
+M-x chiply-isr-start-server     ; or run ./start-server.sh in a terminal
+M-x chiply-isr-index-corpus     ; only if db/ is empty or stale
+M-x chiply-isr-semantic-read    ; bound to the menu-lookup prefix + i
+#+end_src
+
+* Notes
+
+=index-corpus.sh= (and =M-x chiply-isr-index-corpus=) index only =corpus/=. If
+you ever point this at real notes instead, exclude anything private --- nothing
+here ships embeddings off the machine, but indexed text lands in =db/=.
+=EXPORT_FILE_NAME= targets =src/routes/private=. Private posts must never be
+embedded or indexed.

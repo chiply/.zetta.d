@@ -18,6 +18,8 @@
   (setq shr-cookie-policy nil)
   (set-face-attribute 'shr-text nil :family "Terminus (TTF)")
 
+  (setopt eww-search-prefix "https://lite.duckduckgo.com/lite/?q=")
+
   ;; Per-URL image control
   (defun my-eww-inhibit-images-advice (orig-fun url &rest args)
     "Set shr-inhibit-images based on URL before calling eww."
@@ -69,8 +71,8 @@
    "<return>" 'zetta-eww-follow-link
    "x" '(lambda () (interactive) (kill-buffer (current-buffer)))
    "s-i" 'eww-toggle-images
-   "s-j" 'zetta-tap-next
-   "s-k" 'zetta-tap-prev
+   "s-j" 'treesit-tap-next
+   "s-k" 'treesit-tap-prev
    )
   (
    :keymaps 'menu-lookup-map

@@ -6,7 +6,7 @@ around tap.  If region active, then fold in this region.  If active
 folds in tap (eg tap itself isn't what is folded, but rather a subset
 of tap), then toggle the closest fold"
   (interactive)
-  (let* ((bnds (zetta-locate-thing thing))
+  (let* ((bnds (treesit-tap-locate-thing thing))
          (beg-thing (nth 0 bnds))
          (end-thing (nth 1 bnds))
          (bol (save-excursion (back-to-indentation) (point)))
@@ -41,10 +41,10 @@ of tap), then toggle the closest fold"
            (fold-at-point fold)
            ;; if at first thing, take 1 as lower bound, otherwise
            ;; beginning of thing - 1.
-           (beg (if (zetta-tap-at-bobp)
+           (beg (if (treesit-tap-at-bobp)
                     1
                   (- (ov-beg fold-at-point) 1)))
-           (end (if (zetta-tap-at-eobp)
+           (end (if (treesit-tap-at-eobp)
                     (save-excursion (end-of-buffer) (point))
                   (+ 1 (ov-end fold-at-point))))
            )
@@ -55,17 +55,17 @@ of tap), then toggle the closest fold"
     (let (
           ;; if at first thing, take 1 as lower bound, otherwise
           ;; beginning of thing - 1.
-          (beg (if (zetta-tap-at-bobp)
+          (beg (if (treesit-tap-at-bobp)
                    1
                  (save-excursion
-                   (beginning-of-thing zetta-tap-current-thing)
+                   (beginning-of-thing treesit-tap-current-thing)
                    ;; in case there is indentation
                    (beginning-of-line)
                    (- (point) 1)
                    )))
-          (end (if (zetta-tap-at-eobp)
+          (end (if (treesit-tap-at-eobp)
                    (save-excursion (end-of-buffer) (point))
-                 (+ 1 (cdr (bounds-of-thing-at-point zetta-tap-current-thing)))))
+                 (+ 1 (cdr (bounds-of-thing-at-point treesit-tap-current-thing)))))
           )
       (narrow-to-region beg end)
       )

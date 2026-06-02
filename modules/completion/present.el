@@ -6,7 +6,7 @@
 ;;
 ;; Adds zetta-specific integration:
 ;;   - Picker bindings in the minibuffer keymap (`M-i' / `C-c i').
-;;   - Tree-sitter types from `zetta-embark-treesit-types' registered
+;;   - Tree-sitter types from `treesit-tap-embark-types' registered
 ;;     into `present-types' (so picking accepts AST node types).
 ;;   - The richer zetta-embark visible-instance collector wired in as
 ;;     `present-collect-extra-fn' when embark is loaded.
@@ -24,8 +24,8 @@
   (present-mode 1)
 
   ;; Register tree-sitter presentation types from the embark side.
-  (when (boundp 'zetta-embark-treesit-types)
-    (dolist (ts-type zetta-embark-treesit-types)
+  (when (boundp 'treesit-tap-embark-types)
+    (dolist (ts-type treesit-tap-embark-types)
       (let ((sym (intern (format "ts-%s" ts-type))))
         (unless (alist-get sym present-types)
           (setf (alist-get sym present-types)
@@ -38,7 +38,7 @@
   ;; (TYPE THING) and it operates on the currently-selected window, so
   ;; we briefly switch into the window being scanned.
   (with-eval-after-load 'embark
-    (when (fboundp 'zetta-embark--collect-visible-instances)
+    (when (fboundp 'embark-scope-collect-visible-instances)
       (setq present-collect-extra-fn
             (lambda (expected win buf _beg _end)
               (when (and expected
@@ -48,7 +48,7 @@
                          ;; produces dupes to dedupe.
                          (not (present-type-prop expected :finder))
                          ;; And skip when the type carries no embark/thing
-                         ;; mapping — `zetta-embark--collect-visible-instances'
+                         ;; mapping — `embark-scope-collect-visible-instances'
                          ;; would otherwise be called with `string' / a root
                          ;; type and return nothing useful (or error).
                          (or (present-type-prop expected :embark)
@@ -61,7 +61,7 @@
                         (with-selected-window win
                           (with-current-buffer buf
                             (ignore-errors
-                              (zetta-embark--collect-visible-instances
+                              (embark-scope-collect-visible-instances
                                embark-type thing))))))
                   (mapcar
                    (lambda (b)

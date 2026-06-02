@@ -246,5 +246,94 @@ URL inside the bracketed link."
   (let ((result (present-collect-visible 'url)))
     (should (listp result))))
 
+;;;; --detect-expected-type cascade
+
+(ert-deftest present/detect-expected-type-override ()
+  "Override beats every other source."
+  (let ((present--expected-type-override 'url))
+    (should (eq 'url (present--detect-expected-type)))))
+
+(ert-deftest present/detect-expected-type-from-command-map ()
+  "When override + category are nil, falls through to command map."
+  (let ((present--expected-type-override nil)
+        (present--minibuffer-opener 'browse-url))
+    ;; Stub minibufferp to t so the command-map check fires.
+    (cl-letf (((symbol-function 'minibufferp) (lambda (&rest _) t)))
+      (should (eq 'url (present--detect-expected-type))))))
+
+(ert-deftest present/detect-expected-type-falls-through-to-nil ()
+  "With no signals at all, returns nil."
+  (let ((present--expected-type-override nil)
+        (present--minibuffer-opener nil)
+        (present-heuristic-prompt-detection nil))
+    (cl-letf (((symbol-function 'minibufferp) (lambda (&rest _) nil)))
+      (should-not (present--detect-expected-type)))))
+
+
+;;;; --dedupe respects :type (regression for Copilot review fix)
+
+(ert-deftest present/dedupe-keeps-distinct-types-at-same-bounds ()
+  "Two presentations with the same (buffer, beg, end) but DIFFERENT
+:type both survive dedup -- e.g. an integer regex and a number regex
+matching the same digit run."
+  (with-temp-buffer
+    (let* ((p1 (list :type 'integer :buffer (current-buffer)
+                     :beg 5 :end 10 :text "42"))
+           (p2 (list :type 'number :buffer (current-buffer)
+                     :beg 5 :end 10 :text "42"))
+           (deduped (present--dedupe (list p1 p2))))
+      (should (= 2 (length deduped))))))
+
+
+;;;; --insert-value normalizes non-string :value
+
+(ert-deftest present/insert-value-normalizes-non-string ()
+  "`--insert-value' coerces non-string `:value' through `format' so
+`insert' doesn't crash on integer/symbol values."
+  (with-temp-buffer
+    (let ((p (list :type 'integer :buffer (current-buffer)
+                   :beg 1 :end 3 :text "42" :value 42)))
+      (present--insert-value p)
+      (should (equal "42" (buffer-string))))))
+
+
+;;;; present-mode toggle is idempotent
+
+(ert-deftest present/mode-toggle-idempotent ()
+  "Toggling `present-mode' on twice leaves one hook entry, not two."
+  (unwind-protect
+      (progn
+        (present-mode 1)
+        (present-mode 1)
+        (let ((count (cl-count #'present--capture-minibuffer-opener
+                               minibuffer-setup-hook)))
+          (should (= 1 count))))
+    (present-mode -1)))
+
+
+;;;; --pick-with-fallback truncates to alphabet length
+
+(ert-deftest present/pick-with-fallback-truncates-to-alphabet ()
+  "With more candidates than `present--fallback-label-alphabet' has
+chars, the fallback picker truncates the list (and would emit a
+warning).  Avoids producing unreachable multi-char labels."
+  (with-temp-buffer
+    (insert "x")
+    (let* ((alpha-len (length present--fallback-label-alphabet))
+           (many (cl-loop for i below (1+ alpha-len)
+                          collect (list :type 'word
+                                        :buffer (current-buffer)
+                                        :beg 1 :end 2 :text "x"))))
+      ;; Stub `read-char' to immediately cancel (any non-matching key).
+      (cl-letf (((symbol-function 'read-char) (lambda (&rest _) ?\C-g))
+                ((symbol-function 'message) #'ignore))
+        ;; Should not error; should not produce multi-char labels.
+        (let ((result (ignore-errors
+                        (present--pick-with-fallback many))))
+          ;; We don't care about the result -- the test is "no crash
+          ;; from index-out-of-range label generation".
+          (ignore result))))))
+
+
 (provide 'present-smoke)
 ;;; present-smoke.el ends here

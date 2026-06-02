@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/chiply/.zetta.d/compare/v0.1.4...v0.1.5) (2026-06-02)
+
+
+### Features
+
+* migrate config to renamed repeatable package with ** alias ([8a27108](https://github.com/chiply/.zetta.d/commit/8a27108f591d32cb5d849e67be8a7ef084e720dc))
+
 ## [0.1.4](https://github.com/chiply/.zetta.d/compare/v0.1.3...v0.1.4) (2026-06-02)
 
 

@@ -226,31 +226,31 @@ formatted."
                      (t "")))
              segments ""))
 
-;;;; Runs -- text interleaved with icons / progress bars
+;;;; Runs -- text interleaved with progress bars / pies
 ;; ----------------------------------------------------------------
-;; A `lines' side may mix text with inline icons and progress bars.  A
-;; segment value (or literal) of (:svg-icon DATA FILL) or
-;; (:svg-bar FRACTION WIDTH FILL BG) becomes a non-text run; everything
-;; else contributes text.  `svg-line--render-runs' lowers a segment list
-;; to a run list -- (:text STR), (:icon DATA FILL), (:bar FRAC W FILL BG)
-;; -- coalescing adjacent text, each segment evaluated exactly once.
+;; A `lines' side may mix text with progress bars and pies.  A segment
+;; value (or literal) of (:svg-bar FRACTION WIDTH FILL BG) or
+;; (:svg-pie FRACTION FILL BG) becomes a non-text run; everything else
+;; contributes text.  `svg-line--render-runs' lowers a segment list to a
+;; run list -- (:text STR), (:bar FRAC W FILL BG), (:pie FRAC FILL BG) --
+;; coalescing adjacent text, each segment evaluated exactly once.
+;; (Icons are drawn as Nerd-Font glyphs in the text itself, so they need
+;; no run of their own; see `svg-line--add-text' / `svg-line-glyph-scale'.)
 
 (defun svg-line--render-runs (segments)
   "Lower SEGMENTS to a list of runs, each segment evaluated exactly once.
-Run forms: (:text STR), (:icon DATA FILL), (:bar FRACTION WIDTH FILL BG),
-\(:pie FRACTION FILL BG)."
+Run forms: (:text STR), (:bar FRACTION WIDTH FILL BG), (:pie FRACTION FILL BG)."
   (let ((runs '()) (buf ""))
     (cl-flet ((flush () (when (> (length buf) 0)
                           (push (list :text buf) runs) (setq buf ""))))
       (dolist (s segments)
         (let ((v (cond ((stringp s) s)
-                       ((and (consp s) (memq (car s) '(:svg-icon :svg-bar :svg-pie))) s)
+                       ((and (consp s) (memq (car s) '(:svg-bar :svg-pie))) s)
                        ((functionp s) (funcall s))
                        (t nil))))
           (cond
-           ((and (consp v) (eq (car v) :svg-icon)) (flush) (push (cons :icon (cdr v)) runs))
-           ((and (consp v) (eq (car v) :svg-bar))  (flush) (push (cons :bar (cdr v)) runs))
-           ((and (consp v) (eq (car v) :svg-pie))  (flush) (push (cons :pie (cdr v)) runs))
+           ((and (consp v) (eq (car v) :svg-bar)) (flush) (push (cons :bar (cdr v)) runs))
+           ((and (consp v) (eq (car v) :svg-pie)) (flush) (push (cons :pie (cdr v)) runs))
            (t (setq buf (concat buf (svg-line--item->string v)))))))
       (flush))
     (nreverse runs)))
@@ -263,7 +263,6 @@ Run forms: (:text STR), (:icon DATA FILL), (:bar FRACTION WIDTH FILL BG),
   "Advance width in pixels of a single RUN."
   (pcase (car run)
     (:text (* (length (nth 1 run)) char-advance))
-    (:icon (+ (round (svg-line--icon-width (car (nth 1 run)) fz)) (round (* 0.3 fz))))
     (:pie  (+ (round (* fz 0.76)) (round (* 0.3 fz))))   ; diameter + gap
     (:bar  (+ (nth 2 run) (round (* 0.3 fz))))
     (_ 0)))
@@ -277,7 +276,7 @@ Run forms: (:text STR), (:icon DATA FILL), (:bar FRACTION WIDTH FILL BG),
 
 (defun svg-line--draw-runs (svg runs x top fz lh font char-advance foreground)
   "Draw RUNS left-to-right in SVG starting at X (row top at TOP).
-Text advances by CHAR-ADVANCE per character; icons and bars by their own
+Text advances by CHAR-ADVANCE per character; bars and pies by their own
 width.  FOREGROUND is the fallback fill.  Returns the ending x."
   (dolist (run runs)
     (pcase (car run)
@@ -285,11 +284,6 @@ width.  FOREGROUND is the fallback fill.  Returns the ending x."
                (when (> (length str) 0)
                  (svg-line--add-text svg str :x x :y (+ top fz)
                                      :font font :font-size fz :fill foreground))))
-      (:icon (let ((data (nth 1 run)))
-               (svg-line-icon-append svg (cdr data) (car data)
-                                     :x (+ x (round (* 0.15 fz)))
-                                     :y (+ top (max 0 (/ (- lh fz) 2)))
-                                     :size fz :fill (or (nth 2 run) foreground))))
       (:pie  (let* ((frac (max 0.0 (min 1.0 (float (nth 1 run)))))
                     (fill (svg-line--color (or (nth 2 run) foreground)))
                     (bg   (svg-line--color (or (nth 3 run) "#d4dcea")))
@@ -339,9 +333,8 @@ Each of LEFT and RIGHT is either:
   - a STRING, drawn with exact font anchoring (flush-left at PAD, or
     flush-right at WIDTH minus RIGHT-MARGIN); or
   - a list of RUNS, drawn with CHAR-ADVANCE spacing so it can carry inline
-    icons, pies and progress bars.  A run is (:text STR), (:icon DATA FILL),
-    (:pie FRACTION FILL BG) or (:bar FRACTION PIXELWIDTH FILL BG); see
-    `svg-line--render-runs'.
+    pies and progress bars.  A run is (:text STR), (:pie FRACTION FILL BG)
+    or (:bar FRACTION PIXELWIDTH FILL BG); see `svg-line--render-runs'.
 Returns an svg object (see `svg-create')."
   (let* ((foreground (svg-line--color foreground))
          (background (svg-line--color background))
@@ -393,17 +386,17 @@ inter-item gap in character widths.  Returns an svg object.
 
 STATE selects how each item is styled:
   - nil / non-nil atom  -- treated as CURRENTP (backward compatible);
-  - a plist             -- recognised keys `:current', `:modified', and
-                           `:icon' (a (VIEWBOX . PATHS) leading icon, drawn
-                           in the item's text colour and accounted for in
-                           the wrap width).
+  - a plist             -- recognised keys `:current' and `:modified'.
 
 A current item is drawn bold, in CURRENT-FOREGROUND, over a
 CURRENT-BACKGROUND box.  A (non-current) modified item is drawn in
 MODIFIED-FOREGROUND, over a MODIFIED-BACKGROUND box when set.  When an
 item is BOTH current and modified, its box is tinted with
 MODIFIED-FOREGROUND (the readable current label stays, but the unsaved
-state remains visible behind the highlight)."
+state remains visible behind the highlight).
+
+A per-item icon, if wanted, is just a Nerd-Font glyph at the start of
+LABEL (it is plain text and flows with the label)."
   (let* ((foreground (svg-line--color foreground))
          (background (svg-line--color background))
          (current-foreground (svg-line--color current-foreground))
@@ -418,23 +411,17 @@ state remains visible behind the highlight)."
              (state (cdr it))
              (currentp  (if (consp state) (plist-get state :current) state))
              (modifiedp (and (consp state) (plist-get state :modified)))
-             (icon (and (consp state) (plist-get state :icon)))
-             ;; icon advance = icon width + a small gap before the label
-             (iw (if icon (+ (round (svg-line--icon-width (car icon) fz))
-                             (round (* 0.4 fz)))
-                   0))
-             (lw (* (length label) char-advance))
-             (cw (+ iw lw))                          ; full item (box) width
-             (w  (+ cw (* gap char-advance))))       ; + inter-item gap
+             (cw (* (length label) char-advance))    ; item (box) width
+             (w  (+ cw (* gap char-advance))))        ; + inter-item gap
         (when (and (> x 0) (> (+ x w) width))
           (setq x 0 row (1+ row)))
-        (push (list x (* row lh) cw iw label currentp modifiedp icon) placements)
+        (push (list x (* row lh) cw label currentp modifiedp) placements)
         (setq x (+ x w))))
     (let* ((height (max 1 (* (1+ row) lh)))
            (svg (svg-create width height)))
       (when background (svg-rectangle svg 0 0 width height :fill background))
       (dolist (p (nreverse placements))
-        (cl-destructuring-bind (px top cw iw label currentp modifiedp icon) p
+        (cl-destructuring-bind (px top cw label currentp modifiedp) p
           (let ((box  (cond ;; current AND modified: tint the current box with the
                             ;; modified accent so "unsaved" stays visible behind
                             ;; the current highlight (the label stays readable).
@@ -446,11 +433,7 @@ state remains visible behind the highlight)."
                             (t foreground))))
             (when box
               (svg-rectangle svg px top cw lh :fill box :rx 3))
-            (when icon
-              (svg-line-icon-append svg (cdr icon) (car icon)
-                                    :x px :y (+ top (max 0 (/ (- lh fz) 2)))
-                                    :size fz :fill fill))
-            (svg-line--add-text svg label :x (+ px iw) :y (+ top fz)
+            (svg-line--add-text svg label :x px :y (+ top fz)
                                 :font font :font-size fz :fill fill
                                 :weight (if currentp "bold" "normal")))))
       svg)))
@@ -459,48 +442,6 @@ state remains visible behind the highlight)."
 (defun svg-line-display (svg)
   "Wrap SVG object as a one-space string carrying it as a display image."
   (propertize " " 'display (svg-image svg :ascent 'center)))
-
-;;;; Icons (generic, dependency-free path injection)
-;; ----------------------------------------------------------------
-;; Draw real vector icons INTO a composed svg as scaled <path> groups,
-;; from already-harvested data (a viewBox + path "d" strings).  This is
-;; the primitive the line renderers use; harvesting the data from an icon
-;; set is the job of the optional `svg-line-icons' add-on (which bridges
-;; to `svg-lib').  Kept here, and free of any icon-set dependency, so the
-;; renderers can place icons without the core depending on svg-lib.
-
-(defun svg-line--icon-width (viewbox size)
-  "Pixel width of an icon with VIEWBOX (MINX MINY W H) drawn at height SIZE."
-  (let ((vw (float (or (nth 2 viewbox) size)))
-        (vh (float (or (nth 3 viewbox) size))))
-    (* size (/ vw (if (zerop vh) size vh)))))
-
-(defun svg-line-icon-append (svg paths viewbox &rest props)
-  "Append icon PATHS to SVG as a positioned, scaled `<g>'; return the group.
-PATHS is a list of SVG path \"d\" strings.  VIEWBOX is (MINX MINY W H),
-as parsed from the source icon's `viewBox'.  PROPS is a plist:
-  :x :y    top-left placement in SVG pixels (default 0, 0);
-  :size    target height in pixels, width scales proportionally (default 16);
-  :fill    path fill colour (default \"#000000\").
-SVG is an svg object from `svg-create' (or any DOM node to append into)."
-  (let* ((x    (or (plist-get props :x) 0))
-         (y    (or (plist-get props :y) 0))
-         (size (or (plist-get props :size) 16))
-         (fill (svg-line--color (or (plist-get props :fill) "#000000")))
-         (vx (float (or (nth 0 viewbox) 0)))
-         (vy (float (or (nth 1 viewbox) 0)))
-         (vh (float (or (nth 3 viewbox) size)))
-         (s  (/ size (if (zerop vh) size vh)))
-         ;; map icon space -> SVG pixels: place at (x,y), scale to `size',
-         ;; and shift away the viewBox origin.
-         (transform (format "translate(%g,%g) scale(%g) translate(%g,%g)"
-                            x y s (- vx) (- vy)))
-         (g (dom-node 'g (list (cons 'transform transform)))))
-    (dolist (d paths)
-      (when (and (stringp d) (> (length d) 0))
-        (dom-append-child g (dom-node 'path (list (cons 'd d) (cons 'fill fill))))))
-    (dom-append-child svg g)
-    g))
 
 ;;;; Safety wrapper
 ;; ----------------------------------------------------------------
@@ -571,8 +512,8 @@ SVG is an svg object from `svg-create' (or any DOM node to append into)."
 (defun svg-line--build-lines (spec)
   "Build the `lines' SVG for SPEC.
 Each content row is (LEFT-SEGMENTS . RIGHT-SEGMENTS).  A segment may emit
-an inline icon (:svg-icon DATA FILL) or progress bar (:svg-bar ...) token
-\(see `svg-line--render-runs'); a side with any such token is laid out with
+a progress bar (:svg-bar ...) or pie (:svg-pie ...) token (see
+`svg-line--render-runs'); a side with any such token is laid out with
 CHAR-ADVANCE spacing, otherwise with exact text anchoring."
   (let* ((active (svg-line--active-p spec))
          (fg (or (and (not active) (svg-line--opt spec :inactive-foreground))
@@ -651,13 +592,12 @@ Recognised SPEC keys:
   :layout  `lines' (default) or `wrap'
   :content a function returning the line's content (required):
              - for `lines': a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS); a
-               segment may be a string, a function, or an inline icon
-               (:svg-icon DATA FILL), pie (:svg-pie FRAC FILL BG) or
-               progress-bar (:svg-bar FRAC W FILL BG) token (or a function
-               returning one)
+               segment may be a string, a function, or a pie
+               (:svg-pie FRAC FILL BG) / progress-bar (:svg-bar FRAC W FILL BG)
+               token (or a function returning one).  Icons are Nerd-Font
+               glyphs in the text, so they need no token of their own.
              - for `wrap':  a list of (LABEL . STATE), where STATE is a
-               CURRENTP atom or a plist with `:current'/`:modified'/`:icon'
-               keys (`:icon' is a (VIEWBOX . PATHS) leading tab icon)
+               CURRENTP atom or a plist with `:current'/`:modified' keys
   :width   `frame', `window', an integer, or a function (default by target)
   :font :font-size :line-pad :pad :right-margin :char-advance
   :foreground :background

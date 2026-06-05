@@ -164,8 +164,77 @@ formatted."
                      (t "")))
              segments ""))
 
+;;;; Runs -- text interleaved with icons / progress bars
+;; ----------------------------------------------------------------
+;; A `lines' side may mix text with inline icons and progress bars.  A
+;; segment value (or literal) of (:svg-icon DATA FILL) or
+;; (:svg-bar FRACTION WIDTH FILL BG) becomes a non-text run; everything
+;; else contributes text.  `svg-line--render-runs' lowers a segment list
+;; to a run list -- (:text STR), (:icon DATA FILL), (:bar FRAC W FILL BG)
+;; -- coalescing adjacent text, each segment evaluated exactly once.
+
+(defun svg-line--render-runs (segments)
+  "Lower SEGMENTS to a list of runs, each segment evaluated exactly once.
+Run forms: (:text STR), (:icon DATA FILL), (:bar FRACTION WIDTH FILL BG)."
+  (let ((runs '()) (buf ""))
+    (cl-flet ((flush () (when (> (length buf) 0)
+                          (push (list :text buf) runs) (setq buf ""))))
+      (dolist (s segments)
+        (let ((v (cond ((stringp s) s)
+                       ((and (consp s) (memq (car s) '(:svg-icon :svg-bar))) s)
+                       ((functionp s) (funcall s))
+                       (t nil))))
+          (cond
+           ((and (consp v) (eq (car v) :svg-icon)) (flush) (push (cons :icon (cdr v)) runs))
+           ((and (consp v) (eq (car v) :svg-bar))  (flush) (push (cons :bar (cdr v)) runs))
+           (t (setq buf (concat buf (svg-line--item->string v)))))))
+      (flush))
+    (nreverse runs)))
+
+(defun svg-line--runs-all-text-p (runs)
+  "Non-nil if RUNS are entirely text (so the side can use exact text anchoring)."
+  (cl-every (lambda (r) (eq (car r) :text)) runs))
+
+(defun svg-line--run-width (run char-advance fz)
+  "Advance width in pixels of a single RUN."
+  (pcase (car run)
+    (:text (* (length (nth 1 run)) char-advance))
+    (:icon (+ (round (svg-line--icon-width (car (nth 1 run)) fz)) (round (* 0.4 fz))))
+    (:bar  (+ (nth 2 run) (round (* 0.3 fz))))
+    (_ 0)))
+
+(defun svg-line--runs-width (runs char-advance fz)
+  "Total advance width in pixels of RUNS (for right alignment)."
+  (apply #'+ (mapcar (lambda (r) (svg-line--run-width r char-advance fz)) runs)))
+
 ;;;; Image builders (public, pure: data in, svg object out)
 ;; ----------------------------------------------------------------
+
+(defun svg-line--draw-runs (svg runs x top fz lh font char-advance foreground)
+  "Draw RUNS left-to-right in SVG starting at X (row top at TOP).
+Text advances by CHAR-ADVANCE per character; icons and bars by their own
+width.  FOREGROUND is the fallback fill.  Returns the ending x."
+  (dolist (run runs)
+    (pcase (car run)
+      (:text (let ((str (nth 1 run)))
+               (when (> (length str) 0)
+                 (svg-text svg str :font-family font :font-size fz
+                           :fill foreground :x x :y (+ top fz)))))
+      (:icon (let ((data (nth 1 run)))
+               (svg-line-icon-append svg (cdr data) (car data)
+                                     :x x :y (+ top (max 0 (/ (- lh fz) 2)))
+                                     :size fz :fill (or (nth 2 run) foreground))))
+      (:bar  (let* ((frac (max 0.0 (min 1.0 (float (nth 1 run)))))
+                    (bw (nth 2 run))
+                    (fill (or (nth 3 run) foreground))
+                    (bg (nth 4 run))
+                    (bh (max 3 (round (* fz 0.5))))
+                    (by (+ top (max 0 (/ (- lh bh) 2)))))
+               (when bg (svg-rectangle svg x by bw bh :fill (svg-line--color bg) :rx 2))
+               (svg-rectangle svg x by (max 1 (round (* bw frac))) bh
+                              :fill (svg-line--color fill) :rx 2))))
+    (setq x (+ x (svg-line--run-width run char-advance fz))))
+  x)
 
 ;;;###autoload
 (cl-defun svg-line-image (rows &key
@@ -175,14 +244,16 @@ formatted."
                                (line-pad svg-line-line-pad)
                                (pad 0)
                                (right-margin 0)
+                               (char-advance svg-line-char-advance)
                                (foreground "#000000")
-                               (background nil)
-                               (icons nil))
-  "Build a `lines'-layout SVG from ROWS, a list of (LEFT . RIGHT) strings.
-LEFT is drawn flush-left at PAD; RIGHT is drawn flush-right (anchored at
-WIDTH minus RIGHT-MARGIN).  ICONS, when given, is a list parallel to ROWS;
-each element is nil or (DATA . FILL), where DATA is (VIEWBOX . PATHS) -- a
-leading icon drawn at PAD that shifts that row's LEFT text rightwards.
+                               (background nil))
+  "Build a `lines'-layout SVG from ROWS, a list of (LEFT . RIGHT).
+Each of LEFT and RIGHT is either:
+  - a STRING, drawn with exact font anchoring (flush-left at PAD, or
+    flush-right at WIDTH minus RIGHT-MARGIN); or
+  - a list of RUNS, drawn with CHAR-ADVANCE spacing so it can carry inline
+    icons and progress bars.  A run is (:text STR), (:icon DATA FILL), or
+    (:bar FRACTION PIXELWIDTH FILL BG); see `svg-line--render-runs'.
 Returns an svg object (see `svg-create')."
   (let* ((foreground (svg-line--color foreground))
          (background (svg-line--color background))
@@ -196,25 +267,22 @@ Returns an svg object (see `svg-create')."
              for i from 0
              for top = (* lh i)
              for y = (+ top fz)
-             for icon = (nth i icons)
-             for lx = (let ((data (car-safe icon)))
-                        (if data
-                            (progn
-                              (svg-line-icon-append svg (cdr data) (car data)
-                                                    :x pad
-                                                    :y (+ top (max 0 (/ (- lh fz) 2)))
-                                                    :size fz
-                                                    :fill (or (cdr icon) foreground))
-                              (+ pad (round (svg-line--icon-width (car data) fz))
-                                 (round (* 0.4 fz))))
-                          pad))
              do (progn
-                  (when (and (stringp l) (> (length l) 0))
+                  ;; LEFT: flush-left
+                  (cond
+                   ((and (stringp l) (> (length l) 0))
                     (svg-text svg l :font-family font :font-size fz
-                              :fill foreground :x lx :y y))
-                  (when (and (stringp r) (> (length r) 0))
+                              :fill foreground :x pad :y y))
+                   ((consp l)
+                    (svg-line--draw-runs svg l pad top fz lh font char-advance foreground)))
+                  ;; RIGHT: flush-right
+                  (cond
+                   ((and (stringp r) (> (length r) 0))
                     (svg-text svg r :font-family font :font-size fz
-                              :fill foreground :x rx :y y :text-anchor "end"))))
+                              :fill foreground :x rx :y y :text-anchor "end"))
+                   ((consp r)
+                    (svg-line--draw-runs svg r (max pad (- rx (svg-line--runs-width r char-advance fz)))
+                                         top fz lh font char-advance foreground)))))
     svg))
 
 ;;;###autoload
@@ -405,42 +473,40 @@ SVG is an svg object from `svg-create' (or any DOM node to append into)."
 ;;;; Per-spec builders
 ;; ----------------------------------------------------------------
 
+(defun svg-line--side (segments)
+  "Render SEGMENTS to a side value: a plain string if all text, else a run list."
+  (let ((runs (svg-line--render-runs segments)))
+    (if (svg-line--runs-all-text-p runs)
+        (mapconcat (lambda (r) (nth 1 r)) runs "")
+      runs)))
+
 (defun svg-line--build-lines (spec)
   "Build the `lines' SVG for SPEC.
-A content row is either (LEFT-SEGMENTS . RIGHT-SEGMENTS) or a plist
-\(:left LSEGS :right RSEGS :icon (VIEWBOX . PATHS) :icon-fill COLOUR); the
-latter draws a leading icon that shifts that row's left text rightwards."
+Each content row is (LEFT-SEGMENTS . RIGHT-SEGMENTS).  A segment may emit
+an inline icon (:svg-icon DATA FILL) or progress bar (:svg-bar ...) token
+\(see `svg-line--render-runs'); a side with any such token is laid out with
+CHAR-ADVANCE spacing, otherwise with exact text anchoring."
   (let* ((active (svg-line--active-p spec))
          (fg (or (and (not active) (svg-line--opt spec :inactive-foreground))
                  (svg-line--opt spec :foreground "#000000")))
          (bg (if active
                  (svg-line--opt spec :background)
                (or (svg-line--opt spec :inactive-background)
-                   (svg-line--opt spec :background))))
-         (rows nil) (icons nil))
-    (dolist (r (funcall (plist-get spec :content)))
-      (if (keywordp (car-safe r))
-          (let ((data (plist-get r :icon)))
-            (push (cons (svg-line-render-segments (plist-get r :left))
-                        (svg-line-render-segments (plist-get r :right)))
-                  rows)
-            (push (and data (cons data (svg-line--color (or (plist-get r :icon-fill) fg))))
-                  icons))
-        (push (cons (svg-line-render-segments (car r))
-                    (svg-line-render-segments (cdr r)))
-              rows)
-        (push nil icons)))
-    (svg-line-image (nreverse rows)
-                    :width (svg-line--width spec)
-                    :font (svg-line--opt spec :font
-                                         (or svg-line-font (face-attribute 'default :family nil t)))
-                    :font-size (svg-line--opt spec :font-size svg-line-font-size)
-                    :line-pad (svg-line--opt spec :line-pad svg-line-line-pad)
-                    :pad (svg-line--opt spec :pad 0)
-                    :right-margin (svg-line--opt spec :right-margin 0)
-                    :foreground fg
-                    :background bg
-                    :icons (nreverse icons))))
+                   (svg-line--opt spec :background)))))
+    (svg-line-image
+     (mapcar (lambda (r)
+               (cons (svg-line--side (car r)) (svg-line--side (cdr r))))
+             (funcall (plist-get spec :content)))
+     :width (svg-line--width spec)
+     :font (svg-line--opt spec :font
+                          (or svg-line-font (face-attribute 'default :family nil t)))
+     :font-size (svg-line--opt spec :font-size svg-line-font-size)
+     :line-pad (svg-line--opt spec :line-pad svg-line-line-pad)
+     :pad (svg-line--opt spec :pad 0)
+     :right-margin (svg-line--opt spec :right-margin 0)
+     :char-advance (svg-line--opt spec :char-advance svg-line-char-advance)
+     :foreground fg
+     :background bg)))
 
 (defun svg-line--build-wrap (spec)
   "Build the `wrap' SVG for SPEC.
@@ -496,20 +562,20 @@ Recognised SPEC keys:
   :target  one of `tab-bar' `mode-line' `header-line' `tab-line' (required)
   :layout  `lines' (default) or `wrap'
   :content a function returning the line's content (required):
-             - for `lines': a list of rows, each either
-               (LEFT-SEGMENTS . RIGHT-SEGMENTS) or a plist
-               (:left LSEGS :right RSEGS :icon (VIEWBOX . PATHS) :icon-fill C)
-               for a leading icon on that row
+             - for `lines': a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS); a
+               segment may be a string, a function, or an inline icon
+               (:svg-icon DATA FILL) / progress-bar (:svg-bar FRAC W FILL BG)
+               token, or a function returning one of those
              - for `wrap':  a list of (LABEL . STATE), where STATE is a
                CURRENTP atom or a plist with `:current'/`:modified'/`:icon'
                keys (`:icon' is a (VIEWBOX . PATHS) leading tab icon)
   :width   `frame', `window', an integer, or a function (default by target)
-  :font :font-size :line-pad :pad :right-margin
+  :font :font-size :line-pad :pad :right-margin :char-advance
   :foreground :background
   :active   a predicate; when present and false, inactive variants apply
   :inactive-foreground :inactive-background
   `wrap' only:
-  :char-advance :gap
+  :gap
   :current-foreground :current-background
   :modified-foreground :modified-background
   :inactive-current-foreground :inactive-current-background

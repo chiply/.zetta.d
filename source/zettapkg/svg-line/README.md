@@ -103,16 +103,30 @@ real **vector** icons as scaled `<path>` groups:
   `svg-line-icon-data … no-fetch` + `svg-line-icon-prefetch` keep the network
   and svg-lib itself entirely **off the redisplay path**.
 
-Both layouts accept a leading icon, passed as `(VIEWBOX . PATHS)`:
+In the **`wrap`** layout, each tab takes a leading icon via `:icon`:
 
 ```elisp
-;; wrap: per-tab icon, in the tab's text colour
 (cons "1 init.el" (list :current t :icon (svg-line-icon-data "lambda")))
-
-;; lines: a per-row leading icon via the plist row form
-(list :left '(my-buffer-name) :right '(my-clock)
-      :icon (svg-line-icon-data "language-python") :icon-fill "#c1641e")
 ```
+
+In the **`lines`** layout, a segment may *be* (or *return*) an inline icon
+or progress-bar token, placed anywhere among the text — `(:svg-icon DATA
+FILL)` and `(:svg-bar FRACTION PIXELWIDTH FILL BG)`:
+
+```elisp
+(defun my-vc-icon ()                       ; a dynamic inline-icon segment
+  (when (vc-backend buffer-file-name)
+    (list :svg-icon (svg-line-icon-data "git" "simple") nil)))
+
+(defun my-progress ()                      ; a progress bar of point-in-buffer
+  (list :svg-bar (/ (float (point)) (point-max)) 56 "#2a4d77" "#d4dcea"))
+
+;; row: [git] repo:branch ......  <progress>
+(cons '(my-vc-icon my-repo-branch) '(my-progress))
+```
+
+A side containing any icon/bar token is laid out with `:char-advance`
+spacing; pure-text sides keep exact font anchoring.
 
 ## Safety
 

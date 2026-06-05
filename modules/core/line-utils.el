@@ -124,12 +124,23 @@
     "*"))
 
 (defun zetta-tab-bar-modal ()
+  "The active modal SYSTEM (evil / meow / emacs)."
   (or
    (when (and (boundp 'evil-mode) evil-mode) "evil")
    (when (and (boundp 'meow-mode) meow-mode) "meow")
    (when (not (or (and (boundp 'evil-mode) evil-mode)
                   (and (boundp 'meow-mode) meow-mode)))
      "emacs")))
+
+(defun zetta-line-modal-state ()
+  "The current modal STATE (e.g. normal, insert, visual) as a string.
+Works for evil and meow; \"emacs\" when neither is editing this buffer."
+  (cond
+   ((bound-and-true-p evil-state) (symbol-name evil-state))
+   ((and (bound-and-true-p meow-mode) (fboundp 'meow--current-state)
+         (meow--current-state))
+    (symbol-name (meow--current-state)))
+   (t "emacs")))
 
 (defun zetta-gptel-processes ()
   (when (boundp 'gptel--request-alist)
@@ -175,7 +186,8 @@ where no local thing has been set via `treesit-tap-set-local'."
 
 ;;; mode-line text segments
 (defun zetta-modeline-svg--modal ()
-  (if (fboundp 'zetta-tab-bar-modal) (or (zetta-tab-bar-modal) "") ""))
+  ;; show the modal STATE (normal/insert/...), not the modal system
+  (zetta-line-modal-state))
 
 (defun zetta-modeline-svg--ace ()
   (or (window-parameter (selected-window) 'ace-window-path) ""))
@@ -372,5 +384,16 @@ keep their own font (`zetta-font').")
   (when (and (boundp 'space-tree-modeline-lighter) space-tree-modeline-lighter)
     (and (featurep 'nerd-icons)
          (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-view_dashboard"))))))
+
+(defun zetta-tab-bar-workspace-text ()
+  "The space-tree workspace lighter string (a function so svg-line renders it;
+a bare variable segment would not be evaluated)."
+  (when (boundp 'space-tree-modeline-lighter)
+    space-tree-modeline-lighter))
+
+(defun zetta-tab-bar-spotify-icon ()
+  "Spotify glyph, sits to the left of the spot mode-line string."
+  (and (featurep 'nerd-icons)
+       (zetta-line--glyph (ignore-errors (nerd-icons-faicon "nf-fa-spotify")))))
 
 ;;; line-utils.el ends here

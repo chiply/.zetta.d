@@ -81,6 +81,43 @@
                                   :current-background "#0000ff")))
     (should (= (length (dom-by-tag svg 'rect)) 1))))
 
+(ert-deftest svg-line/wrap-modified-plist-state ()
+  "A plist STATE marks `:modified'; it draws a box and uses MODIFIED-FOREGROUND."
+  (let ((svg (svg-line-wrap-image
+              '(("a" . nil) ("b" . (:current nil :modified t)))
+              :width 1000 :font "Monospace" :font-size 10
+              :foreground "#000000"
+              :modified-foreground "#c1641e" :modified-background "#ffeedd")))
+    ;; one rect for the modified item's box
+    (should (= (length (dom-by-tag svg 'rect)) 1))
+    ;; the modified label is drawn in the modified foreground
+    (let ((fills (mapcar (lambda (tx) (dom-attr tx 'fill)) (dom-by-tag svg 'text))))
+      (should (member "#c1641e" fills))
+      (should (member "#000000" fills)))))
+
+(ert-deftest svg-line/wrap-current-beats-modified ()
+  "When an item is both current and modified, current styling wins."
+  (let ((svg (svg-line-wrap-image
+              '(("a" . (:current t :modified t)))
+              :width 1000 :font "Monospace"
+              :current-foreground "#ffffff" :current-background "#2a4d77"
+              :modified-foreground "#c1641e")))
+    (let ((tx (car (dom-by-tag svg 'text))))
+      (should (equal (dom-attr tx 'fill) "#ffffff"))
+      (should (equal (dom-attr tx 'font-weight) "bold")))))
+
+(ert-deftest svg-line/wrap-inactive-palette ()
+  "With a false `:active' predicate, the wrap layout uses inactive colours."
+  (svg-line-define 'test-wrap-inactive
+    :target 'tab-line :layout 'wrap
+    :content (lambda () '(("a" . t)))
+    :active (lambda () nil)
+    :current-background "#2a4d77"
+    :inactive-current-background "#9aa9bd")
+  (let* ((svg (svg-line--build-wrap (svg-line--spec 'test-wrap-inactive)))
+         (rect (car (dom-by-tag svg 'rect))))
+    (should (equal (dom-attr rect 'fill) "#9aa9bd"))))
+
 ;;;; safety wrapper
 
 (ert-deftest svg-line/safe-error-fallback ()

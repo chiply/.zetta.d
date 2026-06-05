@@ -211,37 +211,56 @@ WIDTH minus RIGHT-MARGIN).  Returns an svg object (see `svg-create')."
                                      (foreground "#000000")
                                      (background nil)
                                      (current-foreground nil)
-                                     (current-background nil))
-  "Build a `wrap'-layout SVG from ITEMS, a list of (LABEL . CURRENTP).
-Items flow left-to-right and wrap onto new rows at WIDTH.  A current item
-is drawn bold, in CURRENT-FOREGROUND, over a CURRENT-BACKGROUND box.
-GAP is the inter-item gap in character widths.  Returns an svg object."
+                                     (current-background nil)
+                                     (modified-foreground nil)
+                                     (modified-background nil))
+  "Build a `wrap'-layout SVG from ITEMS, a list of (LABEL . STATE).
+Items flow left-to-right and wrap onto new rows at WIDTH.  GAP is the
+inter-item gap in character widths.  Returns an svg object.
+
+STATE selects how each item is styled:
+  - nil / non-nil atom  -- treated as CURRENTP (backward compatible);
+  - a plist             -- recognised keys `:current' and `:modified'.
+
+A current item is drawn bold, in CURRENT-FOREGROUND, over a
+CURRENT-BACKGROUND box.  A (non-current) modified item is drawn in
+MODIFIED-FOREGROUND, over a MODIFIED-BACKGROUND box when set.  Current
+takes precedence over modified."
   (let* ((foreground (svg-line--color foreground))
          (background (svg-line--color background))
          (current-foreground (svg-line--color current-foreground))
          (current-background (svg-line--color current-background))
+         (modified-foreground (svg-line--color modified-foreground))
+         (modified-background (svg-line--color modified-background))
          (fz font-size)
          (lh (+ fz line-pad))
          (x 0) (row 0) (placements nil))
     (dolist (it items)
       (let* ((label (car it))
+             (state (cdr it))
+             (currentp  (if (consp state) (plist-get state :current) state))
+             (modifiedp (and (consp state) (plist-get state :modified)))
              (lw (* (length label) char-advance))
              (w  (+ lw (* gap char-advance))))
         (when (and (> x 0) (> (+ x w) width))
           (setq x 0 row (1+ row)))
-        (push (list x (* row lh) lw label (cdr it)) placements)
+        (push (list x (* row lh) lw label currentp modifiedp) placements)
         (setq x (+ x w))))
     (let* ((height (max 1 (* (1+ row) lh)))
            (svg (svg-create width height)))
       (when background (svg-rectangle svg 0 0 width height :fill background))
       (dolist (p (nreverse placements))
-        (cl-destructuring-bind (px top lw label currentp) p
-          (when (and currentp current-background)
-            (svg-rectangle svg px top lw lh :fill current-background :rx 3))
-          (svg-text svg label :font-family font :font-size fz
-                    :fill (if currentp (or current-foreground foreground) foreground)
-                    :font-weight (if currentp "bold" "normal")
-                    :x px :y (+ top fz))))
+        (cl-destructuring-bind (px top lw label currentp modifiedp) p
+          (let ((box  (cond (currentp  current-background)
+                            (modifiedp modified-background)))
+                (fill (cond (currentp  (or current-foreground foreground))
+                            (modifiedp (or modified-foreground foreground))
+                            (t foreground))))
+            (when box
+              (svg-rectangle svg px top lw lh :fill box :rx 3))
+            (svg-text svg label :font-family font :font-size fz
+                      :fill fill :font-weight (if currentp "bold" "normal")
+                      :x px :y (+ top fz)))))
       svg)))
 
 ;;;###autoload
@@ -333,19 +352,30 @@ GAP is the inter-item gap in character widths.  Returns an svg object."
                     :background bg)))
 
 (defun svg-line--build-wrap (spec)
-  "Build the `wrap' SVG for SPEC."
-  (svg-line-wrap-image (funcall (plist-get spec :content))
-                       :width (svg-line--width spec)
-                       :font (svg-line--opt spec :font
-                                            (or svg-line-font (face-attribute 'default :family nil t)))
-                       :font-size (svg-line--opt spec :font-size svg-line-font-size)
-                       :line-pad (svg-line--opt spec :line-pad svg-line-line-pad)
-                       :char-advance (svg-line--opt spec :char-advance svg-line-char-advance)
-                       :gap (svg-line--opt spec :gap 3)
-                       :foreground (svg-line--opt spec :foreground "#000000")
-                       :background (svg-line--opt spec :background)
-                       :current-foreground (svg-line--opt spec :current-foreground)
-                       :current-background (svg-line--opt spec :current-background)))
+  "Build the `wrap' SVG for SPEC.
+When SPEC has an `:active' predicate that is false, the inactive variant
+of each colour applies (falling back to the active colour when unset),
+mirroring the `lines' layout."
+  (let* ((active (svg-line--active-p spec))
+         (pick (lambda (key inactive-key &optional default)
+                 (if active
+                     (svg-line--opt spec key default)
+                   (or (svg-line--opt spec inactive-key)
+                       (svg-line--opt spec key default))))))
+    (svg-line-wrap-image (funcall (plist-get spec :content))
+                         :width (svg-line--width spec)
+                         :font (svg-line--opt spec :font
+                                              (or svg-line-font (face-attribute 'default :family nil t)))
+                         :font-size (svg-line--opt spec :font-size svg-line-font-size)
+                         :line-pad (svg-line--opt spec :line-pad svg-line-line-pad)
+                         :char-advance (svg-line--opt spec :char-advance svg-line-char-advance)
+                         :gap (svg-line--opt spec :gap 3)
+                         :foreground (funcall pick :foreground :inactive-foreground "#000000")
+                         :background (funcall pick :background :inactive-background)
+                         :current-foreground (funcall pick :current-foreground :inactive-current-foreground)
+                         :current-background (funcall pick :current-background :inactive-current-background)
+                         :modified-foreground (funcall pick :modified-foreground :inactive-modified-foreground)
+                         :modified-background (funcall pick :modified-background :inactive-modified-background))))
 
 (defun svg-line--render (name)
   "Render line NAME to a display string (error/loop guarded)."
@@ -376,13 +406,19 @@ Recognised SPEC keys:
   :layout  `lines' (default) or `wrap'
   :content a function returning the line's content (required):
              - for `lines': a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS)
-             - for `wrap':  a list of (LABEL . CURRENTP)
+             - for `wrap':  a list of (LABEL . STATE), where STATE is a
+               CURRENTP atom or a plist with `:current'/`:modified' keys
   :width   `frame', `window', an integer, or a function (default by target)
   :font :font-size :line-pad :pad :right-margin
   :foreground :background
   :active   a predicate; when present and false, inactive variants apply
   :inactive-foreground :inactive-background
-  :char-advance :gap :current-foreground :current-background  (`wrap' only)
+  `wrap' only:
+  :char-advance :gap
+  :current-foreground :current-background
+  :modified-foreground :modified-background
+  :inactive-current-foreground :inactive-current-background
+  :inactive-modified-foreground :inactive-modified-background
 Each styling value may be a literal or a zero-arg function,
 evaluated on every render."
   (unless (plist-get spec :target)

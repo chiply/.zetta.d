@@ -44,16 +44,33 @@ You supply a `:content` function and styling and bind it to a target.
 (svg-line-activate 'mode-line)   ;; svg-line-deactivate / svg-line-toggle
 ```
 
-A `wrap` tab-line whose `:content` returns `(LABEL . CURRENTP)` items:
+A `wrap` tab-line whose `:content` returns `(LABEL . STATE)` items. `STATE`
+is either a `CURRENTP` atom or a plist with `:current` / `:modified` keys:
 
 ```elisp
+(defun my-tab-line-items ()
+  (list (cons "1 init.el"  '(:current t   :modified nil))
+        (cons "2 notes.md" '(:current nil :modified t))))   ; unsaved
+
 (svg-line-define 'tab-line
   :target 'tab-line :layout 'wrap
   :content #'my-tab-line-items
+  :active  #'mode-line-window-selected-p
   :background "#eef3fc"
-  :current-background "#2a4d77" :current-foreground "#ffffff")
+  :current-background "#2a4d77" :current-foreground "#ffffff"
+  :modified-foreground "#c1641e"                 ; unsaved-buffer tabs
+  ;; inactive (unfocused-window) palette — each falls back to its active
+  ;; counterpart when omitted:
+  :inactive-background "#f4f6fa"
+  :inactive-current-background "#9aa9bd")
 (svg-line-activate 'tab-line)
 ```
+
+In the `wrap` layout, a **current** tab is bold over a `current-background`
+box; a **modified** (non-current) tab uses `modified-foreground` (and a
+`modified-background` box when set); current wins when a tab is both. With an
+`:active` predicate, the whole line switches to the `inactive-*` palette in
+unfocused windows.
 
 ### Styling values
 

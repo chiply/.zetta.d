@@ -440,14 +440,11 @@ foreground colour."
              (vc-git-root (buffer-file-name)))
     (zetta-line-icon-token "octicons" "git-branch")))
 
-(defvar zetta-modeline-svg-progress-width 56
-  "Width in pixels of the mode-line file-progress bar.")
-
 (defun zetta-modeline-svg--file-progress ()
-  "Progress bar of point's position through the buffer."
+  "Compact progress pie of point's position through the buffer."
   (let* ((total (max 1 (- (point-max) (point-min))))
          (frac (/ (float (- (point) (point-min))) total)))
-    (list :svg-bar frac zetta-modeline-svg-progress-width "#2a4d77" "#d4dcea")))
+    (list :svg-pie frac "#2a4d77" "#d4dcea")))
 
 ;;; tab bar
 (defun zetta-tab-bar-file-icon ()

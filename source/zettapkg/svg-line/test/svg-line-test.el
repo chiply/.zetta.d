@@ -163,15 +163,29 @@ with the modified accent so the unsaved state stays visible."
     (should (= (length (dom-by-tag svg 'path)) 1))
     (should (> (dom-attr (car (dom-by-tag svg 'text)) 'x) 0)))) ; label shifted
 
-(ert-deftest svg-line/lines-leading-icon ()
-  "A parallel :icons entry draws a leading icon and shifts that row's left text."
+(ert-deftest svg-line/render-runs-lowers-tokens ()
+  "Segments lower to text/icon/bar runs, coalescing adjacent text."
+  (let ((runs (svg-line--render-runs
+               (list "a" "b"
+                     '(:svg-icon ((0 0 24 24) . ("M0 0h1v1z")) "#111111")
+                     (lambda () "c")
+                     '(:svg-bar 0.5 40 "#222222" "#eeeeee")))))
+    (should (equal (mapcar #'car runs) '(:text :icon :text :bar)))
+    (should (equal (nth 1 (nth 0 runs)) "ab"))          ; adjacent text coalesced
+    (should (equal (nth 1 (nth 2 runs)) "c"))))
+
+(ert-deftest svg-line/lines-runs-draw-icon-and-bar ()
+  "A run-list side renders an inline icon group and a progress bar (2 rects)."
   (let* ((icon '((0 0 24 24) . ("M0 0h24v24H0z")))
-         (svg (svg-line-image '(("L" . "R") ("L2" . ""))
-                              :width 200 :font "Monospace" :font-size 10 :pad 4
-                              :icons (list (cons icon "#2a4d77") nil))))
-    (should (dom-by-tag svg 'g))                        ; one leading icon group
-    ;; first row's left text is shifted right of pad (=4)
-    (should (> (dom-attr (car (dom-by-tag svg 'text)) 'x) 4))))
+         (left  (list (list :icon icon "#2a4d77") (list :text " hi")))
+         (right (list (list :bar 0.5 40 "#2a4d77" "#eeeeee")))
+         (svg (svg-line-image (list (cons left right))
+                              :width 400 :font "Monospace" :font-size 10
+                              :pad 4 :char-advance 8)))
+    (should (= (length (dom-by-tag svg 'g)) 1))         ; inline icon group
+    (should (= (length (dom-by-tag svg 'rect)) 2))      ; bar: track + fill
+    (should (member " hi" (mapcar (lambda (tx) (car (dom-children tx)))
+                                  (dom-by-tag svg 'text))))))
 
 ;;;; safety wrapper
 

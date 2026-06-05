@@ -1,0 +1,23 @@
+; -*- lexical-binding: t -*-
+
+(package "svg-line"
+         "0.1.0"
+         "Render tab-bar, tab-line, header-line and mode-line as SVG")
+
+(website-url "https://github.com/chiply/svg-line")
+(keywords "convenience" "faces" "frames")
+
+(package-file "svg-line.el")
+
+;; Only the engine ships; the test suite is excluded from the package.
+(files "svg-line.el")
+
+(script "test" "eask test ert ./test/svg-line-test.el")
+
+(source "gnu")
+(source "melpa")
+
+(depends-on "emacs" "29.1")
+
+(development
+ (depends-on "package-lint"))

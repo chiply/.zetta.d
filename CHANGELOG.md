@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.7](https://github.com/chiply/.zetta.d/compare/v0.1.6...v0.1.7) (2026-06-05)
+
+
+### Features
+
+* **ui:** SVG line engine (svg-line) for tab-bar, mode-line, tab-line, header-line ([8876b21](https://github.com/chiply/.zetta.d/commit/8876b21813570fbaea893835978cf4fd6bada4ac))
+* **ui:** SVG line engine (svg-line) for tab-bar, mode-line, tab-line, header-line ([184958c](https://github.com/chiply/.zetta.d/commit/184958c1084b2ec7782adfbcb99714238bba59ef))
+
 ## [0.1.6](https://github.com/chiply/.zetta.d/compare/v0.1.5...v0.1.6) (2026-06-02)
 
 

@@ -360,10 +360,12 @@ Returns an svg object (see `svg-create')."
                                         :font font :font-size fz :fill foreground))
                    ((consp l)
                     (svg-line--draw-runs svg l pad top fz lh font char-advance foreground)))
-                  ;; RIGHT: flush-right
+                  ;; RIGHT: flush-right.  Trim trailing whitespace so the
+                  ;; visible content reaches the edge (empty trailing segments
+                  ;; or a datum's trailing space would otherwise push it left).
                   (cond
-                   ((and (stringp r) (> (length r) 0))
-                    (svg-line--add-text svg r :x rx :y y :anchor "end"
+                   ((and (stringp r) (> (length (string-trim-right r)) 0))
+                    (svg-line--add-text svg (string-trim-right r) :x rx :y y :anchor "end"
                                         :font font :font-size fz :fill foreground))
                    ((consp r)
                     (svg-line--draw-runs svg r (max pad (- rx (svg-line--runs-width r char-advance fz)))

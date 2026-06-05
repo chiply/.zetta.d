@@ -56,12 +56,12 @@ Row 1 uses the plist form to carry a leading file-type icon for the
 current buffer; the remaining rows are plain (LEFT . RIGHT) conses."
   (list
    ;; line 1 -- leading file-type icon for the current buffer
-   (list :left '(zetta-buffer-name
-                 zmc-modeline-indicator
-                 zetta-pyvenv-activate-poetry-modeline)
+   (cons '(zetta-tab-bar-file-icon
+           zetta-buffer-name
+           zmc-modeline-indicator
+           zetta-pyvenv-activate-poetry-modeline)
          ;; TEMP right-aligned probe (remove for an empty right side)
-         :right '("<<< line 1 right edge")
-         :icon (zetta-line-file-icon-data (current-buffer)))
+         '("<<< line 1 right edge"))
    ;; line 2
    (cons '(zetta-tab-bar-spot-mode-line-string)
          '("line 2 right edge >>>"))
@@ -73,9 +73,16 @@ current buffer; the remaining rows are plain (LEFT . RIGHT) conses."
            zetta-tab-bar-current-thing
            zetta-tab-bar-recursion-level
            recursion-indicator--string
-           tab-bar-format-global
+           ;; mu4e / clock / battery, each with its own icon.  These were
+           ;; bundled in `tab-bar-format-global'; rendering them explicitly
+           ;; lets the mail and battery icons sit next to their data.  (If
+           ;; you add other entries to `global-mode-string', tell me and
+           ;; I'll fold them back in.)
+           zetta-tab-bar-mu4e-icon zetta-tab-bar-mu4e-text "  "
+           zetta-tab-bar-clock "  "
+           zetta-tab-bar-battery-icon zetta-tab-bar-battery-text "  "
            zetta-current-prefix
-           space-tree-modeline-lighter))))
+           zetta-tab-bar-workspace-icon space-tree-modeline-lighter))))
 
 (svg-line-define 'zetta-tab-bar
   :target 'tab-bar

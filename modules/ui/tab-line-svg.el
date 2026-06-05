@@ -326,7 +326,7 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
 Match it to the single-width SVG font's glyph width (JetBrainsMono Nerd
 Font Mono at 15px ~= 9); the file-type glyph counts as one cell."
   :type 'number :group 'zetta)
-(defcustom zetta-tab-line-svg-tab-gap 3
+(defcustom zetta-tab-line-svg-tab-gap 1.5
   "Gap between tabs, in character widths." :type 'number :group 'zetta)
 (defcustom zetta-tab-line-svg-max-name 30
   "Truncate an individual tab name to this many characters (then …)."
@@ -385,8 +385,8 @@ Set to \"\" to rely on colour alone."
 ;;; ------------------------------------------------------------------
 (defun zetta-tab-line-svg-tabs ()
   "Return a list of (LABEL . STATE) for the window's tab-line tabs.
-LABEL is \"GLYPH N name\" -- a nerd-font file-type glyph, the 1-based index
-\(matching g1..g9), and the buffer name, with
+LABEL is \"N GLYPH name\" -- the 1-based index (matching g1..g9), a
+nerd-font file-type glyph, and the buffer name, with
 `zetta-tab-line-svg-modified-marker' appended when the buffer has unsaved
 changes.  STATE is a plist: `:current' marks the tab for the buffer shown
 in this window; `:modified' marks a file-visiting buffer with changes.
@@ -406,9 +406,10 @@ Because the glyph is part of the label text it needs no separate icon."
              for short = (if (> (length name) zetta-tab-line-svg-max-name)
                              (concat (substring name 0 (1- zetta-tab-line-svg-max-name)) "…")
                            name)
-             collect (cons (format "%s%d %s%s"
+             collect (cons (format "%d %s%s%s"
+                                   i
                                    (if glyph (concat glyph " ") "")
-                                   i short
+                                   short
                                    (if modifiedp zetta-tab-line-svg-modified-marker ""))
                            (list :current currentp :modified modifiedp)))))
 

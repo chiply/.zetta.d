@@ -175,18 +175,20 @@ formatted."
 
 (defun svg-line--render-runs (segments)
   "Lower SEGMENTS to a list of runs, each segment evaluated exactly once.
-Run forms: (:text STR), (:icon DATA FILL), (:bar FRACTION WIDTH FILL BG)."
+Run forms: (:text STR), (:icon DATA FILL), (:bar FRACTION WIDTH FILL BG),
+\(:pie FRACTION FILL BG)."
   (let ((runs '()) (buf ""))
     (cl-flet ((flush () (when (> (length buf) 0)
                           (push (list :text buf) runs) (setq buf ""))))
       (dolist (s segments)
         (let ((v (cond ((stringp s) s)
-                       ((and (consp s) (memq (car s) '(:svg-icon :svg-bar))) s)
+                       ((and (consp s) (memq (car s) '(:svg-icon :svg-bar :svg-pie))) s)
                        ((functionp s) (funcall s))
                        (t nil))))
           (cond
            ((and (consp v) (eq (car v) :svg-icon)) (flush) (push (cons :icon (cdr v)) runs))
            ((and (consp v) (eq (car v) :svg-bar))  (flush) (push (cons :bar (cdr v)) runs))
+           ((and (consp v) (eq (car v) :svg-pie))  (flush) (push (cons :pie (cdr v)) runs))
            (t (setq buf (concat buf (svg-line--item->string v)))))))
       (flush))
     (nreverse runs)))
@@ -199,7 +201,8 @@ Run forms: (:text STR), (:icon DATA FILL), (:bar FRACTION WIDTH FILL BG)."
   "Advance width in pixels of a single RUN."
   (pcase (car run)
     (:text (* (length (nth 1 run)) char-advance))
-    (:icon (+ (round (svg-line--icon-width (car (nth 1 run)) fz)) (round (* 0.4 fz))))
+    (:icon (+ (round (svg-line--icon-width (car (nth 1 run)) fz)) (round (* 0.3 fz))))
+    (:pie  (+ (round (* fz 0.76)) (round (* 0.3 fz))))   ; diameter + gap
     (:bar  (+ (nth 2 run) (round (* 0.3 fz))))
     (_ 0)))
 
@@ -222,8 +225,28 @@ width.  FOREGROUND is the fallback fill.  Returns the ending x."
                            :fill foreground :x x :y (+ top fz)))))
       (:icon (let ((data (nth 1 run)))
                (svg-line-icon-append svg (cdr data) (car data)
-                                     :x x :y (+ top (max 0 (/ (- lh fz) 2)))
+                                     :x (+ x (round (* 0.15 fz)))
+                                     :y (+ top (max 0 (/ (- lh fz) 2)))
                                      :size fz :fill (or (nth 2 run) foreground))))
+      (:pie  (let* ((frac (max 0.0 (min 1.0 (float (nth 1 run)))))
+                    (fill (svg-line--color (or (nth 2 run) foreground)))
+                    (bg   (svg-line--color (or (nth 3 run) "#d4dcea")))
+                    (r  (* fz 0.38))
+                    (cx (+ x (round (* 0.15 fz)) r))
+                    (cy (+ top (/ lh 2.0))))
+               (svg-circle svg cx cy r :fill bg)
+               (if (>= frac 0.999)
+                   (svg-circle svg cx cy r :fill fill)
+                 (when (> frac 0.001)
+                   (let* ((theta (* 2 float-pi frac))
+                          (ex (+ cx (* r (sin theta))))
+                          (ey (- cy (* r (cos theta))))
+                          (large (if (> frac 0.5) 1 0)))
+                     (dom-append-child
+                      svg (dom-node 'path
+                                    (list (cons 'd (format "M %g %g L %g %g A %g %g 0 %d 1 %g %g Z"
+                                                           cx cy cx (- cy r) r r large ex ey))
+                                          (cons 'fill fill)))))))))
       (:bar  (let* ((frac (max 0.0 (min 1.0 (float (nth 1 run)))))
                     (bw (nth 2 run))
                     (fill (or (nth 3 run) foreground))
@@ -252,8 +275,9 @@ Each of LEFT and RIGHT is either:
   - a STRING, drawn with exact font anchoring (flush-left at PAD, or
     flush-right at WIDTH minus RIGHT-MARGIN); or
   - a list of RUNS, drawn with CHAR-ADVANCE spacing so it can carry inline
-    icons and progress bars.  A run is (:text STR), (:icon DATA FILL), or
-    (:bar FRACTION PIXELWIDTH FILL BG); see `svg-line--render-runs'.
+    icons, pies and progress bars.  A run is (:text STR), (:icon DATA FILL),
+    (:pie FRACTION FILL BG) or (:bar FRACTION PIXELWIDTH FILL BG); see
+    `svg-line--render-runs'.
 Returns an svg object (see `svg-create')."
   (let* ((foreground (svg-line--color foreground))
          (background (svg-line--color background))
@@ -564,8 +588,9 @@ Recognised SPEC keys:
   :content a function returning the line's content (required):
              - for `lines': a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS); a
                segment may be a string, a function, or an inline icon
-               (:svg-icon DATA FILL) / progress-bar (:svg-bar FRAC W FILL BG)
-               token, or a function returning one of those
+               (:svg-icon DATA FILL), pie (:svg-pie FRAC FILL BG) or
+               progress-bar (:svg-bar FRAC W FILL BG) token (or a function
+               returning one)
              - for `wrap':  a list of (LABEL . STATE), where STATE is a
                CURRENTP atom or a plist with `:current'/`:modified'/`:icon'
                keys (`:icon' is a (VIEWBOX . PATHS) leading tab icon)

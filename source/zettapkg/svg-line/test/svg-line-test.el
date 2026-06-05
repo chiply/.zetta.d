@@ -187,6 +187,22 @@ with the modified accent so the unsaved state stays visible."
     (should (member " hi" (mapcar (lambda (tx) (car (dom-children tx)))
                                   (dom-by-tag svg 'text))))))
 
+(ert-deftest svg-line/lines-pie-run ()
+  "A partial :pie run draws a background circle plus a wedge path."
+  (let ((svg (svg-line-image
+              (list (cons "x" (list (list :pie 0.25 "#2a4d77" "#d4dcea"))))
+              :width 300 :font "Monospace" :font-size 12 :char-advance 8)))
+    (should (= (length (dom-by-tag svg 'circle)) 1))    ; background circle
+    (should (= (length (dom-by-tag svg 'path)) 1))))    ; the wedge
+
+(ert-deftest svg-line/lines-pie-full ()
+  "A full :pie run draws two circles (background + fill) and no wedge."
+  (let ((svg (svg-line-image
+              (list (cons "x" (list (list :pie 1.0 "#2a4d77" "#d4dcea"))))
+              :width 300 :font "Monospace" :font-size 12 :char-advance 8)))
+    (should (= (length (dom-by-tag svg 'circle)) 2))
+    (should (= (length (dom-by-tag svg 'path)) 0))))
+
 ;;;; safety wrapper
 
 (ert-deftest svg-line/safe-error-fallback ()

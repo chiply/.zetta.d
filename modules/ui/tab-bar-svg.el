@@ -24,6 +24,12 @@
   "Extra vertical padding (px) added to each SVG tab-bar line."
   :type 'integer :group 'zetta)
 
+(defcustom zetta-tab-bar-svg-char-advance 7.5
+  "Per-character advance (px) used to lay out rows containing inline icons.
+Match it to the monospace SVG font's glyph width (Terminus at 15px = 7.5)
+so iconned rows stay as tight as the plain-text rows."
+  :type 'number :group 'zetta)
+
 (defcustom zetta-tab-bar-svg-image-cache-eviction-delay 30
   "Value for `image-cache-eviction-delay' while the SVG tab bar is active.
 The SVG renderer emits a new, unique bitmap on nearly every redisplay
@@ -78,10 +84,10 @@ current buffer; the remaining rows are plain (LEFT . RIGHT) conses."
            ;; lets the mail and battery icons sit next to their data.  (If
            ;; you add other entries to `global-mode-string', tell me and
            ;; I'll fold them back in.)
-           zetta-tab-bar-mu4e-icon zetta-tab-bar-mu4e-text "  "
-           zetta-tab-bar-clock "  "
-           zetta-tab-bar-battery-icon zetta-tab-bar-battery-text "  "
-           zetta-current-prefix
+           zetta-tab-bar-mu4e-icon zetta-tab-bar-mu4e-text " "
+           zetta-tab-bar-clock " "
+           zetta-tab-bar-battery-icon zetta-tab-bar-battery-text " "
+           zetta-current-prefix " "
            zetta-tab-bar-workspace-icon space-tree-modeline-lighter))))
 
 (svg-line-define 'zetta-tab-bar
@@ -92,6 +98,7 @@ current buffer; the remaining rows are plain (LEFT . RIGHT) conses."
   :font (lambda () (or (bound-and-true-p zetta-font) "Terminus (TTF)"))
   :font-size (lambda () zetta-tab-bar-svg-font-size)
   :line-pad (lambda () zetta-tab-bar-svg-line-pad)
+  :char-advance (lambda () zetta-tab-bar-svg-char-advance)
   :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
                              (face-foreground 'default nil t)
                              "#cccccc")))

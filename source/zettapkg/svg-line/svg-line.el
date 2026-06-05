@@ -353,10 +353,12 @@ Returns an svg object (see `svg-create')."
              for top = (* lh i)
              for y = (+ top fz)
              do (progn
-                  ;; LEFT: flush-left
+                  ;; LEFT: flush-left.  Trim leading whitespace so the visible
+                  ;; content starts at PAD (empty leading segments or a datum's
+                  ;; leading space would otherwise indent it).
                   (cond
-                   ((and (stringp l) (> (length l) 0))
-                    (svg-line--add-text svg l :x pad :y y
+                   ((and (stringp l) (> (length (string-trim-left l)) 0))
+                    (svg-line--add-text svg (string-trim-left l) :x pad :y y
                                         :font font :font-size fz :fill foreground))
                    ((consp l)
                     (svg-line--draw-runs svg l pad top fz lh font char-advance foreground)))

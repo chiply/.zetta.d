@@ -326,7 +326,7 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
 Match it to the single-width SVG font's glyph width (JetBrainsMono Nerd
 Font Mono at 15px ~= 9); the file-type glyph counts as one cell."
   :type 'number :group 'zetta)
-(defcustom zetta-tab-line-svg-tab-gap 1.5
+(defcustom zetta-tab-line-svg-tab-gap 1.0
   "Gap between tabs, in character widths." :type 'number :group 'zetta)
 (defcustom zetta-tab-line-svg-max-name 30
   "Truncate an individual tab name to this many characters (then …)."

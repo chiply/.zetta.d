@@ -333,8 +333,8 @@ Too high leaves whitespace inside tab boxes; too low overlaps tabs."
   "Truncate an individual tab name to this many characters (then …)."
   :type 'integer :group 'zetta)
 
-(defcustom zetta-tab-line-svg-background "#eef3fc"
-  "Very subtle (lightest) blue background for the SVG tab line.
+(defcustom zetta-tab-line-svg-background "#ece4f6"
+  "Light purple background for the SVG tab line (selected window).
 Distinguishes the tab line from the tab-bar and header-line.  nil = transparent."
   :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
 
@@ -360,8 +360,8 @@ Empty by default -- the modified colour alone marks unsaved tabs."
 ;;; Inactive palette -- used when the tab line's window is NOT selected,
 ;;; the way the mode line dims in unfocused windows.  Each falls back to
 ;;; its active counterpart when nil.
-(defcustom zetta-tab-line-svg-inactive-background "#f4f6fa"
-  "SVG tab-line background in NON-selected windows (lighter than active)."
+(defcustom zetta-tab-line-svg-inactive-background "#f5f1fb"
+  "SVG tab-line background in NON-selected windows (lighter purple than active)."
   :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
 
 (defcustom zetta-tab-line-svg-inactive-foreground "#aab2bd"

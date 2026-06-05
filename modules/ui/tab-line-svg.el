@@ -321,10 +321,11 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
   "Font size (px) for SVG tab-line text." :type 'integer :group 'zetta)
 (defcustom zetta-tab-line-svg-line-pad 4
   "Extra vertical padding (px) per wrapped tab-line row." :type 'integer :group 'zetta)
-(defcustom zetta-tab-line-svg-char-advance 9
+(defcustom zetta-tab-line-svg-char-advance 7
   "Per-character advance (px) used to size tabs and wrap rows.
-Match it to the single-width SVG font's glyph width (JetBrainsMono Nerd
-Font Mono at 15px ~= 9); the file-type glyph counts as one cell."
+Match it to the SVG font's real glyph width as Emacs renders it -- ~7 for
+the bitmap Terminess Nerd Font Mono at 15px (a scalable font would be ~9).
+Too high leaves whitespace inside tab boxes; too low overlaps tabs."
   :type 'number :group 'zetta)
 (defcustom zetta-tab-line-svg-tab-gap 1.0
   "Gap between tabs, in character widths." :type 'number :group 'zetta)

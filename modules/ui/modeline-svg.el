@@ -56,13 +56,18 @@ A barely-there light tint."
 (defun zetta-modeline-svg-lines ()
   "Return the mode line as a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS)."
   (list
-   ;; line 1:  modal | ace | buffer            ......   mode | line:col
-   (cons '(zetta-modeline-svg--modal " " zetta-modeline-svg--ace " " zetta-modeline-svg--buffer)
+   ;; line 1:  [file] modal | ace | buffer        ......   mode | line:col
+   (cons '(zetta-modeline-svg--file-icon
+           zetta-modeline-svg--modal " " zetta-modeline-svg--ace " "
+           zetta-modeline-svg--buffer)
          '(zetta-modeline-svg--mode "  " zetta-modeline-svg--point))
-   ;; line 2:  vc | checkers | flycheck | flags  ......   doc-position
-   (cons '(zetta-modeline-svg--vc " " zetta-modeline-svg--checkers
+   ;; line 2:  [git][branch] vc | [copilot] checkers | flycheck | flags
+   ;;          ......   progress | doc-position
+   (cons '(zetta-modeline-svg--vc-icon zetta-modeline-svg--branch-icon
+           zetta-modeline-svg--vc " "
+           zetta-modeline-svg--copilot-icon zetta-modeline-svg--checkers
            zetta-modeline-svg--flycheck " " zetta-modeline-svg--indicators)
-         '(zetta-modeline-svg--docpos))))
+         '(zetta-modeline-svg--file-progress "  " zetta-modeline-svg--docpos))))
 
 (svg-line-define 'zetta-mode-line
   :target 'mode-line

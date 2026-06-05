@@ -196,9 +196,9 @@ where no local thing has been set via `treesit-tap-set-local'."
       (concat (or repo "") (and branch (concat ":" branch))))))
 
 (defun zetta-modeline-svg--checkers ()
+  ;; copilot is shown as an icon (zetta-modeline-svg--copilot-icon), not text
   (concat
-   (when (and (boundp 'lsp-mode) lsp-mode) "lsp ")
-   (when (and (boundp 'copilot-mode) copilot-mode) "copilot ")))
+   (when (and (boundp 'lsp-mode) lsp-mode) "lsp ")))
 
 (defun zetta-modeline-svg--flycheck ()
   (if (fboundp 'flycheck-indicator--mode-line)
@@ -384,17 +384,116 @@ explicit (COLLECTION . NAME) cons."
                 (cdr (assoc ext zetta-line-icon-ext-alist))))
          zetta-line-icon-default))))
 
+(defun zetta-line-icon-data-cached (collection name)
+  "Return cached (VIEWBOX . PATHS) for icon NAME of COLLECTION, or nil.
+Render-safe: never loads svg-lib or fetches; on a miss it schedules an
+idle prefetch (which requests a redisplay when it lands) and returns nil."
+  (when (and zetta-line-icons (fboundp 'svg-line-icon-prefetch))
+    (or (and (featurep 'svg-lib) (svg-line-icon-data name collection t))
+        (progn (svg-line-icon-prefetch name collection) nil))))
+
 (defun zetta-line-file-icon-data (buffer)
-  "Return cached (VIEWBOX . PATHS) icon data for BUFFER, or nil.
-Never loads svg-lib or fetches on the render path: if svg-lib is not yet
-loaded, or the icon is not cached, schedule an idle prefetch and return
-nil for now (the prefetch requests a redisplay when it lands)."
-  (when (and zetta-line-icons (fboundp 'svg-line-icon-prefetch) (buffer-live-p buffer))
+  "Return cached (VIEWBOX . PATHS) file-type icon data for BUFFER, or nil."
+  (when (buffer-live-p buffer)
     (let ((spec (zetta-line-icon-spec-for buffer)))
-      (when spec
-        (let ((coll (car spec)) (name (cdr spec)))
-          (or (and (featurep 'svg-lib)
-                   (svg-line-icon-data name coll t))
-              (progn (svg-line-icon-prefetch name coll) nil)))))))
+      (and spec (zetta-line-icon-data-cached (car spec) (cdr spec))))))
+
+(defun zetta-line-icon-token (collection name &optional fill)
+  "Return an inline icon token (:svg-icon DATA FILL) for NAME/COLLECTION, or nil.
+For use as / inside a `svg-line' segment.  FILL nil inherits the side's
+foreground colour."
+  (let ((d (zetta-line-icon-data-cached collection name)))
+    (and d (list :svg-icon d fill))))
+
+(defun zetta-line-file-icon-token (buffer &optional fill)
+  "Return an inline file-type icon token for BUFFER, or nil."
+  (let ((d (zetta-line-file-icon-data buffer)))
+    (and d (list :svg-icon d fill))))
+
+;;;; Inline icon + progress-bar segments (SVG mode line / tab bar)
+;; ----------------------------------------------------------------
+;; Each returns an svg-line segment token -- (:svg-icon DATA FILL) or
+;; (:svg-bar FRACTION WIDTH FILL BG) -- or nil to contribute nothing.
+;; Bound into the line composition in modeline-svg.el / tab-bar-svg.el.
+;; Icon segments are atomic (one icon); pair them with a sibling text
+;; segment to show "icon + data".
+
+;;; mode line
+(defun zetta-modeline-svg--file-icon ()
+  "Inline file-type icon for the current buffer."
+  (zetta-line-file-icon-token (current-buffer)))
+
+(defun zetta-modeline-svg--copilot-icon ()
+  "Inline GitHub Copilot icon, shown when `copilot-mode' is on."
+  (when (bound-and-true-p copilot-mode)
+    (zetta-line-icon-token "simple" "githubcopilot")))
+
+(defun zetta-modeline-svg--vc-icon ()
+  "Inline git logo, shown when the file is under git version control."
+  (when (and (buffer-file-name) (fboundp 'vc-git-root)
+             (vc-git-root (buffer-file-name)))
+    (zetta-line-icon-token "simple" "git")))
+
+(defun zetta-modeline-svg--branch-icon ()
+  "Inline branch icon, shown when the file is on a git branch."
+  (when (and (buffer-file-name) (fboundp 'vc-git-root)
+             (vc-git-root (buffer-file-name)))
+    (zetta-line-icon-token "octicons" "git-branch")))
+
+(defvar zetta-modeline-svg-progress-width 56
+  "Width in pixels of the mode-line file-progress bar.")
+
+(defun zetta-modeline-svg--file-progress ()
+  "Progress bar of point's position through the buffer."
+  (let* ((total (max 1 (- (point-max) (point-min))))
+         (frac (/ (float (- (point) (point-min))) total)))
+    (list :svg-bar frac zetta-modeline-svg-progress-width "#2a4d77" "#d4dcea")))
+
+;;; tab bar
+(defun zetta-tab-bar-file-icon ()
+  "Inline file-type icon for the current buffer (tab bar)."
+  (zetta-line-file-icon-token (current-buffer)))
+
+(defun zetta-tab-bar-mu4e-icon ()
+  "Mail icon, shown when mu4e has a non-empty modeline string."
+  (when (and (fboundp 'mu4e--modeline-string)
+             (let ((s (ignore-errors (mu4e--modeline-string))))
+               (and s (> (length (string-trim s)) 0))))
+    (zetta-line-icon-token "octicons" "mail")))
+
+(defun zetta-tab-bar-mu4e-text ()
+  "The mu4e modeline string (unread counts, etc.)."
+  (when (fboundp 'mu4e--modeline-string)
+    (ignore-errors (mu4e--modeline-string))))
+
+(defun zetta-tab-bar-clock ()
+  "The `display-time' clock string."
+  (when (boundp 'display-time-string) display-time-string))
+
+(defun zetta-tab-bar--battery-icon-name ()
+  "Material battery icon name reflecting the current percentage."
+  (let* ((s (and (boundp 'battery-mode-line-string) battery-mode-line-string))
+         (pct (and s (string-match "\\([0-9]+\\)%" s)
+                   (string-to-number (match-string 1 s)))))
+    (cond ((null pct)   "battery")
+          ((>= pct 95)  "battery")
+          ((<= pct 10)  "battery-alert")
+          (t (format "battery-%d0" (max 1 (round (/ pct 10.0))))))))
+
+(defun zetta-tab-bar-battery-icon ()
+  "Battery icon (percentage-aware) when `display-battery-mode' is on."
+  (when (and (bound-and-true-p display-battery-mode)
+             (boundp 'battery-mode-line-string))
+    (zetta-line-icon-token "material" (zetta-tab-bar--battery-icon-name))))
+
+(defun zetta-tab-bar-battery-text ()
+  "The battery percentage string, trimmed."
+  (when (boundp 'battery-mode-line-string)
+    (string-trim (or battery-mode-line-string ""))))
+
+(defun zetta-tab-bar-workspace-icon ()
+  "Workspace icon, shown when the space-tree lighter is active."
+  (when (and (boundp 'space-tree-modeline-lighter) space-tree-modeline-lighter)
+    (zetta-line-icon-token "material" "view-dashboard")))
 
 ;;; line-utils.el ends here

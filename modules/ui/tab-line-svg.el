@@ -351,9 +351,9 @@ A warm amber that stands out from the neutral tab text without shouting,
 echoing the built-in `tab-line-tab-modified' distinction."
   :type 'color :group 'zetta)
 
-(defcustom zetta-tab-line-svg-modified-marker "•"
+(defcustom zetta-tab-line-svg-modified-marker ""
   "Marker appended to a modified tab's label (in addition to the colour).
-Set to \"\" to rely on colour alone."
+Empty by default -- the modified colour alone marks unsaved tabs."
   :type 'string :group 'zetta)
 
 ;;; Inactive palette -- used when the tab line's window is NOT selected,

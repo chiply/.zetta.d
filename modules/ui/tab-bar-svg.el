@@ -24,12 +24,11 @@
   "Extra vertical padding (px) added to each SVG tab-bar line."
   :type 'integer :group 'zetta)
 
-(defcustom zetta-tab-bar-svg-char-advance nil
-  "Per-character advance (px) for rows containing inline icons.
-nil (recommended) measures the real advance from the font -- what the SVG
-renderer actually draws, which matters for bitmap fonts like Terminus that
-snap to a fixed pixel size.  Set a number to override."
-  :type '(choice (const :tag "Auto-measure" nil) number) :group 'zetta)
+(defcustom zetta-tab-bar-svg-char-advance 7.5
+  "Per-character advance (px) used to lay out rows containing inline icons.
+Match it to the monospace SVG font's glyph width (Terminus at 15px = 7.5)
+so iconned rows stay as tight as the plain-text rows."
+  :type 'number :group 'zetta)
 
 (defcustom zetta-tab-bar-svg-image-cache-eviction-delay 30
   "Value for `image-cache-eviction-delay' while the SVG tab bar is active.
@@ -58,13 +57,13 @@ value untouched.  Applied only while the SVG renderer is active."
 ;;; what the SVG tab bar shows.
 ;;; ------------------------------------------------------------------
 (defun zetta-tab-bar-svg-lines ()
-  "Return the tab-bar content as a list of rows.
-Row 1 uses the plist form to carry a leading file-type icon for the
-current buffer; the remaining rows are plain (LEFT . RIGHT) conses."
+  "Return the tab-bar content as a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS).
+Plain text only -- no inline icons here, so every side is laid out with
+exact font anchoring (no char-advance estimation, so nothing jitters as
+keycast or other variable-width segments change)."
   (list
-   ;; line 1 -- leading file-type icon for the current buffer
-   (cons '(zetta-tab-bar-file-icon
-           zetta-buffer-name
+   ;; line 1
+   (cons '(zetta-buffer-name
            zmc-modeline-indicator
            zetta-pyvenv-activate-poetry-modeline)
          ;; TEMP right-aligned probe (remove for an empty right side)
@@ -80,19 +79,9 @@ current buffer; the remaining rows are plain (LEFT . RIGHT) conses."
            zetta-tab-bar-current-thing
            zetta-tab-bar-recursion-level
            recursion-indicator--string
-           ;; mu4e / clock / battery, each with its own icon.  These were
-           ;; bundled in `tab-bar-format-global'; rendering them explicitly
-           ;; lets the mail and battery icons sit next to their data.  (If
-           ;; you add other entries to `global-mode-string', tell me and
-           ;; I'll fold them back in.)
-           ;; data segments are trimmed; one space separates text groups,
-           ;; and each icon abuts the datum it labels (mail->unread,
-           ;; battery->level, workspace->space).
-           zetta-tab-bar-mu4e-icon zetta-tab-bar-mu4e-text
-           " " zetta-tab-bar-clock
-           " " zetta-tab-bar-battery-icon zetta-tab-bar-battery-text
-           " " zetta-current-prefix
-           zetta-tab-bar-workspace-icon space-tree-modeline-lighter))))
+           tab-bar-format-global
+           zetta-current-prefix
+           space-tree-modeline-lighter))))
 
 (svg-line-define 'zetta-tab-bar
   :target 'tab-bar

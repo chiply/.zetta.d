@@ -321,10 +321,10 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
   "Font size (px) for SVG tab-line text." :type 'integer :group 'zetta)
 (defcustom zetta-tab-line-svg-line-pad 4
   "Extra vertical padding (px) per wrapped tab-line row." :type 'integer :group 'zetta)
-(defcustom zetta-tab-line-svg-char-advance 8
-  "Per-character advance (px) for the monospace SVG font.
-Used to decide where tab rows wrap.  Err slightly high so rows wrap
-before reaching the right edge (a hair of slack rather than clipping)."
+(defcustom zetta-tab-line-svg-char-advance 9
+  "Per-character advance (px) used to size tabs and wrap rows.
+Match it to the single-width SVG font's glyph width (JetBrainsMono Nerd
+Font Mono at 15px ~= 9); the file-type glyph counts as one cell."
   :type 'number :group 'zetta)
 (defcustom zetta-tab-line-svg-tab-gap 3
   "Gap between tabs, in character widths." :type 'number :group 'zetta)
@@ -385,11 +385,12 @@ Set to \"\" to rely on colour alone."
 ;;; ------------------------------------------------------------------
 (defun zetta-tab-line-svg-tabs ()
   "Return a list of (LABEL . STATE) for the window's tab-line tabs.
-LABEL is \"N name\" (1-based, matching g1..g9), with
+LABEL is \"GLYPH N name\" -- a nerd-font file-type glyph, the 1-based index
+\(matching g1..g9), and the buffer name, with
 `zetta-tab-line-svg-modified-marker' appended when the buffer has unsaved
-changes.  STATE is a plist: `:current' marks the tab for the buffer
-displayed in this window; `:modified' marks a file-visiting buffer with
-unsaved changes; `:icon' is the buffer's file-type icon data (or nil)."
+changes.  STATE is a plist: `:current' marks the tab for the buffer shown
+in this window; `:modified' marks a file-visiting buffer with changes.
+Because the glyph is part of the label text it needs no separate icon."
   (let ((tabs (ignore-errors (funcall tab-line-tabs-function)))
         (cur  (current-buffer)))
     (cl-loop for buf in tabs
@@ -401,13 +402,15 @@ unsaved changes; `:icon' is the buffer's file-type icon data (or nil)."
                                   (buffer-modified-p real)
                                   (buffer-file-name real)
                                   t)
+             for glyph = (zetta-line-buffer-glyph real)
              for short = (if (> (length name) zetta-tab-line-svg-max-name)
                              (concat (substring name 0 (1- zetta-tab-line-svg-max-name)) "…")
                            name)
-             collect (cons (format "%d %s%s" i short
+             collect (cons (format "%s%d %s%s"
+                                   (if glyph (concat glyph " ") "")
+                                   i short
                                    (if modifiedp zetta-tab-line-svg-modified-marker ""))
-                           (list :current currentp :modified modifiedp
-                                 :icon (zetta-line-file-icon-data real))))))
+                           (list :current currentp :modified modifiedp)))))
 
 (svg-line-define 'zetta-tab-line
   :target 'tab-line
@@ -417,7 +420,7 @@ unsaved changes; `:icon' is the buffer's file-type icon data (or nil)."
   ;; dim the whole tab line when its window is not the selected one,
   ;; the same way the SVG mode line distinguishes active/inactive.
   :active #'mode-line-window-selected-p
-  :font (lambda () (or (bound-and-true-p zetta-font) "Terminus (TTF)"))
+  :font (lambda () zetta-svg-line-font)
   :font-size (lambda () zetta-tab-line-svg-font-size)
   :line-pad (lambda () zetta-tab-line-svg-line-pad)
   :char-advance (lambda () zetta-tab-line-svg-char-advance)

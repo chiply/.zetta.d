@@ -40,7 +40,7 @@
   :layout 'lines
   :width 'window
   :content #'zetta-header-line-svg-lines
-  :font (lambda () (or (bound-and-true-p zetta-font) "Terminus (TTF)"))
+  :font (lambda () zetta-svg-line-font)
   :font-size (lambda () zetta-header-line-svg-font-size)
   :line-pad (lambda () zetta-header-line-svg-line-pad)
   :foreground (lambda () (or (bound-and-true-p brushup-fg-3)

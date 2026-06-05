@@ -410,35 +410,54 @@ foreground colour."
   (let ((d (zetta-line-file-icon-data buffer)))
     (and d (list :svg-icon d fill))))
 
-;;;; Inline icon + progress-bar segments (SVG mode line / tab bar)
+;;;; Nerd-font glyph icons for the SVG bars
 ;; ----------------------------------------------------------------
-;; Each returns an svg-line segment token -- (:svg-icon DATA FILL) or
-;; (:svg-bar FRACTION WIDTH FILL BG) -- or nil to contribute nothing.
-;; Bound into the line composition in modeline-svg.el / tab-bar-svg.el.
-;; Icon segments are atomic (one icon); pair them with a sibling text
-;; segment to show "icon + data".
+;; The bars render in a scalable Nerd Font (`zetta-svg-line-font'), so
+;; icons are just text glyphs (nerd-icons codepoints): they flow inline
+;; with the text in one native SVG <text>, font-accurate -- no separate
+;; positioning, no char-advance estimation, no svg-lib path injection.
+;; Each segment returns the bare glyph string (properties stripped) or nil.
+
+(defvar zetta-svg-line-font "JetBrainsMono Nerd Font Mono"
+  "Font family for the SVG bars (tab-bar, mode-line, tab-line, header-line).
+A scalable, single-width Nerd Font: its advance is predictable (unlike a
+bitmap font such as Terminus) and it carries the icon glyphs, so icons
+render inline as ordinary text.  Buffers keep their own font (`zetta-font').")
+
+(defun zetta-line--glyph (s)
+  "Return nerd-icons glyph string S without text properties, or nil if empty."
+  (and (stringp s)
+       (let ((g (substring-no-properties s)))
+         (and (> (length (string-trim g)) 0) g))))
+
+(defun zetta-line-buffer-glyph (&optional buffer)
+  "Nerd-font file-type glyph for BUFFER (current by default), or nil."
+  (and (featurep 'nerd-icons)
+       (with-current-buffer (or buffer (current-buffer))
+         (zetta-line--glyph (ignore-errors (nerd-icons-icon-for-buffer))))))
 
 ;;; mode line
 (defun zetta-modeline-svg--file-icon ()
-  "Inline file-type icon for the current buffer."
-  (zetta-line-file-icon-token (current-buffer)))
+  "File-type glyph for the current buffer."
+  (zetta-line-buffer-glyph))
 
 (defun zetta-modeline-svg--copilot-icon ()
-  "Inline GitHub Copilot icon, shown when `copilot-mode' is on."
+  "GitHub Copilot glyph, shown when `copilot-mode' is on."
   (when (bound-and-true-p copilot-mode)
-    (zetta-line-icon-token "simple" "githubcopilot")))
+    (and (featurep 'nerd-icons)
+         (zetta-line--glyph (ignore-errors (nerd-icons-octicon "nf-oct-copilot"))))))
 
 (defun zetta-modeline-svg--vc-icon ()
-  "Inline git logo, shown when the file is under git version control."
-  (when (and (buffer-file-name) (fboundp 'vc-git-root)
-             (vc-git-root (buffer-file-name)))
-    (zetta-line-icon-token "simple" "git")))
+  "Git glyph, shown when the file is under git version control."
+  (when (and (buffer-file-name) (fboundp 'vc-git-root) (vc-git-root (buffer-file-name)))
+    (and (featurep 'nerd-icons)
+         (zetta-line--glyph (ignore-errors (nerd-icons-devicon "nf-dev-git"))))))
 
 (defun zetta-modeline-svg--branch-icon ()
-  "Inline branch icon, shown when the file is on a git branch."
-  (when (and (buffer-file-name) (fboundp 'vc-git-root)
-             (vc-git-root (buffer-file-name)))
-    (zetta-line-icon-token "octicons" "git-branch")))
+  "Branch glyph, shown when the file is on a git branch."
+  (when (and (buffer-file-name) (fboundp 'vc-git-root) (vc-git-root (buffer-file-name)))
+    (and (featurep 'nerd-icons)
+         (zetta-line--glyph (ignore-errors (nerd-icons-octicon "nf-oct-git_branch"))))))
 
 (defun zetta-modeline-svg--file-progress ()
   "Compact progress pie of point's position through the buffer."
@@ -448,15 +467,16 @@ foreground colour."
 
 ;;; tab bar
 (defun zetta-tab-bar-file-icon ()
-  "Inline file-type icon for the current buffer (tab bar)."
-  (zetta-line-file-icon-token (current-buffer)))
+  "File-type glyph for the current buffer (tab bar)."
+  (zetta-line-buffer-glyph))
 
 (defun zetta-tab-bar-mu4e-icon ()
-  "Mail icon, shown when mu4e has a non-empty modeline string."
+  "Mail glyph, shown when mu4e has a non-empty modeline string."
   (when (and (fboundp 'mu4e--modeline-string)
              (let ((s (ignore-errors (mu4e--modeline-string))))
                (and s (> (length (string-trim s)) 0))))
-    (zetta-line-icon-token "octicons" "mail")))
+    (and (featurep 'nerd-icons)
+         (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-email_outline"))))))
 
 (defun zetta-tab-bar-mu4e-text ()
   "The mu4e modeline string (unread counts, etc.), trimmed."
@@ -467,21 +487,21 @@ foreground colour."
   "The `display-time' clock string, trimmed."
   (when (boundp 'display-time-string) (string-trim (or display-time-string ""))))
 
-(defun zetta-tab-bar--battery-icon-name ()
-  "Material battery icon name reflecting the current percentage."
+(defun zetta-tab-bar--battery-mdicon ()
+  "Nerd-icons material battery glyph name reflecting the current percentage."
   (let* ((s (and (boundp 'battery-mode-line-string) battery-mode-line-string))
          (pct (and s (string-match "\\([0-9]+\\)%" s)
                    (string-to-number (match-string 1 s)))))
-    (cond ((null pct)   "battery")
-          ((>= pct 95)  "battery")
-          ((<= pct 10)  "battery-alert")
-          (t (format "battery-%d0" (max 1 (round (/ pct 10.0))))))))
+    (cond ((null pct)   "nf-md-battery")
+          ((>= pct 95)  "nf-md-battery")
+          ((<= pct 10)  "nf-md-battery_alert")
+          (t (format "nf-md-battery_%d0" (max 1 (round (/ pct 10.0))))))))
 
 (defun zetta-tab-bar-battery-icon ()
-  "Battery icon (percentage-aware) when `display-battery-mode' is on."
-  (when (and (bound-and-true-p display-battery-mode)
-             (boundp 'battery-mode-line-string))
-    (zetta-line-icon-token "material" (zetta-tab-bar--battery-icon-name))))
+  "Battery glyph (percentage-aware) when `display-battery-mode' is on."
+  (when (and (bound-and-true-p display-battery-mode) (boundp 'battery-mode-line-string))
+    (and (featurep 'nerd-icons)
+         (zetta-line--glyph (ignore-errors (nerd-icons-mdicon (zetta-tab-bar--battery-mdicon)))))))
 
 (defun zetta-tab-bar-battery-text ()
   "The battery percentage string, trimmed."
@@ -489,8 +509,9 @@ foreground colour."
     (string-trim (or battery-mode-line-string ""))))
 
 (defun zetta-tab-bar-workspace-icon ()
-  "Workspace icon, shown when the space-tree lighter is active."
+  "Workspace glyph, shown when the space-tree lighter is active."
   (when (and (boundp 'space-tree-modeline-lighter) space-tree-modeline-lighter)
-    (zetta-line-icon-token "material" "view-dashboard")))
+    (and (featurep 'nerd-icons)
+         (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-view_dashboard"))))))
 
 ;;; line-utils.el ends here

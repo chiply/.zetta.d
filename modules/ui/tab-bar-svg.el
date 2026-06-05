@@ -58,12 +58,13 @@ value untouched.  Applied only while the SVG renderer is active."
 ;;; ------------------------------------------------------------------
 (defun zetta-tab-bar-svg-lines ()
   "Return the tab-bar content as a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS).
-Plain text only -- no inline icons here, so every side is laid out with
-exact font anchoring (no char-advance estimation, so nothing jitters as
-keycast or other variable-width segments change)."
+Icons are nerd-font glyphs (plain text in `zetta-svg-line-font'), so every
+side is one font-accurate text run -- no char-advance estimation, nothing
+jitters as keycast changes width."
   (list
-   ;; line 1
-   (cons '(zetta-buffer-name
+   ;; line 1 -- file-type glyph + buffer name
+   (cons '(zetta-tab-bar-file-icon " "
+           zetta-buffer-name
            zmc-modeline-indicator
            zetta-pyvenv-activate-poetry-modeline)
          ;; TEMP right-aligned probe (remove for an empty right side)
@@ -79,16 +80,21 @@ keycast or other variable-width segments change)."
            zetta-tab-bar-current-thing
            zetta-tab-bar-recursion-level
            recursion-indicator--string
-           tab-bar-format-global
-           zetta-current-prefix
-           space-tree-modeline-lighter))))
+           ;; mu4e / clock / battery, each with its glyph (was bundled in
+           ;; tab-bar-format-global; rendered explicitly so a mail glyph
+           ;; sits by the unread count and a battery glyph by the level)
+           zetta-tab-bar-mu4e-icon " " zetta-tab-bar-mu4e-text " "
+           zetta-tab-bar-clock " "
+           zetta-tab-bar-battery-icon " " zetta-tab-bar-battery-text " "
+           zetta-current-prefix " "
+           zetta-tab-bar-workspace-icon " " space-tree-modeline-lighter))))
 
 (svg-line-define 'zetta-tab-bar
   :target 'tab-bar
   :layout 'lines
   :width 'frame
   :content #'zetta-tab-bar-svg-lines
-  :font (lambda () (or (bound-and-true-p zetta-font) "Terminus (TTF)"))
+  :font (lambda () zetta-svg-line-font)
   :font-size (lambda () zetta-tab-bar-svg-font-size)
   :line-pad (lambda () zetta-tab-bar-svg-line-pad)
   :char-advance (lambda () zetta-tab-bar-svg-char-advance)

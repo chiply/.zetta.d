@@ -95,16 +95,21 @@
       (should (member "#c1641e" fills))
       (should (member "#000000" fills)))))
 
-(ert-deftest svg-line/wrap-current-beats-modified ()
-  "When an item is both current and modified, current styling wins."
+(ert-deftest svg-line/wrap-current-modified-accent-box ()
+  "A current+modified item keeps its readable bold label but tints the box
+with the modified accent so the unsaved state stays visible."
   (let ((svg (svg-line-wrap-image
               '(("a" . (:current t :modified t)))
               :width 1000 :font "Monospace"
               :current-foreground "#ffffff" :current-background "#2a4d77"
               :modified-foreground "#c1641e")))
-    (let ((tx (car (dom-by-tag svg 'text))))
+    (let ((tx   (car (dom-by-tag svg 'text)))
+          (rect (car (dom-by-tag svg 'rect))))
+      ;; label stays readable (white, bold)
       (should (equal (dom-attr tx 'fill) "#ffffff"))
-      (should (equal (dom-attr tx 'font-weight) "bold")))))
+      (should (equal (dom-attr tx 'font-weight) "bold"))
+      ;; box is tinted with the modified accent, not the plain current bg
+      (should (equal (dom-attr rect 'fill) "#c1641e")))))
 
 (ert-deftest svg-line/wrap-inactive-palette ()
   "With a false `:active' predicate, the wrap layout uses inactive colours."

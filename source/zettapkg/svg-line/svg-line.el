@@ -224,8 +224,10 @@ STATE selects how each item is styled:
 
 A current item is drawn bold, in CURRENT-FOREGROUND, over a
 CURRENT-BACKGROUND box.  A (non-current) modified item is drawn in
-MODIFIED-FOREGROUND, over a MODIFIED-BACKGROUND box when set.  Current
-takes precedence over modified."
+MODIFIED-FOREGROUND, over a MODIFIED-BACKGROUND box when set.  When an
+item is BOTH current and modified, its box is tinted with
+MODIFIED-FOREGROUND (the readable current label stays, but the unsaved
+state remains visible behind the highlight)."
   (let* ((foreground (svg-line--color foreground))
          (background (svg-line--color background))
          (current-foreground (svg-line--color current-foreground))
@@ -251,7 +253,11 @@ takes precedence over modified."
       (when background (svg-rectangle svg 0 0 width height :fill background))
       (dolist (p (nreverse placements))
         (cl-destructuring-bind (px top lw label currentp modifiedp) p
-          (let ((box  (cond (currentp  current-background)
+          (let ((box  (cond ;; current AND modified: tint the current box with the
+                            ;; modified accent so "unsaved" stays visible behind
+                            ;; the current highlight (the label stays readable).
+                            ((and currentp modifiedp) (or modified-foreground current-background))
+                            (currentp  current-background)
                             (modifiedp modified-background)))
                 (fill (cond (currentp  (or current-foreground foreground))
                             (modifiedp (or modified-foreground foreground))

@@ -68,9 +68,10 @@ is either a `CURRENTP` atom or a plist with `:current` / `:modified` keys:
 
 In the `wrap` layout, a **current** tab is bold over a `current-background`
 box; a **modified** (non-current) tab uses `modified-foreground` (and a
-`modified-background` box when set); current wins when a tab is both. With an
-`:active` predicate, the whole line switches to the `inactive-*` palette in
-unfocused windows.
+`modified-background` box when set). When a tab is **both**, its box is tinted
+with `modified-foreground` — the readable bold label stays, but the unsaved
+state stays visible behind the current highlight. With an `:active` predicate,
+the whole line switches to the `inactive-*` palette in unfocused windows.
 
 ### Styling values
 

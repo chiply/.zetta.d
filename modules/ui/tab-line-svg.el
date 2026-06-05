@@ -321,12 +321,11 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
   "Font size (px) for SVG tab-line text." :type 'integer :group 'zetta)
 (defcustom zetta-tab-line-svg-line-pad 4
   "Extra vertical padding (px) per wrapped tab-line row." :type 'integer :group 'zetta)
-(defcustom zetta-tab-line-svg-char-advance nil
+(defcustom zetta-tab-line-svg-char-advance 8
   "Per-character advance (px) for the monospace SVG font.
-Used to size tabs and decide where rows wrap.  nil (recommended) measures
-the real advance from the font -- correct for bitmap fonts like Terminus
-that snap to a fixed pixel size.  Set a number to override."
-  :type '(choice (const :tag "Auto-measure" nil) number) :group 'zetta)
+Used to decide where tab rows wrap.  Err slightly high so rows wrap
+before reaching the right edge (a hair of slack rather than clipping)."
+  :type 'number :group 'zetta)
 (defcustom zetta-tab-line-svg-tab-gap 3
   "Gap between tabs, in character widths." :type 'number :group 'zetta)
 (defcustom zetta-tab-line-svg-max-name 30

@@ -280,11 +280,15 @@ where no local thing has been set via `treesit-tap-set-local'."
   "When non-nil, draw file-type icons in the SVG tab-bar and tab-line.")
 
 (defvar zetta-line-icon-collection "material"
-  "`svg-lib' icon collection used for file-type icons.")
+  "Default `svg-lib' icon collection for file-type icons.
+An entry in `zetta-line-icon-mode-alist' / `zetta-line-icon-ext-alist'
+may override it per icon by giving a (COLLECTION . NAME) cons instead of
+a bare NAME string -- e.g. the GNU Emacs logo lives in the brand-logo
+collection \"simple\" as \"gnuemacs\".")
 
 (defvar zetta-line-icon-mode-alist
-  '((emacs-lisp-mode       . "lambda")
-    (lisp-interaction-mode . "lambda")
+  '((emacs-lisp-mode       . ("simple" . "gnuemacs"))
+    (lisp-interaction-mode . ("simple" . "gnuemacs"))
     (python-mode           . "language-python")
     (python-ts-mode        . "language-python")
     (js-mode               . "language-javascript")
@@ -313,7 +317,7 @@ where no local thing has been set via `treesit-tap-set-local'."
   "Map major mode -> `svg-lib' icon NAME for the file-type icon.")
 
 (defvar zetta-line-icon-ext-alist
-  '(("el" . "lambda") ("py" . "language-python")
+  '(("el" . ("simple" . "gnuemacs")) ("py" . "language-python")
     ("js" . "language-javascript") ("jsx" . "language-javascript")
     ("ts" . "language-typescript") ("tsx" . "language-typescript")
     ("json" . "code-json") ("yml" . "code-tags") ("yaml" . "code-tags")
@@ -328,15 +332,24 @@ where no local thing has been set via `treesit-tap-set-local'."
 (defvar zetta-line-icon-default "file-outline"
   "Fallback `svg-lib' icon NAME when neither mode nor extension matches.")
 
-(defun zetta-line-icon-name-for (buffer)
-  "Return the `svg-lib' icon NAME for BUFFER (by major mode, then extension)."
+(defun zetta-line-icon--spec (val)
+  "Normalise an icon alist VAL to a (COLLECTION . NAME) cons, or nil.
+VAL is either a bare NAME string (uses `zetta-line-icon-collection') or an
+explicit (COLLECTION . NAME) cons."
+  (cond ((null val) nil)
+        ((consp val) val)
+        ((stringp val) (cons zetta-line-icon-collection val))))
+
+(defun zetta-line-icon-spec-for (buffer)
+  "Return the (COLLECTION . NAME) icon spec for BUFFER (by mode, then extension)."
   (with-current-buffer buffer
-    (or (alist-get major-mode zetta-line-icon-mode-alist)
-        (let ((ext (and buffer-file-name
-                        (downcase (or (file-name-extension buffer-file-name) "")))))
-          (and ext (> (length ext) 0)
-               (cdr (assoc ext zetta-line-icon-ext-alist))))
-        zetta-line-icon-default)))
+    (zetta-line-icon--spec
+     (or (alist-get major-mode zetta-line-icon-mode-alist)
+         (let ((ext (and buffer-file-name
+                         (downcase (or (file-name-extension buffer-file-name) "")))))
+           (and ext (> (length ext) 0)
+                (cdr (assoc ext zetta-line-icon-ext-alist))))
+         zetta-line-icon-default))))
 
 (defun zetta-line-file-icon-data (buffer)
   "Return cached (VIEWBOX . PATHS) icon data for BUFFER, or nil.
@@ -344,10 +357,11 @@ Never loads svg-lib or fetches on the render path: if svg-lib is not yet
 loaded, or the icon is not cached, schedule an idle prefetch and return
 nil for now (the prefetch requests a redisplay when it lands)."
   (when (and zetta-line-icons (fboundp 'svg-line-icon-prefetch) (buffer-live-p buffer))
-    (let ((name (zetta-line-icon-name-for buffer)))
-      (when name
-        (or (and (featurep 'svg-lib)
-                 (svg-line-icon-data name zetta-line-icon-collection t))
-            (progn (svg-line-icon-prefetch name zetta-line-icon-collection) nil))))))
+    (let ((spec (zetta-line-icon-spec-for buffer)))
+      (when spec
+        (let ((coll (car spec)) (name (cdr spec)))
+          (or (and (featurep 'svg-lib)
+                   (svg-line-icon-data name coll t))
+              (progn (svg-line-icon-prefetch name coll) nil)))))))
 
 ;;; line-utils.el ends here

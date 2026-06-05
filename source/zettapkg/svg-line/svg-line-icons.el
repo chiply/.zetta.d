@@ -64,53 +64,75 @@ See `svg-lib-icon-collections' for the available collection names."
   :type 'string
   :group 'svg-line)
 
-;;;; Generic layer (no svg-lib) -- inject scaled path data into an svg
+;; The dependency-free path-injection primitive `svg-line-icon-append'
+;; (and `svg-line--icon-width') live in the svg-line core, so the line
+;; renderers can draw icons without depending on svg-lib.  This file only
+;; HARVESTS icon data from svg-lib and hands it to that primitive.
+
+;;;; Harvest cache + non-blocking fetch policy
 ;; ----------------------------------------------------------------
+;; Harvesting reads+parses a cached SVG file, and an UNcached icon would
+;; fetch synchronously over the network -- neither is acceptable on the
+;; redisplay path.  So harvested data is memoised, and `svg-line-icon-data'
+;; can run in a NO-FETCH mode that returns nil for not-yet-cached icons;
+;; `svg-line-icon-prefetch' warms the cache from an idle timer instead.
 
-(defun svg-line-icon-append (svg paths viewbox &rest props)
-  "Append icon PATHS to SVG as a positioned, scaled `<g>'; return the group.
-PATHS is a list of SVG path \"d\" strings.  VIEWBOX is (MINX MINY W H),
-as parsed from the source icon's `viewBox'.  PROPS is a plist:
-  :x :y    top-left placement in SVG pixels (default 0, 0);
-  :size    target height in pixels, width scales proportionally (default 16);
-  :fill    path fill colour (default \"#000000\").
-SVG is an svg object from `svg-create' (or any DOM node to append into)."
-  (let* ((x    (or (plist-get props :x) 0))
-         (y    (or (plist-get props :y) 0))
-         (size (or (plist-get props :size) 16))
-         (fill (svg-line--color (or (plist-get props :fill) "#000000")))
-         (vx (float (or (nth 0 viewbox) 0)))
-         (vy (float (or (nth 1 viewbox) 0)))
-         (vh (float (or (nth 3 viewbox) size)))
-         (s  (/ size (if (zerop vh) size vh)))
-         ;; map icon space -> SVG pixels: place at (x,y), scale to `size',
-         ;; and shift away the viewBox origin.
-         (transform (format "translate(%g,%g) scale(%g) translate(%g,%g)"
-                            x y s (- vx) (- vy)))
-         (g (dom-node 'g (list (cons 'transform transform)))))
-    (dolist (d paths)
-      (when (and (stringp d) (> (length d) 0))
-        (dom-append-child g (dom-node 'path (list (cons 'd d) (cons 'fill fill))))))
-    (dom-append-child svg g)
-    g))
+(defvar svg-line-icon--cache (make-hash-table :test 'equal)
+  "Memoised (VIEWBOX . PATHS) harvests, keyed by \"COLLECTION/NAME\".")
 
-;;;; svg-lib bridge -- harvest icon data, then use the generic layer
-;; ----------------------------------------------------------------
+(defvar svg-line-icon--pending (make-hash-table :test 'equal)
+  "Keys with an in-flight idle prefetch, to avoid scheduling duplicates.")
 
-(defun svg-line-icon-data (name &optional collection)
+(defun svg-line-icon--cache-file (collection name)
+  "Path svg-lib would cache icon NAME of COLLECTION at (without fetching)."
+  (expand-file-name (format "%s_%s.svg" collection name)
+                    (or (bound-and-true-p svg-lib-icons-dir)
+                        (expand-file-name "svg-lib/" user-emacs-directory))))
+
+(defun svg-line-icon-data (name &optional collection no-fetch)
   "Return (VIEWBOX . PATHS) for icon NAME in COLLECTION, via `svg-lib'.
 VIEWBOX is (MINX MINY W H); PATHS is a list of path \"d\" strings.
-COLLECTION defaults to `svg-line-icon-default-collection'.  Requires
-`svg-lib'; may fetch and cache the icon over the network on first use."
-  (require 'svg-lib)
+COLLECTION defaults to `svg-line-icon-default-collection'.
+
+Results are memoised.  When NO-FETCH is non-nil and the icon is not
+already cached (in memory or on disk), return nil instead of fetching --
+so this is safe to call on the redisplay path.  Otherwise it may read the
+disk cache, or fetch+cache over the network on first use.
+
+A memoised result is returned WITHOUT loading `svg-lib', so a warm render
+path never pulls in svg-lib."
   (let* ((collection (or collection svg-line-icon-default-collection))
-         (root (car (svg-lib--icon-get-data collection name)))
-         (vb (and root (cdr (assq 'viewBox (xml-node-attributes root)))))
-         (viewbox (and vb (mapcar #'string-to-number (split-string vb))))
-         (paths (and root
-                     (delq nil (mapcar (lambda (n) (cdr (assq 'd (xml-node-attributes n))))
-                                       (xml-get-children root 'path))))))
-    (cons (or viewbox '(0 0 24 24)) paths)))
+         (key (concat collection "/" name)))
+    (or (gethash key svg-line-icon--cache)
+        (progn
+          (require 'svg-lib)
+          (when (or (not no-fetch)
+                    (file-exists-p (svg-line-icon--cache-file collection name)))
+            (let* ((root (car (ignore-errors (svg-lib--icon-get-data collection name))))
+                   (vb (and root (cdr (assq 'viewBox (xml-node-attributes root)))))
+                   (viewbox (and vb (mapcar #'string-to-number (split-string vb))))
+                   (paths (and root
+                               (delq nil (mapcar (lambda (n) (cdr (assq 'd (xml-node-attributes n))))
+                                                 (xml-get-children root 'path)))))
+                   (data (cons (or viewbox '(0 0 24 24)) paths)))
+              (puthash key data svg-line-icon--cache)
+              data))))))
+
+(defun svg-line-icon-prefetch (name &optional collection)
+  "Warm the cache for icon NAME of COLLECTION from an idle timer.
+Does nothing if it is already cached or a prefetch is already scheduled.
+On completion, requests a mode-line update so a later render picks it up."
+  (let* ((collection (or collection svg-line-icon-default-collection))
+         (key (concat collection "/" name)))
+    (unless (or (gethash key svg-line-icon--cache)
+                (gethash key svg-line-icon--pending))
+      (puthash key t svg-line-icon--pending)
+      (run-with-idle-timer
+       0.3 nil
+       (lambda ()
+         (ignore-errors (svg-line-icon-data name collection)) ; fetch allowed here
+         (remhash key svg-line-icon--pending)
+         (force-mode-line-update t))))))
 
 (defun svg-line-icon (svg name &rest props)
   "Harvest icon NAME via `svg-lib' and append it to SVG.

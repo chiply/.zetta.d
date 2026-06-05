@@ -51,14 +51,17 @@ value untouched.  Applied only while the SVG renderer is active."
 ;;; what the SVG tab bar shows.
 ;;; ------------------------------------------------------------------
 (defun zetta-tab-bar-svg-lines ()
-  "Return the tab-bar content as a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS)."
+  "Return the tab-bar content as a list of rows.
+Row 1 uses the plist form to carry a leading file-type icon for the
+current buffer; the remaining rows are plain (LEFT . RIGHT) conses."
   (list
-   ;; line 1
-   (cons '(zetta-buffer-name
-           zmc-modeline-indicator
-           zetta-pyvenv-activate-poetry-modeline)
+   ;; line 1 -- leading file-type icon for the current buffer
+   (list :left '(zetta-buffer-name
+                 zmc-modeline-indicator
+                 zetta-pyvenv-activate-poetry-modeline)
          ;; TEMP right-aligned probe (remove for an empty right side)
-         '("<<< line 1 right edge"))
+         :right '("<<< line 1 right edge")
+         :icon (zetta-line-file-icon-data (current-buffer)))
    ;; line 2
    (cons '(zetta-tab-bar-spot-mode-line-string)
          '("line 2 right edge >>>"))

@@ -88,6 +88,32 @@ dark/light predicate) live in your config and the engine stays theme-agnostic.
 
 `svg-line-deactivate` restores exactly what was there before.
 
+## Icons
+
+Single-font SVG text can't draw icon-font glyphs (all-the-icons, nerd-icons)
+— they render as tofu because the font isn't embedded. svg-line instead draws
+real **vector** icons as scaled `<path>` groups:
+
+- `svg-line-icon-append` (core, dependency-free) injects already-harvested
+  path data — a `viewBox` + path `d` strings — into a composed SVG at a given
+  position/size/fill.
+- The optional **`svg-line-icons`** add-on bridges to Nicolas Rougier's
+  [`svg-lib`](https://github.com/rougier/svg-lib), which fetches and caches
+  icon collections (material, octicons, …). Harvests are memoised, and
+  `svg-line-icon-data … no-fetch` + `svg-line-icon-prefetch` keep the network
+  and svg-lib itself entirely **off the redisplay path**.
+
+Both layouts accept a leading icon, passed as `(VIEWBOX . PATHS)`:
+
+```elisp
+;; wrap: per-tab icon, in the tab's text colour
+(cons "1 init.el" (list :current t :icon (svg-line-icon-data "lambda")))
+
+;; lines: a per-row leading icon via the plist row form
+(list :left '(my-buffer-name) :right '(my-clock)
+      :icon (svg-line-icon-data "language-python") :icon-fill "#c1641e")
+```
+
 ## Safety
 
 Each segment is evaluated **exactly once** (the discipline that avoids
@@ -101,6 +127,7 @@ value instead of looping.
 - `svg-line-image` — `lines` layout → svg object
 - `svg-line-wrap-image` — `wrap` layout → svg object
 - `svg-line-display` — svg object → display string
+- `svg-line-icon-append` — inject scaled icon paths into an svg object
 - `svg-line-safe` — wrap a render thunk with the error/loop guard
 
 ## Tests

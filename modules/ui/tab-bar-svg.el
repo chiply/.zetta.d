@@ -64,43 +64,46 @@ jitters as keycast changes width."
   (list
    ;; line 1 -- file-type glyph + buffer name
    (cons '(zetta-tab-bar-file-icon " "
-           zetta-buffer-name
-           zmc-modeline-indicator
-           zetta-pyvenv-activate-poetry-modeline)
+                                   zetta-buffer-name
+                                   zmc-modeline-indicator
+                                   zetta-pyvenv-activate-poetry-modeline)
          ;; TEMP right-aligned probe (remove for an empty right side)
-         '("<<< line 1 right edge"))
+         '(tab-bar-keycast
+           zetta-tab-bar-recursion-level
+           recursion-indicator--string
+
+           ))
    ;; line 2
-   (cons '(zetta-tab-bar-spot-mode-line-string)
-         '("line 2 right edge >>>"))
+   (cons '(zetta-tab-bar-spotify-icon " " zetta-tab-bar-spot-mode-line-string)
+         '(
+           ;; mu4e / clock / battery, each with its glyph (was bundled in
+           ;; tab-bar-format-global; rendered explicitly so a mail glyph
+           ;; sits by the unread count and a battery glyph by the level)
+           zetta-tab-bar-mu4e-icon " " zetta-tab-bar-mu4e-text
+           ))
    ;; line 3
    (cons '(zetta-tab-bar-modal
            zetta-gptel-processes
            blinker-tab-bar)
-         '(tab-bar-keycast
+         '(
            zetta-tab-bar-current-thing
-           zetta-tab-bar-recursion-level
-           recursion-indicator--string
-           ;; mu4e / clock / battery, each with its glyph (was bundled in
-           ;; tab-bar-format-global; rendered explicitly so a mail glyph
-           ;; sits by the unread count and a battery glyph by the level)
-           zetta-tab-bar-mu4e-icon " " zetta-tab-bar-mu4e-text " "
            zetta-tab-bar-clock " "
            zetta-tab-bar-battery-icon " " zetta-tab-bar-battery-text " "
            zetta-current-prefix " "
-           zetta-tab-bar-workspace-icon " " space-tree-modeline-lighter))))
+           zetta-tab-bar-workspace-icon " " zetta-tab-bar-workspace-text))))
 
 (svg-line-define 'zetta-tab-bar
-  :target 'tab-bar
-  :layout 'lines
-  :width 'frame
-  :content #'zetta-tab-bar-svg-lines
-  :font (lambda () zetta-svg-line-font)
-  :font-size (lambda () zetta-tab-bar-svg-font-size)
-  :line-pad (lambda () zetta-tab-bar-svg-line-pad)
-  :char-advance (lambda () zetta-tab-bar-svg-char-advance)
-  :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
-                             (face-foreground 'default nil t)
-                             "#cccccc")))
+                 :target 'tab-bar
+                 :layout 'lines
+                 :width 'frame
+                 :content #'zetta-tab-bar-svg-lines
+                 :font (lambda () zetta-svg-line-font)
+                 :font-size (lambda () zetta-tab-bar-svg-font-size)
+                 :line-pad (lambda () zetta-tab-bar-svg-line-pad)
+                 :char-advance (lambda () zetta-tab-bar-svg-char-advance)
+                 :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
+                                            (face-foreground 'default nil t)
+                                            "#cccccc")))
 
 ;;; ------------------------------------------------------------------
 ;;; Built-in (fallback) tab-bar format -- the text tab bar used when the

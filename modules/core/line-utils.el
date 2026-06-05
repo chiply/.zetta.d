@@ -268,148 +268,6 @@ where no local thing has been set via `treesit-tap-set-local'."
   "Render the second breadcrumb row (lsp / org / imenu crumbs)."
   (format-mode-line zetta-header-line-svg-line2-format))
 
-;;;; File-type icons (shared by the SVG tab-bar and tab-line)
-;; ----------------------------------------------------------------
-;; Resolve a buffer to vector icon data (from svg-line-icons + svg-lib).
-;; Deliberately NEVER fetches or loads svg-lib on the render path: returns
-;; already-cached data or nil, warming the cache from an idle prefetch.
-;; That keeps the redisplay path free of disk/network/library loads --
-;; important given the tab-bar's history of redisplay freezes.
-
-(defvar zetta-line-icons t
-  "When non-nil, draw file-type icons in the SVG tab-bar and tab-line.")
-
-(defvar zetta-line-icon-collection "material"
-  "Default `svg-lib' icon collection for file-type icons.
-An entry in `zetta-line-icon-mode-alist' / `zetta-line-icon-ext-alist'
-may override it per icon by giving a (COLLECTION . NAME) cons instead of
-a bare NAME string -- e.g. the GNU Emacs logo lives in the brand-logo
-collection \"simple\" as \"gnuemacs\".")
-
-(defvar zetta-line-icon-mode-alist
-  ;; Prefer official brand logos from the "simple" (simple-icons)
-  ;; collection; fall back to neutral "material" glyphs for things with no
-  ;; brand mark (generic terminal, SQL, folder).
-  '((emacs-lisp-mode       . ("simple" . "gnuemacs"))
-    (lisp-interaction-mode . ("simple" . "gnuemacs"))
-    (python-mode           . ("simple" . "python"))
-    (python-ts-mode        . ("simple" . "python"))
-    (js-mode               . ("simple" . "javascript"))
-    (js2-mode              . ("simple" . "javascript"))
-    (js-ts-mode            . ("simple" . "javascript"))
-    (rjsx-mode             . ("simple" . "react"))
-    (typescript-mode       . ("simple" . "typescript"))
-    (typescript-ts-mode    . ("simple" . "typescript"))
-    (tsx-ts-mode           . ("simple" . "react"))
-    (json-mode             . ("simple" . "json"))
-    (json-ts-mode          . ("simple" . "json"))
-    (jsonian-mode          . ("simple" . "json"))
-    (yaml-mode             . ("simple" . "yaml"))
-    (yaml-ts-mode          . ("simple" . "yaml"))
-    (markdown-mode         . ("simple" . "markdown"))
-    (org-mode              . ("simple" . "org"))
-    (sh-mode               . ("simple" . "gnubash"))
-    (bash-ts-mode          . ("simple" . "gnubash"))
-    (shell-mode            . ("simple" . "gnubash"))
-    (eshell-mode           . ("simple" . "gnubash"))
-    (vterm-mode            . "console")
-    (dockerfile-mode       . ("simple" . "docker"))
-    (dockerfile-ts-mode    . ("simple" . "docker"))
-    (docker-compose-mode   . ("simple" . "docker"))
-    (terraform-mode        . ("simple" . "terraform"))
-    (sql-mode              . "database")
-    (web-mode              . ("simple" . "html5"))
-    (html-mode             . ("simple" . "html5"))
-    (mhtml-mode            . ("simple" . "html5"))
-    (css-mode              . ("simple" . "css"))
-    (css-ts-mode           . ("simple" . "css"))
-    (go-mode               . ("simple" . "go"))
-    (go-ts-mode            . ("simple" . "go"))
-    (rust-mode             . ("simple" . "rust"))
-    (rust-ts-mode          . ("simple" . "rust"))
-    (ruby-mode             . ("simple" . "ruby"))
-    (java-mode             . ("simple" . "openjdk"))
-    (php-mode              . ("simple" . "php"))
-    (lua-mode              . ("simple" . "lua"))
-    (c-mode                . ("simple" . "c"))
-    (c-ts-mode             . ("simple" . "c"))
-    (c++-mode              . ("simple" . "cplusplus"))
-    (c++-ts-mode           . ("simple" . "cplusplus"))
-    (magit-status-mode     . ("simple" . "git"))
-    (dired-mode            . "folder"))
-  "Map major mode -> `svg-lib' icon, a NAME or a (COLLECTION . NAME) cons.")
-
-(defvar zetta-line-icon-ext-alist
-  '(("el"   . ("simple" . "gnuemacs"))
-    ("py"   . ("simple" . "python"))
-    ("js"   . ("simple" . "javascript")) ("mjs" . ("simple" . "javascript"))
-    ("jsx"  . ("simple" . "react"))      ("tsx" . ("simple" . "react"))
-    ("ts"   . ("simple" . "typescript"))
-    ("json" . ("simple" . "json"))
-    ("yml"  . ("simple" . "yaml"))       ("yaml" . ("simple" . "yaml"))
-    ("md"   . ("simple" . "markdown"))   ("markdown" . ("simple" . "markdown"))
-    ("org"  . ("simple" . "org"))
-    ("sh"   . ("simple" . "gnubash"))    ("bash" . ("simple" . "gnubash"))
-    ("sql"  . "database")
-    ("html" . ("simple" . "html5"))      ("htm" . ("simple" . "html5"))
-    ("css"  . ("simple" . "css"))
-    ("go"   . ("simple" . "go"))         ("rs" . ("simple" . "rust"))
-    ("c"    . ("simple" . "c"))          ("h"  . ("simple" . "c"))
-    ("cpp"  . ("simple" . "cplusplus"))  ("cc" . ("simple" . "cplusplus"))
-    ("hpp"  . ("simple" . "cplusplus"))
-    ("rb"   . ("simple" . "ruby"))       ("java" . ("simple" . "openjdk"))
-    ("php"  . ("simple" . "php"))        ("lua"  . ("simple" . "lua"))
-    ("toml" . ("simple" . "toml"))       ("tf"   . ("simple" . "terraform")))
-  "Map file extension -> `svg-lib' icon, a NAME or a (COLLECTION . NAME) cons.")
-
-(defvar zetta-line-icon-default "file-outline"
-  "Fallback `svg-lib' icon NAME when neither mode nor extension matches.")
-
-(defun zetta-line-icon--spec (val)
-  "Normalise an icon alist VAL to a (COLLECTION . NAME) cons, or nil.
-VAL is either a bare NAME string (uses `zetta-line-icon-collection') or an
-explicit (COLLECTION . NAME) cons."
-  (cond ((null val) nil)
-        ((consp val) val)
-        ((stringp val) (cons zetta-line-icon-collection val))))
-
-(defun zetta-line-icon-spec-for (buffer)
-  "Return the (COLLECTION . NAME) icon spec for BUFFER (by mode, then extension)."
-  (with-current-buffer buffer
-    (zetta-line-icon--spec
-     (or (alist-get major-mode zetta-line-icon-mode-alist)
-         (let ((ext (and buffer-file-name
-                         (downcase (or (file-name-extension buffer-file-name) "")))))
-           (and ext (> (length ext) 0)
-                (cdr (assoc ext zetta-line-icon-ext-alist))))
-         zetta-line-icon-default))))
-
-(defun zetta-line-icon-data-cached (collection name)
-  "Return cached (VIEWBOX . PATHS) for icon NAME of COLLECTION, or nil.
-Render-safe: never loads svg-lib or fetches; on a miss it schedules an
-idle prefetch (which requests a redisplay when it lands) and returns nil."
-  (when (and zetta-line-icons (fboundp 'svg-line-icon-prefetch))
-    (or (and (featurep 'svg-lib) (svg-line-icon-data name collection t))
-        (progn (svg-line-icon-prefetch name collection) nil))))
-
-(defun zetta-line-file-icon-data (buffer)
-  "Return cached (VIEWBOX . PATHS) file-type icon data for BUFFER, or nil."
-  (when (buffer-live-p buffer)
-    (let ((spec (zetta-line-icon-spec-for buffer)))
-      (and spec (zetta-line-icon-data-cached (car spec) (cdr spec))))))
-
-(defun zetta-line-icon-token (collection name &optional fill)
-  "Return an inline icon token (:svg-icon DATA FILL) for NAME/COLLECTION, or nil.
-For use as / inside a `svg-line' segment.  FILL nil inherits the side's
-foreground colour."
-  (let ((d (zetta-line-icon-data-cached collection name)))
-    (and d (list :svg-icon d fill))))
-
-(defun zetta-line-file-icon-token (buffer &optional fill)
-  "Return an inline file-type icon token for BUFFER, or nil."
-  (let ((d (zetta-line-file-icon-data buffer)))
-    (and d (list :svg-icon d fill))))
-
 ;;;; Nerd-font glyph icons for the SVG bars
 ;; ----------------------------------------------------------------
 ;; The bars render in a scalable Nerd Font (`zetta-svg-line-font'), so
@@ -418,11 +276,12 @@ foreground colour."
 ;; positioning, no char-advance estimation, no svg-lib path injection.
 ;; Each segment returns the bare glyph string (properties stripped) or nil.
 
-(defvar zetta-svg-line-font "JetBrainsMono Nerd Font Mono"
+(defvar zetta-svg-line-font "Terminess Nerd Font Mono"
   "Font family for the SVG bars (tab-bar, mode-line, tab-line, header-line).
-A scalable, single-width Nerd Font: its advance is predictable (unlike a
-bitmap font such as Terminus) and it carries the icon glyphs, so icons
-render inline as ordinary text.  Buffers keep their own font (`zetta-font').")
+A single-width Nerd Font carrying the icon glyphs, so icons render inline
+as ordinary text.  Terminess is the Nerd-patched Terminus, keeping that
+look; any Nerd Font works (e.g. \"JetBrainsMono Nerd Font Mono\").  Buffers
+keep their own font (`zetta-font').")
 
 (defun zetta-line--glyph (s)
   "Return nerd-icons glyph string S without text properties, or nil if empty."

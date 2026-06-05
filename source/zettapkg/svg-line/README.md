@@ -90,43 +90,36 @@ dark/light predicate) live in your config and the engine stays theme-agnostic.
 
 ## Icons
 
-Single-font SVG text can't draw icon-font glyphs (all-the-icons, nerd-icons)
-— they render as tofu because the font isn't embedded. svg-line instead draws
-real **vector** icons as scaled `<path>` groups:
-
-- `svg-line-icon-append` (core, dependency-free) injects already-harvested
-  path data — a `viewBox` + path `d` strings — into a composed SVG at a given
-  position/size/fill.
-- The optional **`svg-line-icons`** add-on bridges to Nicolas Rougier's
-  [`svg-lib`](https://github.com/rougier/svg-lib), which fetches and caches
-  icon collections (material, octicons, …). Harvests are memoised, and
-  `svg-line-icon-data … no-fetch` + `svg-line-icon-prefetch` keep the network
-  and svg-lib itself entirely **off the redisplay path**.
-
-In the **`wrap`** layout, each tab takes a leading icon via `:icon`:
+Use a **Nerd Font** for the line's `:font` and icons are just text — a
+nerd-icons glyph in a segment string flows inline with everything else, one
+native SVG `<text>`, font-accurate, with no positioning math. Glyphs render
+smaller than a text cell, so svg-line enlarges Private-Use (icon) runs via a
+larger `<tspan>` (`svg-line-glyph-scale`, default 1.3):
 
 ```elisp
-(cons "1 init.el" (list :current t :icon (svg-line-icon-data "lambda")))
+;; a segment that returns a git glyph + the branch, in the same font:
+(defun my-vc () (when (vc-backend buffer-file-name)
+                  (concat (nerd-icons-devicon "nf-dev-git") " " (my-branch))))
+(cons '(my-vc) '(my-clock))
 ```
 
-In the **`lines`** layout, a segment may *be* (or *return*) an inline icon
-or progress-bar token, placed anywhere among the text — `(:svg-icon DATA
-FILL)` and `(:svg-bar FRACTION PIXELWIDTH FILL BG)`:
+No icon font? Any glyph the bar font lacks can fall back via a font list, e.g.
+`font-family="Your Font, Symbols Nerd Font Mono"`.
+
+## Progress bars and pies
+
+A `lines` segment may emit a geometric **progress** token, drawn by svg-line
+itself (no dependency): `(:svg-bar FRACTION PIXELWIDTH FILL BG)` or
+`(:svg-pie FRACTION FILL BG)`:
 
 ```elisp
-(defun my-vc-icon ()                       ; a dynamic inline-icon segment
-  (when (vc-backend buffer-file-name)
-    (list :svg-icon (svg-line-icon-data "git" "simple") nil)))
-
-(defun my-progress ()                      ; a progress bar of point-in-buffer
-  (list :svg-bar (/ (float (point)) (point-max)) 56 "#2a4d77" "#d4dcea"))
-
-;; row: [git] repo:branch ......  <progress>
-(cons '(my-vc-icon my-repo-branch) '(my-progress))
+(defun my-progress ()                      ; point's position through the buffer
+  (list :svg-pie (/ (float (point)) (point-max)) "#2a4d77" "#d4dcea"))
+(cons '(my-buffer-name) '(my-progress))
 ```
 
-A side containing any icon/bar token is laid out with `:char-advance`
-spacing; pure-text sides keep exact font anchoring.
+A side containing a bar/pie token is laid out with `:char-advance` spacing;
+pure-text sides keep exact font anchoring.
 
 ## Safety
 
@@ -141,7 +134,6 @@ value instead of looping.
 - `svg-line-image` — `lines` layout → svg object
 - `svg-line-wrap-image` — `wrap` layout → svg object
 - `svg-line-display` — svg object → display string
-- `svg-line-icon-append` — inject scaled icon paths into an svg object
 - `svg-line-safe` — wrap a render thunk with the error/loop guard
 
 ## Tests

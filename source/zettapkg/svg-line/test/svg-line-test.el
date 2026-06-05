@@ -12,7 +12,6 @@
                (file-name-directory
                 (or load-file-name buffer-file-name)))))
 (require 'svg-line)
-(require 'svg-line-icons)
 
 ;; Avoid depending on the batch frame's default font family.
 (setq svg-line-font "Monospace")
@@ -124,65 +123,24 @@ with the modified accent so the unsaved state stays visible."
          (rect (car (dom-by-tag svg 'rect))))
     (should (equal (dom-attr rect 'fill) "#9aa9bd"))))
 
-;;;; icons (generic layer, no svg-lib / no network)
-
-(ert-deftest svg-line/icon-append-builds-scaled-group ()
-  "The generic icon layer appends a <g> of <path> nodes with a transform."
-  (let* ((svg (svg-create 100 100))
-         (g (svg-line-icon-append
-             svg '("M0 0h24v24H0z" "M4 4h4v4H4z") '(0 0 24 24)
-             :x 5 :y 6 :size 16 :fill "#2a4d77")))
-    (should (eq (dom-tag g) 'g))
-    ;; group is attached to the svg
-    (should (memq g (dom-children svg)))
-    ;; two paths, both filled with the requested colour
-    (let ((paths (dom-by-tag g 'path)))
-      (should (= (length paths) 2))
-      (should (cl-every (lambda (p) (equal (dom-attr p 'fill) "#2a4d77")) paths)))
-    ;; transform places (x,y) and scales 16/24
-    (let ((tr (dom-attr g 'transform)))
-      (should (string-prefix-p "translate(5,6)" tr))
-      (should (string-match-p "scale(0\\.6" tr)))))
-
-(ert-deftest svg-line/icon-append-handles-empty-and-offset-viewbox ()
-  "Empty path strings are skipped; a non-zero viewBox origin is shifted out."
-  (let* ((svg (svg-create 50 50))
-         (g (svg-line-icon-append svg '("" "M1 1h2v2H1z") '(2 3 16 16) :size 16)))
-    (should (= (length (dom-by-tag g 'path)) 1))            ; empty d skipped
-    (should (string-match-p "translate(-2,-3)" (dom-attr g 'transform)))))
-
-;;;; icons wired into the layouts
-
-(ert-deftest svg-line/wrap-item-icon ()
-  "An item whose STATE carries :icon draws an icon <g> and shifts its label."
-  (let* ((icon '((0 0 24 24) . ("M0 0h24v24H0z")))
-         (svg (svg-line-wrap-image
-               (list (cons "tab" (list :current nil :icon icon)))
-               :width 1000 :font "Monospace" :font-size 10 :char-advance 8)))
-    (should (dom-by-tag svg 'g))                        ; icon group present
-    (should (= (length (dom-by-tag svg 'path)) 1))
-    (should (> (dom-attr (car (dom-by-tag svg 'text)) 'x) 0)))) ; label shifted
+;;;; runs (text / bars / pies)
 
 (ert-deftest svg-line/render-runs-lowers-tokens ()
-  "Segments lower to text/icon/bar runs, coalescing adjacent text."
+  "Segments lower to text/bar runs, coalescing adjacent text."
   (let ((runs (svg-line--render-runs
                (list "a" "b"
-                     '(:svg-icon ((0 0 24 24) . ("M0 0h1v1z")) "#111111")
                      (lambda () "c")
                      '(:svg-bar 0.5 40 "#222222" "#eeeeee")))))
-    (should (equal (mapcar #'car runs) '(:text :icon :text :bar)))
-    (should (equal (nth 1 (nth 0 runs)) "ab"))          ; adjacent text coalesced
-    (should (equal (nth 1 (nth 2 runs)) "c"))))
+    (should (equal (mapcar #'car runs) '(:text :bar)))
+    (should (equal (nth 1 (nth 0 runs)) "abc"))))       ; adjacent text coalesced
 
-(ert-deftest svg-line/lines-runs-draw-icon-and-bar ()
-  "A run-list side renders an inline icon group and a progress bar (2 rects)."
-  (let* ((icon '((0 0 24 24) . ("M0 0h24v24H0z")))
-         (left  (list (list :icon icon "#2a4d77") (list :text " hi")))
+(ert-deftest svg-line/lines-bar-run ()
+  "A run-list side renders a progress bar (track + fill = 2 rects) and text."
+  (let* ((left  (list (list :text "hi")))
          (right (list (list :bar 0.5 40 "#2a4d77" "#eeeeee")))
          (svg (svg-line-image (list (cons left right))
                               :width 400 :font "Monospace" :font-size 10
                               :pad 4 :char-advance 8)))
-    (should (= (length (dom-by-tag svg 'g)) 1))         ; inline icon group
     (should (= (length (dom-by-tag svg 'rect)) 2))      ; bar: track + fill
     (should (string-match-p "hi" (dom-texts svg)))))
 

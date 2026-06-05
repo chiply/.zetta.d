@@ -184,8 +184,7 @@ with the modified accent so the unsaved state stays visible."
                               :pad 4 :char-advance 8)))
     (should (= (length (dom-by-tag svg 'g)) 1))         ; inline icon group
     (should (= (length (dom-by-tag svg 'rect)) 2))      ; bar: track + fill
-    (should (member " hi" (mapcar (lambda (tx) (car (dom-children tx)))
-                                  (dom-by-tag svg 'text))))))
+    (should (string-match-p "hi" (dom-texts svg)))))
 
 (ert-deftest svg-line/lines-pie-run ()
   "A partial :pie run draws a background circle plus a wedge path."

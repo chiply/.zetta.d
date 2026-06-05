@@ -93,6 +93,68 @@ Used to decide where tab rows wrap.  Set slightly high so rows wrap
 before reaching the right edge rather than clipping."
   :type 'number)
 
+(defcustom svg-line-glyph-scale 1.3
+  "Font-size multiplier for icon (Nerd-Font PUA) glyphs within line text.
+Nerd-font icon glyphs are drawn smaller than a text cell; a value >1
+enlarges just those glyphs (via a larger `<tspan>'), so icons read at a
+comparable weight to the text.  1.0 disables the effect."
+  :type 'number)
+
+(defun svg-line--glyph-char-p (ch)
+  "Non-nil if CH is in a Nerd-Font / icon Private-Use code range."
+  (or (and (>= ch #xE000)   (<= ch #xF8FF))     ; BMP PUA
+      (and (>= ch #xF0000)  (<= ch #xFFFFD))    ; Plane-15 PUA-A
+      (and (>= ch #x100000) (<= ch #x10FFFD)))) ; Plane-16 PUA-B
+
+(defun svg-line--split-glyph-runs (str)
+  "Split STR into a list of (GLYPHP . SUBSTRING); GLYPHP t for icon-glyph runs."
+  (let ((runs nil) (n (length str)))
+    (when (> n 0)
+      (let ((start 0) (cur (svg-line--glyph-char-p (aref str 0))))
+        (dotimes (i n)
+          (let ((g (svg-line--glyph-char-p (aref str i))))
+            (unless (eq g cur)
+              (push (cons cur (substring str start i)) runs)
+              (setq start i cur g))))
+        (push (cons cur (substring str start n)) runs)))
+    (nreverse runs)))
+
+(defun svg-line--add-text (svg str &rest props)
+  "Append a `<text>' for STR to SVG, enlarging Nerd-Font glyph runs.
+PROPS keywords: :x :y :font :font-size :fill :weight :anchor.  Glyph runs
+are wrapped in a larger `<tspan>' (per `svg-line-glyph-scale') with a small
+baseline shift so they stay vertically centred; librsvg flows the tspans,
+so no manual positioning is needed."
+  (let* ((fz (plist-get props :font-size))
+         (scale svg-line-glyph-scale)
+         (big (round (* fz scale)))
+         (shift (round (/ (* fz (- scale 1.0)) 2.0)))
+         (attrs (list (cons 'x (plist-get props :x))
+                      (cons 'y (plist-get props :y))
+                      (cons 'font-family (plist-get props :font))
+                      (cons 'font-size fz)
+                      (cons 'fill (plist-get props :fill))
+                      ;; keep inter-tspan spaces: SVG otherwise trims leading
+                      ;; whitespace at a tspan boundary, swallowing the space
+                      ;; after an enlarged glyph
+                      (cons 'xml:space "preserve"))))
+    (when (plist-get props :weight) (push (cons 'font-weight (plist-get props :weight)) attrs))
+    (when (plist-get props :anchor) (push (cons 'text-anchor (plist-get props :anchor)) attrs))
+    (let ((node (dom-node 'text (nreverse attrs))) (cur-dy 0))
+      (dolist (run (svg-line--split-glyph-runs str))
+        (let* ((glyphp (and (car run) (> scale 1.0)))
+               (target (if glyphp shift 0))
+               (dy (- target cur-dy)))
+          (setq cur-dy target)
+          (dom-append-child
+           node (dom-node 'tspan
+                          (append (when glyphp (list (cons 'font-size big)))
+                                  (unless (zerop dy) (list (cons 'dy dy))))
+                          ;; encode <>& like `svg-text' does (svg-print emits
+                          ;; text content verbatim, so escape it ourselves)
+                          (svg--encode-text (cdr run))))))
+      (dom-append-child svg node))))
+
 ;;;; Value resolution
 ;; ----------------------------------------------------------------
 ;; Every styling option may be a literal or a zero-arg function; the
@@ -221,8 +283,8 @@ width.  FOREGROUND is the fallback fill.  Returns the ending x."
     (pcase (car run)
       (:text (let ((str (nth 1 run)))
                (when (> (length str) 0)
-                 (svg-text svg str :font-family font :font-size fz
-                           :fill foreground :x x :y (+ top fz)))))
+                 (svg-line--add-text svg str :x x :y (+ top fz)
+                                     :font font :font-size fz :fill foreground))))
       (:icon (let ((data (nth 1 run)))
                (svg-line-icon-append svg (cdr data) (car data)
                                      :x (+ x (round (* 0.15 fz)))
@@ -297,15 +359,15 @@ Returns an svg object (see `svg-create')."
                   ;; LEFT: flush-left
                   (cond
                    ((and (stringp l) (> (length l) 0))
-                    (svg-text svg l :font-family font :font-size fz
-                              :fill foreground :x pad :y y))
+                    (svg-line--add-text svg l :x pad :y y
+                                        :font font :font-size fz :fill foreground))
                    ((consp l)
                     (svg-line--draw-runs svg l pad top fz lh font char-advance foreground)))
                   ;; RIGHT: flush-right
                   (cond
                    ((and (stringp r) (> (length r) 0))
-                    (svg-text svg r :font-family font :font-size fz
-                              :fill foreground :x rx :y y :text-anchor "end"))
+                    (svg-line--add-text svg r :x rx :y y :anchor "end"
+                                        :font font :font-size fz :fill foreground))
                    ((consp r)
                     (svg-line--draw-runs svg r (max pad (- rx (svg-line--runs-width r char-advance fz)))
                                          top fz lh font char-advance foreground)))))
@@ -388,9 +450,9 @@ state remains visible behind the highlight)."
               (svg-line-icon-append svg (cdr icon) (car icon)
                                     :x px :y (+ top (max 0 (/ (- lh fz) 2)))
                                     :size fz :fill fill))
-            (svg-text svg label :font-family font :font-size fz
-                      :fill fill :font-weight (if currentp "bold" "normal")
-                      :x (+ px iw) :y (+ top fz)))))
+            (svg-line--add-text svg label :x (+ px iw) :y (+ top fz)
+                                :font font :font-size fz :fill fill
+                                :weight (if currentp "bold" "normal")))))
       svg)))
 
 ;;;###autoload

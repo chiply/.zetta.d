@@ -519,19 +519,58 @@ scaling its `:font-size'/`:char-advance' instead, not the image."
         (mapconcat (lambda (r) (nth 1 r)) runs "")
       runs)))
 
+;;;; Text-scale responsiveness
+;; ----------------------------------------------------------------
+;; The line image is pinned to :scale 1.0 (see `svg-line-display'), so it
+;; never inherits `image-scaling-factor' and overflows.  To still track the
+;; default font size (e.g. `default-text-scale', or `set-face-attribute' on
+;; `default'), the layout SIZES -- font-size, line-pad, padding, advance --
+;; are scaled by the ratio of the current `default'-face height to a
+;; captured reference, so the line RE-RENDERS larger/sharper instead.
+
+(defcustom svg-line-scale-with-text-scale t
+  "When non-nil, scale line sizes with the `default'-face height.
+Lets lines track `default-text-scale' (font-size, line-pad, padding and
+char-advance grow proportionally).  nil keeps a fixed pixel size regardless
+of the default font."
+  :type 'boolean)
+
+(defvar svg-line--base-text-height nil
+  "Reference `default'-face :height for a text scale of 1.0 (captured once).
+Reset to nil to re-capture (e.g. after changing the unscaled default font).")
+
+(defun svg-line--text-scale ()
+  "Factor relating the current `default'-face height to the reference.
+Returns 1.0 when scaling is disabled or unavailable."
+  (if (not svg-line-scale-with-text-scale)
+      1.0
+    (let ((h (ignore-errors (face-attribute 'default :height nil 'default))))
+      (when (and (numberp h) (null svg-line--base-text-height))
+        (setq svg-line--base-text-height h))
+      (if (and (numberp h) (numberp svg-line--base-text-height)
+               (> svg-line--base-text-height 0))
+          (/ (float h) svg-line--base-text-height)
+        1.0))))
+
+(defun svg-line--scaled (size)
+  "Scale pixel SIZE by the current text-scale factor (integer result)."
+  (round (* size (svg-line--text-scale))))
+
 (defun svg-line--build-lines (spec)
   "Build the `lines' SVG for SPEC.
 Each content row is (LEFT-SEGMENTS . RIGHT-SEGMENTS).  A segment may emit
 a progress bar (:svg-bar ...) or pie (:svg-pie ...) token (see
 `svg-line--render-runs'); a side with any such token is laid out with
-CHAR-ADVANCE spacing, otherwise with exact text anchoring."
+CHAR-ADVANCE spacing, otherwise with exact text anchoring.
+Sizes scale with the default font (see `svg-line-scale-with-text-scale')."
   (let* ((active (svg-line--active-p spec))
          (fg (or (and (not active) (svg-line--opt spec :inactive-foreground))
                  (svg-line--opt spec :foreground "#000000")))
          (bg (if active
                  (svg-line--opt spec :background)
                (or (svg-line--opt spec :inactive-background)
-                   (svg-line--opt spec :background)))))
+                   (svg-line--opt spec :background))))
+         (sc (svg-line--text-scale)))
     (svg-line-image
      (mapcar (lambda (r)
                (cons (svg-line--side (car r)) (svg-line--side (cdr r))))
@@ -539,11 +578,11 @@ CHAR-ADVANCE spacing, otherwise with exact text anchoring."
      :width (svg-line--width spec)
      :font (svg-line--opt spec :font
                           (or svg-line-font (face-attribute 'default :family nil t)))
-     :font-size (svg-line--opt spec :font-size svg-line-font-size)
-     :line-pad (svg-line--opt spec :line-pad svg-line-line-pad)
-     :pad (svg-line--opt spec :pad 0)
-     :right-margin (svg-line--opt spec :right-margin 0)
-     :char-advance (or (svg-line--opt spec :char-advance nil) svg-line-char-advance)
+     :font-size (svg-line--scaled (svg-line--opt spec :font-size svg-line-font-size))
+     :line-pad (svg-line--scaled (svg-line--opt spec :line-pad svg-line-line-pad))
+     :pad (svg-line--scaled (svg-line--opt spec :pad 0))
+     :right-margin (svg-line--scaled (svg-line--opt spec :right-margin 0))
+     :char-advance (* (or (svg-line--opt spec :char-advance nil) svg-line-char-advance) sc)
      :foreground fg
      :background bg)))
 
@@ -553,6 +592,7 @@ When SPEC has an `:active' predicate that is false, the inactive variant
 of each colour applies (falling back to the active colour when unset),
 mirroring the `lines' layout."
   (let* ((active (svg-line--active-p spec))
+         (sc (svg-line--text-scale))
          (pick (lambda (key inactive-key &optional default)
                  (if active
                      (svg-line--opt spec key default)
@@ -562,9 +602,9 @@ mirroring the `lines' layout."
                          :width (svg-line--width spec)
                          :font (svg-line--opt spec :font
                                               (or svg-line-font (face-attribute 'default :family nil t)))
-                         :font-size (svg-line--opt spec :font-size svg-line-font-size)
-                         :line-pad (svg-line--opt spec :line-pad svg-line-line-pad)
-                         :char-advance (or (svg-line--opt spec :char-advance nil) svg-line-char-advance)
+                         :font-size (svg-line--scaled (svg-line--opt spec :font-size svg-line-font-size))
+                         :line-pad (svg-line--scaled (svg-line--opt spec :line-pad svg-line-line-pad))
+                         :char-advance (* (or (svg-line--opt spec :char-advance nil) svg-line-char-advance) sc)
                          :gap (svg-line--opt spec :gap 3)
                          :foreground (funcall pick :foreground :inactive-foreground "#000000")
                          :background (funcall pick :background :inactive-background)

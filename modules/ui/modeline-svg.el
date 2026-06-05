@@ -82,9 +82,9 @@ A barely-there light tint."
   :content #'zetta-modeline-svg-lines
   :active #'mode-line-window-selected-p
   :font (lambda () zetta-svg-line-font)
-  :font-size (lambda () (zetta-svg-line-scaled zetta-modeline-svg-font-size))
+  :font-size (lambda () zetta-modeline-svg-font-size)
   :line-pad (lambda () zetta-modeline-svg-line-pad)
-  :char-advance (lambda () (* zetta-modeline-svg-char-advance (zetta-svg-line-text-scale)))
+  :char-advance (lambda () zetta-modeline-svg-char-advance)
   :right-margin (lambda () zetta-modeline-svg-right-margin)
   :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
                              (face-foreground 'mode-line nil t) "#cccccc"))

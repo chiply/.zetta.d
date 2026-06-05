@@ -125,6 +125,13 @@ with the modified accent so the unsaved state stays visible."
 
 ;;;; runs (text / bars / pies)
 
+(defvar svg-line-test--seg)
+(ert-deftest svg-line/segments-bound-variable ()
+  "A bound variable symbol segment renders its value (mode-line-format style)."
+  (let ((svg-line-test--seg "VX"))
+    (should (equal (svg-line-render-segments '(svg-line-test--seg)) "VX"))
+    (should (equal (nth 1 (car (svg-line--render-runs '(svg-line-test--seg)))) "VX"))))
+
 (ert-deftest svg-line/render-runs-lowers-tokens ()
   "Segments lower to text/bar runs, coalescing adjacent text."
   (let ((runs (svg-line--render-runs

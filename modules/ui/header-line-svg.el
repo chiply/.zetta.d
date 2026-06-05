@@ -27,16 +27,6 @@
 (defcustom zetta-header-line-svg-line-pad 4
   "Extra vertical padding (px) per SVG header-line row." :type 'integer :group 'zetta)
 
-(defcustom zetta-header-line-svg-bg-active "#ece4f6"
-  "Background of the SVG header line in the SELECTED window.  nil = transparent.
-A light purple tint -- distinct from the mode line's blues."
-  :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
-
-(defcustom zetta-header-line-svg-bg-inactive "#f5f1fb"
-  "Background of the SVG header line in NON-selected windows.  nil = transparent.
-A barely-there light purple."
-  :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
-
 ;;; ------------------------------------------------------------------
 ;;; Content -- two left-aligned breadcrumb rows.
 ;;; ------------------------------------------------------------------
@@ -50,14 +40,11 @@ A barely-there light purple."
   :layout 'lines
   :width 'window
   :content #'zetta-header-line-svg-lines
-  :active #'mode-line-window-selected-p
   :font (lambda () zetta-svg-line-font)
   :font-size (lambda () zetta-header-line-svg-font-size)
   :line-pad (lambda () zetta-header-line-svg-line-pad)
   :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
-                             (face-foreground 'default nil t) "#cccccc"))
-  :background (lambda () zetta-header-line-svg-bg-active)
-  :inactive-background (lambda () zetta-header-line-svg-bg-inactive))
+                             (face-foreground 'default nil t) "#cccccc")))
 
 ;;; ------------------------------------------------------------------
 ;;; Switching

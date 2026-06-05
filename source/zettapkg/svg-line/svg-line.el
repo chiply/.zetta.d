@@ -176,10 +176,14 @@ formatted."
                                (pad 0)
                                (right-margin 0)
                                (foreground "#000000")
-                               (background nil))
+                               (background nil)
+                               (icons nil))
   "Build a `lines'-layout SVG from ROWS, a list of (LEFT . RIGHT) strings.
 LEFT is drawn flush-left at PAD; RIGHT is drawn flush-right (anchored at
-WIDTH minus RIGHT-MARGIN).  Returns an svg object (see `svg-create')."
+WIDTH minus RIGHT-MARGIN).  ICONS, when given, is a list parallel to ROWS;
+each element is nil or (DATA . FILL), where DATA is (VIEWBOX . PATHS) -- a
+leading icon drawn at PAD that shifts that row's LEFT text rightwards.
+Returns an svg object (see `svg-create')."
   (let* ((foreground (svg-line--color foreground))
          (background (svg-line--color background))
          (fz font-size)
@@ -190,11 +194,24 @@ WIDTH minus RIGHT-MARGIN).  Returns an svg object (see `svg-create')."
     (when background (svg-rectangle svg 0 0 width height :fill background))
     (cl-loop for (l . r) in rows
              for i from 0
-             for y = (+ (* lh i) fz)
+             for top = (* lh i)
+             for y = (+ top fz)
+             for icon = (nth i icons)
+             for lx = (let ((data (car-safe icon)))
+                        (if data
+                            (progn
+                              (svg-line-icon-append svg (cdr data) (car data)
+                                                    :x pad
+                                                    :y (+ top (max 0 (/ (- lh fz) 2)))
+                                                    :size fz
+                                                    :fill (or (cdr icon) foreground))
+                              (+ pad (round (svg-line--icon-width (car data) fz))
+                                 (round (* 0.4 fz))))
+                          pad))
              do (progn
                   (when (and (stringp l) (> (length l) 0))
                     (svg-text svg l :font-family font :font-size fz
-                              :fill foreground :x pad :y y))
+                              :fill foreground :x lx :y y))
                   (when (and (stringp r) (> (length r) 0))
                     (svg-text svg r :font-family font :font-size fz
                               :fill foreground :x rx :y y :text-anchor "end"))))
@@ -220,7 +237,10 @@ inter-item gap in character widths.  Returns an svg object.
 
 STATE selects how each item is styled:
   - nil / non-nil atom  -- treated as CURRENTP (backward compatible);
-  - a plist             -- recognised keys `:current' and `:modified'.
+  - a plist             -- recognised keys `:current', `:modified', and
+                           `:icon' (a (VIEWBOX . PATHS) leading icon, drawn
+                           in the item's text colour and accounted for in
+                           the wrap width).
 
 A current item is drawn bold, in CURRENT-FOREGROUND, over a
 CURRENT-BACKGROUND box.  A (non-current) modified item is drawn in
@@ -242,17 +262,23 @@ state remains visible behind the highlight)."
              (state (cdr it))
              (currentp  (if (consp state) (plist-get state :current) state))
              (modifiedp (and (consp state) (plist-get state :modified)))
+             (icon (and (consp state) (plist-get state :icon)))
+             ;; icon advance = icon width + a small gap before the label
+             (iw (if icon (+ (round (svg-line--icon-width (car icon) fz))
+                             (round (* 0.4 fz)))
+                   0))
              (lw (* (length label) char-advance))
-             (w  (+ lw (* gap char-advance))))
+             (cw (+ iw lw))                          ; full item (box) width
+             (w  (+ cw (* gap char-advance))))       ; + inter-item gap
         (when (and (> x 0) (> (+ x w) width))
           (setq x 0 row (1+ row)))
-        (push (list x (* row lh) lw label currentp modifiedp) placements)
+        (push (list x (* row lh) cw iw label currentp modifiedp icon) placements)
         (setq x (+ x w))))
     (let* ((height (max 1 (* (1+ row) lh)))
            (svg (svg-create width height)))
       (when background (svg-rectangle svg 0 0 width height :fill background))
       (dolist (p (nreverse placements))
-        (cl-destructuring-bind (px top lw label currentp modifiedp) p
+        (cl-destructuring-bind (px top cw iw label currentp modifiedp icon) p
           (let ((box  (cond ;; current AND modified: tint the current box with the
                             ;; modified accent so "unsaved" stays visible behind
                             ;; the current highlight (the label stays readable).
@@ -263,16 +289,62 @@ state remains visible behind the highlight)."
                             (modifiedp (or modified-foreground foreground))
                             (t foreground))))
             (when box
-              (svg-rectangle svg px top lw lh :fill box :rx 3))
+              (svg-rectangle svg px top cw lh :fill box :rx 3))
+            (when icon
+              (svg-line-icon-append svg (cdr icon) (car icon)
+                                    :x px :y (+ top (max 0 (/ (- lh fz) 2)))
+                                    :size fz :fill fill))
             (svg-text svg label :font-family font :font-size fz
                       :fill fill :font-weight (if currentp "bold" "normal")
-                      :x px :y (+ top fz)))))
+                      :x (+ px iw) :y (+ top fz)))))
       svg)))
 
 ;;;###autoload
 (defun svg-line-display (svg)
   "Wrap SVG object as a one-space string carrying it as a display image."
   (propertize " " 'display (svg-image svg :ascent 'center)))
+
+;;;; Icons (generic, dependency-free path injection)
+;; ----------------------------------------------------------------
+;; Draw real vector icons INTO a composed svg as scaled <path> groups,
+;; from already-harvested data (a viewBox + path "d" strings).  This is
+;; the primitive the line renderers use; harvesting the data from an icon
+;; set is the job of the optional `svg-line-icons' add-on (which bridges
+;; to `svg-lib').  Kept here, and free of any icon-set dependency, so the
+;; renderers can place icons without the core depending on svg-lib.
+
+(defun svg-line--icon-width (viewbox size)
+  "Pixel width of an icon with VIEWBOX (MINX MINY W H) drawn at height SIZE."
+  (let ((vw (float (or (nth 2 viewbox) size)))
+        (vh (float (or (nth 3 viewbox) size))))
+    (* size (/ vw (if (zerop vh) size vh)))))
+
+(defun svg-line-icon-append (svg paths viewbox &rest props)
+  "Append icon PATHS to SVG as a positioned, scaled `<g>'; return the group.
+PATHS is a list of SVG path \"d\" strings.  VIEWBOX is (MINX MINY W H),
+as parsed from the source icon's `viewBox'.  PROPS is a plist:
+  :x :y    top-left placement in SVG pixels (default 0, 0);
+  :size    target height in pixels, width scales proportionally (default 16);
+  :fill    path fill colour (default \"#000000\").
+SVG is an svg object from `svg-create' (or any DOM node to append into)."
+  (let* ((x    (or (plist-get props :x) 0))
+         (y    (or (plist-get props :y) 0))
+         (size (or (plist-get props :size) 16))
+         (fill (svg-line--color (or (plist-get props :fill) "#000000")))
+         (vx (float (or (nth 0 viewbox) 0)))
+         (vy (float (or (nth 1 viewbox) 0)))
+         (vh (float (or (nth 3 viewbox) size)))
+         (s  (/ size (if (zerop vh) size vh)))
+         ;; map icon space -> SVG pixels: place at (x,y), scale to `size',
+         ;; and shift away the viewBox origin.
+         (transform (format "translate(%g,%g) scale(%g) translate(%g,%g)"
+                            x y s (- vx) (- vy)))
+         (g (dom-node 'g (list (cons 'transform transform)))))
+    (dolist (d paths)
+      (when (and (stringp d) (> (length d) 0))
+        (dom-append-child g (dom-node 'path (list (cons 'd d) (cons 'fill fill))))))
+    (dom-append-child svg g)
+    g))
 
 ;;;; Safety wrapper
 ;; ----------------------------------------------------------------
@@ -334,7 +406,10 @@ state remains visible behind the highlight)."
 ;; ----------------------------------------------------------------
 
 (defun svg-line--build-lines (spec)
-  "Build the `lines' SVG for SPEC."
+  "Build the `lines' SVG for SPEC.
+A content row is either (LEFT-SEGMENTS . RIGHT-SEGMENTS) or a plist
+\(:left LSEGS :right RSEGS :icon (VIEWBOX . PATHS) :icon-fill COLOUR); the
+latter draws a leading icon that shifts that row's left text rightwards."
   (let* ((active (svg-line--active-p spec))
          (fg (or (and (not active) (svg-line--opt spec :inactive-foreground))
                  (svg-line--opt spec :foreground "#000000")))
@@ -342,11 +417,20 @@ state remains visible behind the highlight)."
                  (svg-line--opt spec :background)
                (or (svg-line--opt spec :inactive-background)
                    (svg-line--opt spec :background))))
-         (rows (mapcar (lambda (r)
-                         (cons (svg-line-render-segments (car r))
-                               (svg-line-render-segments (cdr r))))
-                       (funcall (plist-get spec :content)))))
-    (svg-line-image rows
+         (rows nil) (icons nil))
+    (dolist (r (funcall (plist-get spec :content)))
+      (if (keywordp (car-safe r))
+          (let ((data (plist-get r :icon)))
+            (push (cons (svg-line-render-segments (plist-get r :left))
+                        (svg-line-render-segments (plist-get r :right)))
+                  rows)
+            (push (and data (cons data (svg-line--color (or (plist-get r :icon-fill) fg))))
+                  icons))
+        (push (cons (svg-line-render-segments (car r))
+                    (svg-line-render-segments (cdr r)))
+              rows)
+        (push nil icons)))
+    (svg-line-image (nreverse rows)
                     :width (svg-line--width spec)
                     :font (svg-line--opt spec :font
                                          (or svg-line-font (face-attribute 'default :family nil t)))
@@ -355,7 +439,8 @@ state remains visible behind the highlight)."
                     :pad (svg-line--opt spec :pad 0)
                     :right-margin (svg-line--opt spec :right-margin 0)
                     :foreground fg
-                    :background bg)))
+                    :background bg
+                    :icons (nreverse icons))))
 
 (defun svg-line--build-wrap (spec)
   "Build the `wrap' SVG for SPEC.
@@ -411,9 +496,13 @@ Recognised SPEC keys:
   :target  one of `tab-bar' `mode-line' `header-line' `tab-line' (required)
   :layout  `lines' (default) or `wrap'
   :content a function returning the line's content (required):
-             - for `lines': a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS)
+             - for `lines': a list of rows, each either
+               (LEFT-SEGMENTS . RIGHT-SEGMENTS) or a plist
+               (:left LSEGS :right RSEGS :icon (VIEWBOX . PATHS) :icon-fill C)
+               for a leading icon on that row
              - for `wrap':  a list of (LABEL . STATE), where STATE is a
-               CURRENTP atom or a plist with `:current'/`:modified' keys
+               CURRENTP atom or a plist with `:current'/`:modified'/`:icon'
+               keys (`:icon' is a (VIEWBOX . PATHS) leading tab icon)
   :width   `frame', `window', an integer, or a function (default by target)
   :font :font-size :line-pad :pad :right-margin
   :foreground :background

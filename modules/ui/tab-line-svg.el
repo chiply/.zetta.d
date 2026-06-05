@@ -389,7 +389,7 @@ LABEL is \"N name\" (1-based, matching g1..g9), with
 `zetta-tab-line-svg-modified-marker' appended when the buffer has unsaved
 changes.  STATE is a plist: `:current' marks the tab for the buffer
 displayed in this window; `:modified' marks a file-visiting buffer with
-unsaved changes."
+unsaved changes; `:icon' is the buffer's file-type icon data (or nil)."
   (let ((tabs (ignore-errors (funcall tab-line-tabs-function)))
         (cur  (current-buffer)))
     (cl-loop for buf in tabs
@@ -406,7 +406,8 @@ unsaved changes."
                            name)
              collect (cons (format "%d %s%s" i short
                                    (if modifiedp zetta-tab-line-svg-modified-marker ""))
-                           (list :current currentp :modified modifiedp)))))
+                           (list :current currentp :modified modifiedp
+                                 :icon (zetta-line-file-icon-data real))))))
 
 (svg-line-define 'zetta-tab-line
   :target 'tab-line

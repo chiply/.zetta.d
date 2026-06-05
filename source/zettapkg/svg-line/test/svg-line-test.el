@@ -151,6 +151,28 @@ with the modified accent so the unsaved state stays visible."
     (should (= (length (dom-by-tag g 'path)) 1))            ; empty d skipped
     (should (string-match-p "translate(-2,-3)" (dom-attr g 'transform)))))
 
+;;;; icons wired into the layouts
+
+(ert-deftest svg-line/wrap-item-icon ()
+  "An item whose STATE carries :icon draws an icon <g> and shifts its label."
+  (let* ((icon '((0 0 24 24) . ("M0 0h24v24H0z")))
+         (svg (svg-line-wrap-image
+               (list (cons "tab" (list :current nil :icon icon)))
+               :width 1000 :font "Monospace" :font-size 10 :char-advance 8)))
+    (should (dom-by-tag svg 'g))                        ; icon group present
+    (should (= (length (dom-by-tag svg 'path)) 1))
+    (should (> (dom-attr (car (dom-by-tag svg 'text)) 'x) 0)))) ; label shifted
+
+(ert-deftest svg-line/lines-leading-icon ()
+  "A parallel :icons entry draws a leading icon and shifts that row's left text."
+  (let* ((icon '((0 0 24 24) . ("M0 0h24v24H0z")))
+         (svg (svg-line-image '(("L" . "R") ("L2" . ""))
+                              :width 200 :font "Monospace" :font-size 10 :pad 4
+                              :icons (list (cons icon "#2a4d77") nil))))
+    (should (dom-by-tag svg 'g))                        ; one leading icon group
+    ;; first row's left text is shifted right of pad (=4)
+    (should (> (dom-attr (car (dom-by-tag svg 'text)) 'x) 4))))
+
 ;;;; safety wrapper
 
 (ert-deftest svg-line/safe-error-fallback ()

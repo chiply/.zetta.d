@@ -14,5 +14,10 @@
 
 (use-package svg-line
   :ensure nil
-  :load-path "source/zettapkg/svg-line")
+  :load-path "source/zettapkg/svg-line"
+  :config
+  ;; Optional icon bridge: lets the tab-bar / tab-line draw real vector
+  ;; icons.  Requiring it does NOT pull in svg-lib -- that is loaded lazily
+  ;; (off the render path) only when an icon is actually harvested.
+  (require 'svg-line-icons))
 ;;; svg-line.el ends here

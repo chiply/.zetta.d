@@ -268,4 +268,86 @@ where no local thing has been set via `treesit-tap-set-local'."
   "Render the second breadcrumb row (lsp / org / imenu crumbs)."
   (format-mode-line zetta-header-line-svg-line2-format))
 
+;;;; File-type icons (shared by the SVG tab-bar and tab-line)
+;; ----------------------------------------------------------------
+;; Resolve a buffer to vector icon data (from svg-line-icons + svg-lib).
+;; Deliberately NEVER fetches or loads svg-lib on the render path: returns
+;; already-cached data or nil, warming the cache from an idle prefetch.
+;; That keeps the redisplay path free of disk/network/library loads --
+;; important given the tab-bar's history of redisplay freezes.
+
+(defvar zetta-line-icons t
+  "When non-nil, draw file-type icons in the SVG tab-bar and tab-line.")
+
+(defvar zetta-line-icon-collection "material"
+  "`svg-lib' icon collection used for file-type icons.")
+
+(defvar zetta-line-icon-mode-alist
+  '((emacs-lisp-mode       . "lambda")
+    (lisp-interaction-mode . "lambda")
+    (python-mode           . "language-python")
+    (python-ts-mode        . "language-python")
+    (js-mode               . "language-javascript")
+    (js2-mode              . "language-javascript")
+    (js-ts-mode            . "language-javascript")
+    (typescript-mode       . "language-typescript")
+    (typescript-ts-mode    . "language-typescript")
+    (json-mode             . "code-json")
+    (jsonian-mode          . "code-json")
+    (yaml-mode             . "code-tags")
+    (markdown-mode         . "language-markdown")
+    (org-mode              . "file-document-outline")
+    (sh-mode               . "console")
+    (bash-ts-mode          . "console")
+    (vterm-mode            . "console")
+    (shell-mode            . "console")
+    (eshell-mode           . "console")
+    (dockerfile-mode       . "docker")
+    (docker-compose-mode   . "docker")
+    (sql-mode              . "database")
+    (web-mode              . "language-html5")
+    (html-mode             . "language-html5")
+    (css-mode              . "language-css3")
+    (magit-status-mode     . "git")
+    (dired-mode            . "folder"))
+  "Map major mode -> `svg-lib' icon NAME for the file-type icon.")
+
+(defvar zetta-line-icon-ext-alist
+  '(("el" . "lambda") ("py" . "language-python")
+    ("js" . "language-javascript") ("jsx" . "language-javascript")
+    ("ts" . "language-typescript") ("tsx" . "language-typescript")
+    ("json" . "code-json") ("yml" . "code-tags") ("yaml" . "code-tags")
+    ("md" . "language-markdown") ("org" . "file-document-outline")
+    ("sh" . "console") ("sql" . "database") ("html" . "language-html5")
+    ("css" . "language-css3") ("go" . "language-go") ("rs" . "language-rust")
+    ("c" . "language-c") ("h" . "language-c") ("cpp" . "language-cpp")
+    ("rb" . "language-ruby") ("java" . "language-java") ("php" . "language-php")
+    ("lua" . "language-lua") ("toml" . "code-tags"))
+  "Map file extension -> `svg-lib' icon NAME (fallback when mode is unknown).")
+
+(defvar zetta-line-icon-default "file-outline"
+  "Fallback `svg-lib' icon NAME when neither mode nor extension matches.")
+
+(defun zetta-line-icon-name-for (buffer)
+  "Return the `svg-lib' icon NAME for BUFFER (by major mode, then extension)."
+  (with-current-buffer buffer
+    (or (alist-get major-mode zetta-line-icon-mode-alist)
+        (let ((ext (and buffer-file-name
+                        (downcase (or (file-name-extension buffer-file-name) "")))))
+          (and ext (> (length ext) 0)
+               (cdr (assoc ext zetta-line-icon-ext-alist))))
+        zetta-line-icon-default)))
+
+(defun zetta-line-file-icon-data (buffer)
+  "Return cached (VIEWBOX . PATHS) icon data for BUFFER, or nil.
+Never loads svg-lib or fetches on the render path: if svg-lib is not yet
+loaded, or the icon is not cached, schedule an idle prefetch and return
+nil for now (the prefetch requests a redisplay when it lands)."
+  (when (and zetta-line-icons (fboundp 'svg-line-icon-prefetch) (buffer-live-p buffer))
+    (let ((name (zetta-line-icon-name-for buffer)))
+      (when name
+        (or (and (featurep 'svg-lib)
+                 (svg-line-icon-data name zetta-line-icon-collection t))
+            (progn (svg-line-icon-prefetch name zetta-line-icon-collection) nil))))))
+
 ;;; line-utils.el ends here

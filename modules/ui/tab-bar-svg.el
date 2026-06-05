@@ -24,11 +24,12 @@
   "Extra vertical padding (px) added to each SVG tab-bar line."
   :type 'integer :group 'zetta)
 
-(defcustom zetta-tab-bar-svg-char-advance 7.5
-  "Per-character advance (px) used to lay out rows containing inline icons.
-Match it to the monospace SVG font's glyph width (Terminus at 15px = 7.5)
-so iconned rows stay as tight as the plain-text rows."
-  :type 'number :group 'zetta)
+(defcustom zetta-tab-bar-svg-char-advance nil
+  "Per-character advance (px) for rows containing inline icons.
+nil (recommended) measures the real advance from the font -- what the SVG
+renderer actually draws, which matters for bitmap fonts like Terminus that
+snap to a fixed pixel size.  Set a number to override."
+  :type '(choice (const :tag "Auto-measure" nil) number) :group 'zetta)
 
 (defcustom zetta-tab-bar-svg-image-cache-eviction-delay 30
   "Value for `image-cache-eviction-delay' while the SVG tab bar is active.

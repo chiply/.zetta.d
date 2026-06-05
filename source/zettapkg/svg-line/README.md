@@ -22,6 +22,22 @@ You supply a `:content` function and styling and bind it to a target.
 | `lines` | rows of `(LEFT . RIGHT)`                | tab-bar, mode-line, header-line   |
 | `wrap`  | a flow of items wrapped across rows     | tab-line (buffer tabs)            |
 
+## Installation
+
+svg-line requires **Emacs 29.1+** and has no dependencies beyond the
+built-in `svg.el`. Once it is on MELPA:
+
+```elisp
+(use-package svg-line
+  :ensure t)
+```
+
+Or load it manually after putting `svg-line.el` on your `load-path`:
+
+```elisp
+(require 'svg-line)
+```
+
 ## Usage
 
 ```elisp
@@ -142,7 +158,9 @@ value instead of looping.
 
 ## Core API (for power use)
 
-- `svg-line-render-segments` — segment list → string
+- `svg-line-render-segments` — segment list → string (text-only; does not
+  interpret `:svg-bar`/`:svg-pie` tokens — the engine renders those via its
+  internal run path)
 - `svg-line-image` — `lines` layout → svg object
 - `svg-line-wrap-image` — `wrap` layout → svg object
 - `svg-line-display` — svg object → display string

@@ -191,8 +191,8 @@ with the modified accent so the unsaved state stays visible."
     :target 'tab-bar :layout 'lines
     :content (lambda () '((("hello") . nil))))
   (should (svg-line--entry 'test-line))
-  (should (fboundp 'svg-line-render/test-line))
-  (let ((s (svg-line-render/test-line)))
+  (should (fboundp 'svg-line--render-test-line))
+  (let ((s (svg-line--render-test-line)))
     (should (stringp s))
     (should (get-text-property 0 'display s))))
 
@@ -206,7 +206,7 @@ with the modified accent so the unsaved state stays visible."
     (svg-line-define 'test-tb :target 'tab-bar :content (lambda () '((("x") . nil))))
     (svg-line-activate 'test-tb)
     (should (svg-line-active-p 'test-tb))
-    (should (equal tab-bar-format '(svg-line-render/test-tb)))
+    (should (equal tab-bar-format '(svg-line--render-test-tb)))
     (svg-line-deactivate 'test-tb)
     (should-not (svg-line-active-p 'test-tb))
     (should (equal tab-bar-format '(original)))))

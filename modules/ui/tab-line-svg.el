@@ -1,5 +1,35 @@
-;;; tab-line.el --- Configure tab-line -*- lexical-binding: t; -*-
+;;; tab-line-svg.el --- Wrapping SVG tab line (svg-line config) -*- lexical-binding: t; -*-
 
+;; The complete tab-line module.  It owns BOTH the tab-line system (the
+;; `use-package tab-line' block below: global-tab-line-mode, the buffer
+;; selector + scopes, close commands, g1-g9 / C-tab keybindings, faces,
+;; built-in tab labels) AND the SVG renderer that draws the per-window
+;; tab line as a single SVG image using the `wrap' layout (tabs flow
+;; left-to-right and WRAP overflow onto new rows instead of truncating or
+;; scrolling).  The rendering itself lives in the `svg-line' engine.
+;;
+;; Tab data comes from `tab-line-tabs-function'.  Labels are "N name",
+;; where N is the 1-based index matching the g1..g9 jump keys.  The
+;; current tab is drawn bold, in `current-foreground', over a
+;; `current-background' box.
+;;
+;; Switch at runtime:
+;;   M-x zetta-tab-line-use-svg       ; activate the wrapping SVG tab line
+;;   M-x zetta-tab-line-use-default   ; restore the built-in tab line
+;;   M-x zetta-tab-line-toggle        ; flip
+;;
+;; CAVEATS: single-font SVG text (the all-the-icons file icon is dropped;
+;; the number prefix carries the useful info), and KEYBOARD interaction
+;; only (as one image there are no per-tab mouse click / close targets).
+
+(require 'svg-line)
+
+;;; ==================================================================
+;;; Tab-line SYSTEM (merged from the former tab-line.el): enables
+;;; global-tab-line-mode, the buffer selector + scopes, close commands,
+;;; g1-g9 / C-tab keybindings, faces, and the built-in tab labels.  The
+;;; SVG renderer further below overrides only the rendering.
+;;; ==================================================================
 (use-package tab-line
   :ensure nil
   :hook (elpaca-after-init . global-tab-line-mode)
@@ -280,4 +310,117 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
 
   :hook ((fundamental-mode . tab-line-mode))
   )
-;;; tab-line.el ends here
+
+;;; ------------------------------------------------------------------
+;;; Customization
+;;; ------------------------------------------------------------------
+(defcustom zetta-tab-line-svg-font-size 15
+  "Font size (px) for SVG tab-line text." :type 'integer :group 'zetta)
+(defcustom zetta-tab-line-svg-line-pad 4
+  "Extra vertical padding (px) per wrapped tab-line row." :type 'integer :group 'zetta)
+(defcustom zetta-tab-line-svg-char-advance 8
+  "Per-character advance (px) for the monospace SVG font.
+Used to decide where tab rows wrap.  Err slightly high so rows wrap
+before reaching the right edge (a hair of slack rather than clipping)."
+  :type 'number :group 'zetta)
+(defcustom zetta-tab-line-svg-tab-gap 3
+  "Gap between tabs, in character widths." :type 'number :group 'zetta)
+(defcustom zetta-tab-line-svg-max-name 30
+  "Truncate an individual tab name to this many characters (then …)."
+  :type 'integer :group 'zetta)
+
+(defcustom zetta-tab-line-svg-background "#eef3fc"
+  "Very subtle (lightest) blue background for the SVG tab line.
+Distinguishes the tab line from the tab-bar and header-line.  nil = transparent."
+  :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
+
+(defcustom zetta-tab-line-svg-current-background "#2a4d77"
+  "Dark-blue highlight drawn behind the current (active) tab.  nil = none."
+  :type '(choice (const :tag "None" nil) color) :group 'zetta)
+
+(defcustom zetta-tab-line-svg-current-foreground "#ffffff"
+  "Foreground for the current tab's label (light, to read on the dark box)."
+  :type 'color :group 'zetta)
+
+;;; ------------------------------------------------------------------
+;;; Content -- a list of (LABEL . CURRENTP) for the `wrap' layout.
+;;; ------------------------------------------------------------------
+(defun zetta-tab-line-svg-tabs ()
+  "Return a list of (LABEL . CURRENTP) for the window's tab-line tabs.
+LABEL is \"N name\" (1-based, matching g1..g9); CURRENTP marks the tab
+for the buffer displayed in this window."
+  (let ((tabs (ignore-errors (funcall tab-line-tabs-function)))
+        (cur  (current-buffer)))
+    (cl-loop for buf in tabs
+             for i from 1
+             for name = (buffer-name (if (bufferp buf) buf cur))
+             for short = (if (> (length name) zetta-tab-line-svg-max-name)
+                             (concat (substring name 0 (1- zetta-tab-line-svg-max-name)) "…")
+                           name)
+             collect (cons (format "%d %s" i short)
+                           (eq buf cur)))))
+
+(svg-line-define 'zetta-tab-line
+  :target 'tab-line
+  :layout 'wrap
+  :width 'window
+  :content #'zetta-tab-line-svg-tabs
+  :font (lambda () (or (bound-and-true-p zetta-font) "Terminus (TTF)"))
+  :font-size (lambda () zetta-tab-line-svg-font-size)
+  :line-pad (lambda () zetta-tab-line-svg-line-pad)
+  :char-advance (lambda () zetta-tab-line-svg-char-advance)
+  :gap (lambda () zetta-tab-line-svg-tab-gap)
+  :background (lambda () zetta-tab-line-svg-background)
+  :foreground (lambda () (or (bound-and-true-p brushup-bg-5)
+                             (face-foreground 'shadow nil t) "#888888"))
+  :current-foreground (lambda () zetta-tab-line-svg-current-foreground)
+  :current-background (lambda () zetta-tab-line-svg-current-background))
+
+;;; ------------------------------------------------------------------
+;;; Switching.  svg-line installs the tab line by advising the
+;;; `tab-line-format' FUNCTION (so it catches buffers whose
+;;; `tab-line-format' variable is buffer-local), and removes the advice
+;;; on deactivate.
+;;; ------------------------------------------------------------------
+(defun zetta-tab-line-using-svg-p ()
+  "Non-nil if the wrapping SVG tab line is currently active."
+  (svg-line-active-p 'zetta-tab-line))
+
+;;;###autoload
+(defun zetta-tab-line-use-svg ()
+  "Switch the tab line to the wrapping SVG renderer."
+  (interactive)
+  (svg-line-activate 'zetta-tab-line)
+  (message "tab-line: wrapping SVG renderer active (M-x zetta-tab-line-use-default to revert)"))
+
+;;;###autoload
+(defun zetta-tab-line-use-default ()
+  "Restore the built-in tab line."
+  (interactive)
+  (svg-line-deactivate 'zetta-tab-line)
+  (message "tab-line: built-in renderer active"))
+
+;;;###autoload
+(defun zetta-tab-line-toggle ()
+  "Toggle between the SVG and built-in tab line."
+  (interactive)
+  (if (zetta-tab-line-using-svg-p)
+      (zetta-tab-line-use-default)
+    (zetta-tab-line-use-svg)))
+
+;;; ------------------------------------------------------------------
+;;; Startup default (opt-out).  The tab line is per-window and installs
+;;; by advising `tab-line-format', so it is safe to activate from the
+;;; startup hook (sets up advice only; no rendering at hook time).
+;;; ------------------------------------------------------------------
+(defcustom zetta-tab-line-svg-default t
+  "When non-nil, activate the wrapping SVG tab line at startup.
+Set to nil (and restart) to keep the built-in tab line; either way you
+can switch at runtime with `zetta-tab-line-toggle'."
+  :type 'boolean :group 'zetta)
+
+(when zetta-tab-line-svg-default
+  (add-hook 'emacs-startup-hook #'zetta-tab-line-use-svg))
+
+(provide 'tab-line-svg)
+;;; tab-line-svg.el ends here

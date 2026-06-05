@@ -50,7 +50,7 @@ in the order they appear in the `zetta-modules!' declaration.")
 ;; this order.  Files present on disk but not listed here are appended
 ;; alphabetically at the end.
 (defvar zetta--default-file-order
-  '((core . ("emacs.el" "simple.el" "utility.el" "interface.el" "tab-bar.el" "desktop.el"
+  '((core . ("emacs.el" "simple.el" "utility.el" "interface.el" "desktop.el"
              "remote.el" "security.el" "keys.el" "xref.el" "project.el"
              "persist.el" "smerge-mode.el" "repeat-mode.el" "saveplace.el"
              "savehist.el" "comint.el" "cleanup.el" "buffer.el" "ibuffer.el"
@@ -69,9 +69,9 @@ in the order they appear in the `zetta-modules!' declaration.")
            "all-the-icons-dired.el" "all-the-icons-ibuffer.el" "theme.el"
            "modern-fringes.el" "rainbow-mode.el" "image-mode.el" "browse-url.el"
            "mermaid-mode.el" "minimap.el" "unicode-fonts.el" "spinner.el"
-           "yascroll.el" "nyan-mode.el" "popper.el" "tab-line.el" "window.el"
-           "line.el" "rainbow-delimiters.el" "symbol-overlay.el" "hi-lock.el"
-           "beacon.el" "outline-indent.el" "hl-todo.el" "dual-header.el"
+           "yascroll.el" "nyan-mode.el" "popper.el" "window.el"
+           "rainbow-delimiters.el" "symbol-overlay.el" "hi-lock.el"
+           "beacon.el" "outline-indent.el" "hl-todo.el" "svg-line.el" "header-line-svg.el"
            "breadcrumb.el" "parrot.el" "hl-block.el" "awesome-tray.el"
            "telephone-line.el" "ef-themes.el" "doric-themes.el"
            "adaptive-wrap.el" "svg-lib.el" "explain-pause-mode.el" "spacetree.el"))

@@ -59,6 +59,7 @@ keybindings.org
 # Private/sensitive
 private.el
 notes.txt
+*.plstore
 
 # Misc
 elfeed.stats

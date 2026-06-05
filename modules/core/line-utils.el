@@ -90,68 +90,182 @@
     )
   )
 
-;; This buffer is for text that is not saved, and for Lisp evaluation.
-;; To create a file, visit it with C-x C-f and enter text in its buffer.
-(defun mode-line-fill-right (face reserve)
-  "Return empty space using FACE and leaving RESERVE space on the right."
-  (unless reserve
-    (setq reserve 20))
-  (when (and window-system (eq 'right (get-scroll-bar-mode)))
-    (setq reserve (+ reserve 3)))
-  (propertize " "
-              'display `((space :align-to (- (+ right right-fringe right-margin) ,reserve)))
-              ;;'face face
-              ))
+;;;; Indicators (segment functions, moved from the -svg config modules)
+;; ----------------------------------------------------------------
+;; Atomic display segments.  The -svg config modules in :ui bind these
+;; into lines (they only compose, not define).  line-utils.el (:core)
+;; loads before those :ui consumers, so the functions are defined first.
 
-(defun mode-line-fill-center (face reserve)
-  "Return empty space using FACE to the center of remaining space leaving RESERVE space on the right."
-  (unless reserve
-    (setq reserve 20))
-  (when (and window-system (eq 'right (get-scroll-bar-mode)))
-    (setq reserve (+ reserve 3)))
-  (propertize " "
-              'display `((space :align-to (- (+ center (.5 . right-margin)) ,reserve
-                                             (.5 . left-margin))))
-              ;;'face face
-              ))
+;;; tab-bar / status segments
+(defun zetta-buffer-name ()
+  (let ((name (if (buffer-file-name)
+                  (abbreviate-file-name (buffer-file-name))
+                (buffer-name))))
+    (if (> (length name) 70)
+        (concat (substring name 0 67) "…")
+      name)))
 
-;; NOTE use this to allow  more space ont eh right, otherwise you will get cutoff
-(defconst RIGHT_PADDING 20)
+(defun zmc-modeline-indicator ()
+  (concat
+   (when (boundp 'local-transient) local-transient)
+   " "))
 
-(defun reserve-left/middle (line-align-middle)
-  (/ (length (format-mode-line line-align-middle)) 2))
+(defun zetta-pyvenv-activate-poetry-modeline ()
+  (and (boundp 'zetta-pyvenv-virtual-env)
+       (concat "{venv:"
+               (zetta-minify-path zetta-pyvenv-virtual-env)
+               "/"
+               (car (last (split-string zetta-pyvenv-virtual-env "/")))
+               "}")))
 
-(defun zetta-do-reserve-left/middle (line-align-middle)
-  (if (eq ml-selected-window (selected-window))
-      (mode-line-fill-center 'mode-line (reserve-left/middle line-align-middle))
-    (mode-line-fill-center 'mode-line-inactive
-                           (reserve-left/middle line-align-middle))
-    ))
+(defun zetta-tab-bar-spot-mode-line-string ()
+  (if (fboundp 'spot-mode-line-string)
+      (spot-mode-line-string)
+    "*"))
 
-(defun reserve-middle/right (line-align-right)
-  (+ RIGHT_PADDING (length (format-mode-line line-align-right))))
+(defun zetta-tab-bar-modal ()
+  (or
+   (when (and (boundp 'evil-mode) evil-mode) "evil")
+   (when (and (boundp 'meow-mode) meow-mode) "meow")
+   (when (not (or (and (boundp 'evil-mode) evil-mode)
+                  (and (boundp 'meow-mode) meow-mode)))
+     "emacs")))
 
-(defun zetta-do-reserve-middle/right (line-align-right)
-  (if (eq ml-selected-window (selected-window))
-      (mode-line-fill-right 'mode-line
-                            (reserve-middle/right line-align-right))
-    (mode-line-fill-right 'mode-line-inactive
-                          (reserve-middle/right line-align-right))
-    ))
+(defun zetta-gptel-processes ()
+  (when (boundp 'gptel--request-alist)
+    (let ((num-processes (length gptel--request-alist)))
+      (if (> num-processes 0)
+          (format " ai:%d " num-processes)
+        ""))))
 
-;; extremely conduing, but vars need to be passed to eval as strings
-(defun zetta-get-line-format (line-align-left line-align-middle line-align-right)
-  (list
-   ;; Left
-   line-align-left
+(defun tab-bar-keycast ()
+  (let ((str (keycast--format keycast-mode-line-format)))
+    (when str
+      (set-text-properties 0 (length str) nil str))
+    `((keycast menu-item ,(or str "") ignore))))
 
-   ;; Middle
-   '(:eval (zetta-do-reserve-left/middle 'line-align-middle))
-   line-align-middle
+(defun zetta-tab-bar-current-thing ()
+  "Tab-bar item: shows the effective treesit-tap thing at point.
+Uses the accessor `treesit-tap--current-thing' rather than the raw
+buffer-local `treesit-tap-current-thing', so it is always visible:
+it falls back to `treesit-tap-default-thing' (e.g. [defun]) in buffers
+where no local thing has been set via `treesit-tap-set-local'."
+  (when (fboundp 'treesit-tap--current-thing)
+    (format "[%s] " (treesit-tap--current-thing))))
 
-   ;; Right
-   '(:eval (zetta-do-reserve-middle/right 'line-align-right))
-   line-align-right
-   )
-  )
+(defun zetta-tab-bar-recursion-level ()
+  (let ((recursion-level (minibuffer-depth)))
+    (if (zerop recursion-level)
+        "[R:0] "
+      (format " [R:%d] " recursion-level))))
+
+(defun zetta-current-prefix ()
+  (let ((descr (key-description
+                (or
+                 (and
+                  (boundp 'my-this-command-keys-vector)
+                  my-this-command-keys-vector)
+                 (this-command-keys-vector)))))
+    (if (string-match-p "mouse" descr)
+        ""
+      descr)))
+
+;; otherwise prefix keys won't show up
+(add-hook 'prefix-command-echo-keystrokes-functions 'force-mode-line-update)
+
+;;; mode-line text segments
+(defun zetta-modeline-svg--modal ()
+  (if (fboundp 'zetta-tab-bar-modal) (or (zetta-tab-bar-modal) "") ""))
+
+(defun zetta-modeline-svg--ace ()
+  (or (window-parameter (selected-window) 'ace-window-path) ""))
+
+(defun zetta-modeline-svg--buffer ()
+  (let ((n (buffer-name)))
+    (if (> (length n) 40) (concat (substring n 0 39) "…") n)))
+
+(defun zetta-modeline-svg--mode ()
+  (format-mode-line mode-name))
+
+(defun zetta-modeline-svg--vc ()
+  (when (and (fboundp 'vc-git-root)
+             (vc-git-root (or (buffer-file-name) default-directory)))
+    (let ((repo   (ignore-errors (nth 0 (zetta-get-repo-name))))
+          (branch (ignore-errors (vc-git--symbolic-ref
+                                  (or (buffer-file-name) default-directory)))))
+      (concat (or repo "") (and branch (concat ":" branch))))))
+
+(defun zetta-modeline-svg--checkers ()
+  (concat
+   (when (and (boundp 'lsp-mode) lsp-mode) "lsp ")
+   (when (and (boundp 'copilot-mode) copilot-mode) "copilot ")))
+
+(defun zetta-modeline-svg--flycheck ()
+  (if (fboundp 'flycheck-indicator--mode-line)
+      (let ((text (flycheck-indicator--mode-line)))
+        (if (string= " not-checked" text) "" (substring-no-properties text)))
+    ""))
+
+(defun zetta-modeline-svg--indicators ()
+  (concat
+   (when (bound-and-true-p repeat-in-progress) "R")
+   (when (and (fboundp 'zetta-line-tramp-icon) (zetta-line-tramp-icon)) "T")
+   (when (and (fboundp 'zetta-line-docker-icon) (zetta-line-docker-icon)) "D")
+   (when (and (fboundp 'zetta-line-narrowed-icon) (zetta-line-narrowed-icon)) "N")
+   (when (and (fboundp 'zetta-line-hydra-indicator-icon) (zetta-line-hydra-indicator-icon)) "H")))
+
+(defun zetta-modeline-svg--docpos ()
+  (cond
+   ((and (eq major-mode 'pdf-view-mode) (fboundp 'pdf-view-current-page))
+    (ignore-errors (format "%d/%d" (pdf-view-current-page) (pdf-cache-number-of-pages))))
+   (t "")))
+
+(defun zetta-modeline-svg--point ()
+  (format-mode-line "%l:%c"))
+
+;;; header-line breadcrumb content
+(defvar zetta-header-line-svg-line1-format
+  '((:eval (when (or
+                  (eq major-mode 'docker-image-mode)
+                  (eq major-mode 'docker-container-mode)
+                  (eq major-mode 'docker-volume-mode)
+                  (eq major-mode 'embark-collect-mode))
+             (propertize
+              (window-parameter (selected-window) 'ace-window-path)
+              'face 'focus-focused)))
+    " "
+    (:eval (when (fboundp 'spinner-print) (spinner-print spinner-current)))
+    " "
+    (:eval
+     (let ((path (abbreviate-file-name default-directory)))
+       (if (> (length path) 30) (zetta-minify-path default-directory) path)))
+    " "
+    "%c|%l(%p)")
+  "Mode-line construct for header-line row 1 (path / position).")
+
+(defvar zetta-header-line-svg-line2-format
+  '((:eval
+     (cond
+      ((and (boundp 'lsp-mode) lsp-mode)
+       (window-parameter nil 'lsp-headerline--string))
+      ((string= major-mode "org-mode")
+       (propertize
+        (or (ignore-errors (org-display-outline-path nil t "/" t)) "/")
+        'face '(:height 0.8)))
+      ((or (equal major-mode 'jsonian-mode))
+       (concat (jsonian--display-path (jsonian-path))))
+      ((or (equal major-mode 'docker-compose-mode)
+           (equal major-mode 'yaml-mode))
+       (concat (jpt-yaml-path-to-point)))
+      (t (when (fboundp 'breadcrumb-imenu-crumbs) (breadcrumb-imenu-crumbs))))))
+  "Mode-line construct for header-line row 2 (lsp / org / imenu crumbs).")
+
+(defun zetta-header-line-svg--line1 ()
+  "Render the first breadcrumb row (path / position)."
+  (format-mode-line zetta-header-line-svg-line1-format))
+
+(defun zetta-header-line-svg--line2 ()
+  "Render the second breadcrumb row (lsp / org / imenu crumbs)."
+  (format-mode-line zetta-header-line-svg-line2-format))
+
 ;;; line-utils.el ends here

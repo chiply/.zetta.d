@@ -12,6 +12,7 @@
                (file-name-directory
                 (or load-file-name buffer-file-name)))))
 (require 'svg-line)
+(require 'svg-line-icons)
 
 ;; Avoid depending on the batch frame's default font family.
 (setq svg-line-font "Monospace")
@@ -122,6 +123,33 @@ with the modified accent so the unsaved state stays visible."
   (let* ((svg (svg-line--build-wrap (svg-line--spec 'test-wrap-inactive)))
          (rect (car (dom-by-tag svg 'rect))))
     (should (equal (dom-attr rect 'fill) "#9aa9bd"))))
+
+;;;; icons (generic layer, no svg-lib / no network)
+
+(ert-deftest svg-line/icon-append-builds-scaled-group ()
+  "The generic icon layer appends a <g> of <path> nodes with a transform."
+  (let* ((svg (svg-create 100 100))
+         (g (svg-line-icon-append
+             svg '("M0 0h24v24H0z" "M4 4h4v4H4z") '(0 0 24 24)
+             :x 5 :y 6 :size 16 :fill "#2a4d77")))
+    (should (eq (dom-tag g) 'g))
+    ;; group is attached to the svg
+    (should (memq g (dom-children svg)))
+    ;; two paths, both filled with the requested colour
+    (let ((paths (dom-by-tag g 'path)))
+      (should (= (length paths) 2))
+      (should (cl-every (lambda (p) (equal (dom-attr p 'fill) "#2a4d77")) paths)))
+    ;; transform places (x,y) and scales 16/24
+    (let ((tr (dom-attr g 'transform)))
+      (should (string-prefix-p "translate(5,6)" tr))
+      (should (string-match-p "scale(0\\.6" tr)))))
+
+(ert-deftest svg-line/icon-append-handles-empty-and-offset-viewbox ()
+  "Empty path strings are skipped; a non-zero viewBox origin is shifted out."
+  (let* ((svg (svg-create 50 50))
+         (g (svg-line-icon-append svg '("" "M1 1h2v2H1z") '(2 3 16 16) :size 16)))
+    (should (= (length (dom-by-tag g 'path)) 1))            ; empty d skipped
+    (should (string-match-p "translate(-2,-3)" (dom-attr g 'transform)))))
 
 ;;;; safety wrapper
 

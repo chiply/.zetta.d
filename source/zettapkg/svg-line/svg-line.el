@@ -88,10 +88,30 @@ nil means use the `default' face family at render time."
   :type 'integer)
 
 (defcustom svg-line-char-advance 8
-  "Default per-character advance, in pixels, for the `wrap' layout.
-Used to decide where tab rows wrap.  Set slightly high so rows wrap
-before reaching the right edge rather than clipping."
+  "Fallback per-character advance, in pixels, for monospace layout.
+Used only when the real advance can't be measured (e.g. in batch).  When a
+graphic frame is available the advance is measured from the actual font
+with `svg-line--text-advance', so it matches what the SVG renderer draws --
+crucial for bitmap fonts (e.g. Terminus), whose advance does not scale with
+the requested size."
   :type 'number)
+
+(defvar svg-line--advance-cache (make-hash-table :test 'equal)
+  "Cache of measured (FONT . SIZE) -> pixel advance widths.")
+
+(defun svg-line--text-advance (font font-size)
+  "Measured pixel advance of monospace FONT at FONT-SIZE via the font system.
+This is what the SVG renderer (librsvg, sharing the system fonts) actually
+draws, so it stays correct for bitmap fonts that snap to a fixed pixel size.
+Returns nil when unavailable (no graphic frame, or the font is unknown)."
+  (let ((key (cons font font-size)))
+    (or (gethash key svg-line--advance-cache)
+        (and (display-graphic-p) (stringp font)
+             (let* ((info (ignore-errors (font-info (font-spec :family font :size font-size))))
+                    (adv (and (vectorp info) (> (length info) 11) (aref info 11))))
+               (when (and (numberp adv) (> adv 0))
+                 (puthash key adv svg-line--advance-cache)
+                 adv))))))
 
 ;;;; Value resolution
 ;; ----------------------------------------------------------------
@@ -518,19 +538,24 @@ CHAR-ADVANCE spacing, otherwise with exact text anchoring."
          (bg (if active
                  (svg-line--opt spec :background)
                (or (svg-line--opt spec :inactive-background)
-                   (svg-line--opt spec :background)))))
+                   (svg-line--opt spec :background))))
+         (font (svg-line--opt spec :font
+                              (or svg-line-font (face-attribute 'default :family nil t))))
+         (fz (svg-line--opt spec :font-size svg-line-font-size))
+         (ca (or (svg-line--opt spec :char-advance nil)
+                 (svg-line--text-advance font fz)
+                 svg-line-char-advance)))
     (svg-line-image
      (mapcar (lambda (r)
                (cons (svg-line--side (car r)) (svg-line--side (cdr r))))
              (funcall (plist-get spec :content)))
      :width (svg-line--width spec)
-     :font (svg-line--opt spec :font
-                          (or svg-line-font (face-attribute 'default :family nil t)))
-     :font-size (svg-line--opt spec :font-size svg-line-font-size)
+     :font font
+     :font-size fz
      :line-pad (svg-line--opt spec :line-pad svg-line-line-pad)
      :pad (svg-line--opt spec :pad 0)
      :right-margin (svg-line--opt spec :right-margin 0)
-     :char-advance (svg-line--opt spec :char-advance svg-line-char-advance)
+     :char-advance ca
      :foreground fg
      :background bg)))
 
@@ -540,6 +565,12 @@ When SPEC has an `:active' predicate that is false, the inactive variant
 of each colour applies (falling back to the active colour when unset),
 mirroring the `lines' layout."
   (let* ((active (svg-line--active-p spec))
+         (font (svg-line--opt spec :font
+                              (or svg-line-font (face-attribute 'default :family nil t))))
+         (fz (svg-line--opt spec :font-size svg-line-font-size))
+         (ca (or (svg-line--opt spec :char-advance nil)
+                 (svg-line--text-advance font fz)
+                 svg-line-char-advance))
          (pick (lambda (key inactive-key &optional default)
                  (if active
                      (svg-line--opt spec key default)
@@ -547,11 +578,10 @@ mirroring the `lines' layout."
                        (svg-line--opt spec key default))))))
     (svg-line-wrap-image (funcall (plist-get spec :content))
                          :width (svg-line--width spec)
-                         :font (svg-line--opt spec :font
-                                              (or svg-line-font (face-attribute 'default :family nil t)))
-                         :font-size (svg-line--opt spec :font-size svg-line-font-size)
+                         :font font
+                         :font-size fz
                          :line-pad (svg-line--opt spec :line-pad svg-line-line-pad)
-                         :char-advance (svg-line--opt spec :char-advance svg-line-char-advance)
+                         :char-advance ca
                          :gap (svg-line--opt spec :gap 3)
                          :foreground (funcall pick :foreground :inactive-foreground "#000000")
                          :background (funcall pick :background :inactive-background)

@@ -29,10 +29,11 @@
   "Font size (px) for SVG mode-line text." :type 'integer :group 'zetta)
 (defcustom zetta-modeline-svg-line-pad 4
   "Extra vertical padding (px) per SVG mode-line line." :type 'integer :group 'zetta)
-(defcustom zetta-modeline-svg-char-advance 7.5
+(defcustom zetta-modeline-svg-char-advance nil
   "Per-character advance (px) for mode-line rows containing inline icons.
-Match it to the monospace SVG font's glyph width (Terminus at 15px = 7.5)."
-  :type 'number :group 'zetta)
+nil (recommended) measures the real advance from the font (correct for
+bitmap fonts like Terminus).  Set a number to override."
+  :type '(choice (const :tag "Auto-measure" nil) number) :group 'zetta)
 (defcustom zetta-modeline-svg-right-margin 8
   "Pixels of inset kept between right-aligned text and the window edge."
   :type 'integer :group 'zetta)

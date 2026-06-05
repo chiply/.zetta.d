@@ -301,30 +301,10 @@ keep their own font (`zetta-font').")
        (let ((g (substring-no-properties s)))
          (and (> (length (string-trim g)) 0) g))))
 
-;;; Text-scale responsiveness -----------------------------------------
-;; The SVG bars render at a fixed pixel font-size and pin their image to
-;; 1:1 (so it never auto-scales with the default font and overflows).  To
-;; still TRACK `default-text-scale' (which changes the `default' face
-;; height), the bars scale their `:font-size'/`:char-advance' by the ratio
-;; of the current default height to the reference height -- a crisp
-;; re-render rather than a blurry, quantised image scale.
-
-(defvar zetta-svg-line--base-text-height nil
-  "Reference `default'-face :height for unscaled SVG bars (captured once).")
-
-(defun zetta-svg-line-text-scale ()
-  "Factor by which `default-text-scale' has grown the default face (1.0 = base)."
-  (let ((h (face-attribute 'default :height nil 'default)))
-    (when (and (numberp h) (null zetta-svg-line--base-text-height))
-      (setq zetta-svg-line--base-text-height h))
-    (if (and (numberp h) (numberp zetta-svg-line--base-text-height)
-             (> zetta-svg-line--base-text-height 0))
-        (/ (float h) zetta-svg-line--base-text-height)
-      1.0)))
-
-(defun zetta-svg-line-scaled (base)
-  "BASE pixel size scaled by the current text-scale factor (integer, >=1)."
-  (max 1 (round (* base (zetta-svg-line-text-scale)))))
+;; Text-scale responsiveness now lives in the svg-line package
+;; (`svg-line-scale-with-text-scale'): the engine scales line sizes with
+;; the default-face height, so the bars track default-text-scale without
+;; any config-side helper.
 
 (defun zetta-line-buffer-glyph (&optional buffer)
   "Nerd-font file-type glyph for BUFFER (current by default), or nil."

@@ -121,6 +121,18 @@ itself (no dependency): `(:svg-bar FRACTION PIXELWIDTH FILL BG)` or
 A side containing a bar/pie token is laid out with `:char-advance` spacing;
 pure-text sides keep exact font anchoring.
 
+## Text scale
+
+A line image *is* the bar at its exact target pixel width, so it's pinned to
+`:scale 1.0` — it never inherits `image-scaling-factor` (which would scale it
+with the default font and overflow the frame). To still track the default font
+size (`default-text-scale`, or any change to the `default` face height), the
+layout **sizes** — font-size, line-pad, padding, char-advance — scale by the
+ratio of the current default height to a captured reference, so the line
+*re-renders* larger and crisp. Toggle with `svg-line-scale-with-text-scale`
+(default on); reset `svg-line--base-text-height` to nil to re-capture the
+reference after changing your unscaled default font.
+
 ## Safety
 
 Each segment is evaluated **exactly once** (the discipline that avoids

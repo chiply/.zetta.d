@@ -99,9 +99,9 @@ jitters as keycast changes width."
                  :width 'frame
                  :content #'zetta-tab-bar-svg-lines
                  :font (lambda () zetta-svg-line-font)
-                 :font-size (lambda () (zetta-svg-line-scaled zetta-tab-bar-svg-font-size))
+                 :font-size (lambda () zetta-tab-bar-svg-font-size)
                  :line-pad (lambda () zetta-tab-bar-svg-line-pad)
-                 :char-advance (lambda () (* zetta-tab-bar-svg-char-advance (zetta-svg-line-text-scale)))
+                 :char-advance (lambda () zetta-tab-bar-svg-char-advance)
                  :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
                                             (face-foreground 'default nil t)
                                             "#cccccc")))

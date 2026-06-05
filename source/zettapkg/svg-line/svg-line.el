@@ -191,9 +191,11 @@ is already 6-digit hex passes through; nil returns nil."
 ;;;; Segment rendering
 ;; ----------------------------------------------------------------
 ;; A "segment" is a string (used verbatim), a zero-arg function (called,
-;; result normalised), or anything else (contributes nothing).  A function
-;; result may be a string, a tab-bar menu-item `(KEY menu-item STR . _)',
-;; a list of such, or nil.  Each segment is evaluated exactly once.
+;; result normalised), a BOUND VARIABLE symbol (its value is used, like a
+;; `mode-line-format' construct), or anything else (contributes nothing).
+;; A function/variable value may be a string, a tab-bar menu-item
+;; `(KEY menu-item STR . _)', a list of such, or nil.  Each segment is
+;; evaluated exactly once.
 
 (defun svg-line--menu-item-string (item)
   "Return the display string of a tab-bar menu-item ITEM (its third element).
@@ -223,6 +225,7 @@ formatted."
   (mapconcat (lambda (s)
                (cond ((stringp s) s)
                      ((functionp s) (svg-line--item->string (funcall s)))
+                     ((and (symbolp s) (boundp s)) (svg-line--item->string (symbol-value s)))
                      (t "")))
              segments ""))
 
@@ -247,6 +250,7 @@ Run forms: (:text STR), (:bar FRACTION WIDTH FILL BG), (:pie FRACTION FILL BG)."
         (let ((v (cond ((stringp s) s)
                        ((and (consp s) (memq (car s) '(:svg-bar :svg-pie))) s)
                        ((functionp s) (funcall s))
+                       ((and (symbolp s) (boundp s)) (symbol-value s))
                        (t nil))))
           (cond
            ((and (consp v) (eq (car v) :svg-bar)) (flush) (push (cons :bar (cdr v)) runs))

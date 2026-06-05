@@ -84,10 +84,13 @@ current buffer; the remaining rows are plain (LEFT . RIGHT) conses."
            ;; lets the mail and battery icons sit next to their data.  (If
            ;; you add other entries to `global-mode-string', tell me and
            ;; I'll fold them back in.)
-           zetta-tab-bar-mu4e-icon zetta-tab-bar-mu4e-text " "
-           zetta-tab-bar-clock " "
-           zetta-tab-bar-battery-icon zetta-tab-bar-battery-text " "
-           zetta-current-prefix " "
+           ;; no explicit separators -- each datum carries its own trailing
+           ;; space (as the old global-mode-string did); the icons add a
+           ;; small gap of their own.
+           zetta-tab-bar-mu4e-icon zetta-tab-bar-mu4e-text
+           zetta-tab-bar-clock
+           zetta-tab-bar-battery-icon zetta-tab-bar-battery-text
+           zetta-current-prefix
            zetta-tab-bar-workspace-icon space-tree-modeline-lighter))))
 
 (svg-line-define 'zetta-tab-bar

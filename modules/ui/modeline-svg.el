@@ -71,7 +71,7 @@ A barely-there light tint."
            zetta-modeline-svg--vc " "
            zetta-modeline-svg--copilot-icon zetta-modeline-svg--checkers
            zetta-modeline-svg--flycheck " " zetta-modeline-svg--indicators)
-         '(zetta-modeline-svg--file-progress "  " zetta-modeline-svg--docpos))))
+         '(zetta-modeline-svg--docpos " " zetta-modeline-svg--file-progress))))
 
 (svg-line-define 'zetta-mode-line
   :target 'mode-line

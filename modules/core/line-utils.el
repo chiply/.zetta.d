@@ -484,9 +484,9 @@ foreground colour."
     (zetta-line-icon-token "material" (zetta-tab-bar--battery-icon-name))))
 
 (defun zetta-tab-bar-battery-text ()
-  "The battery percentage string, trimmed."
+  "The battery percentage string (kept as-is, including its trailing space)."
   (when (boundp 'battery-mode-line-string)
-    (string-trim (or battery-mode-line-string ""))))
+    battery-mode-line-string))
 
 (defun zetta-tab-bar-workspace-icon ()
   "Workspace icon, shown when the space-tree lighter is active."

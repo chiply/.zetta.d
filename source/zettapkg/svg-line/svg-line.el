@@ -530,7 +530,7 @@ CHAR-ADVANCE spacing, otherwise with exact text anchoring."
      :line-pad (svg-line--opt spec :line-pad svg-line-line-pad)
      :pad (svg-line--opt spec :pad 0)
      :right-margin (svg-line--opt spec :right-margin 0)
-     :char-advance (svg-line--opt spec :char-advance svg-line-char-advance)
+     :char-advance (or (svg-line--opt spec :char-advance nil) svg-line-char-advance)
      :foreground fg
      :background bg)))
 
@@ -551,7 +551,7 @@ mirroring the `lines' layout."
                                               (or svg-line-font (face-attribute 'default :family nil t)))
                          :font-size (svg-line--opt spec :font-size svg-line-font-size)
                          :line-pad (svg-line--opt spec :line-pad svg-line-line-pad)
-                         :char-advance (svg-line--opt spec :char-advance svg-line-char-advance)
+                         :char-advance (or (svg-line--opt spec :char-advance nil) svg-line-char-advance)
                          :gap (svg-line--opt spec :gap 3)
                          :foreground (funcall pick :foreground :inactive-foreground "#000000")
                          :background (funcall pick :background :inactive-background)

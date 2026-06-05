@@ -29,11 +29,11 @@
   "Font size (px) for SVG mode-line text." :type 'integer :group 'zetta)
 (defcustom zetta-modeline-svg-line-pad 4
   "Extra vertical padding (px) per SVG mode-line line." :type 'integer :group 'zetta)
-(defcustom zetta-modeline-svg-char-advance 9
+(defcustom zetta-modeline-svg-char-advance 7
   "Per-character advance (px) for rows containing a progress pie/bar.
-Match it to the SVG font's glyph width (JetBrainsMono Nerd Font Mono at
-15px ~= 9).  Glyph icons are plain text and need no estimation; only the
-geometric pie/bar uses this."
+Match it to the SVG font's real glyph width as Emacs renders it (~7 for the
+bitmap Terminess Nerd Font Mono at 15px).  Glyph icons are plain text and
+need no estimation; only the geometric pie/bar uses this."
   :type 'number :group 'zetta)
 (defcustom zetta-modeline-svg-right-margin 8
   "Pixels of inset kept between right-aligned text and the window edge."

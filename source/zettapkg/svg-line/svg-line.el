@@ -446,8 +446,12 @@ LABEL (it is plain text and flows with the label)."
 
 ;;;###autoload
 (defun svg-line-display (svg)
-  "Wrap SVG object as a one-space string carrying it as a display image."
-  (propertize " " 'display (svg-image svg :ascent 'center)))
+  "Wrap SVG object as a one-space string carrying it as a display image.
+Pinned to `:scale' 1.0: the image IS the line at its exact target pixel
+width, so it must NOT inherit `image-scaling-factor' (auto), which would
+scale it with the default font and overflow the frame.  Scale the line by
+scaling its `:font-size'/`:char-advance' instead, not the image."
+  (propertize " " 'display (svg-image svg :ascent 'center :scale 1.0)))
 
 ;;;; Safety wrapper
 ;; ----------------------------------------------------------------

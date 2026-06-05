@@ -41,7 +41,7 @@
   :width 'window
   :content #'zetta-header-line-svg-lines
   :font (lambda () zetta-svg-line-font)
-  :font-size (lambda () zetta-header-line-svg-font-size)
+  :font-size (lambda () (zetta-svg-line-scaled zetta-header-line-svg-font-size))
   :line-pad (lambda () zetta-header-line-svg-line-pad)
   :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
                              (face-foreground 'default nil t) "#cccccc")))

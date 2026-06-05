@@ -423,9 +423,9 @@ Because the glyph is part of the label text it needs no separate icon."
   ;; the same way the SVG mode line distinguishes active/inactive.
   :active #'mode-line-window-selected-p
   :font (lambda () zetta-svg-line-font)
-  :font-size (lambda () zetta-tab-line-svg-font-size)
+  :font-size (lambda () (zetta-svg-line-scaled zetta-tab-line-svg-font-size))
   :line-pad (lambda () zetta-tab-line-svg-line-pad)
-  :char-advance (lambda () zetta-tab-line-svg-char-advance)
+  :char-advance (lambda () (* zetta-tab-line-svg-char-advance (zetta-svg-line-text-scale)))
   :gap (lambda () zetta-tab-line-svg-tab-gap)
   :background (lambda () zetta-tab-line-svg-background)
   :foreground (lambda () (or (bound-and-true-p brushup-bg-5)

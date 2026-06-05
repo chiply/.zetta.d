@@ -69,9 +69,10 @@ jitters as keycast changes width."
                                    zetta-pyvenv-activate-poetry-modeline)
          ;; TEMP right-aligned probe (remove for an empty right side)
          '(tab-bar-keycast
+           " "
            zetta-tab-bar-recursion-level
+           " "
            recursion-indicator--string
-
            ))
    ;; line 2
    (cons '(zetta-tab-bar-spotify-icon " " zetta-tab-bar-spot-mode-line-string)
@@ -98,9 +99,9 @@ jitters as keycast changes width."
                  :width 'frame
                  :content #'zetta-tab-bar-svg-lines
                  :font (lambda () zetta-svg-line-font)
-                 :font-size (lambda () zetta-tab-bar-svg-font-size)
+                 :font-size (lambda () (zetta-svg-line-scaled zetta-tab-bar-svg-font-size))
                  :line-pad (lambda () zetta-tab-bar-svg-line-pad)
-                 :char-advance (lambda () zetta-tab-bar-svg-char-advance)
+                 :char-advance (lambda () (* zetta-tab-bar-svg-char-advance (zetta-svg-line-text-scale)))
                  :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
                                             (face-foreground 'default nil t)
                                             "#cccccc")))

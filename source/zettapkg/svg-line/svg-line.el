@@ -232,7 +232,9 @@ width.  FOREGROUND is the fallback fill.  Returns the ending x."
                     (fill (svg-line--color (or (nth 2 run) foreground)))
                     (bg   (svg-line--color (or (nth 3 run) "#d4dcea")))
                     (r  (* fz 0.38))
-                    (cx (+ x (round (* 0.15 fz)) r))
+                    ;; leading-only gap: the pie's right edge lands at the
+                    ;; run end, so a rightmost pie sits flush at the margin.
+                    (cx (+ x (round (* 0.3 fz)) r))
                     (cy (+ top (/ lh 2.0))))
                (svg-circle svg cx cy r :fill bg)
                (if (>= frac 0.999)

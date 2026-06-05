@@ -29,9 +29,11 @@
   "Font size (px) for SVG mode-line text." :type 'integer :group 'zetta)
 (defcustom zetta-modeline-svg-line-pad 4
   "Extra vertical padding (px) per SVG mode-line line." :type 'integer :group 'zetta)
-(defcustom zetta-modeline-svg-char-advance 7.5
-  "Per-character advance (px) for mode-line rows containing inline icons.
-Match it to the monospace SVG font's glyph width (Terminus at 15px = 7.5)."
+(defcustom zetta-modeline-svg-char-advance 9
+  "Per-character advance (px) for rows containing a progress pie/bar.
+Match it to the SVG font's glyph width (JetBrainsMono Nerd Font Mono at
+15px ~= 9).  Glyph icons are plain text and need no estimation; only the
+geometric pie/bar uses this."
   :type 'number :group 'zetta)
 (defcustom zetta-modeline-svg-right-margin 8
   "Pixels of inset kept between right-aligned text and the window edge."
@@ -61,15 +63,15 @@ A barely-there light tint."
   "Return the mode line as a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS)."
   (list
    ;; line 1:  [file] modal | ace | buffer        ......   mode | line:col
-   (cons '(zetta-modeline-svg--file-icon
+   (cons '(zetta-modeline-svg--file-icon " "
            zetta-modeline-svg--modal " " zetta-modeline-svg--ace " "
            zetta-modeline-svg--buffer)
          '(zetta-modeline-svg--mode "  " zetta-modeline-svg--point))
-   ;; line 2:  [git][branch] vc | [copilot] checkers | flycheck | flags
-   ;;          ......   progress | doc-position
-   (cons '(zetta-modeline-svg--vc-icon zetta-modeline-svg--branch-icon
+   ;; line 2:  [git] [branch] vc | [copilot] checkers | flycheck | flags
+   ;;          ......   doc-position | <progress pie>
+   (cons '(zetta-modeline-svg--vc-icon " " zetta-modeline-svg--branch-icon " "
            zetta-modeline-svg--vc " "
-           zetta-modeline-svg--copilot-icon zetta-modeline-svg--checkers
+           zetta-modeline-svg--copilot-icon " " zetta-modeline-svg--checkers
            zetta-modeline-svg--flycheck " " zetta-modeline-svg--indicators)
          '(zetta-modeline-svg--docpos " " zetta-modeline-svg--file-progress))))
 
@@ -79,7 +81,7 @@ A barely-there light tint."
   :width 'window
   :content #'zetta-modeline-svg-lines
   :active #'mode-line-window-selected-p
-  :font (lambda () (or (bound-and-true-p zetta-font) "Terminus (TTF)"))
+  :font (lambda () zetta-svg-line-font)
   :font-size (lambda () zetta-modeline-svg-font-size)
   :line-pad (lambda () zetta-modeline-svg-line-pad)
   :char-advance (lambda () zetta-modeline-svg-char-advance)

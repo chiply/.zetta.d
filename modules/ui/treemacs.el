@@ -93,4 +93,20 @@
 (use-package treemacs-magit
   :ensure nil
   :after (treemacs magit))
+
+;; Treemacs uses a minimal custom mode line (just the path) and a
+;; breadcrumb header line.  (Moved here from line.el.)
+(add-hook 'treemacs-mode-hook
+          (lambda ()
+            (setq mode-line-format
+                  (list
+                   '(:eval
+                     (let ((path (abbreviate-file-name default-directory)))
+                       (if (> (length path) 30)
+                           (zetta-minify-path default-directory)
+                         path)))))
+            (setq header-line-format
+                  (list '(:eval (zetta-get-repo-name))
+                        ":"
+                        '(:eval (zetta-get-branch-name))))))
 ;;; treemacs.el ends here

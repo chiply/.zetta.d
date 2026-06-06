@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.9](https://github.com/chiply/.zetta.d/compare/v0.1.8...v0.1.9) (2026-06-06)
+
+
+### Features
+
+* SVG line styling — icons, nerd-font glyphs, faces, text-scale + svg-line MELPA prep ([08b6f9c](https://github.com/chiply/.zetta.d/commit/08b6f9c06574e91c46c6a76e54a402bd43adda6a))
+
 ## [0.1.8](https://github.com/chiply/.zetta.d/compare/v0.1.7...v0.1.8) (2026-06-06)
 
 

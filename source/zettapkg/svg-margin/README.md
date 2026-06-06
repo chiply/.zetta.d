@@ -97,15 +97,16 @@ Two independent pieces:
 2. **Move the data** — write a provider that reads the package's own state.
    No interception needed; adapters are ~10 lines.
 
-`examples/svg-margin-examples.el` ships three, stacking on one line:
+`examples/svg-margin-examples.el` ships ten ready-made providers — VC
+(git-gutter or diff-hl), flycheck, TODO/FIXME, bookmarks, evil marks, an Org
+heading rail, long-line and trailing-whitespace hygiene, and live
+symbol-at-point occurrences — that stack into columns on shared lines. Each is
+short and demonstrates a different technique. `M-x svg-margin-example-setup`
+(plus `M-x svg-margin-example-extras-setup`) wires them up with the fringe
+diversion.
 
-- **evil marks** — reads evil's `evil-markers-alist` (no `evil-fringe-mark`,
-  no fringe), drawing each mark letter in the margin;
-- **VC hunks** — reads `diff-hl-changes`, drawing a coloured bar that hugs the
-  text like a gutter;
-- **TODO/FIXME/HACK** — coloured dots.
-
-`M-x svg-margin-example-setup` wires all three plus the fringe diversion.
+See **[EXAMPLES.md](EXAMPLES.md)** for what each provider does, what it looks
+like, why it's useful, and how to write your own.
 
 ## Layout notes
 

@@ -269,7 +269,7 @@ the recompute yields the same hunks we skip, breaking the cycle."
 (svg-margin-register-provider 'evil-marks   #'zetta-svg-margin-evil-marks   :side 'left  :priority 5)
 (svg-margin-register-provider 'org-headings #'zetta-svg-margin-org-headings :side 'left  :priority 4)
 (svg-margin-register-provider 'long-lines   #'zetta-svg-margin-long-lines   :side 'right :priority 3)
-(svg-margin-register-provider 'symbol       #'zetta-svg-margin-symbol       :side 'right :priority 2)
+(svg-margin-register-provider 'symbol       #'zetta-svg-margin-symbol       :side 'left  :priority 2)
 (svg-margin-register-provider 'trailing-ws  #'zetta-svg-margin-trailing-ws  :side 'right :priority 1)
 
 ;; Refresh triggers, deferred until each source package loads.

@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.1.8](https://github.com/chiply/.zetta.d/compare/v0.1.7...v0.1.8) (2026-06-06)
+
+
+### Features
+
+* **config:** set svg-margin minimum widths (left 4, right 2); fix symbol provider ([451e7ba](https://github.com/chiply/.zetta.d/commit/451e7baae1b5a1b501f70539aa047a8b0bf06691))
+* **config:** wire svg-margin into my config as a ui module ([6320873](https://github.com/chiply/.zetta.d/commit/632087379ef051772c707802fec94af332ab6160))
+* svg-margin — multi-provider SVG margin gutter + config wiring ([e464872](https://github.com/chiply/.zetta.d/commit/e46487230263465907c73106ceafb1a1addf6252))
+* **svg-margin:** add five more example providers ([37fe646](https://github.com/chiply/.zetta.d/commit/37fe646b95174a43e0fcb2244b975d9e36ea8542))
+* **svg-margin:** example providers for git-gutter, bookmarks; fix diff-hl ([e01aa44](https://github.com/chiply/.zetta.d/commit/e01aa44d58ec3469108cf5d84810d3f480e35536))
+* **svg-margin:** make example provider sides configurable (left/right) ([50d4d8a](https://github.com/chiply/.zetta.d/commit/50d4d8aa62fdfb92f09ddd4efdc2c3d03e12c05c))
+* **svg-margin:** new package — multi-provider SVG margin gutter ([1e1a05b](https://github.com/chiply/.zetta.d/commit/1e1a05ba907ad9a911f951382db80d62452a869d))
+* **svg-margin:** reserve a minimum margin width to stop buffer shifting ([dfe6ac5](https://github.com/chiply/.zetta.d/commit/dfe6ac594a383c889fb2e9fd0c238eeb7f599e85))
+
+
+### Bug Fixes
+
+* **svg-margin:** address pre-publication review (portability, config, docs) ([45bef2e](https://github.com/chiply/.zetta.d/commit/45bef2e0737e077a4883b9339cddc17fa222dea8))
+* **svg-margin:** only reclaim the left fringe in the example setup ([ce22c2a](https://github.com/chiply/.zetta.d/commit/ce22c2a2f977e16fa3ad71129f7c8438c4099e25))
+* **svg-margin:** render marks correctly and stop margin flicker ([f8babed](https://github.com/chiply/.zetta.d/commit/f8babedee9d8243280e99468cc40baa56433067b))
+
 ## [0.1.7](https://github.com/chiply/.zetta.d/compare/v0.1.6...v0.1.7) (2026-06-05)
 
 

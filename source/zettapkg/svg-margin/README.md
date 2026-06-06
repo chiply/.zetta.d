@@ -147,6 +147,10 @@ like, why it's useful, and how to write your own.
   the number of indicators, not buffer size.
 - Margins and the composite image are pinned to `:scale 1.0`, so the gutter
   doesn't inherit `image-scaling-factor` and overflow.
+- A side's margin grows to its widest line and shrinks back as indicators come
+  and go. To stop that shifting the buffer, reserve a baseline with
+  `svg-margin-min-left-columns` / `svg-margin-min-right-columns` (see
+  [CONFIGURATION.md](CONFIGURATION.md)).
 
 ## Caveats (v1)
 

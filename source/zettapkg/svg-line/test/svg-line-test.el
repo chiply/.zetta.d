@@ -81,6 +81,92 @@
                                   :current-background "#0000ff")))
     (should (= (length (dom-by-tag svg 'rect)) 1))))
 
+(ert-deftest svg-line/wrap-modified-plist-state ()
+  "A plist STATE marks `:modified'; it draws a box and uses MODIFIED-FOREGROUND."
+  (let ((svg (svg-line-wrap-image
+              '(("a" . nil) ("b" . (:current nil :modified t)))
+              :width 1000 :font "Monospace" :font-size 10
+              :foreground "#000000"
+              :modified-foreground "#c1641e" :modified-background "#ffeedd")))
+    ;; one rect for the modified item's box
+    (should (= (length (dom-by-tag svg 'rect)) 1))
+    ;; the modified label is drawn in the modified foreground
+    (let ((fills (mapcar (lambda (tx) (dom-attr tx 'fill)) (dom-by-tag svg 'text))))
+      (should (member "#c1641e" fills))
+      (should (member "#000000" fills)))))
+
+(ert-deftest svg-line/wrap-current-modified-accent-box ()
+  "A current+modified item keeps its readable bold label but tints the box
+with the modified accent so the unsaved state stays visible."
+  (let ((svg (svg-line-wrap-image
+              '(("a" . (:current t :modified t)))
+              :width 1000 :font "Monospace"
+              :current-foreground "#ffffff" :current-background "#2a4d77"
+              :modified-foreground "#c1641e")))
+    (let ((tx   (car (dom-by-tag svg 'text)))
+          (rect (car (dom-by-tag svg 'rect))))
+      ;; label stays readable (white, bold)
+      (should (equal (dom-attr tx 'fill) "#ffffff"))
+      (should (equal (dom-attr tx 'font-weight) "bold"))
+      ;; box is tinted with the modified accent, not the plain current bg
+      (should (equal (dom-attr rect 'fill) "#c1641e")))))
+
+(ert-deftest svg-line/wrap-inactive-palette ()
+  "With a false `:active' predicate, the wrap layout uses inactive colours."
+  (svg-line-define 'test-wrap-inactive
+    :target 'tab-line :layout 'wrap
+    :content (lambda () '(("a" . t)))
+    :active (lambda () nil)
+    :current-background "#2a4d77"
+    :inactive-current-background "#9aa9bd")
+  (let* ((svg (svg-line--build-wrap (svg-line--spec 'test-wrap-inactive)))
+         (rect (car (dom-by-tag svg 'rect))))
+    (should (equal (dom-attr rect 'fill) "#9aa9bd"))))
+
+;;;; runs (text / bars / pies)
+
+(defvar svg-line-test--seg)
+(ert-deftest svg-line/segments-bound-variable ()
+  "A bound variable symbol segment renders its value (mode-line-format style)."
+  (let ((svg-line-test--seg "VX"))
+    (should (equal (svg-line-render-segments '(svg-line-test--seg)) "VX"))
+    (should (equal (nth 1 (car (svg-line--render-runs '(svg-line-test--seg)))) "VX"))))
+
+(ert-deftest svg-line/render-runs-lowers-tokens ()
+  "Segments lower to text/bar runs, coalescing adjacent text."
+  (let ((runs (svg-line--render-runs
+               (list "a" "b"
+                     (lambda () "c")
+                     '(:svg-bar 0.5 40 "#222222" "#eeeeee")))))
+    (should (equal (mapcar #'car runs) '(:text :bar)))
+    (should (equal (nth 1 (nth 0 runs)) "abc"))))       ; adjacent text coalesced
+
+(ert-deftest svg-line/lines-bar-run ()
+  "A run-list side renders a progress bar (track + fill = 2 rects) and text."
+  (let* ((left  (list (list :text "hi")))
+         (right (list (list :bar 0.5 40 "#2a4d77" "#eeeeee")))
+         (svg (svg-line-image (list (cons left right))
+                              :width 400 :font "Monospace" :font-size 10
+                              :pad 4 :char-advance 8)))
+    (should (= (length (dom-by-tag svg 'rect)) 2))      ; bar: track + fill
+    (should (string-match-p "hi" (dom-texts svg)))))
+
+(ert-deftest svg-line/lines-pie-run ()
+  "A partial :pie run draws a background circle plus a wedge path."
+  (let ((svg (svg-line-image
+              (list (cons "x" (list (list :pie 0.25 "#2a4d77" "#d4dcea"))))
+              :width 300 :font "Monospace" :font-size 12 :char-advance 8)))
+    (should (= (length (dom-by-tag svg 'circle)) 1))    ; background circle
+    (should (= (length (dom-by-tag svg 'path)) 1))))    ; the wedge
+
+(ert-deftest svg-line/lines-pie-full ()
+  "A full :pie run draws two circles (background + fill) and no wedge."
+  (let ((svg (svg-line-image
+              (list (cons "x" (list (list :pie 1.0 "#2a4d77" "#d4dcea"))))
+              :width 300 :font "Monospace" :font-size 12 :char-advance 8)))
+    (should (= (length (dom-by-tag svg 'circle)) 2))
+    (should (= (length (dom-by-tag svg 'path)) 0))))
+
 ;;;; safety wrapper
 
 (ert-deftest svg-line/safe-error-fallback ()
@@ -105,8 +191,8 @@
     :target 'tab-bar :layout 'lines
     :content (lambda () '((("hello") . nil))))
   (should (svg-line--entry 'test-line))
-  (should (fboundp 'svg-line-render/test-line))
-  (let ((s (svg-line-render/test-line)))
+  (should (fboundp 'svg-line--render-test-line))
+  (let ((s (svg-line--render-test-line)))
     (should (stringp s))
     (should (get-text-property 0 'display s))))
 
@@ -120,7 +206,7 @@
     (svg-line-define 'test-tb :target 'tab-bar :content (lambda () '((("x") . nil))))
     (svg-line-activate 'test-tb)
     (should (svg-line-active-p 'test-tb))
-    (should (equal tab-bar-format '(svg-line-render/test-tb)))
+    (should (equal tab-bar-format '(svg-line--render-test-tb)))
     (svg-line-deactivate 'test-tb)
     (should-not (svg-line-active-p 'test-tb))
     (should (equal tab-bar-format '(original)))))

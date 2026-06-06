@@ -24,6 +24,12 @@
   "Extra vertical padding (px) added to each SVG tab-bar line."
   :type 'integer :group 'zetta)
 
+(defcustom zetta-tab-bar-svg-char-advance 7.5
+  "Per-character advance (px) used to lay out rows containing inline icons.
+Match it to the monospace SVG font's glyph width (Terminus at 15px = 7.5)
+so iconned rows stay as tight as the plain-text rows."
+  :type 'number :group 'zetta)
+
 (defcustom zetta-tab-bar-svg-image-cache-eviction-delay 30
   "Value for `image-cache-eviction-delay' while the SVG tab bar is active.
 The SVG renderer emits a new, unique bitmap on nearly every redisplay
@@ -51,40 +57,54 @@ value untouched.  Applied only while the SVG renderer is active."
 ;;; what the SVG tab bar shows.
 ;;; ------------------------------------------------------------------
 (defun zetta-tab-bar-svg-lines ()
-  "Return the tab-bar content as a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS)."
+  "Return the tab-bar content as a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS).
+Icons are nerd-font glyphs (plain text in `zetta-svg-line-font'), so every
+side is one font-accurate text run -- no char-advance estimation, nothing
+jitters as keycast changes width."
   (list
-   ;; line 1
-   (cons '(zetta-buffer-name
-           zmc-modeline-indicator
-           zetta-pyvenv-activate-poetry-modeline)
+   ;; line 1 -- file-type glyph + buffer name
+   (cons '(zetta-tab-bar-file-icon " "
+                                   zetta-buffer-name
+                                   zmc-modeline-indicator
+                                   zetta-pyvenv-activate-poetry-modeline)
          ;; TEMP right-aligned probe (remove for an empty right side)
-         '("<<< line 1 right edge"))
+         '(tab-bar-keycast
+           " "
+           zetta-tab-bar-recursion-level
+           " "
+           recursion-indicator--string
+           ))
    ;; line 2
-   (cons '(zetta-tab-bar-spot-mode-line-string)
-         '("line 2 right edge >>>"))
+   (cons '(zetta-tab-bar-spotify-icon " " zetta-tab-bar-spot-mode-line-string)
+         '(
+           ;; mu4e / clock / battery, each with its glyph (was bundled in
+           ;; tab-bar-format-global; rendered explicitly so a mail glyph
+           ;; sits by the unread count and a battery glyph by the level)
+           zetta-tab-bar-mu4e-icon " " zetta-tab-bar-mu4e-text
+           ))
    ;; line 3
    (cons '(zetta-tab-bar-modal
            zetta-gptel-processes
            blinker-tab-bar)
-         '(tab-bar-keycast
+         '(
            zetta-tab-bar-current-thing
-           zetta-tab-bar-recursion-level
-           recursion-indicator--string
-           tab-bar-format-global
-           zetta-current-prefix
-           space-tree-modeline-lighter))))
+           zetta-tab-bar-clock " "
+           zetta-tab-bar-battery-icon " " zetta-tab-bar-battery-text " "
+           zetta-current-prefix " "
+           zetta-tab-bar-workspace-icon " " zetta-tab-bar-workspace-text))))
 
 (svg-line-define 'zetta-tab-bar
-  :target 'tab-bar
-  :layout 'lines
-  :width 'frame
-  :content #'zetta-tab-bar-svg-lines
-  :font (lambda () (or (bound-and-true-p zetta-font) "Terminus (TTF)"))
-  :font-size (lambda () zetta-tab-bar-svg-font-size)
-  :line-pad (lambda () zetta-tab-bar-svg-line-pad)
-  :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
-                             (face-foreground 'default nil t)
-                             "#cccccc")))
+                 :target 'tab-bar
+                 :layout 'lines
+                 :width 'frame
+                 :content #'zetta-tab-bar-svg-lines
+                 :font (lambda () zetta-svg-line-font)
+                 :font-size (lambda () zetta-tab-bar-svg-font-size)
+                 :line-pad (lambda () zetta-tab-bar-svg-line-pad)
+                 :char-advance (lambda () zetta-tab-bar-svg-char-advance)
+                 :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
+                                            (face-foreground 'default nil t)
+                                            "#cccccc")))
 
 ;;; ------------------------------------------------------------------
 ;;; Built-in (fallback) tab-bar format -- the text tab bar used when the

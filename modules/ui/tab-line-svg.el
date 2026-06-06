@@ -11,7 +11,10 @@
 ;; Tab data comes from `tab-line-tabs-function'.  Labels are "N name",
 ;; where N is the 1-based index matching the g1..g9 jump keys.  The
 ;; current tab is drawn bold, in `current-foreground', over a
-;; `current-background' box.
+;; `current-background' box.  A buffer with unsaved changes is drawn in
+;; `modified-foreground' with a trailing marker, and the whole tab line
+;; dims to an inactive palette when its window is not selected (the same
+;; active/inactive distinction the SVG mode line makes).
 ;;
 ;; Switch at runtime:
 ;;   M-x zetta-tab-line-use-svg       ; activate the wrapping SVG tab line
@@ -319,18 +322,19 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
 (defcustom zetta-tab-line-svg-line-pad 4
   "Extra vertical padding (px) per wrapped tab-line row." :type 'integer :group 'zetta)
 (defcustom zetta-tab-line-svg-char-advance 8
-  "Per-character advance (px) for the monospace SVG font.
-Used to decide where tab rows wrap.  Err slightly high so rows wrap
-before reaching the right edge (a hair of slack rather than clipping)."
+  "Per-character advance (px) used to size tabs and wrap rows.
+Match it to the SVG font's real glyph width as Emacs renders it -- 8 for
+the bitmap Terminess Nerd Font Mono at 15px (a scalable font would be ~9).
+Too high leaves whitespace inside tab boxes; too low overlaps tabs."
   :type 'number :group 'zetta)
-(defcustom zetta-tab-line-svg-tab-gap 3
+(defcustom zetta-tab-line-svg-tab-gap 1.0
   "Gap between tabs, in character widths." :type 'number :group 'zetta)
 (defcustom zetta-tab-line-svg-max-name 30
   "Truncate an individual tab name to this many characters (then …)."
   :type 'integer :group 'zetta)
 
-(defcustom zetta-tab-line-svg-background "#eef3fc"
-  "Very subtle (lightest) blue background for the SVG tab line.
+(defcustom zetta-tab-line-svg-background "#ece4f6"
+  "Light purple background for the SVG tab line (selected window).
 Distinguishes the tab line from the tab-bar and header-line.  nil = transparent."
   :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
 
@@ -342,30 +346,83 @@ Distinguishes the tab line from the tab-bar and header-line.  nil = transparent.
   "Foreground for the current tab's label (light, to read on the dark box)."
   :type 'color :group 'zetta)
 
+(defcustom zetta-tab-line-svg-modified-foreground "#c1641e"
+  "Foreground for a tab whose buffer has unsaved changes.
+A warm amber that stands out from the neutral tab text without shouting,
+echoing the built-in `tab-line-tab-modified' distinction."
+  :type 'color :group 'zetta)
+
+(defcustom zetta-tab-line-svg-modified-marker ""
+  "Marker appended to a modified tab's label (in addition to the colour).
+Empty by default -- the modified colour alone marks unsaved tabs."
+  :type 'string :group 'zetta)
+
+;;; Inactive palette -- used when the tab line's window is NOT selected,
+;;; the way the mode line dims in unfocused windows.  Each falls back to
+;;; its active counterpart when nil.
+(defcustom zetta-tab-line-svg-inactive-background "#f5f1fb"
+  "SVG tab-line background in NON-selected windows (lighter purple than active)."
+  :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
+
+(defcustom zetta-tab-line-svg-inactive-foreground "#aab2bd"
+  "Foreground for ordinary tabs in NON-selected windows (dimmed)."
+  :type 'color :group 'zetta)
+
+(defcustom zetta-tab-line-svg-inactive-current-background "#9aa9bd"
+  "Highlight behind the current tab in NON-selected windows (muted blue-grey)."
+  :type '(choice (const :tag "None" nil) color) :group 'zetta)
+
+(defcustom zetta-tab-line-svg-inactive-current-foreground "#ffffff"
+  "Current tab's label colour in NON-selected windows."
+  :type 'color :group 'zetta)
+
+(defcustom zetta-tab-line-svg-inactive-modified-foreground "#d8a06a"
+  "Modified tab's label colour in NON-selected windows (dimmed amber)."
+  :type 'color :group 'zetta)
+
 ;;; ------------------------------------------------------------------
-;;; Content -- a list of (LABEL . CURRENTP) for the `wrap' layout.
+;;; Content -- a list of (LABEL . STATE) for the `wrap' layout, where
+;;; STATE is a plist of `:current' / `:modified' flags.
 ;;; ------------------------------------------------------------------
 (defun zetta-tab-line-svg-tabs ()
-  "Return a list of (LABEL . CURRENTP) for the window's tab-line tabs.
-LABEL is \"N name\" (1-based, matching g1..g9); CURRENTP marks the tab
-for the buffer displayed in this window."
+  "Return a list of (LABEL . STATE) for the window's tab-line tabs.
+LABEL is \"N GLYPH name\" -- the 1-based index (matching g1..g9), a
+nerd-font file-type glyph, and the buffer name, with
+`zetta-tab-line-svg-modified-marker' appended when the buffer has unsaved
+changes.  STATE is a plist: `:current' marks the tab for the buffer shown
+in this window; `:modified' marks a file-visiting buffer with changes.
+Because the glyph is part of the label text it needs no separate icon."
   (let ((tabs (ignore-errors (funcall tab-line-tabs-function)))
         (cur  (current-buffer)))
     (cl-loop for buf in tabs
              for i from 1
-             for name = (buffer-name (if (bufferp buf) buf cur))
+             for real = (if (bufferp buf) buf cur)
+             for name = (buffer-name real)
+             for currentp = (eq buf cur)
+             for modifiedp = (and (buffer-live-p real)
+                                  (buffer-modified-p real)
+                                  (buffer-file-name real)
+                                  t)
+             for glyph = (zetta-line-buffer-glyph real)
              for short = (if (> (length name) zetta-tab-line-svg-max-name)
                              (concat (substring name 0 (1- zetta-tab-line-svg-max-name)) "…")
                            name)
-             collect (cons (format "%d %s" i short)
-                           (eq buf cur)))))
+             collect (cons (format "%d %s%s%s"
+                                   i
+                                   (if glyph (concat glyph " ") "")
+                                   short
+                                   (if modifiedp zetta-tab-line-svg-modified-marker ""))
+                           (list :current currentp :modified modifiedp)))))
 
 (svg-line-define 'zetta-tab-line
   :target 'tab-line
   :layout 'wrap
   :width 'window
   :content #'zetta-tab-line-svg-tabs
-  :font (lambda () (or (bound-and-true-p zetta-font) "Terminus (TTF)"))
+  ;; dim the whole tab line when its window is not the selected one,
+  ;; the same way the SVG mode line distinguishes active/inactive.
+  :active #'mode-line-window-selected-p
+  :font (lambda () zetta-svg-line-font)
   :font-size (lambda () zetta-tab-line-svg-font-size)
   :line-pad (lambda () zetta-tab-line-svg-line-pad)
   :char-advance (lambda () zetta-tab-line-svg-char-advance)
@@ -374,7 +431,14 @@ for the buffer displayed in this window."
   :foreground (lambda () (or (bound-and-true-p brushup-bg-5)
                              (face-foreground 'shadow nil t) "#888888"))
   :current-foreground (lambda () zetta-tab-line-svg-current-foreground)
-  :current-background (lambda () zetta-tab-line-svg-current-background))
+  :current-background (lambda () zetta-tab-line-svg-current-background)
+  :modified-foreground (lambda () zetta-tab-line-svg-modified-foreground)
+  ;; inactive (unfocused-window) palette
+  :inactive-background (lambda () zetta-tab-line-svg-inactive-background)
+  :inactive-foreground (lambda () zetta-tab-line-svg-inactive-foreground)
+  :inactive-current-foreground (lambda () zetta-tab-line-svg-inactive-current-foreground)
+  :inactive-current-background (lambda () zetta-tab-line-svg-inactive-current-background)
+  :inactive-modified-foreground (lambda () zetta-tab-line-svg-inactive-modified-foreground))
 
 ;;; ------------------------------------------------------------------
 ;;; Switching.  svg-line installs the tab line by advising the

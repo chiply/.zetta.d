@@ -17,7 +17,29 @@
 (require 'svg-margin)
 
 (defvar evil-markers-alist)
+(defvar git-gutter:diffinfos)
+(defvar bookmark-alist)
 (declare-function diff-hl-changes "diff-hl")
+(declare-function git-gutter-hunk-start-line "git-gutter")
+(declare-function git-gutter-hunk-end-line "git-gutter")
+(declare-function git-gutter-hunk-type "git-gutter")
+(declare-function global-git-gutter-mode "git-gutter")
+(declare-function bookmark-get-filename "bookmark")
+(declare-function bookmark-get-position "bookmark")
+
+;; A bookmark-ribbon shape, to show `svg-margin-define-shape'.
+(svg-margin-define-shape 'bookmark
+  (lambda (svg x y w h color)
+    (let* ((bw (max 4 (round (* w 0.52))))
+           (bx (+ x (/ (- w bw) 2)))
+           (top (+ y (round (* h 0.16))))
+           (bot (+ y (round (* h 0.84))))
+           (notch (+ y (round (* h 0.6)))))
+      (svg-polygon svg
+                   (list (cons bx top) (cons (+ bx bw) top)
+                         (cons (+ bx bw) bot) (cons (+ bx (/ bw 2)) notch)
+                         (cons bx bot))
+                   :fill color))))
 
 ;;;; Provider: TODO/FIXME/HACK keywords -> coloured dots
 
@@ -40,22 +62,83 @@
 ;;;; Provider: VC hunks (diverted from the diff-hl/git-gutter fringe)
 
 (defun svg-margin-example-vc (buffer)
-  "Return vertical-bar indicators for VC hunks in BUFFER (via `diff-hl-changes').
-Drawn at the inner column (priority 9) so it hugs the text like a gutter."
+  "Return vertical-bar indicators for VC hunks in BUFFER via `diff-hl-changes'.
+An ALTERNATIVE VC source to `svg-margin-example-git-gutter' -- use one, not
+both (both draw at priority 9 and would stack two bars per line).
+
+`diff-hl-changes' returns an alist ((:working . CHANGES) ...) where each
+change is (LINE INSERTS DELETES TYPE) and TYPE is `insert', `delete' or
+`change'."
   (with-current-buffer buffer
     (when (fboundp 'diff-hl-changes)
+      (let ((changes (ignore-errors (alist-get :working (diff-hl-changes))))
+            out)
+        (dolist (chg changes)
+          (cl-destructuring-bind (line inserts _deletes type) chg
+            (if (eq type 'delete)
+                (push (list :line line :shape 'triangle :priority 9
+                            :color "#f85149" :help "deleted")
+                      out)
+              (cl-loop for i from 0 below (max 1 inserts) do
+                       (push (list :line (+ line i) :shape 'bar :priority 9
+                                   :color (if (eq type 'insert) "#3fb950" "#d29922")
+                                   :help (symbol-name type))
+                             out)))))
+        out))))
+
+;;;; Provider: VC hunks via git-gutter (data-only; git-gutter does not draw)
+
+(defun svg-margin-example-git-gutter (buffer)
+  "Return vertical-bar indicators for git-gutter's hunks in BUFFER.
+Reads git-gutter's buffer-local `git-gutter:diffinfos'.  Use together with
+`svg-margin-example-git-gutter-setup', which keeps git-gutter computing but
+stops it drawing (so it does not duel with svg-margin over the margin)."
+  (with-current-buffer buffer
+    (when (and (bound-and-true-p git-gutter-mode) (boundp 'git-gutter:diffinfos))
       (let (out)
-        (dolist (hunk (ignore-errors (diff-hl-changes)))
-          (cl-destructuring-bind (line len type) hunk
-            (dotimes (i (max 1 len))
-              (push (list :line (+ line i)
-                          :shape 'bar
-                          :priority 9
-                          :color (pcase type
-                                   ('insert "#3fb950") ('delete "#f85149") (_ "#d29922"))
-                          :help (symbol-name type))
+        (dolist (info git-gutter:diffinfos)
+          (let* ((start (git-gutter-hunk-start-line info))
+                 (end   (or (git-gutter-hunk-end-line info) start))
+                 (type  (git-gutter-hunk-type info)))
+            (pcase type
+              ((or 'added 'modified)
+               (cl-loop for ln from start to (min end (+ start 1000)) do
+                        (push (list :line ln :shape 'bar :priority 9
+                                    :color (if (eq type 'added) "#3fb950" "#d29922")
+                                    :help (symbol-name type))
+                              out)))
+              ('deleted
+               (push (list :line start :shape 'triangle :priority 9
+                           :color "#f85149" :help "deleted")
+                     out)))))
+        out))))
+
+(defun svg-margin-example--gg-feed (&rest _)
+  "Override of `git-gutter:view-diff-infos': refresh svg-margin, draw nothing.
+git-gutter still computes `git-gutter:diffinfos'; svg-margin draws from them."
+  (svg-margin-refresh))
+
+;;;; Provider: bookmarks (diverted from the bookmark fringe)
+
+(defun svg-margin-example-bookmarks (buffer)
+  "Return ribbon indicators for bookmarks pointing into BUFFER's file.
+Reads the global `bookmark-alist' and matches by file name."
+  (with-current-buffer buffer
+    (when (and buffer-file-name (bound-and-true-p bookmark-alist))
+      (let ((file (file-truename buffer-file-name)) out)
+        (dolist (bm bookmark-alist)
+          (let ((bmfile (ignore-errors (bookmark-get-filename bm)))
+                (pos (ignore-errors (bookmark-get-position bm))))
+            (when (and bmfile pos (string= (file-truename bmfile) file))
+              (push (list :pos pos :shape 'bookmark :priority 6
+                          :color "#7d5bed"
+                          :help (format "bookmark: %s" (car bm)))
                     out))))
         out))))
+
+(defun svg-margin-example--bookmark-refresh (&rest _)
+  "Refresh svg-margin after a bookmark is set or deleted."
+  (svg-margin-refresh-all))
 
 ;;;; Provider: evil marks (diverted from the evil-fringe-mark fringe)
 
@@ -89,17 +172,58 @@ nor any fringe."
 (defun svg-margin-example-setup ()
   "Register the example providers, divert the left fringe, and enable the mode.
 Demonstrates several sources stacking columns on one line: a VC bar nearest
-the text, a TODO dot, and an evil-mark letter, all in the left margin."
+the text, a TODO dot, a bookmark ribbon, and an evil-mark letter, all in the
+left margin.  For VC it prefers git-gutter and falls back to diff-hl -- never
+both, since they would draw two bars per line."
   (interactive)
   (svg-margin-register-provider 'todo #'svg-margin-example-todo)
-  (when (fboundp 'diff-hl-changes)
-    (svg-margin-register-provider 'vc #'svg-margin-example-vc))
   (when (boundp 'evil-markers-alist)
     (svg-margin-register-provider 'evil-marks #'svg-margin-example-evil-marks)
     (advice-add 'evil-set-marker :after #'svg-margin-example--mark-refresh))
+  (when (fboundp 'bookmark-get-position)
+    (svg-margin-example-bookmarks-setup))
+  (cond ((fboundp 'global-git-gutter-mode) (svg-margin-example-git-gutter-setup))
+        ((fboundp 'diff-hl-changes)
+         (svg-margin-register-provider 'vc #'svg-margin-example-vc)))
   (setq svg-margin-disable-fringe 'left)
   (svg-margin-mode 1)
-  (message "svg-margin example active: VC + TODO + evil marks in the left margin"))
+  (message "svg-margin example active: VC + TODO + bookmarks + evil marks in the left margin"))
+
+;;;###autoload
+(defun svg-margin-example-git-gutter-setup ()
+  "Feed git-gutter's VC hunks into the svg-margin gutter.
+Overrides git-gutter's own drawing (so it does not duel with svg-margin
+over the margin), registers the git-gutter provider, and enables
+`global-git-gutter-mode' for its computation."
+  (interactive)
+  (advice-add 'git-gutter:view-diff-infos :override #'svg-margin-example--gg-feed)
+  (svg-margin-register-provider 'git-gutter #'svg-margin-example-git-gutter)
+  (global-git-gutter-mode 1)
+  (svg-margin-refresh-all)
+  (message "svg-margin: git-gutter hunks now drawn in the margin"))
+
+(defun svg-margin-example-git-gutter-teardown ()
+  "Undo `svg-margin-example-git-gutter-setup'."
+  (interactive)
+  (advice-remove 'git-gutter:view-diff-infos #'svg-margin-example--gg-feed)
+  (svg-margin-unregister-provider 'git-gutter))
+
+;;;###autoload
+(defun svg-margin-example-bookmarks-setup ()
+  "Draw bookmarks in the svg-margin gutter and refresh when they change."
+  (interactive)
+  (svg-margin-register-provider 'bookmarks #'svg-margin-example-bookmarks)
+  (advice-add 'bookmark-set :after #'svg-margin-example--bookmark-refresh)
+  (advice-add 'bookmark-delete :after #'svg-margin-example--bookmark-refresh)
+  (svg-margin-refresh-all)
+  (message "svg-margin: bookmarks now drawn in the margin"))
+
+(defun svg-margin-example-bookmarks-teardown ()
+  "Undo `svg-margin-example-bookmarks-setup'."
+  (interactive)
+  (svg-margin-unregister-provider 'bookmarks)
+  (advice-remove 'bookmark-set #'svg-margin-example--bookmark-refresh)
+  (advice-remove 'bookmark-delete #'svg-margin-example--bookmark-refresh))
 
 (defun svg-margin-example-teardown ()
   "Undo `svg-margin-example-setup' in the current buffer."
@@ -108,7 +232,9 @@ the text, a TODO dot, and an evil-mark letter, all in the left margin."
   (svg-margin-unregister-provider 'todo)
   (svg-margin-unregister-provider 'vc)
   (svg-margin-unregister-provider 'evil-marks)
-  (advice-remove 'evil-set-marker #'svg-margin-example--mark-refresh))
+  (advice-remove 'evil-set-marker #'svg-margin-example--mark-refresh)
+  (svg-margin-example-bookmarks-teardown)
+  (svg-margin-example-git-gutter-teardown))
 
 (provide 'svg-margin-examples)
 ;;; svg-margin-examples.el ends here

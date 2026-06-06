@@ -209,12 +209,13 @@ both, since they would draw two bars per line."
   (cond ((fboundp 'global-git-gutter-mode) (svg-margin-example-git-gutter-setup))
         ((fboundp 'diff-hl-changes)
          (svg-margin-register-provider 'vc #'svg-margin-example-vc)))
-  ;; Reclaim whichever fringe(s) the configured sides actually use.
-  (let ((sides (mapcar #'cdr svg-margin-example-sides)))
-    (setq svg-margin-disable-fringe
-          (cond ((and (memq 'left sides) (memq 'right sides)) 'both)
-                ((memq 'right sides) 'right)
-                (t 'left))))
+  ;; Reclaim ONLY the left fringe -- evil-fringe-mark's old home, now migrated
+  ;; into the margin.  Disabling a fringe is about migrating that fringe's
+  ;; USERS, not about which margin side you draw in: margins are independent of
+  ;; fringes, so right-margin indicators show fine while the right fringe stays
+  ;; available for yascroll / flycheck / continuation arrows.  Only disable a
+  ;; fringe once nothing else needs it.
+  (setq svg-margin-disable-fringe 'left)
   (svg-margin-mode 1)
   (message "svg-margin example active: VC + TODO + bookmarks + evil marks in the left margin"))
 

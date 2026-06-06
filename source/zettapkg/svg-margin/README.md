@@ -88,6 +88,12 @@ Two independent pieces:
    `right`, or `both`; svg-margin zeroes that fringe while active and restores
    it on exit. (Note: a zeroed fringe also hides its truncation/continuation
    arrows.)
+
+   This is **independent of which margin side you draw in** — margins and
+   fringes are separate regions, so right-margin indicators coexist with the
+   right fringe. Disable a fringe only once you've migrated *its* users:
+   e.g. don't zero the right fringe if `yascroll`/`flycheck` still draw a
+   scroll bar / checker marks there, or they'll have nowhere to render.
 2. **Move the data** — write a provider that reads the package's own state.
    No interception needed; adapters are ~10 lines.
 

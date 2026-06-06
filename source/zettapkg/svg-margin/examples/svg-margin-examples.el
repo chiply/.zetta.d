@@ -302,15 +302,21 @@ nor any fringe."
     (let ((sym (and (derived-mode-p 'prog-mode)
                     (ignore-errors (thing-at-point 'symbol t)))))
       (when (and sym (>= (length sym) 3))
-        (let ((re (concat "\\_<" (regexp-quote sym) "\\_>")) out)
+        (let ((re (concat "\\_<" (regexp-quote sym) "\\_>"))
+              (seen (make-hash-table :test 'eql)) out)
           (save-excursion
             (goto-char (point-min))
             (while (re-search-forward re nil t)
-              (push (list :pos (match-beginning 0)
-                          :side (svg-margin-example--side 'symbol)
-                          :shape 'dot :priority 2 :color "#58a6ff"
-                          :help (format "occurrence of `%s'" sym))
-                    out)))
+              ;; one indicator per LINE, not per occurrence -- several matches
+              ;; on the same line must not each claim a column.
+              (let ((bol (line-beginning-position)))
+                (unless (gethash bol seen)
+                  (puthash bol t seen)
+                  (push (list :pos bol
+                              :side (svg-margin-example--side 'symbol)
+                              :shape 'dot :priority 2 :color "#58a6ff"
+                              :help (format "occurrence of `%s'" sym))
+                        out)))))
           out)))))
 
 (defun svg-margin-example--symbol-watch ()

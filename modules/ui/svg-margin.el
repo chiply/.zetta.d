@@ -200,13 +200,19 @@
     (let ((sym (and (derived-mode-p 'prog-mode)
                     (ignore-errors (thing-at-point 'symbol t)))))
       (when (and sym (>= (length sym) 3))
-        (let ((re (concat "\\_<" (regexp-quote sym) "\\_>")) out)
+        (let ((re (concat "\\_<" (regexp-quote sym) "\\_>"))
+              (seen (make-hash-table :test 'eql)) out)
           (save-excursion
             (goto-char (point-min))
             (while (re-search-forward re nil t)
-              (push (list :pos (match-beginning 0) :shape 'dot :color "#58a6ff"
-                          :help (format "occurrence of `%s'" sym))
-                    out)))
+              ;; one indicator per LINE, not per occurrence -- several matches
+              ;; on the same line must not each claim a column.
+              (let ((bol (line-beginning-position)))
+                (unless (gethash bol seen)
+                  (puthash bol t seen)
+                  (push (list :pos bol :shape 'dot :color "#58a6ff"
+                              :help (format "occurrence of `%s'" sym))
+                        out)))))
           out)))))
 
 ;;;; Refresh triggers
@@ -248,6 +254,11 @@ the recompute yields the same hunks we skip, breaking the cycle."
 ;; fringe stays for yascroll.  Margins are independent of fringes, so the
 ;; right-margin providers below still show.
 (setq svg-margin-disable-fringe 'left)
+
+;; Reserve a baseline margin width so buffer text doesn't shift as indicators
+;; come and go (the margin still grows past this when a line needs more).
+(setq svg-margin-min-left-columns 4
+      svg-margin-min-right-columns 2)
 
 ;; Provider -> (side . priority).  Side/priority set here, not in the
 ;; providers, so moving one between margins is a one-line edit.

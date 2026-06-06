@@ -27,6 +27,23 @@
 (declare-function bookmark-get-filename "bookmark")
 (declare-function bookmark-get-position "bookmark")
 
+(defcustom svg-margin-example-sides
+  '((git-gutter . left)
+    (vc         . left)
+    (evil-marks . left)
+    (todo       . right)
+    (bookmarks  . right))
+  "Margin side (`left' or `right') for each example provider.
+Providers stamp their indicators with the side looked up here, so moving a
+source between margins is pure configuration -- the engine renders each
+indicator on its `:side' and reserves both margins as needed."
+  :type '(alist :key-type symbol :value-type (choice (const left) (const right)))
+  :group 'svg-margin)
+
+(defun svg-margin-example--side (provider)
+  "Return the configured margin side for PROVIDER (see `svg-margin-example-sides')."
+  (alist-get provider svg-margin-example-sides 'left))
+
 ;; A bookmark-ribbon shape, to show `svg-margin-define-shape'.
 (svg-margin-define-shape 'bookmark
   (lambda (svg x y w h color)
@@ -51,6 +68,7 @@
         (goto-char (point-min))
         (while (re-search-forward "\\_<\\(TODO\\|FIXME\\|HACK\\)\\_>" nil t)
           (push (list :pos (match-beginning 0)
+                      :side (svg-margin-example--side 'todo)
                       :shape 'dot
                       :priority 7
                       :color (pcase (match-string 1)
@@ -76,11 +94,13 @@ change is (LINE INSERTS DELETES TYPE) and TYPE is `insert', `delete' or
         (dolist (chg changes)
           (cl-destructuring-bind (line inserts _deletes type) chg
             (if (eq type 'delete)
-                (push (list :line line :shape 'triangle :priority 9
+                (push (list :line line :side (svg-margin-example--side 'vc)
+                            :shape 'triangle :priority 9
                             :color "#f85149" :help "deleted")
                       out)
               (cl-loop for i from 0 below (max 1 inserts) do
-                       (push (list :line (+ line i) :shape 'bar :priority 9
+                       (push (list :line (+ line i) :side (svg-margin-example--side 'vc)
+                                   :shape 'bar :priority 9
                                    :color (if (eq type 'insert) "#3fb950" "#d29922")
                                    :help (symbol-name type))
                              out)))))
@@ -103,12 +123,14 @@ stops it drawing (so it does not duel with svg-margin over the margin)."
             (pcase type
               ((or 'added 'modified)
                (cl-loop for ln from start to (min end (+ start 1000)) do
-                        (push (list :line ln :shape 'bar :priority 9
+                        (push (list :line ln :side (svg-margin-example--side 'git-gutter)
+                                    :shape 'bar :priority 9
                                     :color (if (eq type 'added) "#3fb950" "#d29922")
                                     :help (symbol-name type))
                               out)))
               ('deleted
-               (push (list :line start :shape 'triangle :priority 9
+               (push (list :line start :side (svg-margin-example--side 'git-gutter)
+                           :shape 'triangle :priority 9
                            :color "#f85149" :help "deleted")
                      out)))))
         out))))
@@ -130,7 +152,8 @@ Reads the global `bookmark-alist' and matches by file name."
           (let ((bmfile (ignore-errors (bookmark-get-filename bm)))
                 (pos (ignore-errors (bookmark-get-position bm))))
             (when (and bmfile pos (string= (file-truename bmfile) file))
-              (push (list :pos pos :shape 'bookmark :priority 6
+              (push (list :pos pos :side (svg-margin-example--side 'bookmarks)
+                          :shape 'bookmark :priority 6
                           :color "#7d5bed"
                           :help (format "bookmark: %s" (car bm)))
                     out))))
@@ -155,6 +178,7 @@ nor any fringe."
                        (eq (marker-buffer val) buffer)
                        (>= char ?a) (<= char ?z))
               (push (list :pos (marker-position val)
+                          :side (svg-margin-example--side 'evil-marks)
                           :text (char-to-string char)
                           :priority 5
                           :face 'warning
@@ -185,7 +209,12 @@ both, since they would draw two bars per line."
   (cond ((fboundp 'global-git-gutter-mode) (svg-margin-example-git-gutter-setup))
         ((fboundp 'diff-hl-changes)
          (svg-margin-register-provider 'vc #'svg-margin-example-vc)))
-  (setq svg-margin-disable-fringe 'left)
+  ;; Reclaim whichever fringe(s) the configured sides actually use.
+  (let ((sides (mapcar #'cdr svg-margin-example-sides)))
+    (setq svg-margin-disable-fringe
+          (cond ((and (memq 'left sides) (memq 'right sides)) 'both)
+                ((memq 'right sides) 'right)
+                (t 'left))))
   (svg-margin-mode 1)
   (message "svg-margin example active: VC + TODO + bookmarks + evil marks in the left margin"))
 

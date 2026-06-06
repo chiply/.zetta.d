@@ -72,6 +72,7 @@ in the order they appear in the `zetta-modules!' declaration.")
            "yascroll.el" "nyan-mode.el" "popper.el" "window.el"
            "rainbow-delimiters.el" "symbol-overlay.el" "hi-lock.el"
            "beacon.el" "outline-indent.el" "hl-todo.el" "svg-line.el" "header-line-svg.el"
+           "svg-margin.el"
            "breadcrumb.el" "parrot.el" "hl-block.el" "awesome-tray.el"
            "telephone-line.el" "ef-themes.el" "doric-themes.el"
            "adaptive-wrap.el" "svg-lib.el" "explain-pause-mode.el" "spacetree.el"))

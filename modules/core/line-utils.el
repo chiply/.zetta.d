@@ -124,12 +124,23 @@
     "*"))
 
 (defun zetta-tab-bar-modal ()
+  "The active modal SYSTEM (evil / meow / emacs)."
   (or
    (when (and (boundp 'evil-mode) evil-mode) "evil")
    (when (and (boundp 'meow-mode) meow-mode) "meow")
    (when (not (or (and (boundp 'evil-mode) evil-mode)
                   (and (boundp 'meow-mode) meow-mode)))
      "emacs")))
+
+(defun zetta-line-modal-state ()
+  "The current modal STATE (e.g. normal, insert, visual) as a string.
+Works for evil and meow; \"emacs\" when neither is editing this buffer."
+  (cond
+   ((bound-and-true-p evil-state) (symbol-name evil-state))
+   ((and (bound-and-true-p meow-mode) (fboundp 'meow--current-state)
+         (meow--current-state))
+    (symbol-name (meow--current-state)))
+   (t "emacs")))
 
 (defun zetta-gptel-processes ()
   (when (boundp 'gptel--request-alist)
@@ -175,7 +186,8 @@ where no local thing has been set via `treesit-tap-set-local'."
 
 ;;; mode-line text segments
 (defun zetta-modeline-svg--modal ()
-  (if (fboundp 'zetta-tab-bar-modal) (or (zetta-tab-bar-modal) "") ""))
+  ;; show the modal STATE (normal/insert/...), not the modal system
+  (zetta-line-modal-state))
 
 (defun zetta-modeline-svg--ace ()
   (or (window-parameter (selected-window) 'ace-window-path) ""))
@@ -196,9 +208,9 @@ where no local thing has been set via `treesit-tap-set-local'."
       (concat (or repo "") (and branch (concat ":" branch))))))
 
 (defun zetta-modeline-svg--checkers ()
+  ;; copilot is shown as an icon (zetta-modeline-svg--copilot-icon), not text
   (concat
-   (when (and (boundp 'lsp-mode) lsp-mode) "lsp ")
-   (when (and (boundp 'copilot-mode) copilot-mode) "copilot ")))
+   (when (and (boundp 'lsp-mode) lsp-mode) "lsp ")))
 
 (defun zetta-modeline-svg--flycheck ()
   (if (fboundp 'flycheck-indicator--mode-line)
@@ -267,5 +279,126 @@ where no local thing has been set via `treesit-tap-set-local'."
 (defun zetta-header-line-svg--line2 ()
   "Render the second breadcrumb row (lsp / org / imenu crumbs)."
   (format-mode-line zetta-header-line-svg-line2-format))
+
+;;;; Nerd-font glyph icons for the SVG bars
+;; ----------------------------------------------------------------
+;; The bars render in a scalable Nerd Font (`zetta-svg-line-font'), so
+;; icons are just text glyphs (nerd-icons codepoints): they flow inline
+;; with the text in one native SVG <text>, font-accurate -- no separate
+;; positioning, no char-advance estimation, no svg-lib path injection.
+;; Each segment returns the bare glyph string (properties stripped) or nil.
+
+(defvar zetta-svg-line-font "Terminess Nerd Font Mono"
+  "Font family for the SVG bars (tab-bar, mode-line, tab-line, header-line).
+A single-width Nerd Font carrying the icon glyphs, so icons render inline
+as ordinary text.  Terminess is the Nerd-patched Terminus, keeping that
+look; any Nerd Font works (e.g. \"JetBrainsMono Nerd Font Mono\").  Buffers
+keep their own font (`zetta-font').")
+
+(defun zetta-line--glyph (s)
+  "Return nerd-icons glyph string S without text properties, or nil if empty."
+  (and (stringp s)
+       (let ((g (substring-no-properties s)))
+         (and (> (length (string-trim g)) 0) g))))
+
+;; Text-scale responsiveness now lives in the svg-line package
+;; (`svg-line-scale-with-text-scale'): the engine scales line sizes with
+;; the default-face height, so the bars track default-text-scale without
+;; any config-side helper.
+
+(defun zetta-line-buffer-glyph (&optional buffer)
+  "Nerd-font file-type glyph for BUFFER (current by default), or nil."
+  (and (featurep 'nerd-icons)
+       (with-current-buffer (or buffer (current-buffer))
+         (zetta-line--glyph (ignore-errors (nerd-icons-icon-for-buffer))))))
+
+;;; mode line
+(defun zetta-modeline-svg--file-icon ()
+  "File-type glyph for the current buffer."
+  (zetta-line-buffer-glyph))
+
+(defun zetta-modeline-svg--copilot-icon ()
+  "GitHub Copilot glyph, shown when `copilot-mode' is on."
+  (when (bound-and-true-p copilot-mode)
+    (and (featurep 'nerd-icons)
+         (zetta-line--glyph (ignore-errors (nerd-icons-octicon "nf-oct-copilot"))))))
+
+(defun zetta-modeline-svg--vc-icon ()
+  "Git glyph, shown when the file is under git version control."
+  (when (and (buffer-file-name) (fboundp 'vc-git-root) (vc-git-root (buffer-file-name)))
+    (and (featurep 'nerd-icons)
+         (zetta-line--glyph (ignore-errors (nerd-icons-devicon "nf-dev-git"))))))
+
+(defun zetta-modeline-svg--branch-icon ()
+  "Branch glyph, shown when the file is on a git branch."
+  (when (and (buffer-file-name) (fboundp 'vc-git-root) (vc-git-root (buffer-file-name)))
+    (and (featurep 'nerd-icons)
+         (zetta-line--glyph (ignore-errors (nerd-icons-octicon "nf-oct-git_branch"))))))
+
+(defun zetta-modeline-svg--file-progress ()
+  "Compact progress pie of point's position through the buffer."
+  (let* ((total (max 1 (- (point-max) (point-min))))
+         (frac (/ (float (- (point) (point-min))) total)))
+    (list :svg-pie frac "#2a4d77" "#d4dcea")))
+
+;;; tab bar
+(defun zetta-tab-bar-file-icon ()
+  "File-type glyph for the current buffer (tab bar)."
+  (zetta-line-buffer-glyph))
+
+(defun zetta-tab-bar-mu4e-icon ()
+  "Mail glyph, shown when mu4e has a non-empty modeline string."
+  (when (and (fboundp 'mu4e--modeline-string)
+             (let ((s (ignore-errors (mu4e--modeline-string))))
+               (and s (> (length (string-trim s)) 0))))
+    (and (featurep 'nerd-icons)
+         (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-email_outline"))))))
+
+(defun zetta-tab-bar-mu4e-text ()
+  "The mu4e modeline string (unread counts, etc.), trimmed."
+  (when (fboundp 'mu4e--modeline-string)
+    (string-trim (or (ignore-errors (mu4e--modeline-string)) ""))))
+
+(defun zetta-tab-bar-clock ()
+  "The `display-time' clock string, trimmed."
+  (when (boundp 'display-time-string) (string-trim (or display-time-string ""))))
+
+(defun zetta-tab-bar--battery-mdicon ()
+  "Nerd-icons material battery glyph name reflecting the current percentage."
+  (let* ((s (and (boundp 'battery-mode-line-string) battery-mode-line-string))
+         (pct (and s (string-match "\\([0-9]+\\)%" s)
+                   (string-to-number (match-string 1 s)))))
+    (cond ((null pct)   "nf-md-battery")
+          ((>= pct 95)  "nf-md-battery")
+          ((<= pct 10)  "nf-md-battery_alert")
+          (t (format "nf-md-battery_%d0" (max 1 (round (/ pct 10.0))))))))
+
+(defun zetta-tab-bar-battery-icon ()
+  "Battery glyph (percentage-aware) when `display-battery-mode' is on."
+  (when (and (bound-and-true-p display-battery-mode) (boundp 'battery-mode-line-string))
+    (and (featurep 'nerd-icons)
+         (zetta-line--glyph (ignore-errors (nerd-icons-mdicon (zetta-tab-bar--battery-mdicon)))))))
+
+(defun zetta-tab-bar-battery-text ()
+  "The battery percentage string, trimmed."
+  (when (boundp 'battery-mode-line-string)
+    (string-trim (or battery-mode-line-string ""))))
+
+(defun zetta-tab-bar-workspace-icon ()
+  "Workspace glyph, shown when the space-tree lighter is active."
+  (when (and (boundp 'space-tree-modeline-lighter) space-tree-modeline-lighter)
+    (and (featurep 'nerd-icons)
+         (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-view_dashboard"))))))
+
+(defun zetta-tab-bar-workspace-text ()
+  "The space-tree workspace lighter string (a function so svg-line renders it;
+a bare variable segment would not be evaluated)."
+  (when (boundp 'space-tree-modeline-lighter)
+    space-tree-modeline-lighter))
+
+(defun zetta-tab-bar-spotify-icon ()
+  "Spotify glyph, sits to the left of the spot mode-line string."
+  (and (featurep 'nerd-icons)
+       (zetta-line--glyph (ignore-errors (nerd-icons-faicon "nf-fa-spotify")))))
 
 ;;; line-utils.el ends here

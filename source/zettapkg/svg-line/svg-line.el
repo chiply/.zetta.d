@@ -4,7 +4,7 @@
 
 ;; Author: Charlie Holland <charliebkr707@gmail.com>
 ;; Maintainer: Charlie Holland <charliebkr707@gmail.com>
-;; URL: https://github.com/<TBD>/svg-line
+;; URL: https://github.com/chiply/svg-line
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: convenience, faces, frames
@@ -68,6 +68,7 @@
 (require 'cl-lib)
 (require 'dom)
 (require 'color)
+(require 'subr-x)
 
 (defgroup svg-line nil
   "SVG-rendered tab-bar, tab-line, header-line and mode-line."
@@ -92,6 +93,77 @@ nil means use the `default' face family at render time."
 Used to decide where tab rows wrap.  Set slightly high so rows wrap
 before reaching the right edge rather than clipping."
   :type 'number)
+
+(defcustom svg-line-glyph-scale 1.3
+  "Font-size multiplier for icon (Nerd-Font PUA) glyphs within line text.
+Nerd-font icon glyphs are drawn smaller than a text cell; a value >1
+enlarges just those glyphs (via a larger `<tspan>'), so icons read at a
+comparable weight to the text.  1.0 disables the effect."
+  :type 'number)
+
+(defun svg-line--glyph-char-p (ch)
+  "Non-nil if CH is in a Nerd-Font / icon Private-Use code range."
+  (or (and (>= ch #xE000)   (<= ch #xF8FF))     ; BMP PUA
+      (and (>= ch #xF0000)  (<= ch #xFFFFD))    ; Plane-15 PUA-A
+      (and (>= ch #x100000) (<= ch #x10FFFD)))) ; Plane-16 PUA-B
+
+(defun svg-line--split-glyph-runs (str)
+  "Split STR into a list of (GLYPHP . SUBSTRING); GLYPHP t for icon-glyph runs."
+  (let ((runs nil) (n (length str)))
+    (when (> n 0)
+      (let ((start 0) (cur (svg-line--glyph-char-p (aref str 0))))
+        (dotimes (i n)
+          (let ((g (svg-line--glyph-char-p (aref str i))))
+            (unless (eq g cur)
+              (push (cons cur (substring str start i)) runs)
+              (setq start i cur g))))
+        (push (cons cur (substring str start n)) runs)))
+    (nreverse runs)))
+
+(defun svg-line--xml-escape (text)
+  "Escape the XML metacharacters &, < and > in TEXT for SVG text content.
+A private escaper so the package does not depend on svg.el internals
+\(e.g. `svg--encode-text', whose stability is not guaranteed)."
+  (replace-regexp-in-string
+   "[&<>]"
+   (lambda (m) (pcase m ("&" "&amp;") ("<" "&lt;") (">" "&gt;")))
+   text t t))
+
+(defun svg-line--add-text (svg str &rest props)
+  "Append a `<text>' for STR to SVG, enlarging Nerd-Font glyph runs.
+PROPS keywords: :x :y :font :font-size :fill :weight :anchor.  Glyph runs
+are wrapped in a larger `<tspan>' (per `svg-line-glyph-scale') with a small
+baseline shift so they stay vertically centred; librsvg flows the tspans,
+so no manual positioning is needed."
+  (let* ((fz (plist-get props :font-size))
+         (scale svg-line-glyph-scale)
+         (big (round (* fz scale)))
+         (shift (round (/ (* fz (- scale 1.0)) 2.0)))
+         (attrs (list (cons 'x (plist-get props :x))
+                      (cons 'y (plist-get props :y))
+                      (cons 'font-family (plist-get props :font))
+                      (cons 'font-size fz)
+                      (cons 'fill (plist-get props :fill))
+                      ;; keep inter-tspan spaces: SVG otherwise trims leading
+                      ;; whitespace at a tspan boundary, swallowing the space
+                      ;; after an enlarged glyph
+                      (cons 'xml:space "preserve"))))
+    (when (plist-get props :weight) (push (cons 'font-weight (plist-get props :weight)) attrs))
+    (when (plist-get props :anchor) (push (cons 'text-anchor (plist-get props :anchor)) attrs))
+    (let ((node (dom-node 'text (nreverse attrs))) (cur-dy 0))
+      (dolist (run (svg-line--split-glyph-runs str))
+        (let* ((glyphp (and (car run) (> scale 1.0)))
+               (target (if glyphp shift 0))
+               (dy (- target cur-dy)))
+          (setq cur-dy target)
+          (dom-append-child
+           node (dom-node 'tspan
+                          (append (when glyphp (list (cons 'font-size big)))
+                                  (unless (zerop dy) (list (cons 'dy dy))))
+                          ;; encode <>& like `svg-text' does (svg-print emits
+                          ;; text content verbatim, so escape it ourselves)
+                          (svg-line--xml-escape (cdr run))))))
+      (dom-append-child svg node))))
 
 ;;;; Value resolution
 ;; ----------------------------------------------------------------
@@ -129,9 +201,11 @@ is already 6-digit hex passes through; nil returns nil."
 ;;;; Segment rendering
 ;; ----------------------------------------------------------------
 ;; A "segment" is a string (used verbatim), a zero-arg function (called,
-;; result normalised), or anything else (contributes nothing).  A function
-;; result may be a string, a tab-bar menu-item `(KEY menu-item STR . _)',
-;; a list of such, or nil.  Each segment is evaluated exactly once.
+;; result normalised), a BOUND VARIABLE symbol (its value is used, like a
+;; `mode-line-format' construct), or anything else (contributes nothing).
+;; A function/variable value may be a string, a tab-bar menu-item
+;; `(KEY menu-item STR . _)', a list of such, or nil.  Each segment is
+;; evaluated exactly once.
 
 (defun svg-line--menu-item-string (item)
   "Return the display string of a tab-bar menu-item ITEM (its third element).
@@ -157,15 +231,112 @@ formatted."
    (t (format "%s" r))))
 
 (defun svg-line-render-segments (segments)
-  "Render SEGMENTS to one plain string, each evaluated exactly once."
+  "Render SEGMENTS to one plain string, each evaluated exactly once.
+This is the text-only path: it flattens segments to a string and does
+not interpret `:svg-bar'/`:svg-pie' progress tokens.  The engine itself
+renders through `svg-line--render-runs' (which does handle those tokens);
+this function is provided for callers that just want the flattened text."
   (mapconcat (lambda (s)
                (cond ((stringp s) s)
                      ((functionp s) (svg-line--item->string (funcall s)))
+                     ((and (symbolp s) (boundp s)) (svg-line--item->string (symbol-value s)))
                      (t "")))
              segments ""))
 
+;;;; Runs -- text interleaved with progress bars / pies
+;; ----------------------------------------------------------------
+;; A `lines' side may mix text with progress bars and pies.  A segment
+;; value (or literal) of (:svg-bar FRACTION WIDTH FILL BG) or
+;; (:svg-pie FRACTION FILL BG) becomes a non-text run; everything else
+;; contributes text.  `svg-line--render-runs' lowers a segment list to a
+;; run list -- (:text STR), (:bar FRAC W FILL BG), (:pie FRAC FILL BG) --
+;; coalescing adjacent text, each segment evaluated exactly once.
+;; (Icons are drawn as Nerd-Font glyphs in the text itself, so they need
+;; no run of their own; see `svg-line--add-text' / `svg-line-glyph-scale'.)
+
+(defun svg-line--render-runs (segments)
+  "Lower SEGMENTS to a list of runs, each segment evaluated exactly once.
+Run forms: (:text STR), (:bar FRACTION WIDTH FILL BG), (:pie FRACTION FILL BG)."
+  (let ((runs '()) (buf ""))
+    (cl-flet ((flush () (when (> (length buf) 0)
+                          (push (list :text buf) runs) (setq buf ""))))
+      (dolist (s segments)
+        (let ((v (cond ((stringp s) s)
+                       ((and (consp s) (memq (car s) '(:svg-bar :svg-pie))) s)
+                       ((functionp s) (funcall s))
+                       ((and (symbolp s) (boundp s)) (symbol-value s))
+                       (t nil))))
+          (cond
+           ((and (consp v) (eq (car v) :svg-bar)) (flush) (push (cons :bar (cdr v)) runs))
+           ((and (consp v) (eq (car v) :svg-pie)) (flush) (push (cons :pie (cdr v)) runs))
+           (t (setq buf (concat buf (svg-line--item->string v)))))))
+      (flush))
+    (nreverse runs)))
+
+(defun svg-line--runs-all-text-p (runs)
+  "Non-nil if RUNS are entirely text (so the side can use exact text anchoring)."
+  (cl-every (lambda (r) (eq (car r) :text)) runs))
+
+(defun svg-line--run-width (run char-advance fz)
+  "Advance width in pixels of a single RUN.
+Text advances by CHAR-ADVANCE per character; bars and pies derive their
+size from the font size FZ."
+  (pcase (car run)
+    (:text (* (length (nth 1 run)) char-advance))
+    (:pie  (+ (round (* fz 0.76)) (round (* 0.3 fz))))   ; diameter + gap
+    (:bar  (+ (nth 2 run) (round (* 0.3 fz))))
+    (_ 0)))
+
+(defun svg-line--runs-width (runs char-advance fz)
+  "Total advance width in pixels of RUNS (for right alignment).
+CHAR-ADVANCE and font size FZ are passed through to `svg-line--run-width'."
+  (apply #'+ (mapcar (lambda (r) (svg-line--run-width r char-advance fz)) runs)))
+
 ;;;; Image builders (public, pure: data in, svg object out)
 ;; ----------------------------------------------------------------
+
+(defun svg-line--draw-runs (svg runs x top fz lh font char-advance foreground)
+  "Draw RUNS left-to-right in SVG starting at X (row top at TOP).
+Text advances by CHAR-ADVANCE per character; bars and pies by their own
+width.  FOREGROUND is the fallback fill.  Returns the ending x."
+  (dolist (run runs)
+    (pcase (car run)
+      (:text (let ((str (nth 1 run)))
+               (when (> (length str) 0)
+                 (svg-line--add-text svg str :x x :y (+ top fz)
+                                     :font font :font-size fz :fill foreground))))
+      (:pie  (let* ((frac (max 0.0 (min 1.0 (float (nth 1 run)))))
+                    (fill (svg-line--color (or (nth 2 run) foreground)))
+                    (bg   (svg-line--color (or (nth 3 run) "#d4dcea")))
+                    (r  (* fz 0.38))
+                    ;; leading-only gap: the pie's right edge lands at the
+                    ;; run end, so a rightmost pie sits flush at the margin.
+                    (cx (+ x (round (* 0.3 fz)) r))
+                    (cy (+ top (/ lh 2.0))))
+               (svg-circle svg cx cy r :fill bg)
+               (if (>= frac 0.999)
+                   (svg-circle svg cx cy r :fill fill)
+                 (when (> frac 0.001)
+                   (let* ((theta (* 2 float-pi frac))
+                          (ex (+ cx (* r (sin theta))))
+                          (ey (- cy (* r (cos theta))))
+                          (large (if (> frac 0.5) 1 0)))
+                     (dom-append-child
+                      svg (dom-node 'path
+                                    (list (cons 'd (format "M %g %g L %g %g A %g %g 0 %d 1 %g %g Z"
+                                                           cx cy cx (- cy r) r r large ex ey))
+                                          (cons 'fill fill)))))))))
+      (:bar  (let* ((frac (max 0.0 (min 1.0 (float (nth 1 run)))))
+                    (bw (nth 2 run))
+                    (fill (or (nth 3 run) foreground))
+                    (bg (nth 4 run))
+                    (bh (max 3 (round (* fz 0.5))))
+                    (by (+ top (max 0 (/ (- lh bh) 2)))))
+               (when bg (svg-rectangle svg x by bw bh :fill (svg-line--color bg) :rx 2))
+               (svg-rectangle svg x by (max 1 (round (* bw frac))) bh
+                              :fill (svg-line--color fill) :rx 2))))
+    (setq x (+ x (svg-line--run-width run char-advance fz))))
+  x)
 
 ;;;###autoload
 (cl-defun svg-line-image (rows &key
@@ -175,11 +346,19 @@ formatted."
                                (line-pad svg-line-line-pad)
                                (pad 0)
                                (right-margin 0)
+                               (char-advance svg-line-char-advance)
                                (foreground "#000000")
                                (background nil))
-  "Build a `lines'-layout SVG from ROWS, a list of (LEFT . RIGHT) strings.
-LEFT is drawn flush-left at PAD; RIGHT is drawn flush-right (anchored at
-WIDTH minus RIGHT-MARGIN).  Returns an svg object (see `svg-create')."
+  "Build a `lines'-layout SVG from ROWS, a list of (LEFT . RIGHT).
+Each of LEFT and RIGHT is either:
+  - a STRING, drawn with exact font anchoring (flush-left at PAD, or
+    flush-right at WIDTH minus RIGHT-MARGIN); or
+  - a list of RUNS, drawn with CHAR-ADVANCE spacing so it can carry inline
+    pies and progress bars.  A run is (:text STR), (:pie FRACTION FILL BG)
+    or (:bar FRACTION PIXELWIDTH FILL BG); see `svg-line--render-runs'.
+FONT, FONT-SIZE, LINE-PAD, PAD, FOREGROUND and BACKGROUND set the text
+family, size, per-row vertical padding, left inset and colours.
+Returns an svg object (see `svg-create')."
   (let* ((foreground (svg-line--color foreground))
          (background (svg-line--color background))
          (fz font-size)
@@ -190,14 +369,28 @@ WIDTH minus RIGHT-MARGIN).  Returns an svg object (see `svg-create')."
     (when background (svg-rectangle svg 0 0 width height :fill background))
     (cl-loop for (l . r) in rows
              for i from 0
-             for y = (+ (* lh i) fz)
+             for top = (* lh i)
+             for y = (+ top fz)
              do (progn
-                  (when (and (stringp l) (> (length l) 0))
-                    (svg-text svg l :font-family font :font-size fz
-                              :fill foreground :x pad :y y))
-                  (when (and (stringp r) (> (length r) 0))
-                    (svg-text svg r :font-family font :font-size fz
-                              :fill foreground :x rx :y y :text-anchor "end"))))
+                  ;; LEFT: flush-left.  Trim leading whitespace so the visible
+                  ;; content starts at PAD (empty leading segments or a datum's
+                  ;; leading space would otherwise indent it).
+                  (cond
+                   ((and (stringp l) (> (length (string-trim-left l)) 0))
+                    (svg-line--add-text svg (string-trim-left l) :x pad :y y
+                                        :font font :font-size fz :fill foreground))
+                   ((consp l)
+                    (svg-line--draw-runs svg l pad top fz lh font char-advance foreground)))
+                  ;; RIGHT: flush-right.  Trim trailing whitespace so the
+                  ;; visible content reaches the edge (empty trailing segments
+                  ;; or a datum's trailing space would otherwise push it left).
+                  (cond
+                   ((and (stringp r) (> (length (string-trim-right r)) 0))
+                    (svg-line--add-text svg (string-trim-right r) :x rx :y y :anchor "end"
+                                        :font font :font-size fz :fill foreground))
+                   ((consp r)
+                    (svg-line--draw-runs svg r (max pad (- rx (svg-line--runs-width r char-advance fz)))
+                                         top fz lh font char-advance foreground)))))
     svg))
 
 ;;;###autoload
@@ -211,43 +404,78 @@ WIDTH minus RIGHT-MARGIN).  Returns an svg object (see `svg-create')."
                                      (foreground "#000000")
                                      (background nil)
                                      (current-foreground nil)
-                                     (current-background nil))
-  "Build a `wrap'-layout SVG from ITEMS, a list of (LABEL . CURRENTP).
-Items flow left-to-right and wrap onto new rows at WIDTH.  A current item
-is drawn bold, in CURRENT-FOREGROUND, over a CURRENT-BACKGROUND box.
-GAP is the inter-item gap in character widths.  Returns an svg object."
+                                     (current-background nil)
+                                     (modified-foreground nil)
+                                     (modified-background nil))
+  "Build a `wrap'-layout SVG from ITEMS, a list of (LABEL . STATE).
+Items flow left-to-right and wrap onto new rows at WIDTH.  GAP is the
+inter-item gap in character widths.  FONT, FONT-SIZE, LINE-PAD,
+CHAR-ADVANCE, FOREGROUND and BACKGROUND set the text family, size,
+per-row padding, character advance and base colours.  Returns an svg
+object.
+
+STATE selects how each item is styled:
+  - nil / non-nil atom  -- treated as CURRENTP (backward compatible);
+  - a plist             -- recognised keys `:current' and `:modified'.
+
+A current item is drawn bold, in CURRENT-FOREGROUND, over a
+CURRENT-BACKGROUND box.  A (non-current) modified item is drawn in
+MODIFIED-FOREGROUND, over a MODIFIED-BACKGROUND box when set.  When an
+item is BOTH current and modified, its box is tinted with
+MODIFIED-FOREGROUND (the readable current label stays, but the unsaved
+state remains visible behind the highlight).
+
+A per-item icon, if wanted, is just a Nerd-Font glyph at the start of
+LABEL (it is plain text and flows with the label)."
   (let* ((foreground (svg-line--color foreground))
          (background (svg-line--color background))
          (current-foreground (svg-line--color current-foreground))
          (current-background (svg-line--color current-background))
+         (modified-foreground (svg-line--color modified-foreground))
+         (modified-background (svg-line--color modified-background))
          (fz font-size)
          (lh (+ fz line-pad))
          (x 0) (row 0) (placements nil))
     (dolist (it items)
       (let* ((label (car it))
-             (lw (* (length label) char-advance))
-             (w  (+ lw (* gap char-advance))))
+             (state (cdr it))
+             (currentp  (if (consp state) (plist-get state :current) state))
+             (modifiedp (and (consp state) (plist-get state :modified)))
+             (cw (* (length label) char-advance))    ; item (box) width
+             (w  (+ cw (* gap char-advance))))        ; + inter-item gap
         (when (and (> x 0) (> (+ x w) width))
           (setq x 0 row (1+ row)))
-        (push (list x (* row lh) lw label (cdr it)) placements)
+        (push (list x (* row lh) cw label currentp modifiedp) placements)
         (setq x (+ x w))))
     (let* ((height (max 1 (* (1+ row) lh)))
            (svg (svg-create width height)))
       (when background (svg-rectangle svg 0 0 width height :fill background))
       (dolist (p (nreverse placements))
-        (cl-destructuring-bind (px top lw label currentp) p
-          (when (and currentp current-background)
-            (svg-rectangle svg px top lw lh :fill current-background :rx 3))
-          (svg-text svg label :font-family font :font-size fz
-                    :fill (if currentp (or current-foreground foreground) foreground)
-                    :font-weight (if currentp "bold" "normal")
-                    :x px :y (+ top fz))))
+        (cl-destructuring-bind (px top cw label currentp modifiedp) p
+          (let ((box  (cond ;; current AND modified: tint the current box with the
+                            ;; modified accent so "unsaved" stays visible behind
+                            ;; the current highlight (the label stays readable).
+                            ((and currentp modifiedp) (or modified-foreground current-background))
+                            (currentp  current-background)
+                            (modifiedp modified-background)))
+                (fill (cond (currentp  (or current-foreground foreground))
+                            (modifiedp (or modified-foreground foreground))
+                            (t foreground))))
+            (when box
+              (svg-rectangle svg px top cw lh :fill box :rx 3))
+            (svg-line--add-text svg label :x px :y (+ top fz)
+                                :font font :font-size fz :fill fill
+                                :weight (if currentp "bold" "normal")))))
       svg)))
 
 ;;;###autoload
 (defun svg-line-display (svg)
-  "Wrap SVG object as a one-space string carrying it as a display image."
-  (propertize " " 'display (svg-image svg :ascent 'center)))
+  "Wrap SVG object as a one-space string carrying it as a display image.
+Pinned to `:scale' 1.0: the image IS the line at its exact target pixel
+width, so it must NOT inherit `image-scaling-factor' (auto), which would
+scale it with the default font and overflow the frame.  Scale the line by
+scaling its `:font-size'/`:char-advance' instead, not the image."
+  (propertize " " 'display (svg-image svg :ascent 'center :scale 1.0)))
 
 ;;;; Safety wrapper
 ;; ----------------------------------------------------------------
@@ -308,8 +536,57 @@ GAP is the inter-item gap in character widths.  Returns an svg object."
 ;;;; Per-spec builders
 ;; ----------------------------------------------------------------
 
+(defun svg-line--side (segments)
+  "Render SEGMENTS to a side value: a plain string if all text, else a run list."
+  (let ((runs (svg-line--render-runs segments)))
+    (if (svg-line--runs-all-text-p runs)
+        (mapconcat (lambda (r) (nth 1 r)) runs "")
+      runs)))
+
+;;;; Text-scale responsiveness
+;; ----------------------------------------------------------------
+;; The line image is pinned to :scale 1.0 (see `svg-line-display'), so it
+;; never inherits `image-scaling-factor' and overflows.  To still track the
+;; default font size (e.g. `default-text-scale', or `set-face-attribute' on
+;; `default'), the layout SIZES -- font-size, line-pad, padding, advance --
+;; are scaled by the ratio of the current `default'-face height to a
+;; captured reference, so the line RE-RENDERS larger/sharper instead.
+
+(defcustom svg-line-scale-with-text-scale t
+  "When non-nil, scale line sizes with the `default'-face height.
+Lets lines track `default-text-scale' (font-size, line-pad, padding and
+char-advance grow proportionally).  nil keeps a fixed pixel size regardless
+of the default font."
+  :type 'boolean)
+
+(defvar svg-line--base-text-height nil
+  "Reference `default'-face :height for a text scale of 1.0 (captured once).
+Reset to nil to re-capture (e.g. after changing the unscaled default font).")
+
+(defun svg-line--text-scale ()
+  "Factor relating the current `default'-face height to the reference.
+Returns 1.0 when scaling is disabled or unavailable."
+  (if (not svg-line-scale-with-text-scale)
+      1.0
+    (let ((h (ignore-errors (face-attribute 'default :height nil 'default))))
+      (when (and (numberp h) (null svg-line--base-text-height))
+        (setq svg-line--base-text-height h))
+      (if (and (numberp h) (numberp svg-line--base-text-height)
+               (> svg-line--base-text-height 0))
+          (/ (float h) svg-line--base-text-height)
+        1.0))))
+
+(defun svg-line--scaled (size)
+  "Scale pixel SIZE by the current text-scale factor (integer result)."
+  (round (* size (svg-line--text-scale))))
+
 (defun svg-line--build-lines (spec)
-  "Build the `lines' SVG for SPEC."
+  "Build the `lines' SVG for SPEC.
+Each content row is (LEFT-SEGMENTS . RIGHT-SEGMENTS).  A segment may emit
+a progress bar (:svg-bar ...) or pie (:svg-pie ...) token (see
+`svg-line--render-runs'); a side with any such token is laid out with
+CHAR-ADVANCE spacing, otherwise with exact text anchoring.
+Sizes scale with the default font (see `svg-line-scale-with-text-scale')."
   (let* ((active (svg-line--active-p spec))
          (fg (or (and (not active) (svg-line--opt spec :inactive-foreground))
                  (svg-line--opt spec :foreground "#000000")))
@@ -317,35 +594,48 @@ GAP is the inter-item gap in character widths.  Returns an svg object."
                  (svg-line--opt spec :background)
                (or (svg-line--opt spec :inactive-background)
                    (svg-line--opt spec :background))))
-         (rows (mapcar (lambda (r)
-                         (cons (svg-line-render-segments (car r))
-                               (svg-line-render-segments (cdr r))))
-                       (funcall (plist-get spec :content)))))
-    (svg-line-image rows
-                    :width (svg-line--width spec)
-                    :font (svg-line--opt spec :font
-                                         (or svg-line-font (face-attribute 'default :family nil t)))
-                    :font-size (svg-line--opt spec :font-size svg-line-font-size)
-                    :line-pad (svg-line--opt spec :line-pad svg-line-line-pad)
-                    :pad (svg-line--opt spec :pad 0)
-                    :right-margin (svg-line--opt spec :right-margin 0)
-                    :foreground fg
-                    :background bg)))
+         (sc (svg-line--text-scale)))
+    (svg-line-image
+     (mapcar (lambda (r)
+               (cons (svg-line--side (car r)) (svg-line--side (cdr r))))
+             (funcall (plist-get spec :content)))
+     :width (svg-line--width spec)
+     :font (svg-line--opt spec :font
+                          (or svg-line-font (face-attribute 'default :family nil t)))
+     :font-size (svg-line--scaled (svg-line--opt spec :font-size svg-line-font-size))
+     :line-pad (svg-line--scaled (svg-line--opt spec :line-pad svg-line-line-pad))
+     :pad (svg-line--scaled (svg-line--opt spec :pad 0))
+     :right-margin (svg-line--scaled (svg-line--opt spec :right-margin 0))
+     :char-advance (* (or (svg-line--opt spec :char-advance nil) svg-line-char-advance) sc)
+     :foreground fg
+     :background bg)))
 
 (defun svg-line--build-wrap (spec)
-  "Build the `wrap' SVG for SPEC."
-  (svg-line-wrap-image (funcall (plist-get spec :content))
-                       :width (svg-line--width spec)
-                       :font (svg-line--opt spec :font
-                                            (or svg-line-font (face-attribute 'default :family nil t)))
-                       :font-size (svg-line--opt spec :font-size svg-line-font-size)
-                       :line-pad (svg-line--opt spec :line-pad svg-line-line-pad)
-                       :char-advance (svg-line--opt spec :char-advance svg-line-char-advance)
-                       :gap (svg-line--opt spec :gap 3)
-                       :foreground (svg-line--opt spec :foreground "#000000")
-                       :background (svg-line--opt spec :background)
-                       :current-foreground (svg-line--opt spec :current-foreground)
-                       :current-background (svg-line--opt spec :current-background)))
+  "Build the `wrap' SVG for SPEC.
+When SPEC has an `:active' predicate that is false, the inactive variant
+of each colour applies (falling back to the active colour when unset),
+mirroring the `lines' layout."
+  (let* ((active (svg-line--active-p spec))
+         (sc (svg-line--text-scale))
+         (pick (lambda (key inactive-key &optional default)
+                 (if active
+                     (svg-line--opt spec key default)
+                   (or (svg-line--opt spec inactive-key)
+                       (svg-line--opt spec key default))))))
+    (svg-line-wrap-image (funcall (plist-get spec :content))
+                         :width (svg-line--width spec)
+                         :font (svg-line--opt spec :font
+                                              (or svg-line-font (face-attribute 'default :family nil t)))
+                         :font-size (svg-line--scaled (svg-line--opt spec :font-size svg-line-font-size))
+                         :line-pad (svg-line--scaled (svg-line--opt spec :line-pad svg-line-line-pad))
+                         :char-advance (* (or (svg-line--opt spec :char-advance nil) svg-line-char-advance) sc)
+                         :gap (svg-line--opt spec :gap 3)
+                         :foreground (funcall pick :foreground :inactive-foreground "#000000")
+                         :background (funcall pick :background :inactive-background)
+                         :current-foreground (funcall pick :current-foreground :inactive-current-foreground)
+                         :current-background (funcall pick :current-background :inactive-current-background)
+                         :modified-foreground (funcall pick :modified-foreground :inactive-modified-foreground)
+                         :modified-background (funcall pick :modified-background :inactive-modified-background))))
 
 (defun svg-line--render (name)
   "Render line NAME to a display string (error/loop guarded)."
@@ -360,7 +650,7 @@ GAP is the inter-item gap in character widths.  Returns an svg object."
 
 (defun svg-line--renderer (name)
   "Return (creating if needed) the named renderer function symbol for NAME."
-  (let ((sym (intern (format "svg-line-render/%s" name))))
+  (let ((sym (intern (format "svg-line--render-%s" name))))
     (defalias sym (lambda () (svg-line--render name))
       (format "Render the `%s' svg-line (made by `svg-line-define')." name))
     sym))
@@ -375,20 +665,30 @@ Recognised SPEC keys:
   :target  one of `tab-bar' `mode-line' `header-line' `tab-line' (required)
   :layout  `lines' (default) or `wrap'
   :content a function returning the line's content (required):
-             - for `lines': a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS)
-             - for `wrap':  a list of (LABEL . CURRENTP)
+             - for `lines': a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS); a
+               segment may be a string, a function, or a pie
+               (:svg-pie FRAC FILL BG) / progress-bar (:svg-bar FRAC W FILL BG)
+               token (or a function returning one).  Icons are Nerd-Font
+               glyphs in the text, so they need no token of their own.
+             - for `wrap':  a list of (LABEL . STATE), where STATE is a
+               CURRENTP atom or a plist with `:current'/`:modified' keys
   :width   `frame', `window', an integer, or a function (default by target)
-  :font :font-size :line-pad :pad :right-margin
+  :font :font-size :line-pad :pad :right-margin :char-advance
   :foreground :background
   :active   a predicate; when present and false, inactive variants apply
   :inactive-foreground :inactive-background
-  :char-advance :gap :current-foreground :current-background  (`wrap' only)
+  `wrap' only:
+  :gap
+  :current-foreground :current-background
+  :modified-foreground :modified-background
+  :inactive-current-foreground :inactive-current-background
+  :inactive-modified-foreground :inactive-modified-background
 Each styling value may be a literal or a zero-arg function,
 evaluated on every render."
   (unless (plist-get spec :target)
-    (error "svg-line-define: %s needs a :target" name))
+    (error "Missing :target for svg-line %S" name))
   (unless (functionp (plist-get spec :content))
-    (error "svg-line-define: %s needs a :content function" name))
+    (error "Missing :content function for svg-line %S" name))
   (let ((entry (or (svg-line--entry name) (list :saved nil))))
     (setq entry (plist-put entry :spec spec))
     (setq entry (plist-put entry :renderer (svg-line--renderer name)))
@@ -416,7 +716,7 @@ evaluated on every render."
        ;; the `tab-line-format' FUNCTION, so override that to catch them all.
        (setq entry (plist-put entry :saved (cons 'advice sym)))
        (advice-add 'tab-line-format :override sym))
-      (_ (error "svg-line: unknown :target %S" target)))
+      (_ (error "Unknown :target %S for svg-line %S" target name)))
     (puthash name entry svg-line--registry)
     (force-mode-line-update t)))
 
@@ -443,12 +743,22 @@ evaluated on every render."
        (plist-get (svg-line--entry name) :saved)
        t))
 
+(defun svg-line--read-name (prompt &optional predicate)
+  "Read a defined svg-line NAME (a symbol) from the minibuffer with PROMPT.
+PREDICATE, if non-nil, filters the offered names (called with a symbol)."
+  (let* ((names (cl-remove-if-not (or predicate #'always)
+                                  (hash-table-keys svg-line--registry))))
+    (unless names (user-error "No svg-lines defined (see `svg-line-define')"))
+    (intern (completing-read prompt (mapcar #'symbol-name names) nil t))))
+
 ;;;###autoload
 (defun svg-line-activate (name)
   "Activate the svg-line NAME on its target."
-  (interactive)
+  (interactive (list (svg-line--read-name
+                      "Activate svg-line: "
+                      (lambda (n) (not (svg-line-active-p n))))))
   (unless (svg-line--entry name)
-    (error "svg-line-activate: no line named %S (use `svg-line-define')" name))
+    (error "No svg-line named %S (use `svg-line-define')" name))
   (unless (svg-line-active-p name)
     (svg-line--install name))
   name)
@@ -456,7 +766,8 @@ evaluated on every render."
 ;;;###autoload
 (defun svg-line-deactivate (name)
   "Deactivate the svg-line NAME, restoring its target."
-  (interactive)
+  (interactive (list (svg-line--read-name "Deactivate svg-line: "
+                                          #'svg-line-active-p)))
   (when (svg-line-active-p name)
     (svg-line--uninstall name))
   name)
@@ -464,7 +775,7 @@ evaluated on every render."
 ;;;###autoload
 (defun svg-line-toggle (name)
   "Toggle the svg-line NAME on its target."
-  (interactive)
+  (interactive (list (svg-line--read-name "Toggle svg-line: ")))
   (if (svg-line-active-p name)
       (svg-line-deactivate name)
     (svg-line-activate name)))

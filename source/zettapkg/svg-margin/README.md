@@ -14,6 +14,10 @@ exact pixel coordinates. Both the **left and right** margins are supported.
 svg-margin is the rendering **engine** only — it ships no providers. You (or
 a tiny adapter) supply them.
 
+**Docs:** this README (engine + API) · [CONFIGURATION.md](CONFIGURATION.md)
+(options, and diverting data from other fringe/margin packages) ·
+[EXAMPLES.md](EXAMPLES.md) (ten ready-made providers).
+
 ## How it works
 
 - A **provider** is a function `BUFFER -> (list of indicators)`. Register any
@@ -118,6 +122,11 @@ Two independent pieces:
    scroll bar / checker marks there, or they'll have nowhere to render.
 2. **Move the data** — write a provider that reads the package's own state.
    No interception needed; adapters are ~10 lines.
+
+For how hard this is in practice — reading a package's data vs. stopping its own
+drawing, the difficulty tiers, refresh triggers, and a worked git-gutter
+example — see **[CONFIGURATION.md](CONFIGURATION.md)** ("Diverting data from
+other packages").
 
 `examples/svg-margin-examples.el` ships ten ready-made providers — VC
 (git-gutter or diff-hl), flycheck, TODO/FIXME, bookmarks, evil marks, an Org

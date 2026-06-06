@@ -308,13 +308,17 @@ NCOLS is the number of columns the image spans."
                 (delq nil (mapcar (lambda (c) (plist-get (plist-get c :indicator) :help))
                                   packed))
                 "\n"))
-         (str (propertize " " 'display (list (list 'margin marg)
-                                             (propertize " " 'display img))))
+         ;; Put the image descriptor DIRECTLY as the margin spec's element;
+         ;; wrapping it in a string (((margin SIDE) STRING)) reserves the
+         ;; margin space but does not render the nested image.
+         (str (propertize " " 'display (list (list 'margin marg) img)))
          (ov (make-overlay pos pos)))
     (when (> (length help) 0) (setq str (propertize str 'help-echo help)))
     (overlay-put ov 'svg-margin t)
     (overlay-put ov 'before-string str)
-    (overlay-put ov 'evaporate t)
+    ;; NB: do NOT set `evaporate' -- these overlays are zero-length, and an
+    ;; evaporate overlay is auto-deleted the instant it is empty, so it would
+    ;; vanish before display.  `svg-margin--clear' rebuilds them each render.
     (push ov svg-margin--overlays)))
 
 ;;;; Window geometry (margins + fringes)
@@ -325,11 +329,18 @@ NCOLS is the number of columns the image spans."
   (get-buffer-window-list (current-buffer) nil t))
 
 (defun svg-margin--apply-margins (left right)
-  "Reserve LEFT and RIGHT indicator columns in every window showing the buffer."
+  "Reserve LEFT and RIGHT indicator columns in every window showing the buffer.
+Only writes a window whose margins actually differ, so the call cannot
+induce a redundant `window-configuration-change-hook' (and the re-render
+loop / flicker that would follow)."
   (let ((lw (* left svg-margin-column-width))
         (rw (* right svg-margin-column-width)))
     (dolist (win (svg-margin--windows))
-      (set-window-margins win lw rw))))
+      (let* ((cur (window-margins win))
+             (cl (or (car cur) 0))
+             (cr (or (cdr cur) 0)))
+        (unless (and (= cl lw) (= cr rw))
+          (set-window-margins win lw rw))))))
 
 (defun svg-margin--restore-margins ()
   "Restore window margins to the buffer's own margin widths."
@@ -349,11 +360,12 @@ NCOLS is the number of columns the image spans."
   (let ((sides (svg-margin--fringe-sides)))
     (when sides
       (dolist (win (svg-margin--windows))
-        (let* ((fr (window-fringes win)) (l (nth 0 fr)) (r (nth 1 fr)))
-          (set-window-fringes
-           win
-           (cond ((not (memq 'left sides)) l) (restore nil) (t 0))
-           (cond ((not (memq 'right sides)) r) (restore nil) (t 0))))))))
+        (let* ((fr (window-fringes win)) (l (nth 0 fr)) (r (nth 1 fr))
+               (nl (cond ((not (memq 'left sides)) l) (restore nil) (t 0)))
+               (nr (cond ((not (memq 'right sides)) r) (restore nil) (t 0))))
+          ;; Only write when changed (see `svg-margin--apply-margins').
+          (unless (and (equal nl l) (equal nr r))
+            (set-window-fringes win nl nr)))))))
 
 ;;;; Render
 ;; ----------------------------------------------------------------

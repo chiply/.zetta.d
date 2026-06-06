@@ -91,6 +91,18 @@ is this value times the number of indicator columns on the widest line."
   "Default margin side for indicators that do not specify `:side'."
   :type '(choice (const left) (const right)))
 
+(defcustom svg-margin-min-left-columns 0
+  "Minimum number of columns to always reserve in the left margin.
+The left margin still grows past this when a line needs more columns, but
+never shrinks below it -- so reserving a baseline keeps buffer text from
+shifting left/right as indicators come and go (up to this width)."
+  :type 'integer)
+
+(defcustom svg-margin-min-right-columns 0
+  "Minimum number of columns to always reserve in the right margin.
+See `svg-margin-min-left-columns'."
+  :type 'integer)
+
 (defcustom svg-margin-disable-fringe nil
   "Which window fringe(s) svg-margin collapses to 0 while active.
 nil leaves the fringe alone; `left', `right', `both' (or t) zero the
@@ -333,20 +345,21 @@ A non-function `:draw' is ignored (falls through to `:text'/`:shape')."
       (funcall (gethash (plist-get ind :shape) svg-margin--shapes) svg x y w h color))
      (t (svg-margin--shape-dot svg x y w h color)))))
 
-(defun svg-margin--image (packed side ncols cw lh)
+(defun svg-margin--image (packed side rcols cw lh)
   "Build the composite margin image for PACKED cells on SIDE.
-NCOLS is the number of columns to reserve; column 0 is nearest the buffer
-text on either side.  CW is one column's pixel width and LH the line height
-\(both passed in so they track the displaying window's frame, not just the
-selected one).  A cell whose draw signals is skipped so one bad indicator
-cannot blank the whole line."
+RCOLS is the SIDE's reserved column count (>= this line's own column count),
+so the image fills the whole margin and column 0 lands nearest the buffer text
+\(rightmost on the left margin, leftmost on the right).  CW is one column's
+pixel width and LH the line height (both passed in so they track the displaying
+window's frame, not just the selected one).  A cell whose draw signals is
+skipped so one bad indicator cannot blank the whole line."
   (let* ((h (max 1 lh))
-         (w (max 1 (* ncols cw)))
+         (w (max 1 (* rcols cw)))
          (svg (svg-create w h)))
     (dolist (cell packed)
       (let* ((col (plist-get cell :column))
              (ind (plist-get cell :indicator))
-             (x (if (eq side 'left) (* (- ncols 1 col) cw) (* col cw))))
+             (x (if (eq side 'left) (* (- rcols 1 col) cw) (* col cw))))
         (condition-case err
             (svg-margin--draw ind svg x 0 cw h)
           (error (message "svg-margin: drawing an indicator failed: %s"
@@ -364,11 +377,11 @@ cannot blank the whole line."
   (mapc #'delete-overlay svg-margin--overlays)
   (setq svg-margin--overlays nil))
 
-(defun svg-margin--place (pos side packed ncols cw lh)
+(defun svg-margin--place (pos side packed rcols cw lh)
   "Create an overlay at POS carrying the composite SIDE image for PACKED.
-NCOLS is the number of columns the image spans; CW and LH are the column
-pixel width and line height for the image."
-  (let* ((img (svg-margin--image packed side ncols cw lh))
+RCOLS is the SIDE's reserved column count the image spans; CW and LH are the
+column pixel width and line height for the image."
+  (let* ((img (svg-margin--image packed side rcols cw lh))
          (marg (if (eq side 'left) 'left-margin 'right-margin))
          (help (string-join
                 (delq nil (mapcar (lambda (c) (plist-get (plist-get c :indicator) :help))
@@ -473,7 +486,11 @@ before first being zeroed, so they can be restored exactly -- including when
                    (cw (* svg-margin-column-width (frame-char-width frame)))
                    (lh (max 1 (default-line-height)))
                    (groups (svg-margin--group (svg-margin--collect)))
-                   (max-left 0) (max-right 0))
+                   (max-left (max 0 svg-margin-min-left-columns))
+                   (max-right (max 0 svg-margin-min-right-columns))
+                   (cells nil))
+              ;; Pass 1: pack each line and find the reserved width per side
+              ;; (at least the configured minimum).
               (maphash
                (lambda (key inds)
                  (let* ((pos (car key)) (side (cdr key))
@@ -483,8 +500,15 @@ before first being zeroed, so they can be restored exactly -- including when
                      (if (eq side 'left)
                          (setq max-left (max max-left ncols))
                        (setq max-right (max max-right ncols)))
-                     (svg-margin--place pos side packed ncols cw lh))))
+                     (push (list pos side packed) cells))))
                groups)
+              ;; Pass 2: place each line filling its side's reserved width, so
+              ;; indicators align to the text regardless of per-line variation.
+              (dolist (c cells)
+                (cl-destructuring-bind (pos side packed) c
+                  (svg-margin--place pos side packed
+                                     (if (eq side 'left) max-left max-right)
+                                     cw lh)))
               (svg-margin--apply-margins max-left max-right)
               (svg-margin--apply-fringes))))))))
 

@@ -15,6 +15,8 @@ All are plain `defcustom`s (`M-x customize-group RET svg-margin`):
 |--------|---------|---------|
 | `svg-margin-column-width` | `1` | width of one indicator column, in character cells |
 | `svg-margin-default-side` | `left` | side for indicators that don't set `:side` |
+| `svg-margin-min-left-columns` | `0` | columns to always reserve in the left margin |
+| `svg-margin-min-right-columns` | `0` | columns to always reserve in the right margin |
 | `svg-margin-disable-fringe` | `nil` | `left` / `right` / `both` — which fringe to collapse to 0 while active |
 | `svg-margin-provider-sides` | `nil` | alist `(PROVIDER . left|right)` forcing where a provider draws |
 | `svg-margin-debug` | `nil` | message indicators dropped for a missing/out-of-range position |
@@ -23,6 +25,22 @@ All are plain `defcustom`s (`M-x customize-group RET svg-margin`):
 Enable per buffer with `svg-margin-mode`, or everywhere with
 `global-svg-margin-mode`. svg-margin needs a **graphical frame** (it draws SVG),
 so it shows nothing in `emacs -nw`.
+
+### Keeping the buffer from shifting
+
+By default a margin is only as wide as it needs to be, so the buffer text shifts
+left/right as indicators appear and disappear. Reserve a baseline to keep it
+steady:
+
+```elisp
+(setq svg-margin-min-left-columns 1
+      svg-margin-min-right-columns 1)
+```
+
+The margin still grows beyond the minimum when a line needs more columns — it
+just never drops below it, so text stops jiggling up to that width. (Indicators
+are drawn nearest the text within the reserved space, so a wider reservation
+shows as empty room at the window edge, not a gap against the text.)
 
 ## Registering a provider
 

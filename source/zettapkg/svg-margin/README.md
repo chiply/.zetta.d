@@ -113,6 +113,12 @@ Two independent pieces:
 ## Caveats (v1)
 
 - svg-margin **owns** the managed margins while active (one consumer at a time).
+  Another package that also writes the *same* window margin — e.g. `git-gutter`
+  in its margin (non-fringe) mode — will duel with it: each re-sets the margin
+  width to its own value and reacts to the other's change, so the buffer text
+  **flickers left/right**. Disable the other margin user (and instead feed its
+  data in through an svg-margin provider). svg-margin only writes a window whose
+  margins actually changed, so it never duels with *itself*.
 - Margin *content* (the overlay images) is per-buffer, while the reserved
   *width* is per-window — so the same indicators show in every window on the
   buffer.

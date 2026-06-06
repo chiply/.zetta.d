@@ -88,6 +88,38 @@
         (should (functionp (gethash 'test-shape svg-margin--shapes))))
     (remhash 'test-shape svg-margin--shapes)))
 
+;;;; Provider defaults + side override
+
+(ert-deftest svg-margin/provider-defaults-fill-missing ()
+  (let ((ind (svg-margin--apply-provider-defaults
+              '(:line 3) '(:fn ignore :side right :priority 5) nil)))
+    (should (eq 'right (plist-get ind :side)))
+    (should (= 5 (plist-get ind :priority)))))
+
+(ert-deftest svg-margin/provider-defaults-respect-explicit ()
+  (let ((ind (svg-margin--apply-provider-defaults
+              '(:line 3 :side left) '(:fn ignore :side right) nil)))
+    ;; the indicator's own :side wins over the provider default
+    (should (eq 'left (plist-get ind :side)))))
+
+(ert-deftest svg-margin/provider-side-override-forces ()
+  (let ((ind (svg-margin--apply-provider-defaults
+              '(:line 3 :side left) '(:fn ignore :side left) 'right)))
+    ;; an override forces the side even over an explicit indicator :side
+    (should (eq 'right (plist-get ind :side)))))
+
+;;;; Narrowing-safe normalisation
+
+(ert-deftest svg-margin/normalize-line-is-absolute-under-narrowing ()
+  (with-temp-buffer
+    (insert "l1\nl2\nl3\nl4\nl5\n")
+    (let ((want (save-excursion (goto-char (point-min)) (forward-line 3) (point))))
+      (narrow-to-region (save-excursion (goto-char (point-min)) (forward-line 2) (point))
+                        (point-max))
+      ;; :line 4 must still resolve to absolute file line 4, not the 4th
+      ;; visible line within the narrowing.
+      (should (= want (plist-get (svg-margin--normalize '(:line 4 :shape dot)) :pos))))))
+
 ;;;; Provider registry
 
 (ert-deftest svg-margin/register-and-unregister-provider ()

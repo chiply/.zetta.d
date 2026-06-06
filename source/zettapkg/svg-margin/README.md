@@ -26,8 +26,9 @@ a tiny adapter) supply them.
 
 ## Installation
 
-Requires **Emacs 29.1+**; no dependencies beyond the built-in `svg.el`.
-Once on MELPA:
+Requires **Emacs 29.1+** and a **graphical frame** (it draws SVG images, so
+it shows nothing in a terminal `emacs -nw`); no dependencies beyond the
+built-in `svg.el`. Once on MELPA:
 
 ```elisp
 (use-package svg-margin
@@ -56,11 +57,11 @@ Or manually, with `svg-margin.el` on your `load-path`:
 
 | Key         | Meaning                                                        |
 |-------------|----------------------------------------------------------------|
-| `:pos`/`:line` | buffer position or 1-based line (one is required)           |
+| `:pos`/`:line` | buffer position or **absolute** 1-based line (one is required; resolved against the whole buffer, so it is correct under narrowing) |
 | `:side`     | `left` (default `svg-margin-default-side`) or `right`          |
 | `:column`   | explicit slot (0 = nearest the text); else auto-packed         |
 | `:priority` | higher is packed first → claims the inner column (default 0)    |
-| `:shape`    | a registered shape: `dot` `circle` `bar` `box` `triangle`      |
+| `:shape`    | a built-in shape: `dot` (filled disc) · `circle` (hollow ring) · `bar` (vertical bar) · `box` (rounded square) · `triangle`, or your own via `svg-margin-define-shape` |
 | `:text`     | a short string drawn centred (e.g. an evil mark letter)        |
 | `:draw`     | `(lambda (SVG X Y W H COLOR) ...)` for full control            |
 | `:color`/`:face` | fill colour, or a face whose foreground is used           |
@@ -68,6 +69,27 @@ Or manually, with `svg-margin.el` on your `load-path`:
 
 Indicators sharing a `(line, side)` pack into adjacent columns; an explicit
 free `:column` is honoured, otherwise each takes the lowest free slot.
+
+One of `:pos`/`:line` is **required** — an indicator without a (valid, in-range)
+position is silently skipped. Set `svg-margin-debug` to `t` to get a message
+naming the provider when that happens (handy while writing one).
+
+### Provider defaults and moving a provider's side
+
+A provider can set defaults so it needn't stamp every indicator, and **users
+can relocate any provider — including a third-party one — without editing it**:
+
+```elisp
+;; provider author: default everything from this provider to the right margin
+(svg-margin-register-provider 'my-source #'my-fn :side 'right :priority 5)
+
+;; user: override where a provider draws, declaratively
+(setq svg-margin-provider-sides '((my-source . left) (flycheck . right)))
+```
+
+Precedence for an indicator's side: `svg-margin-provider-sides` override →
+the indicator's own `:side` → the provider's registered `:side` →
+`svg-margin-default-side`.
 
 ### Custom shapes
 

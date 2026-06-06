@@ -12,8 +12,12 @@ columns, and draws one composite SVG per line/side.
 
 ## Loading & turning them on
 
+This file is **not installed** with the package (the Eask `files` clause ships
+only `svg-margin.el`), so load it from your checkout — substitute the real path
+to the `examples/` directory of your clone:
+
 ```elisp
-(load-file ".../svg-margin/examples/svg-margin-examples.el")
+(load-file "/path/to/svg-margin/examples/svg-margin-examples.el")
 
 (svg-margin-example-setup)          ; core set + fringe diversion + the mode
 (svg-margin-example-extras-setup)   ; the five "extra" demo providers
@@ -134,6 +138,8 @@ TODO, and so on. Every side is configurable (see *Configuring sides*).
 ### symbol — occurrences of the symbol at point
 
 - **What:** a dot on every line where the symbol under the cursor also appears.
+  Active **only in `prog-mode` buffers, and only for symbols of 3+ characters**
+  (so short identifiers like `i`/`fn` and prose buffers stay quiet).
 - **Looks:** blue dots that move with you as you navigate.
 - **Why:** an instant "where else is this used" map, like a lightweight
   `highlight-symbol`, without changing the buffer text.
@@ -163,6 +169,12 @@ it. Every example stamps `:side` from one alist:
 
 Flip any entry to move that source to the other margin — no code change. The
 engine reserves and draws both margins independently.
+
+`svg-margin-example-sides` is this gallery's own knob. For **third-party**
+providers you didn't write, the engine offers the same control directly:
+`svg-margin-provider-sides` (an alist the engine honours) and the `:side`
+argument to `svg-margin-register-provider` — so you can relocate any provider
+without editing it.
 
 ## Fringe diversion
 

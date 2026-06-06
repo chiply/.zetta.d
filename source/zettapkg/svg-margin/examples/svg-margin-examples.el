@@ -15,6 +15,7 @@
 ;;; Code:
 
 (require 'svg-margin)
+(require 'cl-lib)
 
 (defvar evil-markers-alist)
 (defvar git-gutter:diffinfos)

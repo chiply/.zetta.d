@@ -59,6 +59,11 @@
 ;; line.  Providers are decoupled, so several packages can contribute to the
 ;; same gutter and stack on one line.
 ;;
+;; A provider may set per-provider defaults so it need not stamp every
+;; indicator: (svg-margin-register-provider NAME FN :side 'right :priority 5).
+;; Users can relocate any provider's margin declaratively, without editing it,
+;; via `svg-margin-provider-sides'.
+;;
 ;; To move what a package draws in the fringe into the margin instead, write
 ;; a provider that reads that package's data (e.g. evil's `evil-markers-alist')
 ;; and set `svg-margin-disable-fringe' to reclaim the fringe space.  See the
@@ -99,6 +104,22 @@ Note: zeroing a fringe also hides its truncation/continuation arrows."
   "Idle seconds to coalesce changes before re-rendering a buffer."
   :type 'number)
 
+(defcustom svg-margin-provider-sides nil
+  "Alist of (PROVIDER-NAME . SIDE) overriding where a provider draws.
+SIDE is `left' or `right'.  An entry here forces every indicator from that
+provider onto SIDE, even one that stamps its own `:side' -- so you can move
+any provider (including a third-party one) to the other margin declaratively,
+without editing its source.  See also the `:side' argument to
+`svg-margin-register-provider'."
+  :type '(alist :key-type symbol :value-type (choice (const left) (const right))))
+
+(defcustom svg-margin-debug nil
+  "When non-nil, report indicators that are dropped for lack of a position.
+A provider whose indicator has no `:pos'/`:line' (or an out-of-range one) has
+that indicator silently skipped; enable this to get a message naming the
+provider, which helps when writing one."
+  :type 'boolean)
+
 ;;;; Colour
 ;; ----------------------------------------------------------------
 
@@ -121,6 +142,7 @@ Names and the 12-digit \"#RRRRGGGGBBBB\" form are resolved via `color.el';
 (defvar svg-margin--shapes (make-hash-table :test 'eq)
   "Map of shape NAME symbol -> drawing function (SVG X Y W H COLOR).")
 
+;;;###autoload
 (defun svg-margin-define-shape (name fn)
   "Register drawing FN under shape NAME (a symbol).
 FN is called as (FN SVG X Y W H COLOR) and should draw within the cell
@@ -131,6 +153,12 @@ rectangle whose top-left is (X, Y) and size is W by H pixels."
   "Draw a filled dot of COLOR centred in the (X Y W H) cell of SVG."
   (svg-circle svg (+ x (/ w 2.0)) (+ y (/ h 2.0)) (* (min w h) 0.30)
               :fill (svg-margin--color color)))
+
+(defun svg-margin--shape-circle (svg x y w h color)
+  "Draw a hollow ring of COLOR centred in the (X Y W H) cell of SVG."
+  (let ((c (svg-margin--color color)))
+    (svg-circle svg (+ x (/ w 2.0)) (+ y (/ h 2.0)) (* (min w h) 0.30)
+                :fill "none" :stroke c :stroke-width (max 1 (round (* (min w h) 0.12))))))
 
 (defun svg-margin--shape-bar (svg x y w h color)
   "Draw a vertical bar of COLOR spanning the height of the (X Y W H) cell of SVG."
@@ -152,7 +180,7 @@ rectangle whose top-left is (X, Y) and size is W by H pixels."
                  :fill (svg-margin--color color))))
 
 (dolist (s '((dot . svg-margin--shape-dot)
-             (circle . svg-margin--shape-dot)
+             (circle . svg-margin--shape-circle)
              (bar . svg-margin--shape-bar)
              (box . svg-margin--shape-box)
              (triangle . svg-margin--shape-triangle)))
@@ -162,19 +190,42 @@ rectangle whose top-left is (X, Y) and size is W by H pixels."
 ;; ----------------------------------------------------------------
 
 (defvar svg-margin--providers nil
-  "Alist of (NAME . FUNCTION); each FUNCTION maps a buffer to indicators.")
+  "Alist of (NAME . PLIST); PLIST has :fn and optional :side/:priority/:column.
+The optional values are per-provider DEFAULTS applied to any indicator that
+omits the corresponding key (see `svg-margin--apply-provider-defaults').")
 
-(defun svg-margin-register-provider (name fn)
+;;;###autoload
+(cl-defun svg-margin-register-provider (name fn &key side priority column)
   "Register provider FN under NAME (a symbol), replacing any prior one.
-FN is called with one argument, the buffer, and returns a list of
-indicator plists (see Commentary).  Registered buffers are re-rendered."
-  (setf (alist-get name svg-margin--providers) fn)
+FN is called with one argument, the buffer, and returns a list of indicator
+plists (see Commentary).  The optional keywords set per-provider DEFAULTS:
+SIDE (`left'/`right'), PRIORITY, and COLUMN are applied to any indicator this
+provider emits that does not specify them itself, so a provider need not stamp
+every indicator.  `svg-margin-provider-sides' can override SIDE per provider.
+Registered buffers are re-rendered."
+  (setf (alist-get name svg-margin--providers)
+        (list :fn fn :side side :priority priority :column column))
   (svg-margin-refresh-all))
 
+;;;###autoload
 (defun svg-margin-unregister-provider (name)
   "Remove the provider registered under NAME and re-render."
   (setq svg-margin--providers (assq-delete-all name svg-margin--providers))
   (svg-margin-refresh-all))
+
+(defun svg-margin--apply-provider-defaults (ind props override-side)
+  "Fill IND's missing :side/:priority/:column from provider PROPS.
+OVERRIDE-SIDE, when non-nil, forces `:side' regardless of what IND carries."
+  (let ((ind (copy-sequence ind)))
+    (when (and (plist-get props :side) (not (plist-member ind :side)))
+      (setq ind (plist-put ind :side (plist-get props :side))))
+    (when (and (plist-get props :priority) (not (plist-member ind :priority)))
+      (setq ind (plist-put ind :priority (plist-get props :priority))))
+    (when (and (plist-get props :column) (not (plist-member ind :column)))
+      (setq ind (plist-put ind :column (plist-get props :column))))
+    (when override-side
+      (setq ind (plist-put ind :side override-side)))
+    ind))
 
 ;;;; Collection, normalisation, grouping
 ;; ----------------------------------------------------------------
@@ -182,29 +233,41 @@ indicator plists (see Commentary).  Registered buffers are re-rendered."
 (defun svg-margin--normalize (ind)
   "Return a normalised copy of indicator IND, or nil if it has no position.
 The result carries a `:pos' at beginning-of-line and a `:side' of `left'
-or `right'."
-  (let* ((pos (or (plist-get ind :pos)
-                  (and (plist-get ind :line)
-                       (save-excursion
-                         (goto-char (point-min))
-                         (forward-line (1- (plist-get ind :line)))
-                         (point)))))
-         (side (or (plist-get ind :side) svg-margin-default-side)))
-    (when (and pos (<= (point-min) pos (point-max)))
-      (let ((bol (save-excursion (goto-char pos) (line-beginning-position))))
-        (append (list :pos bol :side (if (memq side '(right right-margin)) 'right 'left))
-                ind)))))
+or `right'.  `:line' and `:pos' are resolved against the WHOLE buffer (the
+position math widens), so line numbers are absolute regardless of narrowing."
+  (save-restriction
+    (widen)
+    (let* ((pos (or (plist-get ind :pos)
+                    (and (plist-get ind :line)
+                         (save-excursion
+                           (goto-char (point-min))
+                           (forward-line (1- (plist-get ind :line)))
+                           (point)))))
+           (side (or (plist-get ind :side) svg-margin-default-side)))
+      (when (and pos (<= (point-min) pos (point-max)))
+        (let ((bol (save-excursion (goto-char pos) (line-beginning-position))))
+          (append (list :pos bol :side (if (memq side '(right right-margin)) 'right 'left))
+                  ind))))))
 
 (defun svg-margin--collect ()
-  "Run every provider against the current buffer and return all indicators."
+  "Run every provider against the current buffer and return all indicators.
+Per-provider defaults and `svg-margin-provider-sides' overrides are applied,
+and (when `svg-margin-debug') position-less indicators are reported."
   (let ((buf (current-buffer)) (out nil))
     (dolist (p svg-margin--providers)
-      (condition-case err
-          (dolist (ind (funcall (cdr p) buf))
-            (when-let* ((n (svg-margin--normalize ind)))
-              (push n out)))
-        (error (message "svg-margin: provider %s failed: %s"
-                        (car p) (error-message-string err)))))
+      (let* ((name (car p)) (props (cdr p)) (fn (plist-get props :fn))
+             (override (alist-get name svg-margin-provider-sides)))
+        (condition-case err
+            (dolist (ind (funcall fn buf))
+              (let* ((ind (svg-margin--apply-provider-defaults ind props override))
+                     (n (svg-margin--normalize ind)))
+                (if n
+                    (push n out)
+                  (when svg-margin-debug
+                    (message "svg-margin: provider %s dropped an indicator (no/out-of-range :pos/:line): %S"
+                             name ind)))))
+          (error (message "svg-margin: provider %s failed: %s"
+                          name (error-message-string err))))))
     out))
 
 (defun svg-margin--group (indicators)
@@ -260,32 +323,34 @@ of (:indicator IND :column N)."
               :fill (svg-margin--color color))))
 
 (defun svg-margin--draw (ind svg x y w h)
-  "Draw indicator IND into the (X Y W H) cell of SVG."
+  "Draw indicator IND into the (X Y W H) cell of SVG.
+A non-function `:draw' is ignored (falls through to `:text'/`:shape')."
   (let ((color (svg-margin--indicator-color ind)))
     (cond
-     ((plist-get ind :draw) (funcall (plist-get ind :draw) svg x y w h color))
+     ((functionp (plist-get ind :draw)) (funcall (plist-get ind :draw) svg x y w h color))
      ((plist-get ind :text) (svg-margin--draw-text svg (plist-get ind :text) x y w h color))
      ((gethash (plist-get ind :shape) svg-margin--shapes)
       (funcall (gethash (plist-get ind :shape) svg-margin--shapes) svg x y w h color))
      (t (svg-margin--shape-dot svg x y w h color)))))
 
-(defun svg-margin--line-height ()
-  "Pixel height of a default line in the selected frame."
-  (max 1 (default-line-height)))
-
-(defun svg-margin--image (packed side ncols)
+(defun svg-margin--image (packed side ncols cw lh)
   "Build the composite margin image for PACKED cells on SIDE.
 NCOLS is the number of columns to reserve; column 0 is nearest the buffer
-text on either side."
-  (let* ((cw (* svg-margin-column-width (frame-char-width)))
-         (h (svg-margin--line-height))
+text on either side.  CW is one column's pixel width and LH the line height
+\(both passed in so they track the displaying window's frame, not just the
+selected one).  A cell whose draw signals is skipped so one bad indicator
+cannot blank the whole line."
+  (let* ((h (max 1 lh))
          (w (max 1 (* ncols cw)))
          (svg (svg-create w h)))
     (dolist (cell packed)
       (let* ((col (plist-get cell :column))
              (ind (plist-get cell :indicator))
              (x (if (eq side 'left) (* (- ncols 1 col) cw) (* col cw))))
-        (svg-margin--draw ind svg x 0 cw h)))
+        (condition-case err
+            (svg-margin--draw ind svg x 0 cw h)
+          (error (message "svg-margin: drawing an indicator failed: %s"
+                          (error-message-string err))))))
     (svg-image svg :ascent 'center :scale 1.0)))
 
 ;;;; Overlays
@@ -299,10 +364,11 @@ text on either side."
   (mapc #'delete-overlay svg-margin--overlays)
   (setq svg-margin--overlays nil))
 
-(defun svg-margin--place (pos side packed ncols)
+(defun svg-margin--place (pos side packed ncols cw lh)
   "Create an overlay at POS carrying the composite SIDE image for PACKED.
-NCOLS is the number of columns the image spans."
-  (let* ((img (svg-margin--image packed side ncols))
+NCOLS is the number of columns the image spans; CW and LH are the column
+pixel width and line height for the image."
+  (let* ((img (svg-margin--image packed side ncols cw lh))
          (marg (if (eq side 'left) 'left-margin 'right-margin))
          (help (string-join
                 (delq nil (mapcar (lambda (c) (plist-get (plist-get c :indicator) :help))
@@ -325,8 +391,12 @@ NCOLS is the number of columns the image spans."
 ;; ----------------------------------------------------------------
 
 (defun svg-margin--windows ()
-  "Return the windows currently displaying the current buffer."
-  (get-buffer-window-list (current-buffer) nil t))
+  "Return the GRAPHICAL windows currently displaying the current buffer.
+Margins/fringes are only meaningful where the SVG can render, so terminal
+windows showing the same buffer are excluded (they would otherwise reserve
+dead gutter space)."
+  (cl-remove-if-not (lambda (w) (display-graphic-p (window-frame w)))
+                    (get-buffer-window-list (current-buffer) nil t)))
 
 (defun svg-margin--apply-margins (left right)
   "Reserve LEFT and RIGHT indicator columns in every window showing the buffer.
@@ -355,17 +425,31 @@ loop / flicker that would follow)."
     ('right '(right))
     (_ nil)))
 
-(defun svg-margin--apply-fringes (restore)
-  "Zero (or, when RESTORE, reset to default) the configured fringe sides."
-  (let ((sides (svg-margin--fringe-sides)))
-    (when sides
-      (dolist (win (svg-margin--windows))
-        (let* ((fr (window-fringes win)) (l (nth 0 fr)) (r (nth 1 fr))
-               (nl (cond ((not (memq 'left sides)) l) (restore nil) (t 0)))
-               (nr (cond ((not (memq 'right sides)) r) (restore nil) (t 0))))
-          ;; Only write when changed (see `svg-margin--apply-margins').
-          (unless (and (equal nl l) (equal nr r))
-            (set-window-fringes win nl nr)))))))
+(defun svg-margin--apply-fringes ()
+  "Zero the configured fringe side(s); restore the others to their saved widths.
+Each window's original fringe widths are saved once (in a window parameter)
+before first being zeroed, so they can be restored exactly -- including when
+`svg-margin-disable-fringe' changes at runtime."
+  (dolist (win (svg-margin--windows))
+    (let* ((sides (svg-margin--fringe-sides))
+           (fr (window-fringes win)) (l (nth 0 fr)) (r (nth 1 fr))
+           (saved (window-parameter win 'svg-margin--saved-fringes)))
+      (when (and sides (not saved))
+        (setq saved (cons l r))
+        (set-window-parameter win 'svg-margin--saved-fringes saved))
+      (let* ((ol (if saved (car saved) l)) (or* (if saved (cdr saved) r))
+             (nl (if (memq 'left sides) 0 ol))
+             (nr (if (memq 'right sides) 0 or*)))
+        (unless (and (= nl l) (= nr r))
+          (set-window-fringes win nl nr))))))
+
+(defun svg-margin--restore-fringes ()
+  "Restore each window's fringes to the widths saved before svg-margin zeroed them."
+  (dolist (win (svg-margin--windows))
+    (let ((saved (window-parameter win 'svg-margin--saved-fringes)))
+      (when saved
+        (set-window-fringes win (car saved) (cdr saved))
+        (set-window-parameter win 'svg-margin--saved-fringes nil)))))
 
 ;;;; Render
 ;; ----------------------------------------------------------------
@@ -376,22 +460,33 @@ loop / flicker that would follow)."
     (when (and (buffer-live-p buffer) (display-graphic-p))
       (with-current-buffer buffer
         (when (bound-and-true-p svg-margin-mode)
-          (svg-margin--clear)
-          (let ((groups (svg-margin--group (svg-margin--collect)))
-                (max-left 0) (max-right 0))
-            (maphash
-             (lambda (key inds)
-               (let* ((pos (car key)) (side (cdr key))
-                      (packed (svg-margin--pack-columns inds))
-                      (ncols (svg-margin--max-column packed)))
-                 (when (> ncols 0)
-                   (if (eq side 'left)
-                       (setq max-left (max max-left ncols))
-                     (setq max-right (max max-right ncols)))
-                   (svg-margin--place pos side packed ncols))))
-             groups)
-            (svg-margin--apply-margins max-left max-right)
-            (svg-margin--apply-fringes nil)))))))
+          ;; Widen so providers see -- and `:line'/`:pos' resolve against -- the
+          ;; whole buffer (absolute positions); overlays outside a narrowing
+          ;; simply will not display.
+          (save-restriction
+            (widen)
+            (svg-margin--clear)
+            ;; Size columns/lines from a window actually showing the buffer (its
+            ;; frame's font), falling back to the selected frame when off-screen.
+            (let* ((win (car (svg-margin--windows)))
+                   (frame (if win (window-frame win) (selected-frame)))
+                   (cw (* svg-margin-column-width (frame-char-width frame)))
+                   (lh (max 1 (default-line-height)))
+                   (groups (svg-margin--group (svg-margin--collect)))
+                   (max-left 0) (max-right 0))
+              (maphash
+               (lambda (key inds)
+                 (let* ((pos (car key)) (side (cdr key))
+                        (packed (svg-margin--pack-columns inds))
+                        (ncols (svg-margin--max-column packed)))
+                   (when (> ncols 0)
+                     (if (eq side 'left)
+                         (setq max-left (max max-left ncols))
+                       (setq max-right (max max-right ncols)))
+                     (svg-margin--place pos side packed ncols cw lh))))
+               groups)
+              (svg-margin--apply-margins max-left max-right)
+              (svg-margin--apply-fringes))))))))
 
 (defvar-local svg-margin--timer nil
   "Idle timer coalescing re-renders for this buffer.")
@@ -433,10 +528,15 @@ loop / flicker that would follow)."
 (define-minor-mode svg-margin-mode
   "Display SVG indicators from registered providers in the window margins.
 Providers are registered globally with `svg-margin-register-provider'; this
-buffer-local mode renders whatever they contribute for the current buffer."
+buffer-local mode renders whatever they contribute for the current buffer.
+
+svg-margin draws SVG images, so it only shows anything in a GRAPHICAL frame;
+in a terminal (`emacs -nw') it does nothing."
   :lighter " SVGm"
   (if svg-margin-mode
       (progn
+        (unless (display-graphic-p)
+          (message "svg-margin-mode: needs a graphical frame; nothing will show in a terminal"))
         (add-hook 'after-change-functions #'svg-margin--after-change nil t)
         (add-hook 'window-configuration-change-hook #'svg-margin--window-config nil t)
         (svg-margin--render (current-buffer)))
@@ -444,7 +544,7 @@ buffer-local mode renders whatever they contribute for the current buffer."
     (remove-hook 'window-configuration-change-hook #'svg-margin--window-config t)
     (when (timerp svg-margin--timer) (cancel-timer svg-margin--timer))
     (svg-margin--clear)
-    (svg-margin--apply-fringes t)
+    (svg-margin--restore-fringes)
     (svg-margin--restore-margins)))
 
 (defun svg-margin--maybe-enable ()

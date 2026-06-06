@@ -26,13 +26,22 @@
 (declare-function global-git-gutter-mode "git-gutter")
 (declare-function bookmark-get-filename "bookmark")
 (declare-function bookmark-get-position "bookmark")
+(defvar flycheck-current-errors)
+(declare-function flycheck-error-line "flycheck")
+(declare-function flycheck-error-level "flycheck")
+(declare-function flycheck-error-message "flycheck")
 
 (defcustom svg-margin-example-sides
-  '((git-gutter . left)
-    (vc         . left)
-    (evil-marks . left)
-    (todo       . right)
-    (bookmarks  . right))
+  '((git-gutter   . left)
+    (vc           . left)
+    (evil-marks   . left)
+    (flycheck     . left)
+    (org-headings . left)
+    (todo         . right)
+    (bookmarks    . right)
+    (long-lines   . right)
+    (trailing-ws  . right)
+    (symbol       . right))
   "Margin side (`left' or `right') for each example provider.
 Providers stamp their indicators with the side looked up here, so moving a
 source between margins is pure configuration -- the engine renders each
@@ -190,6 +199,127 @@ nor any fringe."
   "Refresh svg-margin after an evil mark changes."
   (svg-margin-refresh))
 
+;;;; Provider: flycheck/flymake-style diagnostics (external integration)
+
+(defun svg-margin-example-flycheck (buffer)
+  "Return severity-coloured dots for flycheck diagnostics in BUFFER."
+  (with-current-buffer buffer
+    (when (bound-and-true-p flycheck-mode)
+      (let (out)
+        (dolist (err flycheck-current-errors)
+          (let ((line (flycheck-error-line err))
+                (level (flycheck-error-level err)))
+            (when line
+              (push (list :line line :side (svg-margin-example--side 'flycheck)
+                          :shape 'dot :priority 8
+                          :color (pcase level
+                                   ('error "#f85149") ('warning "#d29922") (_ "#3fb950"))
+                          :help (ignore-errors (flycheck-error-message err)))
+                    out))))
+        out))))
+
+(defun svg-margin-example--flycheck-refresh (&rest _)
+  "Refresh svg-margin after a flycheck check finishes."
+  (svg-margin-refresh))
+
+;;;; Provider: long lines (pure buffer scan, no dependency)
+
+(defcustom svg-margin-example-long-line-column 80
+  "Column past which `svg-margin-example-long-lines' flags a line."
+  :type 'integer :group 'svg-margin)
+
+(defun svg-margin-example-long-lines (buffer)
+  "Return bar indicators for over-long lines in prog-mode BUFFER."
+  (with-current-buffer buffer
+    (when (derived-mode-p 'prog-mode)
+      (let ((col svg-margin-example-long-line-column) out)
+        (save-excursion
+          (goto-char (point-min))
+          (while (not (eobp))
+            (end-of-line)
+            (when (> (current-column) col)
+              (push (list :pos (line-beginning-position)
+                          :side (svg-margin-example--side 'long-lines)
+                          :shape 'bar :priority 3 :color "#b08800"
+                          :help (format "line exceeds %d columns" col))
+                    out))
+            (forward-line 1)))
+        out))))
+
+;;;; Provider: trailing whitespace (pure buffer scan)
+
+(defun svg-margin-example-trailing-ws (buffer)
+  "Return small marks for lines with trailing whitespace in BUFFER."
+  (with-current-buffer buffer
+    (let (out)
+      (save-excursion
+        (goto-char (point-min))
+        (while (re-search-forward "[ \t]+$" nil t)
+          (push (list :pos (line-beginning-position)
+                      :side (svg-margin-example--side 'trailing-ws)
+                      :shape 'dot :priority 1 :color "#8b949e"
+                      :help "trailing whitespace")
+                out)
+          (forward-line 1)))
+      out)))
+
+;;;; Provider: org heading rail (mode-specific, variable-geometry :draw)
+
+(defun svg-margin-example-org-headings (buffer)
+  "Return a left rail bar per org heading, sized and coloured by depth."
+  (with-current-buffer buffer
+    (when (derived-mode-p 'org-mode)
+      (let (out)
+        (save-excursion
+          (goto-char (point-min))
+          (while (re-search-forward "^\\(\\*+\\) " nil t)
+            (let* ((level (length (match-string 1)))
+                   (face (intern (format "org-level-%d" (1+ (mod (1- level) 8)))))
+                   (color (or (face-foreground face nil 'default) "#888888")))
+              (push (list :pos (line-beginning-position)
+                          :side (svg-margin-example--side 'org-headings)
+                          :priority 4 :color color
+                          :help (format "heading level %d" level)
+                          ;; deeper headings draw a shorter, centred tick
+                          :draw (lambda (svg x y w h c)
+                                  (let* ((frac (/ (max 1 (- 7 level)) 6.0))
+                                         (bh (max 3 (round (* h frac))))
+                                         (yy (+ y (/ (- h bh) 2))))
+                                    (svg-rectangle svg x yy (max 2 (round (* w 0.4))) bh
+                                                   :rx 1 :fill c))))
+                    out))))
+        out))))
+
+;;;; Provider: occurrences of the symbol at point (dynamic, point-driven)
+
+(defvar svg-margin-example--last-symbol nil
+  "Last symbol at point, to refresh svg-margin only when it changes.")
+
+(defun svg-margin-example-symbol-occurrences (buffer)
+  "Return dots on lines where the symbol at point also appears in BUFFER."
+  (with-current-buffer buffer
+    (let ((sym (and (derived-mode-p 'prog-mode)
+                    (ignore-errors (thing-at-point 'symbol t)))))
+      (when (and sym (>= (length sym) 3))
+        (let ((re (concat "\\_<" (regexp-quote sym) "\\_>")) out)
+          (save-excursion
+            (goto-char (point-min))
+            (while (re-search-forward re nil t)
+              (push (list :pos (match-beginning 0)
+                          :side (svg-margin-example--side 'symbol)
+                          :shape 'dot :priority 2 :color "#58a6ff"
+                          :help (format "occurrence of `%s'" sym))
+                    out)))
+          out)))))
+
+(defun svg-margin-example--symbol-watch ()
+  "Refresh svg-margin when the symbol at point changes (for `post-command-hook')."
+  (let ((sym (and (derived-mode-p 'prog-mode)
+                  (ignore-errors (thing-at-point 'symbol t)))))
+    (unless (equal sym svg-margin-example--last-symbol)
+      (setq svg-margin-example--last-symbol sym)
+      (svg-margin-refresh))))
+
 ;;;; Wiring
 
 ;;;###autoload
@@ -255,6 +385,33 @@ over the margin), registers the git-gutter provider, and enables
   (advice-remove 'bookmark-set #'svg-margin-example--bookmark-refresh)
   (advice-remove 'bookmark-delete #'svg-margin-example--bookmark-refresh))
 
+;;;###autoload
+(defun svg-margin-example-extras-setup ()
+  "Register the extra demo providers: flycheck, long-lines, trailing-ws,
+org-headings, and symbol-at-point occurrences.  Showcases more techniques
+\(external integration, pure scans, mode-specific variable-geometry drawing,
+and dynamic point-driven refresh)."
+  (interactive)
+  (svg-margin-register-provider 'long-lines #'svg-margin-example-long-lines)
+  (svg-margin-register-provider 'trailing-ws #'svg-margin-example-trailing-ws)
+  (svg-margin-register-provider 'org-headings #'svg-margin-example-org-headings)
+  (svg-margin-register-provider 'symbol #'svg-margin-example-symbol-occurrences)
+  (add-hook 'post-command-hook #'svg-margin-example--symbol-watch)
+  (when (boundp 'flycheck-current-errors)
+    (svg-margin-register-provider 'flycheck #'svg-margin-example-flycheck)
+    (add-hook 'flycheck-after-syntax-check-hook #'svg-margin-example--flycheck-refresh))
+  (svg-margin-refresh-all)
+  (message "svg-margin extras: flycheck, long-lines, trailing-ws, org-headings, symbol"))
+
+(defun svg-margin-example-extras-teardown ()
+  "Undo `svg-margin-example-extras-setup'."
+  (interactive)
+  (dolist (p '(long-lines trailing-ws org-headings symbol flycheck))
+    (svg-margin-unregister-provider p))
+  (remove-hook 'post-command-hook #'svg-margin-example--symbol-watch)
+  (when (boundp 'flycheck-after-syntax-check-hook)
+    (remove-hook 'flycheck-after-syntax-check-hook #'svg-margin-example--flycheck-refresh)))
+
 (defun svg-margin-example-teardown ()
   "Undo `svg-margin-example-setup' in the current buffer."
   (interactive)
@@ -264,7 +421,8 @@ over the margin), registers the git-gutter provider, and enables
   (svg-margin-unregister-provider 'evil-marks)
   (advice-remove 'evil-set-marker #'svg-margin-example--mark-refresh)
   (svg-margin-example-bookmarks-teardown)
-  (svg-margin-example-git-gutter-teardown))
+  (svg-margin-example-git-gutter-teardown)
+  (svg-margin-example-extras-teardown))
 
 (provide 'svg-margin-examples)
 ;;; svg-margin-examples.el ends here

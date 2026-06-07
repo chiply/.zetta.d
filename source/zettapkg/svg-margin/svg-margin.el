@@ -138,6 +138,16 @@ that indicator silently skipped; enable this to get a message naming the
 provider, which helps when writing one."
   :type 'boolean)
 
+(defface svg-margin-help '((t :inherit highlight))
+  "Face for an indicator's hover help (its `help-echo').
+With tooltips off the help shows in the echo area, where this contrasting
+background makes the cue stand out; the face is carried into the echo area,
+so it works there as well as in a tooltip.")
+
+(defcustom svg-margin-help-face 'svg-margin-help
+  "Face applied to the indicator hover help, or nil to leave it unstyled."
+  :type '(choice (const :tag "No face" nil) face))
+
 ;;;; Colour
 ;; ----------------------------------------------------------------
 
@@ -495,7 +505,10 @@ column pixel width and line height for the image."
                                                 (cons (plist-get c :column) ind))))
                                        packed)))
          (ov (make-overlay pos pos)))
-    (when (> (length help) 0) (setq str (propertize str 'help-echo help)))
+    (when (> (length help) 0)
+      (when svg-margin-help-face
+        (setq help (propertize help 'face svg-margin-help-face)))
+      (setq str (propertize str 'help-echo help)))
     ;; A margin click on an image-map area arrives as [AREA-ID mouse-1] looked
     ;; up in the active keymaps (the area's own keymap is NOT consulted), so we
     ;; put a keymap on the string with a t-default that catches the area

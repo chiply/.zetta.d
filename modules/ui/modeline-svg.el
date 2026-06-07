@@ -29,11 +29,14 @@
   "Font size (px) for SVG mode-line text." :type 'integer :group 'zetta)
 (defcustom zetta-modeline-svg-line-pad 4
   "Extra vertical padding (px) per SVG mode-line line." :type 'integer :group 'zetta)
-(defcustom zetta-modeline-svg-char-advance 7
-  "Per-character advance (px) for rows containing a progress pie/bar.
-Match it to the SVG font's real glyph width as Emacs renders it (~7 for the
-bitmap Terminess Nerd Font Mono at 15px).  Glyph icons are plain text and
-need no estimation; only the geometric pie/bar uses this."
+(defcustom zetta-modeline-svg-char-advance 8
+  "Per-character advance (px) for rows laid out by run (pies/bars/segments).
+Match it to the SVG font's real glyph width as librsvg renders it (~8 for the
+bitmap Terminess Nerd Font Mono at 15px scaled).  Used to position progress
+pies/bars and interactive segments (clickable indicators) and to right-align
+their rows; plain all-text rows use exact font anchoring and ignore it.  If a
+clickable indicator's hover box sits too far left (overlapping the previous
+text) raise this; if it sits too far right (a gap before the text) lower it."
   :type 'number :group 'zetta)
 (defcustom zetta-modeline-svg-right-margin 8
   "Pixels of inset kept between right-aligned text and the window edge."
@@ -67,10 +70,10 @@ A barely-there light tint."
            zetta-modeline-svg--modal " " zetta-modeline-svg--ace " "
            zetta-modeline-svg--buffer)
          '(zetta-modeline-svg--mode "  " zetta-modeline-svg--point))
-   ;; line 2:  [git] [branch] vc | [copilot] checkers | flycheck | flags
+   ;; line 2:  git:branch (clickable -> magit) | [copilot] lsp | flycheck | flags
    ;;          ......   doc-position | <progress pie>
-   (cons '(zetta-modeline-svg--vc-icon " " zetta-modeline-svg--branch-icon " "
-           zetta-modeline-svg--vc " "
+   ;; (the git + branch glyphs are folded into the clickable vc segment)
+   (cons '(zetta-modeline-svg--vc " "
            zetta-modeline-svg--copilot-icon " " zetta-modeline-svg--checkers
            zetta-modeline-svg--flycheck " " zetta-modeline-svg--indicators)
          '(zetta-modeline-svg--docpos " " zetta-modeline-svg--file-progress))))

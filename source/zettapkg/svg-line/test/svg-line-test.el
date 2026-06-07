@@ -167,6 +167,96 @@ with the modified accent so the unsaved state stays visible."
     (should (= (length (dom-by-tag svg 'circle)) 2))
     (should (= (length (dom-by-tag svg 'path)) 0))))
 
+;;;; interactive segments (lines layout)
+
+(ert-deftest svg-line/seg-constructor ()
+  "`svg-line-seg' builds a :svg-seg form, and returns nil for empty text."
+  (should (equal (svg-line-seg "hi" :id 'x :action #'ignore)
+                 '(:svg-seg "hi" :id x :action ignore)))
+  (should-not (svg-line-seg ""))
+  (should-not (svg-line-seg nil)))
+
+(ert-deftest svg-line/segs-splice-form ()
+  "`svg-line-segs' groups items and drops nils."
+  (should (equal (svg-line-segs (svg-line-seg "a" :id 1) nil " / "
+                                (svg-line-seg "b" :id 2))
+                 '(:svg-segs (:svg-seg "a" :id 1) " / " (:svg-seg "b" :id 2)))))
+
+(ert-deftest svg-line/render-runs-seg-and-splice ()
+  "A :svg-seg lowers to a :seg run (text + plist); :svg-segs splices; empty drops."
+  (let ((runs (svg-line--render-runs
+               (list "x"
+                     (svg-line-seg "B" :id 'b :action #'ignore)
+                     (svg-line-segs (svg-line-seg "c1" :id 'c1) "·"
+                                    (svg-line-seg "c2" :id 'c2))
+                     (lambda () (svg-line-seg "" :id 'empty))))))  ; empty -> dropped
+    (should (equal (mapcar #'car runs) '(:text :seg :seg :text :seg)))
+    ;; the leading literal text stays its own run; seg carries text + plist
+    (should (equal (nth 1 (nth 1 runs)) "B"))
+    (should (equal (plist-get (nth 2 (nth 1 runs)) :id) 'b))
+    ;; the "·" separator between c1 and c2 is plain text
+    (should (equal (nth 1 (nth 3 runs)) "·"))))
+
+(ert-deftest svg-line/seg-placements-recorded ()
+  "Drawing interactive segments records their placements (X TOP W ITEM)."
+  (let* ((svg-line--lines-placements nil)
+         (left (list (svg-line-seg "AA" :id 'a)))
+         (right (list (svg-line-seg "BB" :id 'b)))
+         (_ (svg-line-image (list (cons (svg-line--side left) (svg-line--side right)))
+                            :width 400 :font "Monospace" :font-size 10
+                            :char-advance 8))
+         (ps svg-line--lines-placements))
+    (should (= (length ps) 2))
+    ;; each placement is (X TOP W (TEXT . PLIST)); ids round-trip
+    (should (equal (sort (mapcar (lambda (p) (plist-get (cdr (nth 3 p)) :id)) ps)
+                         (lambda (x y) (string< (symbol-name x) (symbol-name y))))
+                   '(a b)))
+    ;; left seg sits at x=0; right seg is anchored further right
+    (let ((xa (car (cl-find 'a ps :key (lambda (p) (plist-get (cdr (nth 3 p)) :id)))))
+          (xb (car (cl-find 'b ps :key (lambda (p) (plist-get (cdr (nth 3 p)) :id))))))
+      (should (= xa 0))
+      (should (> xb xa)))))
+
+(ert-deftest svg-line/seg-hover-box ()
+  "An interactive seg whose :id equals HOVERED draws a hover box; none otherwise."
+  (let* ((side (svg-line--side (list (svg-line-seg "AA" :id 'a)
+                                     " " (svg-line-seg "BB" :id 'b))))
+         (rows (list (cons side nil))))
+    (should (= 1 (length (dom-by-tag
+                          (svg-line-image rows :width 400 :font "Monospace"
+                                          :font-size 10 :char-advance 8
+                                          :hovered 'a :hover-color "#445")
+                          'rect))))
+    (should (= 0 (length (dom-by-tag
+                          (svg-line-image rows :width 400 :font "Monospace"
+                                          :font-size 10 :char-advance 8
+                                          :hovered 'zzz :hover-color "#445")
+                          'rect))))))
+
+(ert-deftest svg-line/placements-per-name ()
+  "Placement storage is per-line-name and buffer-local (no cross-bar clobber)."
+  (with-temp-buffer
+    (svg-line--store-placements 'bar1 14 '((0 0 16 ("x" :id 1))))
+    (svg-line--store-placements 'bar2 14 '((0 0 24 ("y" :id 2))))
+    (should (equal (svg-line--placements-for 'bar1) '(14 (0 0 16 ("x" :id 1)))))
+    (should (equal (svg-line--placements-for 'bar2) '(14 (0 0 24 ("y" :id 2)))))
+    ;; updating one leaves the other intact
+    (svg-line--store-placements 'bar1 14 '((0 0 99 ("z" :id 3))))
+    (should (equal (svg-line--placements-for 'bar1) '(14 (0 0 99 ("z" :id 3)))))
+    (should (equal (svg-line--placements-for 'bar2) '(14 (0 0 24 ("y" :id 2)))))))
+
+(ert-deftest svg-line/seg-help-composed-and-tagged ()
+  "An item's help joins help/action-help/menu hints and is tagged with its :id."
+  (let* ((item (cons "buf.el" '(:id buf :help "buffer: buf.el"
+                                    :action ignore :action-help "switch to it"
+                                    :menu (("Kill" . ignore)))))
+         (svg-line-help-face nil)             ; isolate from face propertization
+         (h (svg-line--tab-help item)))
+    (should (string-match-p "buffer: buf.el" h))
+    (should (string-match-p "click to switch to it" h))
+    (should (string-match-p "right-click for menu" h))
+    (should (eq (get-text-property 0 'svg-line-tab h) 'buf))))
+
 ;;;; safety wrapper
 
 (ert-deftest svg-line/safe-error-fallback ()

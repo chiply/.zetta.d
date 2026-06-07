@@ -407,12 +407,37 @@ Because the glyph is part of the label text it needs no separate icon."
              for short = (if (> (length name) zetta-tab-line-svg-max-name)
                              (concat (substring name 0 (1- zetta-tab-line-svg-max-name)) "…")
                            name)
-             collect (cons (format "%d %s%s%s"
-                                   i
-                                   (if glyph (concat glyph " ") "")
-                                   short
-                                   (if modifiedp zetta-tab-line-svg-modified-marker ""))
-                           (list :current currentp :modified modifiedp)))))
+             ;; capture the buffer in a fresh binding -- cl-loop reuses one
+             ;; binding for `real', so action/menu closures must not close over
+             ;; it directly (they would all see the last tab's buffer).
+             collect (let ((b real) (nm name))
+                       (cons (format "%d %s%s%s"
+                                     i
+                                     (if glyph (concat glyph " ") "")
+                                     short
+                                     (if modifiedp zetta-tab-line-svg-modified-marker ""))
+                             (list :current currentp :modified modifiedp
+                                   :id b
+                                   :help (format "buffer: %s" nm)
+                                   :action-help "switch to this buffer"
+                                   :action (lambda () (interactive)
+                                             (when (buffer-live-p b) (switch-to-buffer b)))
+                                   :menu
+                                   (delq nil
+                                         (list (cons "Switch to buffer"
+                                                     (lambda () (interactive)
+                                                       (when (buffer-live-p b) (switch-to-buffer b))))
+                                               (and (buffer-file-name b)
+                                                    (cons "Save buffer"
+                                                          (lambda () (interactive)
+                                                            (when (buffer-live-p b)
+                                                              (with-current-buffer b (save-buffer))))))
+                                               (cons "Kill buffer"
+                                                     (lambda () (interactive)
+                                                       (when (buffer-live-p b) (kill-buffer b))))
+                                               (cons "Copy buffer name"
+                                                     (lambda () (interactive)
+                                                       (kill-new (buffer-name b))))))))))))
 
 (svg-line-define 'zetta-tab-line
   :target 'tab-line
@@ -454,6 +479,7 @@ Because the glyph is part of the label text it needs no separate icon."
 (defun zetta-tab-line-use-svg ()
   "Switch the tab line to the wrapping SVG renderer."
   (interactive)
+  (setq svg-line-hover-highlight t)   ; highlight the tab under the mouse
   (svg-line-activate 'zetta-tab-line)
   (message "tab-line: wrapping SVG renderer active (M-x zetta-tab-line-use-default to revert)"))
 

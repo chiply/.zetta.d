@@ -256,20 +256,34 @@ this function is provided for callers that just want the flattened text."
 
 (defun svg-line--render-runs (segments)
   "Lower SEGMENTS to a list of runs, each segment evaluated exactly once.
-Run forms: (:text STR), (:bar FRACTION WIDTH FILL BG), (:pie FRACTION FILL BG)."
+Run forms: (:text STR), (:bar FRACTION WIDTH FILL BG), (:pie FRACTION FILL BG),
+or (:seg STR PLIST) for an interactive text run (see `svg-line-seg').
+A segment value of (:svg-segs ITEM ...) is spliced (each ITEM processed as a
+sub-value), so one segment function can emit several interactive runs (e.g.
+per-crumb breadcrumbs)."
   (let ((runs '()) (buf ""))
-    (cl-flet ((flush () (when (> (length buf) 0)
-                          (push (list :text buf) runs) (setq buf ""))))
+    (cl-labels
+        ((flush () (when (> (length buf) 0)
+                     (push (list :text buf) runs) (setq buf "")))
+         (add (v)
+           (cond
+            ((null v))
+            ((and (consp v) (eq (car v) :svg-bar)) (flush) (push (cons :bar (cdr v)) runs))
+            ((and (consp v) (eq (car v) :svg-pie)) (flush) (push (cons :pie (cdr v)) runs))
+            ((and (consp v) (eq (car v) :svg-seg))
+             (let ((txt (svg-line--item->string (cadr v))))
+               (when (> (length txt) 0)
+                 (flush) (push (list :seg txt (cddr v)) runs))))
+            ((and (consp v) (eq (car v) :svg-segs))
+             (dolist (c (cdr v)) (add c)))
+            (t (setq buf (concat buf (svg-line--item->string v)))))))
       (dolist (s segments)
         (let ((v (cond ((stringp s) s)
-                       ((and (consp s) (memq (car s) '(:svg-bar :svg-pie))) s)
+                       ((and (consp s) (memq (car s) '(:svg-bar :svg-pie :svg-seg :svg-segs))) s)
                        ((functionp s) (funcall s))
                        ((and (symbolp s) (boundp s)) (symbol-value s))
                        (t nil))))
-          (cond
-           ((and (consp v) (eq (car v) :svg-bar)) (flush) (push (cons :bar (cdr v)) runs))
-           ((and (consp v) (eq (car v) :svg-pie)) (flush) (push (cons :pie (cdr v)) runs))
-           (t (setq buf (concat buf (svg-line--item->string v)))))))
+          (add v)))
       (flush))
     (nreverse runs)))
 
@@ -277,12 +291,34 @@ Run forms: (:text STR), (:bar FRACTION WIDTH FILL BG), (:pie FRACTION FILL BG)."
   "Non-nil if RUNS are entirely text (so the side can use exact text anchoring)."
   (cl-every (lambda (r) (eq (car r) :text)) runs))
 
+(defun svg-line--runs-ltrim (runs)
+  "Drop leading blank `:text' RUNS and left-trim the first text run.
+Mirrors the exact-anchor path's leading trim so run-laid content (with inline
+pies/bars/segments) still starts flush at the left inset."
+  (while (and runs (eq (caar runs) :text) (string-blank-p (nth 1 (car runs))))
+    (setq runs (cdr runs)))
+  (if (and runs (eq (caar runs) :text))
+      (cons (list :text (string-trim-left (nth 1 (car runs)))) (cdr runs))
+    runs))
+
+(defun svg-line--runs-rtrim (runs)
+  "Drop trailing blank `:text' RUNS and right-trim the last text run.
+Mirrors the exact-anchor path's trailing trim so a run-laid right side stays
+flush at the right edge instead of leaving a gap from empty trailing segments."
+  (setq runs (nreverse runs))
+  (while (and runs (eq (caar runs) :text) (string-blank-p (nth 1 (car runs))))
+    (setq runs (cdr runs)))
+  (when (and runs (eq (caar runs) :text))
+    (setq runs (cons (list :text (string-trim-right (nth 1 (car runs)))) (cdr runs))))
+  (nreverse runs))
+
 (defun svg-line--run-width (run char-advance fz)
   "Advance width in pixels of a single RUN.
 Text advances by CHAR-ADVANCE per character; bars and pies derive their
 size from the font size FZ."
   (pcase (car run)
     (:text (* (length (nth 1 run)) char-advance))
+    (:seg  (* (length (nth 1 run)) char-advance))
     (:pie  (+ (round (* fz 0.76)) (round (* 0.3 fz))))   ; diameter + gap
     (:bar  (+ (nth 2 run) (round (* 0.3 fz))))
     (_ 0)))
@@ -295,16 +331,50 @@ CHAR-ADVANCE and font size FZ are passed through to `svg-line--run-width'."
 ;;;; Image builders (public, pure: data in, svg object out)
 ;; ----------------------------------------------------------------
 
-(defun svg-line--draw-runs (svg runs x top fz lh font char-advance foreground)
+(defvar svg-line--seg-acc nil
+  "Accumulator for interactive-run placements in the current `lines' render.
+Each entry is (X TOP W (TEXT . PLIST)), pushed by `svg-line--draw-runs' and
+harvested by `svg-line-image'.  A side channel so `svg-line--draw-runs' keeps
+its simple return contract (the ending x).")
+
+(defvar svg-line--lines-placements nil
+  "Interactive-segment placements from the last `svg-line-image' call.
+Each entry is (X TOP W (TEXT . PLIST)); a side channel like
+`svg-line--wrap-placements'.")
+(defvar svg-line--lines-lh 0
+  "Row height from the last `svg-line-image' call.  Side channel.")
+
+(defun svg-line--draw-runs (svg runs x top fz lh font char-advance foreground
+                                &optional hovered hover-color)
   "Draw RUNS left-to-right in SVG starting at X (row top at TOP).
 Text advances by CHAR-ADVANCE per character; bars and pies by their own
-width.  FOREGROUND is the fallback fill.  Returns the ending x."
+width.  FOREGROUND is the fallback fill.  An interactive (:seg STR PLIST)
+run is drawn like text, gets a HOVER-COLOR box when its `:id' equals HOVERED,
+and its placement (X TOP WIDTH (STR . PLIST)) is pushed onto
+`svg-line--seg-acc' for click/hover hit-testing.  Returns the ending x."
   (dolist (run runs)
     (pcase (car run)
       (:text (let ((str (nth 1 run)))
                (when (> (length str) 0)
                  (svg-line--add-text svg str :x x :y (+ top fz)
                                      :font font :font-size fz :fill foreground))))
+      (:seg  (let* ((str (nth 1 run))
+                    (plist (nth 2 run))
+                    (cw (* (length str) char-advance))
+                    (id (plist-get plist :id))
+                    (hov (and hover-color hovered id (equal id hovered)))
+                    (col (plist-get plist :color))
+                    (face (plist-get plist :face))
+                    (fill (cond (col (svg-line--color col))
+                                (face (svg-line--color
+                                       (face-foreground face nil 'default)))
+                                (t foreground))))
+               (when hov
+                 (svg-rectangle svg x top cw lh :fill hover-color :rx 3))
+               (when (> (length str) 0)
+                 (svg-line--add-text svg str :x x :y (+ top fz)
+                                     :font font :font-size fz :fill fill))
+               (push (list x top cw (cons str plist)) svg-line--seg-acc)))
       (:pie  (let* ((frac (max 0.0 (min 1.0 (float (nth 1 run)))))
                     (fill (svg-line--color (or (nth 2 run) foreground)))
                     (bg   (svg-line--color (or (nth 3 run) "#d4dcea")))
@@ -348,24 +418,32 @@ width.  FOREGROUND is the fallback fill.  Returns the ending x."
                                (right-margin 0)
                                (char-advance svg-line-char-advance)
                                (foreground "#000000")
-                               (background nil))
+                               (background nil)
+                               (hovered nil)
+                               (hover-color nil))
   "Build a `lines'-layout SVG from ROWS, a list of (LEFT . RIGHT).
 Each of LEFT and RIGHT is either:
   - a STRING, drawn with exact font anchoring (flush-left at PAD, or
     flush-right at WIDTH minus RIGHT-MARGIN); or
   - a list of RUNS, drawn with CHAR-ADVANCE spacing so it can carry inline
-    pies and progress bars.  A run is (:text STR), (:pie FRACTION FILL BG)
-    or (:bar FRACTION PIXELWIDTH FILL BG); see `svg-line--render-runs'.
+    pies, progress bars and interactive segments.  A run is (:text STR),
+    (:pie FRACTION FILL BG), (:bar FRACTION PIXELWIDTH FILL BG) or
+    (:seg STR PLIST); see `svg-line--render-runs'.
 FONT, FONT-SIZE, LINE-PAD, PAD, FOREGROUND and BACKGROUND set the text
-family, size, per-row vertical padding, left inset and colours.
+family, size, per-row vertical padding, left inset and colours.  An
+interactive (:seg ...) run whose `:id' equals HOVERED gets a HOVER-COLOR
+box; the placements of all such runs are left in `svg-line--lines-placements'
+\(with row height in `svg-line--lines-lh') for click/hover hit-testing.
 Returns an svg object (see `svg-create')."
   (let* ((foreground (svg-line--color foreground))
          (background (svg-line--color background))
+         (hover-color (svg-line--color hover-color))
          (fz font-size)
          (lh (+ fz line-pad))
          (rx (max 0 (- width right-margin)))
          (height (max 1 (* lh (length rows))))
-         (svg (svg-create width height)))
+         (svg (svg-create width height))
+         (svg-line--seg-acc nil))
     (when background (svg-rectangle svg 0 0 width height :fill background))
     (cl-loop for (l . r) in rows
              for i from 0
@@ -380,7 +458,9 @@ Returns an svg object (see `svg-create')."
                     (svg-line--add-text svg (string-trim-left l) :x pad :y y
                                         :font font :font-size fz :fill foreground))
                    ((consp l)
-                    (svg-line--draw-runs svg l pad top fz lh font char-advance foreground)))
+                    (svg-line--draw-runs svg (svg-line--runs-ltrim l) pad top fz lh
+                                         font char-advance foreground
+                                         hovered hover-color)))
                   ;; RIGHT: flush-right.  Trim trailing whitespace so the
                   ;; visible content reaches the edge (empty trailing segments
                   ;; or a datum's trailing space would otherwise push it left).
@@ -389,11 +469,146 @@ Returns an svg object (see `svg-create')."
                     (svg-line--add-text svg (string-trim-right r) :x rx :y y :anchor "end"
                                         :font font :font-size fz :fill foreground))
                    ((consp r)
-                    (svg-line--draw-runs svg r (max pad (- rx (svg-line--runs-width r char-advance fz)))
-                                         top fz lh font char-advance foreground)))))
+                    (let ((rr (svg-line--runs-rtrim r)))
+                      (svg-line--draw-runs svg rr (max pad (- rx (svg-line--runs-width rr char-advance fz)))
+                                           top fz lh font char-advance foreground
+                                           hovered hover-color))))))
+    (setq svg-line--lines-placements (nreverse svg-line--seg-acc)
+          svg-line--lines-lh lh)
     svg))
 
 ;;;###autoload
+;;;; line interactivity (clicks, menus, hover) -- see also `svg-line-define'
+;; ----------------------------------------------------------------
+;; Shared by both layouts: `wrap' items (LABEL . STATE) and `lines'
+;; interactive segments (TEXT . PLIST) both reduce to placements
+;; (X TOP W (LABEL . PLIST)), so one set of hit-test / help / click
+;; functions drives clicks, hover boxes and echo help for every bar.
+
+(defcustom svg-line-hover-highlight nil
+  "When non-nil, draw a background behind the interactive item under the mouse.
+Applies to `wrap' items (tab-line tabs) and `lines' interactive segments
+\(mode-line / header-line / tab-bar indicators).  Needs `show-help-function'
+wired to call `svg-line--note-help' (the package can't change that global
+itself); the mouse enter/move/leave signal arrives through the help-echo
+machinery.  See the tab-line config."
+  :type 'boolean)
+
+(defcustom svg-line-help-face 'svg-line-help
+  "Face applied to an interactive item's hover help, or nil to leave it unstyled."
+  :type '(choice (const :tag "No face" nil) face))
+
+(defface svg-line-help '((t :inherit highlight))
+  "Face for an interactive item's hover help (its `help-echo').
+With tooltips off the help shows in the echo area, where this contrasting
+background makes the cue stand out; the face is preserved into the echo area.")
+
+(defvar svg-line--hovered nil
+  "Id of the interactive item under the mouse (its `:id'), or nil.
+Set by `svg-line--note-help'; the renderer draws a hover box behind the item
+whose `:id' matches.  Ids must be unique per item across all visible windows
+\(e.g. include the buffer for a per-window bar), or several boxes would draw.")
+
+(defvar svg-line--wrap-map nil
+  "Image map built by the last `svg-line-wrap-image' call, or nil.
+A side channel so `svg-line-wrap-image' keeps returning a plain svg object
+\(its documented contract) while `svg-line--build-wrap' can still pick up the
+per-item hot-spots to put on the image descriptor.")
+
+(defvar svg-line--wrap-placements nil
+  "Placements (X TOP CW ITEM) from the last `svg-line-wrap-image' call.
+Side channel, like `svg-line--wrap-map'.")
+(defvar svg-line--wrap-lh 0
+  "Row height from the last `svg-line-wrap-image' call.  Side channel.")
+
+(defvar-local svg-line--placements nil
+  "Per-buffer alist (NAME . (LH . PLACEMENTS)) of each line's last hot-spots.
+PLACEMENTS are (X TOP W ITEM); ITEM is (LABEL . STATE) for `wrap' or
+\(TEXT . PLIST) for `lines'.  Keyed by line NAME so several bars in one buffer
+\(tab-line + header-line + mode-line) don't clobber each other.  Hit-tested on
+click/hover so the layout is never recomputed (which would need
+`with-selected-window' during redisplay -- unsafe).")
+
+(defvar svg-line--placements-global nil
+  "Global mirror of `svg-line--placements', keyed by NAME.
+The per-window bars (mode/header/tab line) hit-test the buffer-local copy via
+the window under the mouse, but the FRAME-level tab bar isn't tied to a buffer
+\(its mouse posn reports the frame, not a window), so it reads this mirror.")
+
+(defun svg-line--store-placements (name lh placements)
+  "Record PLACEMENTS (row height LH) for line NAME (buffer-local and global)."
+  (let ((entry (cons name (cons lh placements))))
+    (setq-local svg-line--placements
+                (cons entry (assq-delete-all name svg-line--placements)))
+    (setq svg-line--placements-global
+          (cons entry (assq-delete-all name svg-line--placements-global)))))
+
+(defun svg-line--placements-for (name)
+  "Return (LH . PLACEMENTS) recorded for line NAME in the current buffer, or nil."
+  (cdr (assq name svg-line--placements)))
+
+(defun svg-line--hit (pcons x y)
+  "Return the ITEM in PCONS (LH . PLACEMENTS) covering image pixel (X, Y), or nil."
+  (let ((lh (car pcons)))
+    ;; NB: `item', not `it' (the latter is anaphoric in `when ... return it').
+    (cl-loop for (px top cw item) in (cdr pcons)
+             when (and (<= px x) (< x (+ px cw)) (<= top y) (< y (+ top lh)))
+             return item)))
+
+;;;###autoload
+(defun svg-line-seg (text &rest plist)
+  "Return an interactive `lines' segment carrying TEXT and PLIST.
+PLIST keys: `:id' (unique hover/identity key), `:help', `:action' (a command
+run on left/middle click), `:action-help' (the \"click to ...\" hint), `:menu'
+\(an alist (LABEL . COMMAND) for right-click) and `:color'/`:face' (text fill).
+Use as a segment in a `lines' content side; the engine tracks its pixel extent
+and wires click/hover/menu just like a `wrap' tab.  Returns nil for empty TEXT
+\(so an absent indicator contributes nothing).  See `svg-line-define'."
+  (let ((s (svg-line--item->string text)))
+    (and (> (length s) 0) (cons :svg-seg (cons s plist)))))
+
+;;;###autoload
+(defun svg-line-segs (&rest items)
+  "Return a spliced group of ITEMS (strings or `svg-line-seg' forms).
+A single `lines' segment can thus emit several runs -- e.g. per-crumb
+breadcrumbs.  nil ITEMS are dropped."
+  (cons :svg-segs (delq nil items)))
+
+(defun svg-line--wrap-place (items width char-advance gap lh)
+  "Return placements (X TOP CW ITEM) for ITEMS in a `wrap' layout.
+WIDTH bounds each row; CHAR-ADVANCE, GAP and LH set per-item width and row
+height.  Shared by drawing (`svg-line-wrap-image') and click hit-testing
+\(`svg-line--seg-at') so both agree on where each item sits."
+  (let ((x 0) (row 0) (out nil))
+    (dolist (it items)
+      (let* ((label (car it))
+             (cw (* (length label) char-advance))
+             (w  (+ cw (* gap char-advance))))
+        (when (and (> x 0) (> (+ x w) width))
+          (setq x 0 row (1+ row)))
+        (push (list x (* row lh) cw it) out)
+        (setq x (+ x w))))
+    (nreverse out)))
+
+(defun svg-line--tab-help (item)
+  "Compose, face and tag the hover help for wrap ITEM, or nil.
+The string is tagged with the item's STATE `:id' in the `svg-line-tab' text
+property so `svg-line--note-help' can track which item the mouse is over."
+  (let ((state (cdr item)))
+    (when (consp state)
+      (let* ((help (plist-get state :help))
+             (ah   (plist-get state :action-help))
+             (parts (delq nil
+                          (list help
+                                (and (plist-get state :action) ah (concat "click to " ah))
+                                (and (plist-get state :menu) "right-click for menu")))))
+        (when parts
+          (let ((s (string-join parts "  ·  ")))
+            (when svg-line-help-face
+              (setq s (propertize s 'face svg-line-help-face)))
+            (setq s (propertize s 'svg-line-tab (plist-get state :id)))
+            s))))))
+
 (cl-defun svg-line-wrap-image (items &key
                                      (width 100)
                                      (font (or svg-line-font (face-attribute 'default :family nil t)))
@@ -406,7 +621,9 @@ Returns an svg object (see `svg-create')."
                                      (current-foreground nil)
                                      (current-background nil)
                                      (modified-foreground nil)
-                                     (modified-background nil))
+                                     (modified-background nil)
+                                     (hovered nil)
+                                     (hover-color nil))
   "Build a `wrap'-layout SVG from ITEMS, a list of (LABEL . STATE).
 Items flow left-to-right and wrap onto new rows at WIDTH.  GAP is the
 inter-item gap in character widths.  FONT, FONT-SIZE, LINE-PAD,
@@ -414,68 +631,76 @@ CHAR-ADVANCE, FOREGROUND and BACKGROUND set the text family, size,
 per-row padding, character advance and base colours.  Returns an svg
 object.
 
-STATE selects how each item is styled:
+STATE selects how each item is styled and made interactive:
   - nil / non-nil atom  -- treated as CURRENTP (backward compatible);
-  - a plist             -- recognised keys `:current' and `:modified'.
+  - a plist             -- `:current' / `:modified' for styling, plus the
+    optional `:id' `:help' `:action' `:action-help' `:menu' for hover/click
+    (see `svg-line-define').
 
-A current item is drawn bold, in CURRENT-FOREGROUND, over a
-CURRENT-BACKGROUND box.  A (non-current) modified item is drawn in
-MODIFIED-FOREGROUND, over a MODIFIED-BACKGROUND box when set.  When an
-item is BOTH current and modified, its box is tinted with
-MODIFIED-FOREGROUND (the readable current label stays, but the unsaved
-state remains visible behind the highlight).
-
-A per-item icon, if wanted, is just a Nerd-Font glyph at the start of
-LABEL (it is plain text and flows with the label)."
+A current item is drawn bold over CURRENT-BACKGROUND; a modified item uses
+MODIFIED-FOREGROUND (and MODIFIED-BACKGROUND when set); an ordinary item whose
+`:id' equals HOVERED gets a HOVER-COLOR box.  Items with `:help'/`:action'/
+`:menu' become image map hot-spots (per-item help-echo + hand pointer)."
   (let* ((foreground (svg-line--color foreground))
          (background (svg-line--color background))
          (current-foreground (svg-line--color current-foreground))
          (current-background (svg-line--color current-background))
          (modified-foreground (svg-line--color modified-foreground))
          (modified-background (svg-line--color modified-background))
+         (hover-color (svg-line--color hover-color))
          (fz font-size)
          (lh (+ fz line-pad))
-         (x 0) (row 0) (placements nil))
-    (dolist (it items)
-      (let* ((label (car it))
-             (state (cdr it))
-             (currentp  (if (consp state) (plist-get state :current) state))
-             (modifiedp (and (consp state) (plist-get state :modified)))
-             (cw (* (length label) char-advance))    ; item (box) width
-             (w  (+ cw (* gap char-advance))))        ; + inter-item gap
-        (when (and (> x 0) (> (+ x w) width))
-          (setq x 0 row (1+ row)))
-        (push (list x (* row lh) cw label currentp modifiedp) placements)
-        (setq x (+ x w))))
-    (let* ((height (max 1 (* (1+ row) lh)))
-           (svg (svg-create width height)))
-      (when background (svg-rectangle svg 0 0 width height :fill background))
-      (dolist (p (nreverse placements))
-        (cl-destructuring-bind (px top cw label currentp modifiedp) p
-          (let ((box  (cond ;; current AND modified: tint the current box with the
-                            ;; modified accent so "unsaved" stays visible behind
-                            ;; the current highlight (the label stays readable).
-                            ((and currentp modifiedp) (or modified-foreground current-background))
-                            (currentp  current-background)
-                            (modifiedp modified-background)))
-                (fill (cond (currentp  (or current-foreground foreground))
-                            (modifiedp (or modified-foreground foreground))
-                            (t foreground))))
-            (when box
-              (svg-rectangle svg px top cw lh :fill box :rx 3))
-            (svg-line--add-text svg label :x px :y (+ top fz)
-                                :font font :font-size fz :fill fill
-                                :weight (if currentp "bold" "normal")))))
-      svg)))
+         (placements (svg-line--wrap-place items width char-advance gap lh))
+         (height (max 1 (apply #'max lh (mapcar (lambda (p) (+ (nth 1 p) lh)) placements))))
+         (svg (svg-create width height))
+         (map nil))
+    (when background (svg-rectangle svg 0 0 width height :fill background))
+    (dolist (p placements)
+      (cl-destructuring-bind (px top cw it) p
+        (let* ((label (car it))
+               (state (cdr it))
+               (currentp  (if (consp state) (plist-get state :current) state))
+               (modifiedp (and (consp state) (plist-get state :modified)))
+               (hoveredp  (and hover-color (consp state) hovered
+                               (equal (plist-get state :id) hovered)))
+               (box  (cond ((and currentp modifiedp) (or modified-foreground current-background))
+                           (currentp  current-background)
+                           (modifiedp modified-background)
+                           (hoveredp  hover-color)))
+               (fill (cond (currentp  (or current-foreground foreground))
+                           (modifiedp (or modified-foreground foreground))
+                           (t foreground))))
+          (when box
+            (svg-rectangle svg px top cw lh :fill box :rx 3))
+          (svg-line--add-text svg label :x px :y (+ top fz)
+                              :font font :font-size fz :fill fill
+                              :weight (if currentp "bold" "normal"))
+          ;; image-map hot-spot for hover/click
+          (let ((eh (svg-line--tab-help it)))
+            (when (and (consp state)
+                       (or eh (plist-get state :action) (plist-get state :menu)))
+              (let ((props (list 'pointer 'hand)))
+                (when eh (setq props (append props (list 'help-echo eh))))
+                (push (list (cons 'rect (cons (cons px top) (cons (+ px cw) (+ top lh))))
+                            (make-symbol (format "svg-line-tab-%d-%d" px top))
+                            props)
+                      map)))))))
+    ;; Stash the hot-spot map and placements in side channels (so this fn keeps
+    ;; returning a plain svg object) and return the svg object.
+    (setq svg-line--wrap-map (nreverse map)
+          svg-line--wrap-placements placements
+          svg-line--wrap-lh lh)
+    svg))
 
 ;;;###autoload
-(defun svg-line-display (svg)
+(defun svg-line-display (svg &optional props)
   "Wrap SVG object as a one-space string carrying it as a display image.
+PROPS, if given, are extra `svg-image' keywords (e.g. (:map MAP)).
 Pinned to `:scale' 1.0: the image IS the line at its exact target pixel
 width, so it must NOT inherit `image-scaling-factor' (auto), which would
 scale it with the default font and overflow the frame.  Scale the line by
 scaling its `:font-size'/`:char-advance' instead, not the image."
-  (propertize " " 'display (svg-image svg :ascent 'center :scale 1.0)))
+  (propertize " " 'display (apply #'svg-image svg :ascent 'center :scale 1.0 props)))
 
 ;;;; Safety wrapper
 ;; ----------------------------------------------------------------
@@ -583,9 +808,10 @@ Returns 1.0 when scaling is disabled or unavailable."
 (defun svg-line--build-lines (spec)
   "Build the `lines' SVG for SPEC.
 Each content row is (LEFT-SEGMENTS . RIGHT-SEGMENTS).  A segment may emit
-a progress bar (:svg-bar ...) or pie (:svg-pie ...) token (see
-`svg-line--render-runs'); a side with any such token is laid out with
-CHAR-ADVANCE spacing, otherwise with exact text anchoring.
+a progress bar (:svg-bar ...), pie (:svg-pie ...) or interactive segment
+\(:svg-seg ...) token (see `svg-line--render-runs' and `svg-line-seg'); a side
+with any such token is laid out with CHAR-ADVANCE spacing, otherwise with
+exact text anchoring.  The hovered interactive segment gets a hover box.
 Sizes scale with the default font (see `svg-line-scale-with-text-scale')."
   (let* ((active (svg-line--active-p spec))
          (fg (or (and (not active) (svg-line--opt spec :inactive-foreground))
@@ -608,10 +834,14 @@ Sizes scale with the default font (see `svg-line-scale-with-text-scale')."
      :right-margin (svg-line--scaled (svg-line--opt spec :right-margin 0))
      :char-advance (* (or (svg-line--opt spec :char-advance nil) svg-line-char-advance) sc)
      :foreground fg
-     :background bg)))
+     :background bg
+     :hovered svg-line--hovered
+     :hover-color (or (svg-line--opt spec :hover-color)
+                      (face-background 'highlight nil 'default) "#444466"))))
 
 (defun svg-line--build-wrap (spec)
-  "Build the `wrap' SVG for SPEC.
+  "Build the `wrap' layout for SPEC, returning (SVG . MAP).
+MAP is the per-item image-map hot-spots (nil when no interactive items).
 When SPEC has an `:active' predicate that is false, the inactive variant
 of each colour applies (falling back to the active colour when unset),
 mirroring the `lines' layout."
@@ -621,7 +851,8 @@ mirroring the `lines' layout."
                  (if active
                      (svg-line--opt spec key default)
                    (or (svg-line--opt spec inactive-key)
-                       (svg-line--opt spec key default))))))
+                       (svg-line--opt spec key default)))))
+         (svg
     (svg-line-wrap-image (funcall (plist-get spec :content))
                          :width (svg-line--width spec)
                          :font (svg-line--opt spec :font
@@ -635,18 +866,142 @@ mirroring the `lines' layout."
                          :current-foreground (funcall pick :current-foreground :inactive-current-foreground)
                          :current-background (funcall pick :current-background :inactive-current-background)
                          :modified-foreground (funcall pick :modified-foreground :inactive-modified-foreground)
-                         :modified-background (funcall pick :modified-background :inactive-modified-background))))
+                         :modified-background (funcall pick :modified-background :inactive-modified-background)
+                         :hovered svg-line--hovered
+                         :hover-color (or (svg-line--opt spec :hover-color)
+                                          (face-background 'highlight nil 'default)
+                                          "#444466"))))
+    (cons svg svg-line--wrap-map)))
+
+;;;; interactivity: hover tracking + click/menu dispatch (wrap + lines)
+;; ----------------------------------------------------------------
+
+(defun svg-line--popup-menu (title items)
+  "Pop up a menu of ITEMS at the current event and run the chosen command.
+ITEMS is an alist of (LABEL . COMMAND); TITLE labels the menu."
+  (let ((choice (x-popup-menu last-input-event
+                              (list (or title "svg-line") (cons "" items)))))
+    (when choice
+      (if (commandp choice) (call-interactively choice) (funcall choice)))))
+
+(defvar svg-line--hover-timer nil
+  "Idle timer that applies a hover re-render off the redisplay path.")
+
+;;;###autoload
+(defun svg-line--note-help (help)
+  "Update the hovered item from HELP and re-render if it changed.
+Wire `show-help-function' to call this (then display HELP): it fires on mouse
+enter, move AND leave (leave with nil), so the hovered item's `:id' -- carried
+in HELP's `svg-line-tab' text property -- can be tracked and a hover box drawn.
+Works for both `wrap' tabs and `lines' interactive segments.  The re-render is
+DEFERRED to an idle timer: this runs during the help-echo display (itself
+during redisplay), and forcing a redisplay synchronously here would re-enter
+the renderer and degrade the other lines (the safety guard returns a stale
+value)."
+  (when svg-line-hover-highlight
+    (let ((id (and (stringp help) (> (length help) 0)
+                   (get-text-property 0 'svg-line-tab help))))
+      (unless (equal id svg-line--hovered)
+        (setq svg-line--hovered id)
+        (when (timerp svg-line--hover-timer) (cancel-timer svg-line--hover-timer))
+        (setq svg-line--hover-timer
+              (run-with-idle-timer 0 nil (lambda () (force-mode-line-update t))))))))
+
+(defun svg-line--seg-at-posn (name posn)
+  "Return line NAME's interactive item under POSN, or nil.
+Handles both bar kinds: a per-window bar (mode/header/tab line) reports a live
+window and IMAGE-relative `posn-object-x-y', so we hit-test that window's
+buffer-local placements; the FRAME-level tab bar reports the frame and nil
+object coords, so we use the area-relative `posn-x-y' against the global
+placement mirror.  No layout recompute and no `with-selected-window' (which
+would corrupt redisplay when called from a help-echo function)."
+  (let* ((win (and posn (posn-window posn)))
+         (obj (and posn (posn-object-x-y posn))))
+    (if (windowp win)
+        ;; per-window bar: image coords = object-x-y, placements = buffer-local
+        (let ((x (car-safe obj)) (y (cdr-safe obj)))
+          (when (and (numberp x) (numberp y))
+            (with-current-buffer (window-buffer win)
+              (svg-line--hit (svg-line--placements-for name) x y))))
+      ;; frame-level bar (tab-bar): image coords = posn-x-y, placements = global
+      (let* ((xy (and posn (posn-x-y posn)))
+             (x (car-safe xy)) (y (cdr-safe xy)))
+        (when (and (numberp x) (numberp y))
+          (svg-line--hit (cdr (assq name svg-line--placements-global)) x y))))))
+
+(defun svg-line--seg-at (name posn)
+  "Return line NAME's interactive item under POSN (a click), or nil."
+  (svg-line--seg-at-posn name posn))
+
+(defun svg-line--seg-help-fn (name)
+  "Return a `help-echo' FUNCTION for line NAME.
+A special area (tab line, header line, mode line, tab bar) does not fire image
+map *area* help-echo, but it does call a STRING-level help-echo function on
+mouse move.  We turn the frame-relative `mouse-pixel-position' into a posn with
+`posn-at-x-y' and hit-test it (see `svg-line--seg-at-posn'), then return the
+item's help (tagged, so `svg-line--note-help' tracks hover)."
+  (lambda (_win _obj _pos)
+    (let* ((mp (mouse-pixel-position))
+           (frame (car mp)) (mx (cadr mp)) (my (cddr mp))
+           (posn (and (framep frame) (numberp mx) (numberp my)
+                      (ignore-errors (posn-at-x-y mx my frame))))
+           (item (and posn (svg-line--seg-at-posn name posn))))
+      (and item (svg-line--tab-help item)))))
+
+(defun svg-line--seg-make-click-map (name)
+  "Return a keymap dispatching clicks for line NAME.
+Left/middle click runs the item's `:action'; right click pops its `:menu'.
+Bindings are duplicated under a catch-all default so the click resolves
+whether or not the special area prepends an event prefix."
+  (let* ((run (lambda ()
+                (interactive)
+                (let* ((it (svg-line--seg-at name (event-start last-input-event)))
+                       (cmd (and (consp (cdr-safe it)) (plist-get (cdr it) :action))))
+                  (when cmd (call-interactively cmd)))))
+         (menu (lambda ()
+                 (interactive)
+                 (let* ((it (svg-line--seg-at name (event-start last-input-event)))
+                        (items (and (consp (cdr-safe it)) (plist-get (cdr it) :menu))))
+                   (when items (svg-line--popup-menu (car it) items)))))
+         (sub (make-sparse-keymap)) (km (make-sparse-keymap)))
+    (dolist (k (list [mouse-1] [mouse-2]))
+      (define-key km k run) (define-key sub k run))
+    (define-key km [down-mouse-3] menu) (define-key sub [down-mouse-3] menu)
+    (dolist (k (list [down-mouse-1] [down-mouse-2] [mouse-3]))
+      (define-key km k #'ignore) (define-key sub k #'ignore))
+    (define-key km [t] sub)
+    km))
+
+(defun svg-line--interactive (str name has-spots &optional pointer)
+  "Attach click/hover/help props to display STR for line NAME, when HAS-SPOTS.
+A special area honours STRING-level keymap/help-echo but not image map *area*
+properties, so clicks and hover are driven from the string: a click keymap
+\(dispatched by pixel position), a help-echo FUNCTION (mouse-move hover +
+tooltip) and, when POINTER is given, that mouse pointer.  (The hover BOX is
+drawn into the SVG itself from `svg-line--hovered'.)"
+  (if has-spots
+      (let ((s (propertize str
+                           'keymap (svg-line--seg-make-click-map name)
+                           'help-echo (svg-line--seg-help-fn name))))
+        (if pointer (propertize s 'pointer pointer) s))
+    str))
 
 (defun svg-line--render (name)
   "Render line NAME to a display string (error/loop guarded)."
   (svg-line-safe
    name
    (lambda ()
-     (let* ((spec (svg-line--spec name))
-            (svg (pcase (or (plist-get spec :layout) 'lines)
-                   ('wrap (svg-line--build-wrap spec))
-                   (_     (svg-line--build-lines spec)))))
-       (svg-line-display svg)))))
+     (let ((spec (svg-line--spec name)))
+       (if (eq (or (plist-get spec :layout) 'lines) 'wrap)
+           (let ((str (svg-line-display (car (svg-line--build-wrap spec)))))
+             (svg-line--store-placements name svg-line--wrap-lh svg-line--wrap-placements)
+             ;; the whole wrap line is tabs, so a hand pointer everywhere fits
+             (svg-line--interactive str name (and svg-line--wrap-placements t) 'hand))
+         (let ((svg (svg-line--build-lines spec)))
+           (svg-line--store-placements name svg-line--lines-lh svg-line--lines-placements)
+           ;; a lines bar has large non-interactive gaps, so no global pointer
+           (svg-line--interactive (svg-line-display svg) name
+                                  (and svg-line--lines-placements t))))))))
 
 (defun svg-line--renderer (name)
   "Return (creating if needed) the named renderer function symbol for NAME."

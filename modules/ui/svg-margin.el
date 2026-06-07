@@ -34,6 +34,40 @@
 (declare-function global-evil-fringe-mark-mode "evil-fringe-mark")
 (declare-function bookmark-get-filename "bookmark")
 (declare-function bookmark-get-position "bookmark")
+(declare-function bookmark-jump "bookmark")
+(declare-function bookmark-rename "bookmark")
+(declare-function bookmark-delete "bookmark")
+(declare-function evil-goto-mark "evil-commands")
+(declare-function evil-delete-marks "evil-commands")
+(declare-function git-gutter:next-hunk "git-gutter")
+(declare-function git-gutter:previous-hunk "git-gutter")
+(declare-function git-gutter:stage-hunk "git-gutter")
+(declare-function git-gutter:revert-hunk "git-gutter")
+(declare-function git-gutter:popup-hunk "git-gutter")
+(declare-function flycheck-next-error "flycheck")
+(declare-function flycheck-previous-error "flycheck")
+(declare-function flycheck-list-errors "flycheck")
+(declare-function flycheck-explain-error-at-point "flycheck")
+(declare-function flycheck-display-error-at-point "flycheck")
+(declare-function org-cycle "org")
+(declare-function org-narrow-to-subtree "org")
+
+(defun zetta-svg-margin--goto-line (n)
+  "Move point to the start of line N (absolute) in the current buffer."
+  (goto-char (point-min))
+  (forward-line (1- n)))
+
+(defun zetta-svg-margin--gg-action (line cmd)
+  "Return a command that moves to LINE then runs git-gutter CMD on that hunk."
+  (lambda () (interactive) (zetta-svg-margin--goto-line line) (call-interactively cmd)))
+
+(defun zetta-svg-margin--gg-menu (line)
+  "Return a context-menu alist for the git-gutter hunk at LINE."
+  (list (cons "Show hunk diff" (zetta-svg-margin--gg-action line #'git-gutter:popup-hunk))
+        (cons "Stage hunk"     (zetta-svg-margin--gg-action line #'git-gutter:stage-hunk))
+        (cons "Revert hunk"    (zetta-svg-margin--gg-action line #'git-gutter:revert-hunk))
+        (cons "Next hunk"      #'git-gutter:next-hunk)
+        (cons "Previous hunk"  #'git-gutter:previous-hunk)))
 (declare-function flycheck-error-line "flycheck")
 (declare-function flycheck-error-level "flycheck")
 (declare-function flycheck-error-message "flycheck")
@@ -48,6 +82,7 @@
     (let* ((bw (max 4 (round (* w 0.52))))
            (bx (+ x (/ (- w bw) 2)))
            (top (+ y (round (* h 0.16))))
+
            (bot (+ y (round (* h 0.84))))
            (notch (+ y (round (* h 0.6)))))
       (svg-polygon svg
@@ -68,11 +103,19 @@
       (save-excursion
         (goto-char (point-min))
         (while (re-search-forward "\\_<\\(TODO\\|FIXME\\|HACK\\)\\_>" nil t)
-          (push (list :pos (match-beginning 0) :shape 'dot
-                      :color (pcase (match-string 1)
-                               ("TODO" "#d29922") ("FIXME" "#f85149") (_ "#a371f7"))
-                      :help (match-string 1))
-                out)))
+          (let ((p (match-beginning 0)) (kw (match-string 1)))
+            (push (list :pos p :shape 'dot
+                        :color (pcase kw
+                                 ("TODO" "#d29922") ("FIXME" "#f85149") (_ "#a371f7"))
+                        :help kw
+                        :action-help "go to keyword"
+                        :action (lambda () (interactive) (goto-char p))
+                        :menu (list (cons "Go to keyword"
+                                          (lambda () (interactive) (goto-char p)))
+                                    (cons "List TODO/FIXME/HACK"
+                                          (lambda () (interactive)
+                                            (occur "\\_<\\(TODO\\|FIXME\\|HACK\\)\\_>")))))
+                  out))))
       out)))
 
 (defun zetta-svg-margin-git-gutter (buffer)
@@ -87,13 +130,23 @@
             (pcase type
               ((or 'added 'modified)
                (cl-loop for ln from start to (min end (+ start 1000)) do
-                        (push (list :line ln :shape 'bar
-                                    :color (if (eq type 'added) "#3fb950" "#d29922")
-                                    :help (symbol-name type))
-                              out)))
+                        (let ((l ln) (ty type))
+                          (push (list :line l :shape 'bar
+                                      :color (if (eq ty 'added) "#3fb950" "#d29922")
+                                      :help (format "git: %s hunk" ty)
+                                      :action-help "show hunk diff"
+                                      :action (zetta-svg-margin--gg-action l #'git-gutter:popup-hunk)
+                                      :menu (zetta-svg-margin--gg-menu l))
+                                out))))
               ('deleted
-               (push (list :line start :shape 'triangle :color "#f85149" :help "deleted")
-                     out)))))
+               (let ((l start))
+                 (push (list :line l :shape 'triangle :color "#f85149"
+                             :help "git: deleted hunk"
+                             :action-help "show hunk diff"
+                             :action (zetta-svg-margin--gg-action l #'git-gutter:popup-hunk)
+
+                             :menu (zetta-svg-margin--gg-menu l))
+                       out))))))
         out))))
 
 (defun zetta-svg-margin-bookmarks (buffer)
@@ -105,9 +158,18 @@
           (let ((bmfile (ignore-errors (bookmark-get-filename bm)))
                 (pos (ignore-errors (bookmark-get-position bm))))
             (when (and bmfile pos (string= (file-truename bmfile) file))
-              (push (list :pos pos :shape 'bookmark :color "#7d5bed"
-                          :help (format "bookmark: %s" (car bm)))
-                    out))))
+              (let ((name (car bm)))
+                (push (list :pos pos :shape 'bookmark :color "#7d5bed"
+                            :help (format "bookmark: %s" name)
+                            :action-help "jump to bookmark"
+                            :action (lambda () (interactive) (bookmark-jump name))
+                            :menu (list (cons "Jump to bookmark"
+                                              (lambda () (interactive) (bookmark-jump name)))
+                                        (cons "Rename bookmark…"
+                                              (lambda () (interactive) (bookmark-rename name)))
+                                        (cons "Delete bookmark"
+                                              (lambda () (interactive) (bookmark-delete name)))))
+                      out)))))
         out))))
 
 (defun zetta-svg-margin-evil-marks (buffer)
@@ -120,7 +182,15 @@
             (when (and (markerp val) (eq (marker-buffer val) buffer)
                        (>= char ?a) (<= char ?z))
               (push (list :pos (marker-position val) :text (char-to-string char)
-                          :face 'warning :help (format "evil mark `%c'" char))
+                          :face 'warning
+                          :help (format "evil mark `%c'" char)
+                          :action-help (format "jump to mark `%c'" char)
+                          :action (lambda () (interactive) (evil-goto-mark char))
+                          :menu (list (cons (format "Jump to mark `%c'" char)
+                                            (lambda () (interactive) (evil-goto-mark char)))
+                                      (cons (format "Delete mark `%c'" char)
+                                            (lambda () (interactive)
+                                              (evil-delete-marks (char-to-string char))))))
                     out))))
         out))))
 
@@ -133,11 +203,27 @@
           (let ((line (flycheck-error-line err))
                 (level (flycheck-error-level err)))
             (when line
-              (push (list :line line :shape 'dot
-                          :color (pcase level
-                                   ('error "#f85149") ('warning "#d29922") (_ "#3fb950"))
-                          :help (ignore-errors (flycheck-error-message err)))
-                    out))))
+              (let ((l line))
+                (push (list :line l :shape 'dot
+                            :color (pcase level
+                                     ('error "#f85149") ('warning "#d29922") (_ "#3fb950"))
+                            :help (ignore-errors (flycheck-error-message err))
+                            :action-help "show error"
+                            :action (lambda () (interactive)
+                                      (zetta-svg-margin--goto-line l)
+                                      (flycheck-display-error-at-point))
+                            :menu (list (cons "Show error"
+                                              (lambda () (interactive)
+                                                (zetta-svg-margin--goto-line l)
+                                                (flycheck-display-error-at-point)))
+                                        (cons "Explain error"
+                                              (lambda () (interactive)
+                                                (zetta-svg-margin--goto-line l)
+                                                (flycheck-explain-error-at-point)))
+                                        (cons "List all errors" #'flycheck-list-errors)
+                                        (cons "Next error" #'flycheck-next-error)
+                                        (cons "Previous error" #'flycheck-previous-error)))
+                      out)))))
         out))))
 
 (defun zetta-svg-margin-long-lines (buffer)
@@ -150,9 +236,12 @@
           (while (not (eobp))
             (end-of-line)
             (when (> (current-column) col)
-              (push (list :pos (line-beginning-position) :shape 'bar :color "#b08800"
-                          :help (format "line exceeds %d columns" col))
-                    out))
+              (let ((bol (line-beginning-position)))
+                (push (list :pos bol :shape 'bar :color "#b08800"
+                            :help (format "line exceeds %d columns" col)
+                            :action-help "go to overflow"
+                            :action (lambda () (interactive) (goto-char bol) (end-of-line)))
+                      out)))
             (forward-line 1)))
         out))))
 
@@ -163,9 +252,19 @@
       (save-excursion
         (goto-char (point-min))
         (while (re-search-forward "[ \t]+$" nil t)
-          (push (list :pos (line-beginning-position) :shape 'dot :color "#8b949e"
-                      :help "trailing whitespace")
-                out)
+          (let ((bol (line-beginning-position)))
+            (push (list :pos bol :shape 'dot :color "#8b949e"
+                        :help "trailing whitespace"
+                        :action-help "go to line"
+                        :action (lambda () (interactive) (goto-char bol) (end-of-line))
+                        :menu (list (cons "Clear on this line"
+                                          (lambda () (interactive)
+                                            (goto-char bol)
+                                            (when (re-search-forward "[ \t]+$" (line-end-position) t)
+                                              (replace-match ""))))
+                                    (cons "Clear in whole buffer"
+                                          #'delete-trailing-whitespace)))
+                  out))
           (forward-line 1)))
       out)))
 
@@ -179,9 +278,19 @@
           (while (re-search-forward "^\\(\\*+\\) " nil t)
             (let* ((level (length (match-string 1)))
                    (face (intern (format "org-level-%d" (1+ (mod (1- level) 8)))))
-                   (color (or (face-foreground face nil 'default) "#888888")))
-              (push (list :pos (line-beginning-position) :color color
+                   (color (or (face-foreground face nil 'default) "#888888"))
+                   (p (line-beginning-position)))
+              (push (list :pos p :color color
                           :help (format "heading level %d" level)
+                          :action-help "go to heading"
+                          :action (lambda () (interactive) (goto-char p))
+                          :menu (list (cons "Go to heading"
+                                            (lambda () (interactive) (goto-char p)))
+                                      (cons "Toggle fold"
+                                            (lambda () (interactive) (goto-char p) (org-cycle)))
+                                      (cons "Narrow to subtree"
+                                            (lambda () (interactive)
+                                              (goto-char p) (org-narrow-to-subtree))))
                           :draw (lambda (svg x y w h c)
                                   (let* ((frac (/ (max 1 (- 7 level)) 6.0))
                                          (bh (max 3 (round (* h frac))))
@@ -204,15 +313,24 @@
               (seen (make-hash-table :test 'eql)) out)
           (save-excursion
             (goto-char (point-min))
+
             (while (re-search-forward re nil t)
               ;; one indicator per LINE, not per occurrence -- several matches
               ;; on the same line must not each claim a column.
               (let ((bol (line-beginning-position)))
                 (unless (gethash bol seen)
                   (puthash bol t seen)
-                  (push (list :pos bol :shape 'dot :color "#58a6ff"
-                              :help (format "occurrence of `%s'" sym))
-                        out)))))
+                  (let ((p bol) (s sym))
+                    (push (list :pos p :shape 'dot :color "#58a6ff"
+                                :help (format "occurrence of `%s'" s)
+                                :action-help "go to occurrence"
+                                :action (lambda () (interactive) (goto-char p))
+                                :menu (list (cons "Go to occurrence"
+                                                  (lambda () (interactive) (goto-char p)))
+                                            (cons (format "Occur `%s'" s)
+                                                  (lambda () (interactive)
+                                                    (occur (concat "\\_<" (regexp-quote s) "\\_>"))))))
+                          out))))))
           out)))))
 
 ;;;; Refresh triggers
@@ -287,6 +405,18 @@ the recompute yields the same hunks we skip, breaking the cycle."
 ;; Runs after init, when the packages svg-margin replaces are loaded: turn
 ;; off their fringe drawing, then enable the gutter everywhere.
 
+(defvar zetta-svg-margin--orig-show-help nil
+  "The `show-help-function' in effect before svg-margin wrapped it.")
+
+(defun zetta-svg-margin--show-help (help)
+  "Track hover for svg-margin and svg-line, then show HELP as before.
+Both note-help functions key off their own text property and hover custom, so
+calling both is safe; this is the single `show-help-function' both hook into."
+  (svg-margin--note-help help)
+  (when (fboundp 'svg-line--note-help) (svg-line--note-help help))
+  (when (functionp zetta-svg-margin--orig-show-help)
+    (funcall zetta-svg-margin--orig-show-help help)))
+
 (defun zetta-svg-margin-activate ()
   "Disable the fringe drawers svg-margin replaces and enable the gutter."
   ;; evil marks now come from the margin provider, not the fringe.
@@ -296,6 +426,14 @@ the recompute yields the same hunks we skip, breaking the cycle."
   (when (and (fboundp 'git-gutter:view-diff-infos)
              (not (advice-member-p #'zetta-svg-margin--gg-feed 'git-gutter:view-diff-infos)))
     (advice-add 'git-gutter:view-diff-infos :override #'zetta-svg-margin--gg-feed))
+  ;; Hover background: route help display through `svg-margin--note-help' so the
+  ;; hovered indicator gets a drawn background (works because show-help-function
+  ;; fires on mouse enter, move AND leave).  Done here (after init) so it sits
+  ;; on top of whatever tooltip.el left in `show-help-function'.
+  (setq svg-margin-hover-highlight t)
+  (unless (eq show-help-function #'zetta-svg-margin--show-help)
+    (setq zetta-svg-margin--orig-show-help show-help-function
+          show-help-function #'zetta-svg-margin--show-help))
   (global-svg-margin-mode 1)
   (svg-margin-refresh-all))
 

@@ -138,12 +138,6 @@ that indicator silently skipped; enable this to get a message naming the
 provider, which helps when writing one."
   :type 'boolean)
 
-(defface svg-margin-highlight '((t :inherit highlight))
-  "Face for a clickable gutter cell on mouse hover.
-Applied as `mouse-face' to the whole line's gutter image, so the background
-shows through transparent indicator SVGs while the pointer is over it.  Note
-this highlights the line's whole reserved strip, not a single column.")
-
 ;;;; Colour
 ;; ----------------------------------------------------------------
 
@@ -504,9 +498,7 @@ column pixel width and line height for the image."
     ;; put a keymap on the string with a t-default that catches the area
     ;; prefix and dispatches by click position -> column -> indicator.
     (when clickables
-      (setq str (propertize str
-                            'keymap (svg-margin--make-click-map clickables side rcols cw)
-                            'mouse-face 'svg-margin-highlight)))
+      (setq str (propertize str 'keymap (svg-margin--make-click-map clickables side rcols cw))))
     (overlay-put ov 'svg-margin t)
     (overlay-put ov 'before-string str)
     ;; NB: do NOT set `evaporate' -- these overlays are zero-length, and an

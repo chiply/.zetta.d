@@ -449,8 +449,13 @@ not consulted (the area id becomes an event prefix)."
       (put-text-property 0 (length eh) 'svg-margin-cell (list (current-buffer) pos side col) eh)
       (setq props (append props (list 'help-echo eh))))
     (when props
+      ;; A GLOBALLY-unique area id (per pos/side/col).  If two hot-spots in
+      ;; different line images shared an id (e.g. same-type indicators sit in
+      ;; the same column), Emacs's mouse-highlight would treat them as one and
+      ;; not re-fire help-echo when moving between them -- breaking hover
+      ;; tracking.  Uninterned so it does not accumulate in the obarray.
       (list (cons 'rect (cons (cons x 0) (cons (+ x cw) h)))
-            (intern (format "svg-margin--area-%d" col))
+            (make-symbol (format "svg-margin-area-%d-%s-%d" pos side col))
             props))))
 
 ;;;; Overlays

@@ -475,8 +475,11 @@ RCOLS is the SIDE's reserved column count the image spans; CW and LH are the
 column pixel width and line height for the image."
   (let* ((img (svg-margin--image packed side rcols cw lh))
          (marg (if (eq side 'left) 'left-margin 'right-margin))
+         ;; Compose the line's tooltip from each indicator's full hint (label +
+         ;; "click to ..." + menu).  Done at the STRING level because a margin
+         ;; honours the string `help-echo' but not image-map area properties.
          (help (string-join
-                (delq nil (mapcar (lambda (c) (plist-get (plist-get c :indicator) :help))
+                (delq nil (mapcar (lambda (c) (svg-margin--area-help (plist-get c :indicator)))
                                   packed))
                 "\n"))
          ;; Put the image descriptor DIRECTLY as the margin spec's element;
@@ -497,6 +500,9 @@ column pixel width and line height for the image."
     ;; up in the active keymaps (the area's own keymap is NOT consulted), so we
     ;; put a keymap on the string with a t-default that catches the area
     ;; prefix and dispatches by click position -> column -> indicator.
+    ;; NB: a margin honours `help-echo' and click keymaps but NOT `pointer' or
+    ;; `mouse-face' (verified) -- so the only hover affordance here is the
+    ;; tooltip; the cursor shape cannot be changed over margin content.
     (when clickables
       (setq str (propertize str 'keymap (svg-margin--make-click-map clickables side rcols cw))))
     (overlay-put ov 'svg-margin t)

@@ -22,6 +22,8 @@ All are plain `defcustom`s (`M-x customize-group RET svg-margin`):
 | `svg-margin-debug` | `nil` | message indicators dropped for a missing/out-of-range position |
 | `svg-margin-idle-delay` | `0.1` | seconds to coalesce changes before re-rendering |
 | `svg-margin-help-face` | `svg-margin-help` | face for an indicator's hover help (or nil for none) |
+| `svg-margin-hover-highlight` | `nil` | draw a background behind the indicator under the mouse |
+| `svg-margin-hover-color` | `nil` | that background's colour (nil = `highlight` face background) |
 
 Indicators can be made interactive with `:action` (left/middle click),
 `:action-help` (the "click to …" hint), and `:menu` (right-click context
@@ -31,6 +33,26 @@ stands out especially when help is shown in the **echo area** rather than a
 tooltip — useful on tiling window managers, where Emacs's own tooltip *frame*
 can get tiled. To route help to the echo area, disable `tooltip-mode`
 (`(tooltip-mode -1)`), which also makes it instant.
+
+### Background-on-hover
+
+A margin can't change the cursor or apply `mouse-face`, but the indicator's
+*background* can still react to the mouse — by re-rendering the line with a
+background drawn into the SVG. Enable `svg-margin-hover-highlight` and route the
+help machinery through `svg-margin--note-help` (it fires on mouse enter, move
+**and leave** — the leave signal is what makes this reliable):
+
+```elisp
+(setq svg-margin-hover-highlight t)
+(let ((inner show-help-function))           ; do this AFTER any tooltip-mode setup
+  (setq show-help-function
+        (lambda (help) (svg-margin--note-help help)
+          (when inner (funcall inner help)))))
+```
+
+The highlight (color `svg-margin-hover-color`, default the `highlight` face
+background) appears once the pointer settles on an indicator and clears on
+leave. Note: each hover change schedules a re-render of that buffer's gutter.
 
 Enable per buffer with `svg-margin-mode`, or everywhere with
 `global-svg-margin-mode`. svg-margin needs a **graphical frame** (it draws SVG),

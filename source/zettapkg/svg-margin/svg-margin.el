@@ -148,6 +148,23 @@ so it works there as well as in a tooltip.")
   "Face applied to the indicator hover help, or nil to leave it unstyled."
   :type '(choice (const :tag "No face" nil) face))
 
+(defcustom svg-margin-hover-highlight nil
+  "When non-nil, draw a background behind the indicator under the mouse.
+This needs `show-help-function' wired to call `svg-margin--note-help' (the
+package cannot change that global on its own -- see CONFIGURATION.md), since
+the mouse-enter/leave signal comes through the help-echo machinery."
+  :type 'boolean)
+
+(defcustom svg-margin-hover-color nil
+  "Background colour drawn behind the hovered indicator.
+nil uses the `highlight' face background."
+  :type '(choice (const :tag "highlight face" nil) color))
+
+(defvar svg-margin--hovered nil
+  "The cell under the mouse as (BUFFER POS SIDE COLUMN), or nil.
+Set by `svg-margin--note-help' from the help-echo of the indicator the mouse
+is over; consumed by the renderer to draw `svg-margin-hover-color' behind it.")
+
 ;;;; Colour
 ;; ----------------------------------------------------------------
 
@@ -361,33 +378,41 @@ A non-function `:draw' is ignored (falls through to `:text'/`:shape')."
       (funcall (gethash (plist-get ind :shape) svg-margin--shapes) svg x y w h color))
      (t (svg-margin--shape-dot svg x y w h color)))))
 
-(defun svg-margin--image (packed side rcols cw lh)
+(defun svg-margin--hover-color ()
+  "Return the background colour for the hovered indicator."
+  (svg-margin--color (or svg-margin-hover-color
+                         (face-background 'highlight nil 'default)
+                         "#444466")))
+
+(defun svg-margin--image (packed pos side rcols cw lh hovered-col)
   "Build the composite margin image for PACKED cells on SIDE.
-RCOLS is the SIDE's reserved column count (>= this line's own column count),
-so the image fills the whole margin and column 0 lands nearest the buffer text
-\(rightmost on the left margin, leftmost on the right).  CW is one column's
-pixel width and LH the line height (both passed in so they track the displaying
-window's frame, not just the selected one).  A cell whose draw signals is
-skipped so one bad indicator cannot blank the whole line."
+POS is the line's buffer position (for tagging each hot-spot's help with its
+cell identity).  RCOLS is the SIDE's reserved column count (>= this line's own
+column count), so the image fills the whole margin and column 0 lands nearest
+the buffer text (rightmost on the left margin, leftmost on the right).  CW is
+one column's pixel width and LH the line height (both passed in so they track
+the displaying window's frame, not just the selected one).  When HOVERED-COL is
+the column of a cell, a `svg-margin-hover-color' background is drawn behind it.
+A cell whose draw signals is skipped so one bad indicator cannot blank the line."
   (let* ((h (max 1 lh))
          (w (max 1 (* rcols cw)))
          (svg (svg-create w h))
-         (map nil) (i 0))
+         (map nil))
     (dolist (cell packed)
       (let* ((col (plist-get cell :column))
              (ind (plist-get cell :indicator))
              (x (if (eq side 'left) (* (- rcols 1 col) cw) (* col cw))))
+        ;; Hover background (drawn first, behind the indicator).
+        (when (and hovered-col (eql col hovered-col))
+          (svg-rectangle svg x 0 cw h :fill (svg-margin--hover-color)))
         (condition-case err
             (svg-margin--draw ind svg x 0 cw h)
           (error (message "svg-margin: drawing an indicator failed: %s"
                           (error-message-string err))))
-        ;; Per-cell image-map hot-spot: own help-echo, hand pointer, and a
-        ;; keymap running the indicator's `:action' on a click.  This makes
-        ;; each indicator individually hoverable and clickable within the one
-        ;; composite image.
-        (let ((area (svg-margin--cell-area ind x cw h i)))
-          (when area (push area map)))
-        (setq i (1+ i))))
+        ;; Per-cell image-map hot-spot: own help-echo (tagged with the cell
+        ;; identity for hover tracking), hand pointer, and the click keymap.
+        (let ((area (svg-margin--cell-area ind x cw h pos side col)))
+          (when area (push area map)))))
     (let ((props (list :ascent 'center :scale 1.0)))
       (when map (setq props (append props (list :map (nreverse map)))))
       (apply #'svg-image svg props))))
@@ -401,14 +426,15 @@ skipped so one bad indicator cannot blank the whole line."
                            (and (plist-get ind :menu) "right-click for menu")))))
     (and parts (string-join parts "  ·  "))))
 
-(defun svg-margin--cell-area (ind x cw h i)
+(defun svg-margin--cell-area (ind x cw h pos side col)
   "Return an image map hot-spot for IND drawn at X (width CW, height H).
-I disambiguates the area id.  Returns nil unless IND has a `:help' or an
-`:action'.  Carries the composed per-indicator `help-echo' (see
-`svg-margin--area-help') and a hand `pointer' when the indicator is
-clickable.  The actual click is dispatched by the overlay keymap (see
-`svg-margin--make-click-map'), not here: in a margin the area keymap is not
-consulted -- the area id becomes an event prefix instead."
+POS, SIDE and COL identify the cell; its `help-echo' is tagged with
+\(BUFFER POS SIDE COL) in the `svg-margin-cell' text property so that
+`show-help-function' (via `svg-margin--note-help') can track the hovered
+indicator.  Returns nil unless IND has a `:help' or an `:action'; carries the
+composed help and a hand `pointer' when clickable.  The click itself is
+dispatched by the overlay keymap, not here -- in a margin the area keymap is
+not consulted (the area id becomes an event prefix)."
   (let ((action (or (plist-get ind :action) (plist-get ind :menu)))
         (eh (svg-margin--area-help ind))
         (props nil))
@@ -418,11 +444,13 @@ consulted -- the area id becomes an event prefix instead."
       ;; `svg-margin--place'): a margin honours image-map area help-echo when
       ;; the pointer is directly over the indicator, and that path would
       ;; otherwise show the help without the contrasting background.
-      (when svg-margin-help-face (setq eh (propertize eh 'face svg-margin-help-face)))
+      (setq eh (copy-sequence eh))
+      (when svg-margin-help-face (put-text-property 0 (length eh) 'face svg-margin-help-face eh))
+      (put-text-property 0 (length eh) 'svg-margin-cell (list (current-buffer) pos side col) eh)
       (setq props (append props (list 'help-echo eh))))
     (when props
       (list (cons 'rect (cons (cons x 0) (cons (+ x cw) h)))
-            (intern (format "svg-margin--area-%d" i))
+            (intern (format "svg-margin--area-%d" col))
             props))))
 
 ;;;; Overlays
@@ -488,7 +516,12 @@ prepends; the click position then selects the indicator."
   "Create an overlay at POS carrying the composite SIDE image for PACKED.
 RCOLS is the SIDE's reserved column count the image spans; CW and LH are the
 column pixel width and line height for the image."
-  (let* ((img (svg-margin--image packed side rcols cw lh))
+  (let* ((hovered-col (and svg-margin-hover-highlight svg-margin--hovered
+                           (eq (nth 0 svg-margin--hovered) (current-buffer))
+                           (eql (nth 1 svg-margin--hovered) pos)
+                           (eq (nth 2 svg-margin--hovered) side)
+                           (nth 3 svg-margin--hovered)))
+         (img (svg-margin--image packed pos side rcols cw lh hovered-col))
          (marg (if (eq side 'left) 'left-margin 'right-margin))
          ;; Compose the line's tooltip from each indicator's full hint (label +
          ;; "click to ..." + menu).  Done at the STRING level because a margin
@@ -654,6 +687,23 @@ before first being zeroed, so they can be restored exactly -- including when
         (setq svg-margin--timer
               (run-with-idle-timer svg-margin-idle-delay nil
                                    #'svg-margin--render buf))))))
+
+;;;###autoload
+(defun svg-margin--note-help (help)
+  "Update the hovered cell from HELP and re-render if it changed.
+Wire `show-help-function' to call this (then display HELP as usual): it fires
+on mouse enter, move AND leave (leave calls it with nil), so the hovered cell
+can be tracked and `svg-margin-hover-highlight' drawn behind it.  HELP carries
+the cell identity in its `svg-margin-cell' text property (see
+`svg-margin--cell-area')."
+  (when svg-margin-hover-highlight
+    (let ((cell (and (stringp help) (> (length help) 0)
+                     (get-text-property 0 'svg-margin-cell help))))
+      (unless (equal cell svg-margin--hovered)
+        (let ((old svg-margin--hovered))
+          (setq svg-margin--hovered cell)
+          (dolist (c (delq nil (list (car-safe old) (car-safe cell))))
+            (when (buffer-live-p c) (svg-margin--schedule c))))))))
 
 (defun svg-margin--after-change (&rest _)
   "Schedule a re-render after a buffer change."

@@ -82,6 +82,7 @@
     (let* ((bw (max 4 (round (* w 0.52))))
            (bx (+ x (/ (- w bw) 2)))
            (top (+ y (round (* h 0.16))))
+
            (bot (+ y (round (* h 0.84))))
            (notch (+ y (round (* h 0.6)))))
       (svg-polygon svg
@@ -143,6 +144,7 @@
                              :help "git: deleted hunk"
                              :action-help "show hunk diff"
                              :action (zetta-svg-margin--gg-action l #'git-gutter:popup-hunk)
+
                              :menu (zetta-svg-margin--gg-menu l))
                        out))))))
         out))))
@@ -311,6 +313,7 @@
               (seen (make-hash-table :test 'eql)) out)
           (save-excursion
             (goto-char (point-min))
+
             (while (re-search-forward re nil t)
               ;; one indicator per LINE, not per occurrence -- several matches
               ;; on the same line must not each claim a column.
@@ -402,6 +405,15 @@ the recompute yields the same hunks we skip, breaking the cycle."
 ;; Runs after init, when the packages svg-margin replaces are loaded: turn
 ;; off their fringe drawing, then enable the gutter everywhere.
 
+(defvar zetta-svg-margin--orig-show-help nil
+  "The `show-help-function' in effect before svg-margin wrapped it.")
+
+(defun zetta-svg-margin--show-help (help)
+  "Track the hovered indicator (`svg-margin--note-help'), then show HELP as before."
+  (svg-margin--note-help help)
+  (when (functionp zetta-svg-margin--orig-show-help)
+    (funcall zetta-svg-margin--orig-show-help help)))
+
 (defun zetta-svg-margin-activate ()
   "Disable the fringe drawers svg-margin replaces and enable the gutter."
   ;; evil marks now come from the margin provider, not the fringe.
@@ -411,6 +423,14 @@ the recompute yields the same hunks we skip, breaking the cycle."
   (when (and (fboundp 'git-gutter:view-diff-infos)
              (not (advice-member-p #'zetta-svg-margin--gg-feed 'git-gutter:view-diff-infos)))
     (advice-add 'git-gutter:view-diff-infos :override #'zetta-svg-margin--gg-feed))
+  ;; Hover background: route help display through `svg-margin--note-help' so the
+  ;; hovered indicator gets a drawn background (works because show-help-function
+  ;; fires on mouse enter, move AND leave).  Done here (after init) so it sits
+  ;; on top of whatever tooltip.el left in `show-help-function'.
+  (setq svg-margin-hover-highlight t)
+  (unless (eq show-help-function #'zetta-svg-margin--show-help)
+    (setq zetta-svg-margin--orig-show-help show-help-function
+          show-help-function #'zetta-svg-margin--show-help))
   (global-svg-margin-mode 1)
   (svg-margin-refresh-all))
 

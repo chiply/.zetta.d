@@ -34,6 +34,7 @@
 (declare-function global-evil-fringe-mark-mode "evil-fringe-mark")
 (declare-function bookmark-get-filename "bookmark")
 (declare-function bookmark-get-position "bookmark")
+(declare-function bookmark-jump "bookmark")
 (declare-function flycheck-error-line "flycheck")
 (declare-function flycheck-error-level "flycheck")
 (declare-function flycheck-error-message "flycheck")
@@ -105,9 +106,11 @@
           (let ((bmfile (ignore-errors (bookmark-get-filename bm)))
                 (pos (ignore-errors (bookmark-get-position bm))))
             (when (and bmfile pos (string= (file-truename bmfile) file))
-              (push (list :pos pos :shape 'bookmark :color "#7d5bed"
-                          :help (format "bookmark: %s" (car bm)))
-                    out))))
+              (let ((name (car bm)))
+                (push (list :pos pos :shape 'bookmark :color "#7d5bed"
+                            :help (format "bookmark: %s (click to jump)" name)
+                            :action (lambda () (interactive) (bookmark-jump name)))
+                      out)))))
         out))))
 
 (defun zetta-svg-margin-evil-marks (buffer)

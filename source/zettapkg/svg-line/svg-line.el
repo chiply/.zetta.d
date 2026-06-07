@@ -727,18 +727,27 @@ ITEMS is an alist of (LABEL . COMMAND); TITLE labels the menu."
     (when choice
       (if (commandp choice) (call-interactively choice) (funcall choice)))))
 
+(defvar svg-line--hover-timer nil
+  "Idle timer that applies a hover re-render off the redisplay path.")
+
 ;;;###autoload
 (defun svg-line--note-help (help)
   "Update the hovered wrap item from HELP and re-render if it changed.
 Wire `show-help-function' to call this (then display HELP): it fires on mouse
 enter, move AND leave (leave with nil), so the hovered item's `:id' -- carried
-in HELP's `svg-line-tab' text property -- can be tracked and a hover box drawn."
+in HELP's `svg-line-tab' text property -- can be tracked and a hover box drawn.
+The re-render is DEFERRED to an idle timer: this runs during the help-echo
+display (itself during redisplay), and forcing a redisplay synchronously here
+would re-enter the renderer and degrade the other lines (the safety guard
+returns a stale value)."
   (when svg-line-hover-highlight
     (let ((id (and (stringp help) (> (length help) 0)
                    (get-text-property 0 'svg-line-tab help))))
       (unless (equal id svg-line--hovered)
         (setq svg-line--hovered id)
-        (force-mode-line-update t)))))
+        (when (timerp svg-line--hover-timer) (cancel-timer svg-line--hover-timer))
+        (setq svg-line--hover-timer
+              (run-with-idle-timer 0 nil (lambda () (force-mode-line-update t))))))))
 
 (defun svg-line--wrap-params (spec)
   "Resolve the wrap layout params from SPEC (matching `svg-line--build-wrap')."

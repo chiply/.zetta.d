@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.1.10](https://github.com/chiply/.zetta.d/compare/v0.1.9...v0.1.10) (2026-06-07)
+
+
+### Features
+
+* clickable, hover-aware indicators in the SVG bars and margins ([799780b](https://github.com/chiply/.zetta.d/commit/799780be79035e928aa19b282a56357dabeef8a9))
+* **config:** clickable indicators in mode-line, tab-bar and header-line ([68ef349](https://github.com/chiply/.zetta.d/commit/68ef349481e9b47170e2a2de396d60303da722a0))
+* **config:** show help-echo in the echo area (no tooltip frame) ([07378be](https://github.com/chiply/.zetta.d/commit/07378beb2a9e747a3d242af3a8fbdeb7396161ec))
+* **svg-line:** interactive lines-layout segments (click, menu, hover) ([a6b0378](https://github.com/chiply/.zetta.d/commit/a6b0378c2eab9b017a066c751ea1b0da455407d3))
+* **svg-line:** interactive tab-line (click to switch, menu, hover) ([7c9ae4f](https://github.com/chiply/.zetta.d/commit/7c9ae4f2c791850a98e6004578c9bd36c0caca70))
+* **svg-margin:** background-on-hover via show-help-function ([fec85ed](https://github.com/chiply/.zetta.d/commit/fec85ed3364c5bb22bb1f3ec51bc91de5b8e2c7b))
+* **svg-margin:** contrasting background on the hover help ([c3f0cf5](https://github.com/chiply/.zetta.d/commit/c3f0cf5e8b0e6a0abbdd9bcd30ced637eab6328f))
+* **svg-margin:** hover tooltip "click to …" + gutter hover highlight ([e0e7775](https://github.com/chiply/.zetta.d/commit/e0e7775cec501825284366e55f7ae39ef0e742dd))
+* **svg-margin:** margin click dispatch, right-click menus, action sets ([482df13](https://github.com/chiply/.zetta.d/commit/482df130f75864c606b3aa76e8fa7dd03d3489ac))
+* **svg-margin:** per-indicator clickability + tooltips via image map ([ef6f5b2](https://github.com/chiply/.zetta.d/commit/ef6f5b2ec95a409b9d47109378f42e6496f3a368))
+
+
+### Bug Fixes
+
+* **svg-line:** defer hover re-render to avoid degrading other lines ([3cce576](https://github.com/chiply/.zetta.d/commit/3cce5766844853962f1592f671c89fe509159092))
+* **svg-line:** tab-line hover + tooltip via string-level help-echo ([7dcd7d8](https://github.com/chiply/.zetta.d/commit/7dcd7d89b6a25ee49e8d329327b032cceeb610e1))
+* **svg-margin:** drop non-working mouse-face hover highlight ([da6d7cd](https://github.com/chiply/.zetta.d/commit/da6d7cdc60bcf983b3129042718a370fabdc5cf7))
+* **svg-margin:** face the per-area help too (background shows over indicator) ([906ea4e](https://github.com/chiply/.zetta.d/commit/906ea4e9e0b1cd03cc967bd709521cc6ff5bf953))
+* **svg-margin:** reliable "click to …" tooltip; accept no margin cursor change ([fcb2532](https://github.com/chiply/.zetta.d/commit/fcb25328b4af3f9ae907112c315d04d1ef127c1d))
+* **svg-margin:** unique hot-spot ids so hover tracks same-type indicators ([4a27ac2](https://github.com/chiply/.zetta.d/commit/4a27ac28227a6430f344baa8bb6513f53491aa79))
+
 ## [0.1.9](https://github.com/chiply/.zetta.d/compare/v0.1.8...v0.1.9) (2026-06-06)
 
 

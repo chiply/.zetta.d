@@ -749,27 +749,44 @@ in HELP's `svg-line-tab' text property -- can be tracked and a hover box drawn."
           :lh (+ (svg-line--scaled (svg-line--opt spec :font-size svg-line-font-size))
                  (svg-line--scaled (svg-line--opt spec :line-pad svg-line-line-pad))))))
 
+(defun svg-line--wrap-tab-at-xy (name win x y)
+  "Return the wrap item of line NAME at image pixel (X, Y) in WIN, or nil.
+Recomputes the layout in WIN (so it matches that window's render) and
+hit-tests (X, Y) against the placements."
+  (when (and (windowp win) (numberp x) (numberp y))
+    (with-selected-window win
+      (let* ((spec (svg-line--spec name))
+             (p (svg-line--wrap-params spec))
+             (items (ignore-errors (funcall (plist-get spec :content))))
+             (lh (plist-get p :lh)))
+        (when items
+          ;; NB: use `tab', not `it' -- in cl-loop `when ... return it' the
+          ;; symbol `it' is anaphoric (the `when' value), not our variable.
+          (cl-loop for (px top cw tab) in
+                   (svg-line--wrap-place items (plist-get p :width)
+                                         (plist-get p :char-advance) (plist-get p :gap) lh)
+                   when (and (<= px x) (< x (+ px cw)) (<= top y) (< y (+ top lh)))
+                   return tab))))))
+
 (defun svg-line--wrap-tab-at (name posn)
-  "Return the wrap item of line NAME under POSN, or nil.
-Recomputes the layout in POSN's window (so it matches that window's render)
-and hit-tests the click's pixel position against the placements."
-  (let ((win (posn-window posn)))
-    (when (windowp win)
-      (with-selected-window win
-        (let* ((spec (svg-line--spec name))
-               (p (svg-line--wrap-params spec))
-               (items (ignore-errors (funcall (plist-get spec :content))))
-               (lh (plist-get p :lh))
-               (xy (posn-object-x-y posn))
-               (cx (and xy (car xy))) (cy (and xy (cdr xy))))
-          (when (and cx cy items)
-            ;; NB: use `tab', not `it' -- in cl-loop `when ... return it' the
-            ;; symbol `it' is anaphoric (the `when' value), not our variable.
-            (cl-loop for (px top cw tab) in
-                     (svg-line--wrap-place items (plist-get p :width)
-                                           (plist-get p :char-advance) (plist-get p :gap) lh)
-                     when (and (<= px cx) (< cx (+ px cw)) (<= top cy) (< cy (+ top lh)))
-                     return tab)))))))
+  "Return the wrap item of line NAME under POSN (a click), or nil."
+  (let ((xy (posn-object-x-y posn)))
+    (svg-line--wrap-tab-at-xy name (posn-window posn) (car-safe xy) (cdr-safe xy))))
+
+(defun svg-line--wrap-help-fn (name)
+  "Return a `help-echo' FUNCTION for wrap line NAME.
+A special area (e.g. the tab line) does not fire image map *area* help-echo,
+but it does call a STRING-level help-echo function on mouse move -- so we use
+the mouse pixel position to find the item under the pointer and return its
+help (which is tagged so `svg-line--note-help' tracks the hover)."
+  (lambda (win _obj _pos)
+    (let* ((mp (mouse-pixel-position))
+           (mx (cadr mp)) (my (cddr mp))
+           (tab (and (windowp win) (numberp mx) (numberp my)
+                     (svg-line--wrap-tab-at-xy name win
+                                               (- mx (window-pixel-left win))
+                                               (- my (window-pixel-top win))))))
+      (and tab (svg-line--tab-help tab)))))
 
 (defun svg-line--wrap-make-click-map (name)
   "Return a keymap dispatching tab-line clicks for line NAME.
@@ -802,12 +819,17 @@ resolves whether or not the special area prepends an event prefix."
    (lambda ()
      (let ((spec (svg-line--spec name)))
        (if (eq (or (plist-get spec :layout) 'lines) 'wrap)
-           ;; wrap returns (SVG . MAP); display with the map and attach the
-           ;; click keymap so tabs are clickable.
-           (let* ((built (svg-line--build-wrap spec))
-                  (str (svg-line-display (car built)
-                                         (when (cdr built) (list :map (cdr built))))))
-             (propertize str 'keymap (svg-line--wrap-make-click-map name)))
+           ;; A special area (tab line) honours STRING-level keymap/help-echo
+           ;; but not image-map *area* properties, so drive clicks and hover
+           ;; from the string: a click keymap (dispatched by pixel position),
+           ;; a help-echo FUNCTION (mouse-move hover + tooltip), and a hand
+           ;; pointer.  (The hover BOX itself is drawn into the SVG by
+           ;; `svg-line--build-wrap' from `svg-line--hovered'.)
+           (let ((str (svg-line-display (car (svg-line--build-wrap spec)))))
+             (propertize str
+                         'keymap (svg-line--wrap-make-click-map name)
+                         'help-echo (svg-line--wrap-help-fn name)
+                         'pointer 'hand))
          (svg-line-display (svg-line--build-lines spec)))))))
 
 (defun svg-line--renderer (name)

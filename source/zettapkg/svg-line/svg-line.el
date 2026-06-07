@@ -394,6 +394,70 @@ Returns an svg object (see `svg-create')."
     svg))
 
 ;;;###autoload
+;;;; wrap-layout interactivity (clicks, menus, hover) -- see also `svg-line-define'
+;; ----------------------------------------------------------------
+
+(defcustom svg-line-hover-highlight nil
+  "When non-nil, draw a background behind the wrap item under the mouse.
+Needs `show-help-function' wired to call `svg-line--note-help' (the package
+can't change that global itself); the mouse enter/move/leave signal arrives
+through the help-echo machinery.  See the tab-line config."
+  :type 'boolean)
+
+(defcustom svg-line-help-face 'svg-line-help
+  "Face applied to a wrap item's hover help, or nil to leave it unstyled."
+  :type '(choice (const :tag "No face" nil) face))
+
+(defface svg-line-help '((t :inherit highlight))
+  "Face for a wrap item's hover help (its `help-echo').
+With tooltips off the help shows in the echo area, where this contrasting
+background makes the cue stand out; the face is preserved into the echo area.")
+
+(defvar svg-line--hovered nil
+  "Id of the wrap item under the mouse (its STATE `:id'), or nil.
+Set by `svg-line--note-help'; the renderer draws a hover box behind the item
+whose `:id' matches.")
+
+(defvar svg-line--wrap-map nil
+  "Image map built by the last `svg-line-wrap-image' call, or nil.
+A side channel so `svg-line-wrap-image' keeps returning a plain svg object
+\(its documented contract) while `svg-line--build-wrap' can still pick up the
+per-item hot-spots to put on the image descriptor.")
+
+(defun svg-line--wrap-place (items width char-advance gap lh)
+  "Return placements (X TOP CW ITEM) for ITEMS in a `wrap' layout.
+Shared by drawing (`svg-line-wrap-image') and click hit-testing
+\(`svg-line--wrap-tab-at') so both agree on where each item sits."
+  (let ((x 0) (row 0) (out nil))
+    (dolist (it items)
+      (let* ((label (car it))
+             (cw (* (length label) char-advance))
+             (w  (+ cw (* gap char-advance))))
+        (when (and (> x 0) (> (+ x w) width))
+          (setq x 0 row (1+ row)))
+        (push (list x (* row lh) cw it) out)
+        (setq x (+ x w))))
+    (nreverse out)))
+
+(defun svg-line--tab-help (item)
+  "Compose, face and tag the hover help for wrap ITEM, or nil.
+The string is tagged with the item's STATE `:id' in the `svg-line-tab' text
+property so `svg-line--note-help' can track which item the mouse is over."
+  (let ((state (cdr item)))
+    (when (consp state)
+      (let* ((help (plist-get state :help))
+             (ah   (plist-get state :action-help))
+             (parts (delq nil
+                          (list help
+                                (and (plist-get state :action) ah (concat "click to " ah))
+                                (and (plist-get state :menu) "right-click for menu")))))
+        (when parts
+          (let ((s (string-join parts "  ·  ")))
+            (when svg-line-help-face
+              (setq s (propertize s 'face svg-line-help-face)))
+            (setq s (propertize s 'svg-line-tab (plist-get state :id)))
+            s))))))
+
 (cl-defun svg-line-wrap-image (items &key
                                      (width 100)
                                      (font (or svg-line-font (face-attribute 'default :family nil t)))
@@ -406,7 +470,9 @@ Returns an svg object (see `svg-create')."
                                      (current-foreground nil)
                                      (current-background nil)
                                      (modified-foreground nil)
-                                     (modified-background nil))
+                                     (modified-background nil)
+                                     (hovered nil)
+                                     (hover-color nil))
   "Build a `wrap'-layout SVG from ITEMS, a list of (LABEL . STATE).
 Items flow left-to-right and wrap onto new rows at WIDTH.  GAP is the
 inter-item gap in character widths.  FONT, FONT-SIZE, LINE-PAD,
@@ -414,68 +480,74 @@ CHAR-ADVANCE, FOREGROUND and BACKGROUND set the text family, size,
 per-row padding, character advance and base colours.  Returns an svg
 object.
 
-STATE selects how each item is styled:
+STATE selects how each item is styled and made interactive:
   - nil / non-nil atom  -- treated as CURRENTP (backward compatible);
-  - a plist             -- recognised keys `:current' and `:modified'.
+  - a plist             -- `:current' / `:modified' for styling, plus the
+    optional `:id' `:help' `:action' `:action-help' `:menu' for hover/click
+    (see `svg-line-define').
 
-A current item is drawn bold, in CURRENT-FOREGROUND, over a
-CURRENT-BACKGROUND box.  A (non-current) modified item is drawn in
-MODIFIED-FOREGROUND, over a MODIFIED-BACKGROUND box when set.  When an
-item is BOTH current and modified, its box is tinted with
-MODIFIED-FOREGROUND (the readable current label stays, but the unsaved
-state remains visible behind the highlight).
-
-A per-item icon, if wanted, is just a Nerd-Font glyph at the start of
-LABEL (it is plain text and flows with the label)."
+A current item is drawn bold over CURRENT-BACKGROUND; a modified item uses
+MODIFIED-FOREGROUND (and MODIFIED-BACKGROUND when set); an ordinary item whose
+`:id' equals HOVERED gets a HOVER-COLOR box.  Items with `:help'/`:action'/
+`:menu' become image map hot-spots (per-item help-echo + hand pointer)."
   (let* ((foreground (svg-line--color foreground))
          (background (svg-line--color background))
          (current-foreground (svg-line--color current-foreground))
          (current-background (svg-line--color current-background))
          (modified-foreground (svg-line--color modified-foreground))
          (modified-background (svg-line--color modified-background))
+         (hover-color (svg-line--color hover-color))
          (fz font-size)
          (lh (+ fz line-pad))
-         (x 0) (row 0) (placements nil))
-    (dolist (it items)
-      (let* ((label (car it))
-             (state (cdr it))
-             (currentp  (if (consp state) (plist-get state :current) state))
-             (modifiedp (and (consp state) (plist-get state :modified)))
-             (cw (* (length label) char-advance))    ; item (box) width
-             (w  (+ cw (* gap char-advance))))        ; + inter-item gap
-        (when (and (> x 0) (> (+ x w) width))
-          (setq x 0 row (1+ row)))
-        (push (list x (* row lh) cw label currentp modifiedp) placements)
-        (setq x (+ x w))))
-    (let* ((height (max 1 (* (1+ row) lh)))
-           (svg (svg-create width height)))
-      (when background (svg-rectangle svg 0 0 width height :fill background))
-      (dolist (p (nreverse placements))
-        (cl-destructuring-bind (px top cw label currentp modifiedp) p
-          (let ((box  (cond ;; current AND modified: tint the current box with the
-                            ;; modified accent so "unsaved" stays visible behind
-                            ;; the current highlight (the label stays readable).
-                            ((and currentp modifiedp) (or modified-foreground current-background))
-                            (currentp  current-background)
-                            (modifiedp modified-background)))
-                (fill (cond (currentp  (or current-foreground foreground))
-                            (modifiedp (or modified-foreground foreground))
-                            (t foreground))))
-            (when box
-              (svg-rectangle svg px top cw lh :fill box :rx 3))
-            (svg-line--add-text svg label :x px :y (+ top fz)
-                                :font font :font-size fz :fill fill
-                                :weight (if currentp "bold" "normal")))))
-      svg)))
+         (placements (svg-line--wrap-place items width char-advance gap lh))
+         (height (max 1 (apply #'max lh (mapcar (lambda (p) (+ (nth 1 p) lh)) placements))))
+         (svg (svg-create width height))
+         (map nil))
+    (when background (svg-rectangle svg 0 0 width height :fill background))
+    (dolist (p placements)
+      (cl-destructuring-bind (px top cw it) p
+        (let* ((label (car it))
+               (state (cdr it))
+               (currentp  (if (consp state) (plist-get state :current) state))
+               (modifiedp (and (consp state) (plist-get state :modified)))
+               (hoveredp  (and hover-color (consp state) hovered
+                               (equal (plist-get state :id) hovered)))
+               (box  (cond ((and currentp modifiedp) (or modified-foreground current-background))
+                           (currentp  current-background)
+                           (modifiedp modified-background)
+                           (hoveredp  hover-color)))
+               (fill (cond (currentp  (or current-foreground foreground))
+                           (modifiedp (or modified-foreground foreground))
+                           (t foreground))))
+          (when box
+            (svg-rectangle svg px top cw lh :fill box :rx 3))
+          (svg-line--add-text svg label :x px :y (+ top fz)
+                              :font font :font-size fz :fill fill
+                              :weight (if currentp "bold" "normal"))
+          ;; image-map hot-spot for hover/click
+          (let ((eh (svg-line--tab-help it)))
+            (when (and (consp state)
+                       (or eh (plist-get state :action) (plist-get state :menu)))
+              (let ((props (list 'pointer 'hand)))
+                (when eh (setq props (append props (list 'help-echo eh))))
+                (push (list (cons 'rect (cons (cons px top) (cons (+ px cw) (+ top lh))))
+                            (make-symbol (format "svg-line-tab-%d-%d" px top))
+                            props)
+                      map)))))))
+    ;; Stash the hot-spot map in the side channel (nil when no interactive
+    ;; items) and return the svg object, per this function's contract.
+    (setq svg-line--wrap-map (nreverse map))
+    svg))
 
 ;;;###autoload
-(defun svg-line-display (svg)
+(defun svg-line-display (svg &optional props)
   "Wrap SVG object as a one-space string carrying it as a display image.
+PROPS, if given, are extra `svg-image' keywords (e.g. (:map MAP)).
 Pinned to `:scale' 1.0: the image IS the line at its exact target pixel
 width, so it must NOT inherit `image-scaling-factor' (auto), which would
 scale it with the default font and overflow the frame.  Scale the line by
 scaling its `:font-size'/`:char-advance' instead, not the image."
-  (propertize " " 'display (svg-image svg :ascent 'center :scale 1.0)))
+  (propertize " " 'display (apply #'svg-image svg :ascent 'center :scale 1.0 props)))
 
 ;;;; Safety wrapper
 ;; ----------------------------------------------------------------
@@ -611,7 +683,8 @@ Sizes scale with the default font (see `svg-line-scale-with-text-scale')."
      :background bg)))
 
 (defun svg-line--build-wrap (spec)
-  "Build the `wrap' SVG for SPEC.
+  "Build the `wrap' layout for SPEC, returning (SVG . MAP).
+MAP is the per-item image-map hot-spots (nil when no interactive items).
 When SPEC has an `:active' predicate that is false, the inactive variant
 of each colour applies (falling back to the active colour when unset),
 mirroring the `lines' layout."
@@ -621,7 +694,8 @@ mirroring the `lines' layout."
                  (if active
                      (svg-line--opt spec key default)
                    (or (svg-line--opt spec inactive-key)
-                       (svg-line--opt spec key default))))))
+                       (svg-line--opt spec key default)))))
+         (svg
     (svg-line-wrap-image (funcall (plist-get spec :content))
                          :width (svg-line--width spec)
                          :font (svg-line--opt spec :font
@@ -635,18 +709,106 @@ mirroring the `lines' layout."
                          :current-foreground (funcall pick :current-foreground :inactive-current-foreground)
                          :current-background (funcall pick :current-background :inactive-current-background)
                          :modified-foreground (funcall pick :modified-foreground :inactive-modified-foreground)
-                         :modified-background (funcall pick :modified-background :inactive-modified-background))))
+                         :modified-background (funcall pick :modified-background :inactive-modified-background)
+                         :hovered svg-line--hovered
+                         :hover-color (or (svg-line--opt spec :hover-color)
+                                          (face-background 'highlight nil 'default)
+                                          "#444466"))))
+    (cons svg svg-line--wrap-map)))
+
+;;;; wrap interactivity: hover tracking + click/menu dispatch
+;; ----------------------------------------------------------------
+
+(defun svg-line--popup-menu (title items)
+  "Pop up a menu of ITEMS at the current event and run the chosen command.
+ITEMS is an alist of (LABEL . COMMAND); TITLE labels the menu."
+  (let ((choice (x-popup-menu last-input-event
+                              (list (or title "svg-line") (cons "" items)))))
+    (when choice
+      (if (commandp choice) (call-interactively choice) (funcall choice)))))
+
+;;;###autoload
+(defun svg-line--note-help (help)
+  "Update the hovered wrap item from HELP and re-render if it changed.
+Wire `show-help-function' to call this (then display HELP): it fires on mouse
+enter, move AND leave (leave with nil), so the hovered item's `:id' -- carried
+in HELP's `svg-line-tab' text property -- can be tracked and a hover box drawn."
+  (when svg-line-hover-highlight
+    (let ((id (and (stringp help) (> (length help) 0)
+                   (get-text-property 0 'svg-line-tab help))))
+      (unless (equal id svg-line--hovered)
+        (setq svg-line--hovered id)
+        (force-mode-line-update t)))))
+
+(defun svg-line--wrap-params (spec)
+  "Resolve the wrap layout params from SPEC (matching `svg-line--build-wrap')."
+  (let ((sc (svg-line--text-scale)))
+    (list :width (svg-line--width spec)
+          :char-advance (* (or (svg-line--opt spec :char-advance nil) svg-line-char-advance) sc)
+          :gap (svg-line--opt spec :gap 3)
+          :lh (+ (svg-line--scaled (svg-line--opt spec :font-size svg-line-font-size))
+                 (svg-line--scaled (svg-line--opt spec :line-pad svg-line-line-pad))))))
+
+(defun svg-line--wrap-tab-at (name posn)
+  "Return the wrap item of line NAME under POSN, or nil.
+Recomputes the layout in POSN's window (so it matches that window's render)
+and hit-tests the click's pixel position against the placements."
+  (let ((win (posn-window posn)))
+    (when (windowp win)
+      (with-selected-window win
+        (let* ((spec (svg-line--spec name))
+               (p (svg-line--wrap-params spec))
+               (items (ignore-errors (funcall (plist-get spec :content))))
+               (lh (plist-get p :lh))
+               (xy (posn-object-x-y posn))
+               (cx (and xy (car xy))) (cy (and xy (cdr xy))))
+          (when (and cx cy items)
+            ;; NB: use `tab', not `it' -- in cl-loop `when ... return it' the
+            ;; symbol `it' is anaphoric (the `when' value), not our variable.
+            (cl-loop for (px top cw tab) in
+                     (svg-line--wrap-place items (plist-get p :width)
+                                           (plist-get p :char-advance) (plist-get p :gap) lh)
+                     when (and (<= px cx) (< cx (+ px cw)) (<= top cy) (< cy (+ top lh)))
+                     return tab)))))))
+
+(defun svg-line--wrap-make-click-map (name)
+  "Return a keymap dispatching tab-line clicks for line NAME.
+Left/middle click runs the item's STATE `:action'; right click pops its
+`:menu'.  Bindings are duplicated under a catch-all default so the click
+resolves whether or not the special area prepends an event prefix."
+  (let* ((run (lambda ()
+                (interactive)
+                (let* ((it (svg-line--wrap-tab-at name (event-start last-input-event)))
+                       (cmd (and (consp (cdr-safe it)) (plist-get (cdr it) :action))))
+                  (when cmd (call-interactively cmd)))))
+         (menu (lambda ()
+                 (interactive)
+                 (let* ((it (svg-line--wrap-tab-at name (event-start last-input-event)))
+                        (items (and (consp (cdr-safe it)) (plist-get (cdr it) :menu))))
+                   (when items (svg-line--popup-menu (car it) items)))))
+         (sub (make-sparse-keymap)) (km (make-sparse-keymap)))
+    (dolist (k (list [mouse-1] [mouse-2]))
+      (define-key km k run) (define-key sub k run))
+    (define-key km [down-mouse-3] menu) (define-key sub [down-mouse-3] menu)
+    (dolist (k (list [down-mouse-1] [down-mouse-2] [mouse-3]))
+      (define-key km k #'ignore) (define-key sub k #'ignore))
+    (define-key km [t] sub)
+    km))
 
 (defun svg-line--render (name)
   "Render line NAME to a display string (error/loop guarded)."
   (svg-line-safe
    name
    (lambda ()
-     (let* ((spec (svg-line--spec name))
-            (svg (pcase (or (plist-get spec :layout) 'lines)
-                   ('wrap (svg-line--build-wrap spec))
-                   (_     (svg-line--build-lines spec)))))
-       (svg-line-display svg)))))
+     (let ((spec (svg-line--spec name)))
+       (if (eq (or (plist-get spec :layout) 'lines) 'wrap)
+           ;; wrap returns (SVG . MAP); display with the map and attach the
+           ;; click keymap so tabs are clickable.
+           (let* ((built (svg-line--build-wrap spec))
+                  (str (svg-line-display (car built)
+                                         (when (cdr built) (list :map (cdr built))))))
+             (propertize str 'keymap (svg-line--wrap-make-click-map name)))
+         (svg-line-display (svg-line--build-lines spec)))))))
 
 (defun svg-line--renderer (name)
   "Return (creating if needed) the named renderer function symbol for NAME."

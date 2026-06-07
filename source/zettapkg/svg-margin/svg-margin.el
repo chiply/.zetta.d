@@ -414,6 +414,11 @@ consulted -- the area id becomes an event prefix instead."
         (props nil))
     (when action (setq props (list 'pointer 'hand)))
     (when (and eh (> (length eh) 0))
+      ;; Face the per-area help too (not just the string-level help in
+      ;; `svg-margin--place'): a margin honours image-map area help-echo when
+      ;; the pointer is directly over the indicator, and that path would
+      ;; otherwise show the help without the contrasting background.
+      (when svg-margin-help-face (setq eh (propertize eh 'face svg-margin-help-face)))
       (setq props (append props (list 'help-echo eh))))
     (when props
       (list (cons 'rect (cons (cons x 0) (cons (+ x cw) h)))

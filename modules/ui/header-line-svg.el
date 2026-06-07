@@ -43,6 +43,9 @@
   :font (lambda () zetta-svg-line-font)
   :font-size (lambda () zetta-header-line-svg-font-size)
   :line-pad (lambda () zetta-header-line-svg-line-pad)
+  ;; breadcrumb rows are laid out by run (clickable crumb segments), so match
+  ;; the glyph width like the other bars (see `zetta-modeline-svg-char-advance')
+  :char-advance 8
   :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
                              (face-foreground 'default nil t) "#cccccc")))
 

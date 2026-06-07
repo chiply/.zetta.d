@@ -69,7 +69,10 @@ Or manually, with `svg-margin.el` on your `load-path`:
 | `:text`     | a short string drawn centred (e.g. an evil mark letter)        |
 | `:draw`     | `(lambda (SVG X Y W H COLOR) ...)` for full control            |
 | `:color`/`:face` | fill colour, or a face whose foreground is used           |
-| `:help`     | tooltip string                                                 |
+| `:help`     | tooltip string (per-indicator, shown on hover)                 |
+| `:action`   | a command run on left/middle click; gives a hand pointer. Each indicator is its own hot-spot via the image `:map` |
+| `:action-help` | short verb phrase for the click (e.g. `"jump"`); the hover tooltip reads `"…  click to jump"` |
+| `:menu`     | alist of `(LABEL . COMMAND)`; right-click pops up a context menu of these |
 
 Indicators sharing a `(line, side)` pack into adjacent columns; an explicit
 free `:column` is honoured, otherwise each takes the lowest free slot.

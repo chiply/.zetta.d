@@ -52,7 +52,10 @@
 ;;   :text         a short string drawn centred (e.g. an evil mark letter)
 ;;   :draw         a function (SVG X Y W H COLOR) for full control
 ;;   :color/:face  fill colour, or a face whose foreground is used
-;;   :help         tooltip string
+;;   :help         tooltip string (shown when hovering just this indicator)
+;;   :action       a command (symbol or interactive lambda) run when the
+;;                 indicator is clicked (mouse-1/mouse-2); also gives it a
+;;                 hand pointer.  Implemented via the image `:map' hot-spots.
 ;;
 ;; Indicators sharing a (line, side) are packed into columns and drawn into
 ;; a single composite SVG; the margin width on that side grows to the widest
@@ -355,7 +358,8 @@ window's frame, not just the selected one).  A cell whose draw signals is
 skipped so one bad indicator cannot blank the whole line."
   (let* ((h (max 1 lh))
          (w (max 1 (* rcols cw)))
-         (svg (svg-create w h)))
+         (svg (svg-create w h))
+         (map nil) (i 0))
     (dolist (cell packed)
       (let* ((col (plist-get cell :column))
              (ind (plist-get cell :indicator))
@@ -363,8 +367,36 @@ skipped so one bad indicator cannot blank the whole line."
         (condition-case err
             (svg-margin--draw ind svg x 0 cw h)
           (error (message "svg-margin: drawing an indicator failed: %s"
-                          (error-message-string err))))))
-    (svg-image svg :ascent 'center :scale 1.0)))
+                          (error-message-string err))))
+        ;; Per-cell image-map hot-spot: own help-echo, hand pointer, and a
+        ;; keymap running the indicator's `:action' on a click.  This makes
+        ;; each indicator individually hoverable and clickable within the one
+        ;; composite image.
+        (let ((area (svg-margin--cell-area ind x cw h i)))
+          (when area (push area map)))
+        (setq i (1+ i))))
+    (let ((props (list :ascent 'center :scale 1.0)))
+      (when map (setq props (append props (list :map (nreverse map)))))
+      (apply #'svg-image svg props))))
+
+(defun svg-margin--cell-area (ind x cw h i)
+  "Return an image map hot-spot for IND drawn at X (width CW, height H).
+I disambiguates the area id.  Returns nil unless IND has a `:help' or an
+`:action'.  `:action' (a command) runs on a click and adds a hand pointer."
+  (let ((help (plist-get ind :help))
+        (action (plist-get ind :action))
+        (props nil))
+    (when action
+      (let ((km (make-sparse-keymap)))
+        (define-key km [mouse-1] action)
+        (define-key km [mouse-2] action)
+        (setq props (list 'keymap km 'pointer 'hand))))
+    (when help
+      (setq props (append props (list 'help-echo help))))
+    (when props
+      (list (cons 'rect (cons (cons x 0) (cons (+ x cw) h)))
+            (intern (format "svg-margin--area-%d" i))
+            props))))
 
 ;;;; Overlays
 ;; ----------------------------------------------------------------

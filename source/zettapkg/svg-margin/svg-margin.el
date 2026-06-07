@@ -54,8 +54,9 @@
 ;;   :color/:face  fill colour, or a face whose foreground is used
 ;;   :help         tooltip string (shown when hovering just this indicator)
 ;;   :action       a command (symbol or interactive lambda) run when the
-;;                 indicator is clicked (mouse-1/mouse-2); also gives it a
-;;                 hand pointer.  Implemented via the image `:map' hot-spots.
+;;                 indicator is left/middle-clicked; also gives it a hand pointer.
+;;   :menu         an alist of (LABEL . COMMAND); right-click (mouse-3) pops up
+;;                 a context menu of these and runs the chosen command.
 ;;
 ;; Indicators sharing a (line, side) are packed into columns and drawn into
 ;; a single composite SVG; the margin width on that side grows to the widest
@@ -382,17 +383,15 @@ skipped so one bad indicator cannot blank the whole line."
 (defun svg-margin--cell-area (ind x cw h i)
   "Return an image map hot-spot for IND drawn at X (width CW, height H).
 I disambiguates the area id.  Returns nil unless IND has a `:help' or an
-`:action'.  `:action' (a command) runs on a click and adds a hand pointer."
+`:action'.  Carries per-indicator `help-echo' and a hand `pointer' when the
+indicator is clickable.  The actual click is dispatched by the overlay
+keymap (see `svg-margin--make-click-map'), not here: in a margin the area
+keymap is not consulted -- the area id becomes an event prefix instead."
   (let ((help (plist-get ind :help))
-        (action (plist-get ind :action))
+        (action (or (plist-get ind :action) (plist-get ind :menu)))
         (props nil))
-    (when action
-      (let ((km (make-sparse-keymap)))
-        (define-key km [mouse-1] action)
-        (define-key km [mouse-2] action)
-        (setq props (list 'keymap km 'pointer 'hand))))
-    (when help
-      (setq props (append props (list 'help-echo help))))
+    (when action (setq props (list 'pointer 'hand)))
+    (when help (setq props (append props (list 'help-echo help))))
     (when props
       (list (cons 'rect (cons (cons x 0) (cons (+ x cw) h)))
             (intern (format "svg-margin--area-%d" i))
@@ -409,6 +408,54 @@ I disambiguates the area id.  Returns nil unless IND has a `:help' or an
   (mapc #'delete-overlay svg-margin--overlays)
   (setq svg-margin--overlays nil))
 
+(defun svg-margin--click-column (posn side rcols cw)
+  "Return the indicator column clicked at POSN, given SIDE, RCOLS and CW.
+Uses the click's pixel x within the image; column 0 is nearest the text."
+  (let* ((xy (posn-object-x-y posn))
+         (x (and xy (car xy))))
+    (when (and x (> cw 0))
+      (let ((raw (/ x cw)))
+        (if (eq side 'left) (- rcols 1 raw) raw)))))
+
+(defun svg-margin--popup-menu (title items)
+  "Pop up a menu of ITEMS at the current event and run the chosen command.
+ITEMS is an alist of (LABEL . COMMAND); TITLE labels the menu."
+  (let ((choice (x-popup-menu last-input-event
+                              (list (or title "svg-margin")
+                                    (cons "" items)))))
+    (when choice
+      (if (commandp choice) (call-interactively choice) (funcall choice)))))
+
+(defun svg-margin--make-click-map (clickables side rcols cw)
+  "Build a keymap dispatching a margin click to one of CLICKABLES.
+CLICKABLES is an alist of (COLUMN . INDICATOR).  Left/middle click runs the
+indicator's `:action'; right click (`down-mouse-3') pops up a menu of its
+`:menu' items.  SIDE, RCOLS and CW locate the clicked column.  A default
+\(catch-all) binding absorbs the image map area-id prefix that a margin click
+prepends; the click position then selects the indicator."
+  (let* ((at (lambda ()
+               (let ((col (svg-margin--click-column
+                           (event-start last-input-event) side rcols cw)))
+                 (and col (cdr (assq col clickables))))))
+         (run (lambda ()
+                (interactive)
+                (let* ((ind (funcall at)) (cmd (and ind (plist-get ind :action))))
+                  (when cmd (call-interactively cmd)))))
+         (menu (lambda ()
+                 (interactive)
+                 (let* ((ind (funcall at)) (items (and ind (plist-get ind :menu))))
+                   (when items (svg-margin--popup-menu (plist-get ind :help) items)))))
+         (sub (make-sparse-keymap))
+         (km (make-sparse-keymap)))
+    (define-key sub [mouse-1] run)
+    (define-key sub [mouse-2] run)
+    (define-key sub [down-mouse-3] menu)
+    (define-key sub [down-mouse-1] #'ignore)
+    (define-key sub [down-mouse-2] #'ignore)
+    (define-key sub [mouse-3] #'ignore)
+    (define-key km [t] sub)
+    km))
+
 (defun svg-margin--place (pos side packed rcols cw lh)
   "Create an overlay at POS carrying the composite SIDE image for PACKED.
 RCOLS is the SIDE's reserved column count the image spans; CW and LH are the
@@ -423,8 +470,22 @@ column pixel width and line height for the image."
          ;; wrapping it in a string (((margin SIDE) STRING)) reserves the
          ;; margin space but does not render the nested image.
          (str (propertize " " 'display (list (list 'margin marg) img)))
+         ;; (COLUMN . INDICATOR) for indicators that are clickable (left-click
+         ;; `:action' and/or right-click `:menu').
+         (clickables (delq nil (mapcar (lambda (c)
+                                         (let ((ind (plist-get c :indicator)))
+                                           (and (or (plist-get ind :action)
+                                                    (plist-get ind :menu))
+                                                (cons (plist-get c :column) ind))))
+                                       packed)))
          (ov (make-overlay pos pos)))
     (when (> (length help) 0) (setq str (propertize str 'help-echo help)))
+    ;; A margin click on an image-map area arrives as [AREA-ID mouse-1] looked
+    ;; up in the active keymaps (the area's own keymap is NOT consulted), so we
+    ;; put a keymap on the string with a t-default that catches the area
+    ;; prefix and dispatches by click position -> column -> indicator.
+    (when clickables
+      (setq str (propertize str 'keymap (svg-margin--make-click-map clickables side rcols cw))))
     (overlay-put ov 'svg-margin t)
     (overlay-put ov 'before-string str)
     ;; NB: do NOT set `evaporate' -- these overlays are zero-length, and an

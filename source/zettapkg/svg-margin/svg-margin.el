@@ -55,6 +55,8 @@
 ;;   :help         tooltip string (shown when hovering just this indicator)
 ;;   :action       a command (symbol or interactive lambda) run when the
 ;;                 indicator is left/middle-clicked; also gives it a hand pointer.
+;;   :action-help  a short verb phrase for the click, e.g. \"jump\"; the hover
+;;                 tooltip then reads \"...  click to jump\".
 ;;   :menu         an alist of (LABEL . COMMAND); right-click (mouse-3) pops up
 ;;                 a context menu of these and runs the chosen command.
 ;;
@@ -135,6 +137,12 @@ A provider whose indicator has no `:pos'/`:line' (or an out-of-range one) has
 that indicator silently skipped; enable this to get a message naming the
 provider, which helps when writing one."
   :type 'boolean)
+
+(defface svg-margin-highlight '((t :inherit highlight))
+  "Face for a clickable gutter cell on mouse hover.
+Applied as `mouse-face' to the whole line's gutter image, so the background
+shows through transparent indicator SVGs while the pointer is over it.  Note
+this highlights the line's whole reserved strip, not a single column.")
 
 ;;;; Colour
 ;; ----------------------------------------------------------------
@@ -380,18 +388,29 @@ skipped so one bad indicator cannot blank the whole line."
       (when map (setq props (append props (list :map (nreverse map)))))
       (apply #'svg-image svg props))))
 
+(defun svg-margin--area-help (ind)
+  "Compose IND's hover tooltip: its `:help', the click action, and a menu hint."
+  (let ((parts (delq nil
+                     (list (plist-get ind :help)
+                           (and (plist-get ind :action) (plist-get ind :action-help)
+                                (concat "click to " (plist-get ind :action-help)))
+                           (and (plist-get ind :menu) "right-click for menu")))))
+    (and parts (string-join parts "  ·  "))))
+
 (defun svg-margin--cell-area (ind x cw h i)
   "Return an image map hot-spot for IND drawn at X (width CW, height H).
 I disambiguates the area id.  Returns nil unless IND has a `:help' or an
-`:action'.  Carries per-indicator `help-echo' and a hand `pointer' when the
-indicator is clickable.  The actual click is dispatched by the overlay
-keymap (see `svg-margin--make-click-map'), not here: in a margin the area
-keymap is not consulted -- the area id becomes an event prefix instead."
-  (let ((help (plist-get ind :help))
-        (action (or (plist-get ind :action) (plist-get ind :menu)))
+`:action'.  Carries the composed per-indicator `help-echo' (see
+`svg-margin--area-help') and a hand `pointer' when the indicator is
+clickable.  The actual click is dispatched by the overlay keymap (see
+`svg-margin--make-click-map'), not here: in a margin the area keymap is not
+consulted -- the area id becomes an event prefix instead."
+  (let ((action (or (plist-get ind :action) (plist-get ind :menu)))
+        (eh (svg-margin--area-help ind))
         (props nil))
     (when action (setq props (list 'pointer 'hand)))
-    (when help (setq props (append props (list 'help-echo help))))
+    (when (and eh (> (length eh) 0))
+      (setq props (append props (list 'help-echo eh))))
     (when props
       (list (cons 'rect (cons (cons x 0) (cons (+ x cw) h)))
             (intern (format "svg-margin--area-%d" i))
@@ -485,7 +504,9 @@ column pixel width and line height for the image."
     ;; put a keymap on the string with a t-default that catches the area
     ;; prefix and dispatches by click position -> column -> indicator.
     (when clickables
-      (setq str (propertize str 'keymap (svg-margin--make-click-map clickables side rcols cw))))
+      (setq str (propertize str
+                            'keymap (svg-margin--make-click-map clickables side rcols cw)
+                            'mouse-face 'svg-margin-highlight)))
     (overlay-put ov 'svg-margin t)
     (overlay-put ov 'before-string str)
     ;; NB: do NOT set `evaporate' -- these overlays are zero-length, and an

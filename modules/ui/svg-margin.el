@@ -107,6 +107,7 @@
                         :color (pcase kw
                                  ("TODO" "#d29922") ("FIXME" "#f85149") (_ "#a371f7"))
                         :help kw
+                        :action-help "go to keyword"
                         :action (lambda () (interactive) (goto-char p))
                         :menu (list (cons "Go to keyword"
                                           (lambda () (interactive) (goto-char p)))
@@ -132,6 +133,7 @@
                           (push (list :line l :shape 'bar
                                       :color (if (eq ty 'added) "#3fb950" "#d29922")
                                       :help (format "git: %s hunk" ty)
+                                      :action-help "show hunk diff"
                                       :action (zetta-svg-margin--gg-action l #'git-gutter:popup-hunk)
                                       :menu (zetta-svg-margin--gg-menu l))
                                 out))))
@@ -139,6 +141,7 @@
                (let ((l start))
                  (push (list :line l :shape 'triangle :color "#f85149"
                              :help "git: deleted hunk"
+                             :action-help "show hunk diff"
                              :action (zetta-svg-margin--gg-action l #'git-gutter:popup-hunk)
                              :menu (zetta-svg-margin--gg-menu l))
                        out))))))
@@ -156,6 +159,7 @@
               (let ((name (car bm)))
                 (push (list :pos pos :shape 'bookmark :color "#7d5bed"
                             :help (format "bookmark: %s" name)
+                            :action-help "jump to bookmark"
                             :action (lambda () (interactive) (bookmark-jump name))
                             :menu (list (cons "Jump to bookmark"
                                               (lambda () (interactive) (bookmark-jump name)))
@@ -178,6 +182,7 @@
               (push (list :pos (marker-position val) :text (char-to-string char)
                           :face 'warning
                           :help (format "evil mark `%c'" char)
+                          :action-help (format "jump to mark `%c'" char)
                           :action (lambda () (interactive) (evil-goto-mark char))
                           :menu (list (cons (format "Jump to mark `%c'" char)
                                             (lambda () (interactive) (evil-goto-mark char)))
@@ -201,6 +206,7 @@
                             :color (pcase level
                                      ('error "#f85149") ('warning "#d29922") (_ "#3fb950"))
                             :help (ignore-errors (flycheck-error-message err))
+                            :action-help "show error"
                             :action (lambda () (interactive)
                                       (zetta-svg-margin--goto-line l)
                                       (flycheck-display-error-at-point))
@@ -231,6 +237,7 @@
               (let ((bol (line-beginning-position)))
                 (push (list :pos bol :shape 'bar :color "#b08800"
                             :help (format "line exceeds %d columns" col)
+                            :action-help "go to overflow"
                             :action (lambda () (interactive) (goto-char bol) (end-of-line)))
                       out)))
             (forward-line 1)))
@@ -246,6 +253,7 @@
           (let ((bol (line-beginning-position)))
             (push (list :pos bol :shape 'dot :color "#8b949e"
                         :help "trailing whitespace"
+                        :action-help "go to line"
                         :action (lambda () (interactive) (goto-char bol) (end-of-line))
                         :menu (list (cons "Clear on this line"
                                           (lambda () (interactive)
@@ -272,6 +280,7 @@
                    (p (line-beginning-position)))
               (push (list :pos p :color color
                           :help (format "heading level %d" level)
+                          :action-help "go to heading"
                           :action (lambda () (interactive) (goto-char p))
                           :menu (list (cons "Go to heading"
                                             (lambda () (interactive) (goto-char p)))
@@ -311,6 +320,7 @@
                   (let ((p bol) (s sym))
                     (push (list :pos p :shape 'dot :color "#58a6ff"
                                 :help (format "occurrence of `%s'" s)
+                                :action-help "go to occurrence"
                                 :action (lambda () (interactive) (goto-char p))
                                 :menu (list (cons "Go to occurrence"
                                                   (lambda () (interactive) (goto-char p)))

@@ -70,7 +70,8 @@ Or manually, with `svg-margin.el` on your `load-path`:
 | `:draw`     | `(lambda (SVG X Y W H COLOR) ...)` for full control            |
 | `:color`/`:face` | fill colour, or a face whose foreground is used           |
 | `:help`     | tooltip string (per-indicator, shown on hover)                 |
-| `:action`   | a command run on click (mouse-1/mouse-2); gives a hand pointer. Each indicator is its own hot-spot via the image `:map` |
+| `:action`   | a command run on left/middle click; gives a hand pointer. Each indicator is its own hot-spot via the image `:map` |
+| `:menu`     | alist of `(LABEL . COMMAND)`; right-click pops up a context menu of these |
 
 Indicators sharing a `(line, side)` pack into adjacent columns; an explicit
 free `:column` is honoured, otherwise each takes the lowest free slot.

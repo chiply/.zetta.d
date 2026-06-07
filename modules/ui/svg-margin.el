@@ -409,8 +409,11 @@ the recompute yields the same hunks we skip, breaking the cycle."
   "The `show-help-function' in effect before svg-margin wrapped it.")
 
 (defun zetta-svg-margin--show-help (help)
-  "Track the hovered indicator (`svg-margin--note-help'), then show HELP as before."
+  "Track hover for svg-margin and svg-line, then show HELP as before.
+Both note-help functions key off their own text property and hover custom, so
+calling both is safe; this is the single `show-help-function' both hook into."
   (svg-margin--note-help help)
+  (when (fboundp 'svg-line--note-help) (svg-line--note-help help))
   (when (functionp zetta-svg-margin--orig-show-help)
     (funcall zetta-svg-margin--orig-show-help help)))
 

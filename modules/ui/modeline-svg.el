@@ -130,9 +130,20 @@ A barely-there light tint."
   "Restore the telephone-line mode line."
   (interactive)
   (svg-line-deactivate 'zetta-mode-line)
-  (if (fboundp 'telephone-line-mode)
-      (telephone-line-mode 1)
-    (force-mode-line-update t))
+  ;; svg-line installs its renderer as the DEFAULT `mode-line-format', but some
+  ;; buffers carry a buffer-local copy of it (so the restored default does not
+  ;; reach them and they keep showing the SVG image).  Drop those leftovers --
+  ;; the mirror of the telephone-line cleanup in `zetta-modeline-use-svg' -- so
+  ;; they fall back to the telephone-line default.
+  (dolist (buf (buffer-list))
+    (with-current-buffer buf
+      (when (and (local-variable-p 'mode-line-format)
+                 (string-match-p "svg-line--render-zetta-mode-line"
+                                 (format "%S" mode-line-format)))
+        (kill-local-variable 'mode-line-format))))
+  (when (fboundp 'telephone-line-mode)
+    (telephone-line-mode 1))
+  (force-mode-line-update t)
   (message "modeline: telephone-line active"))
 
 ;;;###autoload

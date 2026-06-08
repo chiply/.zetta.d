@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.12](https://github.com/chiply/.zetta.d/compare/v0.1.11...v0.1.12) (2026-06-08)
+
+
+### Bug Fixes
+
+* **ui:** clear buffer-local SVG mode line when reverting to telephone-line ([#40](https://github.com/chiply/.zetta.d/issues/40)) ([09e32e0](https://github.com/chiply/.zetta.d/commit/09e32e0b1389366d3280d8816b46e57d45938633))
+* **ui:** toggle SVG header line to native breadcrumbs, not nothing ([#37](https://github.com/chiply/.zetta.d/issues/37)) ([bfe5fb0](https://github.com/chiply/.zetta.d/commit/bfe5fb0d5a9629b92a54db6f42fb08e761bdf053))
+* **ui:** toggle SVG tab bar to the stock tab-bar.el tabs ([#39](https://github.com/chiply/.zetta.d/issues/39)) ([1c6fea8](https://github.com/chiply/.zetta.d/commit/1c6fea835f81e45a42d7f5cbdddaf236991350ee))
+
 ## [0.1.11](https://github.com/chiply/.zetta.d/compare/v0.1.10...v0.1.11) (2026-06-08)
 
 

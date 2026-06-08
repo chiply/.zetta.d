@@ -16,6 +16,9 @@
 
 (require 'svg-line)
 
+(declare-function breadcrumb--header-line "breadcrumb")
+(declare-function breadcrumb-imenu-crumbs "breadcrumb")
+
 ;;; ------------------------------------------------------------------
 ;;; Breadcrumb content (zetta-header-line-svg-line1/2-format and the
 ;;; --line1/--line2 renderers) lives in line-utils.el now; this file
@@ -56,26 +59,52 @@
   "Non-nil if the SVG header line is currently active."
   (svg-line-active-p 'zetta-header-line))
 
+(defcustom zetta-header-line-native-format
+  '((:eval (cond ((fboundp 'breadcrumb--header-line) (breadcrumb--header-line))
+                 ((fboundp 'breadcrumb-imenu-crumbs) (breadcrumb-imenu-crumbs))
+                 (t ""))))
+  "Native (non-SVG) `header-line-format' used when the SVG line is toggled off.
+Defaults to the `breadcrumb' package's own plain-text header line -- the same
+\(:eval (breadcrumb--header-line)) element `breadcrumb-local-mode' installs --
+so turning the SVG header line off falls back to the native breadcrumbs rather
+than to no header line at all."
+  :type 'sexp :group 'zetta)
+
 ;;;###autoload
 (defun zetta-header-line-use-svg ()
   "Activate the SVG breadcrumb header line."
   (interactive)
   (svg-line-activate 'zetta-header-line)
-  (message "header-line: SVG breadcrumbs active (M-x zetta-header-line-use-none to remove)"))
+  (message "header-line: SVG breadcrumbs active (M-x zetta-header-line-toggle to switch)"))
+
+;;;###autoload
+(defun zetta-header-line-use-native ()
+  "Switch to the native (non-SVG) breadcrumb header line.
+Deactivates the SVG renderer and installs `zetta-header-line-native-format'
+as the default `header-line-format'."
+  (interactive)
+  (when (zetta-header-line-using-svg-p)
+    (svg-line-deactivate 'zetta-header-line))
+  (setq-default header-line-format zetta-header-line-native-format)
+  (force-mode-line-update t)
+  (message "header-line: native breadcrumbs active (M-x zetta-header-line-toggle to switch)"))
 
 ;;;###autoload
 (defun zetta-header-line-use-none ()
-  "Remove the header line (restore the value from before activation)."
+  "Remove the header line entirely (neither SVG nor native breadcrumbs)."
   (interactive)
-  (svg-line-deactivate 'zetta-header-line)
+  (when (zetta-header-line-using-svg-p)
+    (svg-line-deactivate 'zetta-header-line))
+  (setq-default header-line-format nil)
+  (force-mode-line-update t)
   (message "header-line: removed"))
 
 ;;;###autoload
 (defun zetta-header-line-toggle ()
-  "Toggle the SVG header line on/off."
+  "Toggle between the SVG header line and the native breadcrumb header line."
   (interactive)
   (if (zetta-header-line-using-svg-p)
-      (zetta-header-line-use-none)
+      (zetta-header-line-use-native)
     (zetta-header-line-use-svg)))
 
 ;;; ------------------------------------------------------------------

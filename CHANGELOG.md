@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/chiply/.zetta.d/compare/v0.1.10...v0.1.11) (2026-06-08)
+
+
+### Features
+
+* **ui:** adopt published svg-line and svg-margin packages from GitHub ([#35](https://github.com/chiply/.zetta.d/issues/35)) ([5137e23](https://github.com/chiply/.zetta.d/commit/5137e2331db2b040b21f4af9e41124663eba0bb5))
+
 ## [0.1.10](https://github.com/chiply/.zetta.d/compare/v0.1.9...v0.1.10) (2026-06-07)
 
 

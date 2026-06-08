@@ -8,8 +8,9 @@
 ;;
 ;; Switch at runtime:
 ;;   M-x zetta-tab-bar-use-svg       ; activate the SVG renderer
-;;   M-x zetta-tab-bar-use-builtin   ; restore the built-in (text) format
-;;   M-x zetta-tab-bar-toggle        ; flip
+;;   M-x zetta-tab-bar-use-default   ; restore the stock tab-bar.el tabs
+;;   M-x zetta-tab-bar-use-builtin   ; restore the custom multi-line text format
+;;   M-x zetta-tab-bar-toggle        ; flip SVG <-> default
 ;;
 ;; CAVEAT: single-font SVG text -- all-the-icons / image segments tofu,
 ;; so the icon-rich built-in (text) format defined below is the fallback.
@@ -192,9 +193,37 @@ jitters as keycast changes width."
   (svg-line-activate 'zetta-tab-bar)
   (message "tab-bar: SVG renderer active (M-x zetta-tab-bar-use-builtin to revert)"))
 
+(defcustom zetta-tab-bar-default-format
+  '(tab-bar-format-history tab-bar-format-tabs tab-bar-separator
+                           tab-bar-format-add-tab)
+  "Stock `tab-bar.el' format restored by `zetta-tab-bar-use-default'.
+This is the ordinary Emacs default (history, tabs, separator, add-tab
+button), so toggling the SVG tab bar off shows the plain text tab bar with
+real tabs -- rather than the custom multi-line text reproduction that
+`zetta-tab-bar-use-builtin' installs."
+  :type 'sexp :group 'zetta)
+
+;;;###autoload
+(defun zetta-tab-bar-use-default ()
+  "Restore the stock (non-SVG) `tab-bar.el' format with real tabs.
+Deactivates the SVG renderer, installs `zetta-tab-bar-default-format', and
+restores the image-cache eviction window."
+  (interactive)
+  (when (zetta-tab-bar-using-svg-p)
+    (svg-line-deactivate 'zetta-tab-bar))
+  (setq tab-bar-format zetta-tab-bar-default-format)
+  (when zetta-tab-bar--saved-eviction-delay
+    (setq image-cache-eviction-delay zetta-tab-bar--saved-eviction-delay
+          zetta-tab-bar--saved-eviction-delay nil))
+  (force-mode-line-update t)
+  (message "tab-bar: default tab-bar active (M-x zetta-tab-bar-toggle to switch)"))
+
 ;;;###autoload
 (defun zetta-tab-bar-use-builtin ()
-  "Restore the built-in (text) tab-bar format and the image-cache window."
+  "Restore the custom built-in (multi-line text) tab-bar format.
+This reproduces the zetta status content (buffer name, modal indicator,
+keycast, ...) as a plain-text tab bar.  For the stock `tab-bar.el' tabs use
+`zetta-tab-bar-use-default' instead."
   (interactive)
   (svg-line-deactivate 'zetta-tab-bar)
   (when zetta-tab-bar--saved-eviction-delay
@@ -204,10 +233,10 @@ jitters as keycast changes width."
 
 ;;;###autoload
 (defun zetta-tab-bar-toggle ()
-  "Toggle between the SVG and built-in tab-bar renderers."
+  "Toggle between the SVG tab bar and the default `tab-bar.el' format."
   (interactive)
   (if (zetta-tab-bar-using-svg-p)
-      (zetta-tab-bar-use-builtin)
+      (zetta-tab-bar-use-default)
     (zetta-tab-bar-use-svg)))
 
 ;;; Clickable + hover-aware tab-bar indicators are handled by the svg-line

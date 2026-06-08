@@ -332,14 +332,21 @@ Too high leaves whitespace inside tab boxes; too low overlaps tabs."
 (defcustom zetta-tab-line-svg-max-name 30
   "Truncate an individual tab name to this many characters (then …)."
   :type 'integer :group 'zetta)
+(defcustom zetta-tab-line-svg-center t
+  "When non-nil, centre the tabs while they all fit on one row.
+Once there are enough tabs to wrap onto a second row they revert to the
+normal flush-left flow."
+  :type 'boolean :group 'zetta)
 
 (defcustom zetta-tab-line-svg-background "#ece4f6"
   "Light purple background for the SVG tab line (selected window).
 Distinguishes the tab line from the tab-bar and header-line.  nil = transparent."
   :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
 
-(defcustom zetta-tab-line-svg-current-background "#2a4d77"
-  "Dark-blue highlight drawn behind the current (active) tab.  nil = none."
+(defcustom zetta-tab-line-svg-current-background "#4b2e83"
+  "Dark-purple highlight drawn behind the current (active) tab.  nil = none.
+Chosen to sit in the same purple family as the lavender tab-line background
+while staying dark enough for the white current-tab label to read."
   :type '(choice (const :tag "None" nil) color) :group 'zetta)
 
 (defcustom zetta-tab-line-svg-current-foreground "#ffffff"
@@ -368,8 +375,8 @@ Empty by default -- the modified colour alone marks unsaved tabs."
   "Foreground for ordinary tabs in NON-selected windows (dimmed)."
   :type 'color :group 'zetta)
 
-(defcustom zetta-tab-line-svg-inactive-current-background "#9aa9bd"
-  "Highlight behind the current tab in NON-selected windows (muted blue-grey)."
+(defcustom zetta-tab-line-svg-inactive-current-background "#b0a3cf"
+  "Highlight behind the current tab in NON-selected windows (muted purple)."
   :type '(choice (const :tag "None" nil) color) :group 'zetta)
 
 (defcustom zetta-tab-line-svg-inactive-current-foreground "#ffffff"
@@ -452,6 +459,7 @@ Because the glyph is part of the label text it needs no separate icon."
   :line-pad (lambda () zetta-tab-line-svg-line-pad)
   :char-advance (lambda () zetta-tab-line-svg-char-advance)
   :gap (lambda () zetta-tab-line-svg-tab-gap)
+  :center (lambda () zetta-tab-line-svg-center)
   :background (lambda () zetta-tab-line-svg-background)
   :foreground (lambda () (or (bound-and-true-p brushup-bg-5)
                              (face-foreground 'shadow nil t) "#888888"))

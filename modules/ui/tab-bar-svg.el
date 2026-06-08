@@ -1,6 +1,6 @@
 ;;; tab-bar-svg.el --- SVG multi-line tab bar (svg-line config) -*- lexical-binding: t; -*-
 
-;; Configures the `svg-line' engine (source/zettapkg/svg-line) to render
+;; Configures the `svg-line' engine (github.com/chiply/svg-line) to render
 ;; the tab bar as a multi-line SVG image: per-line left/right alignment,
 ;; arbitrary height, no `:align-to' redisplay-freeze.  This file supplies
 ;; only CONTENT + styling + activation policy; the rendering lives in
@@ -29,6 +29,31 @@
 Match it to the monospace SVG font's glyph width as librsvg renders it (~8 for
 Terminess at 15px scaled) so a clickable indicator's hover box lands snugly on
 its text.  Plain all-text rows use exact font anchoring and ignore this."
+  :type 'number :group 'zetta)
+
+(defcustom zetta-tab-bar-svg-icon t
+  "When non-nil, draw a full-height Emacs-logo masthead at the left of the tab bar."
+  :type 'boolean :group 'zetta)
+
+(defcustom zetta-tab-bar-svg-icon-color "#6c4dab"
+  "Fill colour for the tab-bar masthead icon (a purple that fits the theme)."
+  :type 'color :group 'zetta)
+
+(defcustom zetta-tab-bar-svg-icon-width 'square
+  "Horizontal space reserved for the masthead icon.
+`square' reserves the bar's full height (a square cell, icon centred); an
+integer reserves that many pixels; nil reserves just past the glyph ink (tight,
+flush-left)."
+  :type '(choice (const :tag "Square (full height)" square)
+                 (const :tag "Tight (ink width)" nil)
+                 integer)
+  :group 'zetta)
+
+(defcustom zetta-tab-bar-svg-icon-scale 1.9
+  "Masthead icon size as a fraction of the tab bar's full height.
+Nerd-Font icon glyphs only ink ~half their em box, so values >1 are normal:
+the glyph is scaled past the bar height (the empty em overflow is clipped) so
+its visible ink fills the height."
   :type 'number :group 'zetta)
 
 (defcustom zetta-tab-bar-svg-image-cache-eviction-delay 30
@@ -68,26 +93,26 @@ jitters as keycast changes width."
                                    zetta-tab-bar-svg--buffer
                                    zmc-modeline-indicator
                                    zetta-pyvenv-activate-poetry-modeline)
-         ;; TEMP right-aligned probe (remove for an empty right side)
-         '(tab-bar-keycast
+         ;; keycast (caps-kbd glyph, padding trimmed) + recursion depth (hierarchy glyph)
+         '(zetta-tab-bar-svg--keycast
            " "
-           zetta-tab-bar-recursion-level
+           zetta-tab-bar-recursion-icon " " zetta-tab-bar-recursion-level
            " "
            recursion-indicator--string
            ))
-   ;; line 2 -- Spotify (clickable) left; mail (clickable) right
-   (cons '(zetta-tab-bar-svg--spotify)
-         '(zetta-tab-bar-svg--mu4e))
-   ;; line 3 -- modal (clickable) left; clock/battery/workspace (clickable) right
-   (cons '(zetta-tab-bar-svg--modal
-           zetta-gptel-processes
-           blinker-tab-bar)
-         '(
-           zetta-tab-bar-current-thing
-           zetta-tab-bar-svg--clock " "
-           zetta-tab-bar-svg--battery " "
-           zetta-current-prefix " "
-           zetta-tab-bar-svg--workspace))))
+   ;; line 2 -- Spotify left; workspace (space-tree) centered; mail right
+   (list :left '(zetta-tab-bar-svg--spotify)
+         :center '(zetta-tab-bar-svg--workspace)
+         :right '(zetta-tab-bar-svg--mu4e))
+   ;; line 3 -- modal (clickable) left; current-thing centered;
+   ;;           clock/battery (clickable) right
+   (list :left '(zetta-tab-bar-svg--modal
+                 zetta-gptel-processes
+                 blinker-tab-bar)
+         :center '(zetta-tab-bar-current-thing)
+         :right '(zetta-tab-bar-svg--clock " "
+                  zetta-tab-bar-svg--battery " "
+                  zetta-current-prefix))))
 
 (svg-line-define 'zetta-tab-bar
                  :target 'tab-bar
@@ -98,6 +123,12 @@ jitters as keycast changes width."
                  :font-size (lambda () zetta-tab-bar-svg-font-size)
                  :line-pad (lambda () zetta-tab-bar-svg-line-pad)
                  :char-advance (lambda () zetta-tab-bar-svg-char-advance)
+                 :icon (lambda () (and zetta-tab-bar-svg-icon
+                                       (fboundp 'zetta-tab-bar-emacs-icon)
+                                       (zetta-tab-bar-emacs-icon)))
+                 :icon-color (lambda () zetta-tab-bar-svg-icon-color)
+                 :icon-width (lambda () zetta-tab-bar-svg-icon-width)
+                 :icon-scale (lambda () zetta-tab-bar-svg-icon-scale)
                  :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
                                             (face-foreground 'default nil t)
                                             "#cccccc")))
@@ -159,7 +190,6 @@ jitters as keycast changes width."
       (setq zetta-tab-bar--saved-eviction-delay image-cache-eviction-delay
             image-cache-eviction-delay zetta-tab-bar-svg-image-cache-eviction-delay)))
   (svg-line-activate 'zetta-tab-bar)
-  (zetta-tab-bar--hover-start)
   (message "tab-bar: SVG renderer active (M-x zetta-tab-bar-use-builtin to revert)"))
 
 ;;;###autoload
@@ -167,7 +197,6 @@ jitters as keycast changes width."
   "Restore the built-in (text) tab-bar format and the image-cache window."
   (interactive)
   (svg-line-deactivate 'zetta-tab-bar)
-  (zetta-tab-bar--hover-stop)
   (when zetta-tab-bar--saved-eviction-delay
     (setq image-cache-eviction-delay zetta-tab-bar--saved-eviction-delay
           zetta-tab-bar--saved-eviction-delay nil))
@@ -181,96 +210,9 @@ jitters as keycast changes width."
       (zetta-tab-bar-use-builtin)
     (zetta-tab-bar-use-svg)))
 
-;;; ------------------------------------------------------------------
-;;; Clickable SVG tab-bar indicators.
-;;; The tab bar (unlike the mode/header/tab line) ignores a string's
-;;; `keymap'/`help-echo' text properties: it routes mouse events through
-;;; `tab-bar-map' -> `tab-bar-mouse-*', which read a `menu-item' property
-;;; and select tabs.  So we advise those commands to first hit-test our
-;;; segment placements (via the svg-line engine) and dispatch the
-;;; indicator's :action (left click) or :menu (right click); off our
-;;; indicators they fall through to the default tab-bar behaviour.
-;;; ------------------------------------------------------------------
-(declare-function svg-line--seg-at-posn "svg-line")
-(declare-function svg-line--popup-menu "svg-line")
-
-(defun zetta-tab-bar--svg-item-at (event)
-  "Return the svg-line tab-bar item (LABEL . PLIST) under EVENT, or nil."
-  (and (fboundp 'svg-line--seg-at-posn)
-       (svg-line-active-p 'zetta-tab-bar)
-       (let ((it (svg-line--seg-at-posn 'zetta-tab-bar (event-start event))))
-         (and (consp it) (consp (cdr it)) it))))
-
-(defun zetta-tab-bar--mouse-down-1-advice (orig event &rest args)
-  "Run an svg-line indicator's :action on click, else the default tab-bar action."
-  (let* ((it (zetta-tab-bar--svg-item-at event))
-         (cmd (and it (plist-get (cdr it) :action))))
-    (if cmd (call-interactively cmd)
-      (apply orig event args))))
-
-(defun zetta-tab-bar--context-menu-advice (orig event &rest args)
-  "Pop an svg-line indicator's :menu on right-click, else the default context menu."
-  (let* ((it (zetta-tab-bar--svg-item-at event))
-         (menu (and it (plist-get (cdr it) :menu))))
-    (if menu (svg-line--popup-menu (car it) menu)
-      (apply orig event args))))
-
-(with-eval-after-load 'tab-bar
-  (advice-add 'tab-bar-mouse-down-1 :around #'zetta-tab-bar--mouse-down-1-advice)
-  (advice-add 'tab-bar-mouse-context-menu :around #'zetta-tab-bar--context-menu-advice))
-
-;;; ------------------------------------------------------------------
-;;; Hover for the SVG tab-bar.
-;;; The mode/header/tab line re-evaluate a string's `help-echo' FUNCTION
-;;; as the mouse moves over their image, which both shows the echo help
-;;; and drives the hover box (via `svg-line--note-help').  The tab bar
-;;; does NOT -- it treats the whole image as one item and never calls our
-;;; help-echo per position.  So we poll the mouse with a short timer while
-;;; the SVG tab bar is active: when the pointer is over one of our
-;;; indicators, feed its (tagged) help through `show-help-function' -- the
-;;; same path the other bars use -- which shows the echo help AND sets the
-;;; hovered id so the box is drawn.
-;;; ------------------------------------------------------------------
-(defvar zetta-tab-bar--hover-timer nil
-  "Repeating timer that drives SVG tab-bar hover; nil when not running.")
-(defvar zetta-tab-bar--hover-was-over nil
-  "Non-nil if the last poll found the pointer over an SVG tab-bar indicator.")
-
-(defun zetta-tab-bar--hover-poll ()
-  "Drive hover help/highlight for the SVG tab bar from the mouse position."
-  (when (and (bound-and-true-p svg-line-hover-highlight)
-             (fboundp 'svg-line--seg-at-posn)
-             (svg-line-active-p 'zetta-tab-bar)
-             (functionp show-help-function))
-    (let* ((mp (mouse-pixel-position))
-           (frame (car mp)) (mx (cadr mp)) (my (cddr mp))
-           (posn (and (framep frame) (integerp mx) (integerp my)
-                      (ignore-errors (posn-at-x-y mx my frame))))
-           (over (and posn (eq (posn-area posn) 'tab-bar)))
-           (item (and over (svg-line--seg-at-posn 'zetta-tab-bar posn)))
-           (help (and item (fboundp 'svg-line--tab-help) (svg-line--tab-help item))))
-      ;; Only touch the help machinery while over the tab bar, or on the one
-      ;; poll right after leaving it (to clear) -- so we never fight the other
-      ;; bars' own help-echo for the shared hovered state.
-      (cond
-       (over
-        (ignore-errors (funcall show-help-function help))
-        (setq zetta-tab-bar--hover-was-over t))
-       (zetta-tab-bar--hover-was-over
-        (ignore-errors (funcall show-help-function nil))
-        (setq zetta-tab-bar--hover-was-over nil))))))
-
-(defun zetta-tab-bar--hover-start ()
-  "Start the SVG tab-bar hover poll timer (idempotent)."
-  (unless (timerp zetta-tab-bar--hover-timer)
-    (setq zetta-tab-bar--hover-timer
-          (run-with-timer 0.12 0.12 #'zetta-tab-bar--hover-poll))))
-
-(defun zetta-tab-bar--hover-stop ()
-  "Stop the SVG tab-bar hover poll timer."
-  (when (timerp zetta-tab-bar--hover-timer)
-    (cancel-timer zetta-tab-bar--hover-timer))
-  (setq zetta-tab-bar--hover-timer nil zetta-tab-bar--hover-was-over nil))
+;;; Clickable + hover-aware tab-bar indicators are handled by the svg-line
+;;; engine itself (it advises the tab-bar mouse commands and runs a hover poll
+;;; whenever a `tab-bar'-target svg-line is active), so nothing is needed here.
 
 ;;; ------------------------------------------------------------------
 ;;; Startup default (opt-out).  Runs from `emacs-startup-hook' so it

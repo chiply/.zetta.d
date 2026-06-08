@@ -102,6 +102,7 @@
 ;; highlights) and to no-op gracefully when the engine isn't loaded.
 (declare-function svg-line-seg "svg-line")
 (declare-function svg-line-segs "svg-line")
+(declare-function svg-line-map-string-regions "svg-line")
 
 (defun zetta-svg-seg (text key &rest plist)
   "Return an interactive svg-line segment for TEXT, keyed by KEY.
@@ -161,62 +162,43 @@ Selects TARGET's window/buffer, pushes the mark, moves point and reveals it
 
 (defun zetta-svg-segs-from-propertized (str id-key)
   "Split propertized STR into an svg-line `:svg-segs' group of clickable crumbs.
-Each maximal region carrying a clickable `keymap'/`local-map' (with a mouse-1
-binding) becomes an interactive segment whose action invokes that binding;
-regions without one stay plain text.  This harvests the crumb handlers that
-breadcrumb.el and lsp-headerline already attach to header-line strings -- their
-handlers either ignore the event (`breadcrumb-jump') or read the window from
-its posn, which our header-line click provides correctly.  ID-KEY namespaces
-the per-crumb hover ids.  Returns nil (no segment) for empty STR."
-  (when (and (stringp str) (fboundp 'svg-line-segs) (> (length str) 0))
-    (let ((parts nil) (i 0) (n (length str)) (idx 0) (buf (current-buffer)))
-      (while (< i n)
-        (let* ((km   (or (get-text-property i 'keymap str)
-                         (get-text-property i 'local-map str)))
-               (next (min (or (next-single-property-change i 'keymap str) n)
-                          (or (next-single-property-change i 'local-map str) n)))
-               (text (substring-no-properties str i next))
-               ;; NB: `lookup-key' returns an integer (not nil) when a key is
-               ;; "too long" for the map, so test each result for `functionp'
-               ;; and take the first real command -- don't `or' the raw results.
-               (handler (and (keymapp km)
-                             (seq-some (lambda (k)
-                                         (let ((b (lookup-key km k)))
-                                           (and (functionp b) b)))
-                                       (list [header-line mouse-1] [mouse-1]
-                                             [mode-line mouse-1]))))
-               ;; Prefer a DIRECT jump to the crumb's own target (org/imenu
-               ;; crumbs stash a marker/region) over the package handler, which
-               ;; for breadcrumb is a completing-read.  lsp crumbs expose no
-               ;; target here, so they keep their own (already-direct) handler.
-               (target (and handler (zetta-svg--crumb-target str i text)))
-               (act  (cond (target (zetta-svg--crumb-jump target))
-                           (handler handler)))
-               (he   (get-text-property i 'help-echo str)))
-          ;; Only a left-click action: these crumb handlers take (interactive
-          ;; "e") and read the invoking mouse event, which a real header-line
-          ;; click supplies but a right-click menu selection would not.
-          (if (and act (> (length (string-trim text)) 0))
-              (setq idx (1+ idx)
-                    parts (cons (svg-line-seg
-                                 text
-                                 :id (list id-key buf idx)
-                                 ;; clean, lightweight help -- for a direct jump
-                                 ;; use the crumb text; else the handler's own
-                                 ;; first help line (properties stripped, since
-                                 ;; breadcrumb stuffs its sibling tree in there)
-                                 :help (if target
-                                           (concat "go to " (string-trim text))
-                                         (if (stringp he)
-                                             (substring-no-properties
-                                              (car (split-string he "\n")))
-                                           (format "%s" (string-trim text))))
-                                 :action-help (if target "jump" "open")
-                                 :action act)
-                                parts))
-            (push text parts))
-          (setq i next)))
-      (apply #'svg-line-segs (nreverse parts)))))
+Builds on `svg-line-map-string-regions' (the package's region splitter +
+mouse-1 handler extractor): each region carrying a mouse-1 keymap becomes an
+interactive segment, regions without one stay plain text.  For a crumb whose own
+text properties name a target (org/imenu markers, `breadcrumb-region'/`-siblings')
+we jump there DIRECTLY -- bypassing `breadcrumb-jump''s `completing-read' -- else
+we fall back to the crumb's own handler (e.g. lsp-headerline's, already direct).
+Only a left-click action: these handlers take (interactive \"e\") and read the
+invoking mouse event, which a real header-line click supplies.  ID-KEY (with the
+buffer, for per-window hover) namespaces the per-crumb hover ids.  Returns nil
+for empty STR."
+  (when (and (stringp str) (fboundp 'svg-line-map-string-regions) (> (length str) 0))
+    (let ((idx 0) (buf (current-buffer)))
+      (apply #'svg-line-segs
+             (svg-line-map-string-regions
+              str
+              (lambda (text start handler help)
+                (let* ((target (and handler (zetta-svg--crumb-target str start text)))
+                       (act (cond (target (zetta-svg--crumb-jump target))
+                                  (handler handler))))
+                  (if (and act (> (length (string-trim text)) 0))
+                      (progn
+                        (setq idx (1+ idx))
+                        (svg-line-seg
+                         text
+                         :id (list id-key buf idx)
+                         ;; clean help -- for a direct jump use the crumb text;
+                         ;; else the handler's own first help line (properties
+                         ;; stripped, since breadcrumb stuffs its sibling tree there)
+                         :help (if target
+                                   (concat "go to " (string-trim text))
+                                 (if (stringp help)
+                                     (substring-no-properties
+                                      (car (split-string help "\n")))
+                                   (format "%s" (string-trim text))))
+                         :action-help (if target "jump" "open")
+                         :action act))
+                    text))))))))
 
 ;;; tab-bar / status segments
 (defun zetta-buffer-name ()

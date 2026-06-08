@@ -292,6 +292,22 @@ where no local thing has been set via `treesit-tap-set-local'."
         "[R:0] "
       (format " [R:%d] " recursion-level))))
 
+(defun zetta-tab-bar-svg--keycast ()
+  "Keycast string with a caps-keyboard glyph sitting next to the keys.
+Keycast right-pads the keys (`keycast-mode-line-format' is \"%10s...\"), so trim
+that leading whitespace before prefixing the glyph -- otherwise the glyph ends
+up far to the left of the actual key/command.  Returns nil when idle."
+  (let ((str (string-trim-left (or (nth 2 (car (tab-bar-keycast))) ""))))
+    (when (> (length str) 0)
+      (let ((icon (and (featurep 'nerd-icons)
+                       (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-keyboard_caps"))))))
+        (concat (and icon (concat icon " ")) str)))))
+
+(defun zetta-tab-bar-recursion-icon ()
+  "Type-hierarchy glyph shown to the left of the recursion-depth indicator."
+  (and (featurep 'nerd-icons)
+       (zetta-line--glyph (ignore-errors (nerd-icons-codicon "nf-cod-type_hierarchy_sub")))))
+
 (defun zetta-current-prefix ()
   (let ((descr (key-description
                 (or
@@ -398,7 +414,10 @@ where no local thing has been set via `treesit-tap-set-local'."
   ;; copilot is shown as an icon (zetta-modeline-svg--copilot-icon), not text
   (when (and (boundp 'lsp-mode) lsp-mode)
     (zetta-svg-seg
-     "lsp " 'ml-lsp
+     (or (and (featurep 'nerd-icons)
+              (zetta-line--glyph (ignore-errors (nerd-icons-devicon "nf-dev-vscode"))))
+         "lsp")
+     'ml-lsp
      :help "LSP session"
      :action-help "LSP diagnostics"
      :action (cond ((fboundp 'consult-lsp-diagnostics) #'consult-lsp-diagnostics)
@@ -413,22 +432,33 @@ where no local thing has been set via `treesit-tap-set-local'."
                        (and (fboundp 'lsp-workspace-restart) (cons "Restart workspace" #'lsp-workspace-restart)))))))
 
 (defun zetta-modeline-svg--flycheck ()
-  (if (fboundp 'flycheck-indicator--mode-line)
-      (let ((text (flycheck-indicator--mode-line)))
-        (if (string= " not-checked" text)
-            ""
-          (zetta-svg-seg
-           (substring-no-properties text) 'ml-flycheck
-           :help "syntax checker results"
-           :action-help "list errors"
-           :action (if (fboundp 'flycheck-list-errors) #'flycheck-list-errors #'ignore)
-           :menu (delq nil
-                       (list (and (fboundp 'flycheck-list-errors) (cons "List errors" #'flycheck-list-errors))
-                             (and (fboundp 'flycheck-next-error) (cons "Next error" #'flycheck-next-error))
-                             (and (fboundp 'flycheck-previous-error) (cons "Previous error" #'flycheck-previous-error))
-                             (and (fboundp 'flycheck-buffer) (cons "Recheck buffer" #'flycheck-buffer))
-                             (and (fboundp 'flycheck-verify-setup) (cons "Verify setup" #'flycheck-verify-setup)))))))
-    ""))
+  "Flycheck indicator: a bug glyph plus error/warning/info counts.
+Coloured red when there are errors, orange for warnings, green when clean.
+Shown whenever `flycheck-mode' is active."
+  (when (and (bound-and-true-p flycheck-mode) (fboundp 'flycheck-count-errors))
+    (let* ((counts (flycheck-count-errors flycheck-current-errors))
+           (err  (or (cdr (assq 'error counts)) 0))
+           (warn (or (cdr (assq 'warning counts)) 0))
+           (info (or (cdr (assq 'info counts)) 0))
+           (bug  (and (featurep 'nerd-icons)
+                      (zetta-line--glyph (ignore-errors (nerd-icons-codicon "nf-cod-bug")))))
+           (parts (delq nil (list (and (> err 0)  (format "%de" err))
+                                  (and (> warn 0) (format "%dw" warn))
+                                  (and (> info 0) (format "%di" info)))))
+           (label (concat (or bug "fc")
+                          (and parts (concat " " (string-join parts " "))))))
+      (zetta-svg-seg
+       label 'ml-flycheck
+       :color (cond ((> err 0) "#f85149") ((> warn 0) "#d29922") (t "#3fb950"))
+       :help (format "flycheck: %d error(s), %d warning(s), %d info" err warn info)
+       :action-help "list errors"
+       :action (if (fboundp 'flycheck-list-errors) #'flycheck-list-errors #'ignore)
+       :menu (delq nil
+                   (list (and (fboundp 'flycheck-list-errors) (cons "List errors" #'flycheck-list-errors))
+                         (and (fboundp 'flycheck-next-error) (cons "Next error" #'flycheck-next-error))
+                         (and (fboundp 'flycheck-previous-error) (cons "Previous error" #'flycheck-previous-error))
+                         (and (fboundp 'flycheck-buffer) (cons "Recheck buffer" #'flycheck-buffer))
+                         (and (fboundp 'flycheck-verify-setup) (cons "Verify setup" #'flycheck-verify-setup))))))))
 
 (defun zetta-modeline-svg--indicators ()
   (let* ((flags (delq nil
@@ -630,43 +660,71 @@ keep their own font (`zetta-font').")
   "The `display-time' clock string, trimmed."
   (when (boundp 'display-time-string) (string-trim (or display-time-string ""))))
 
-(defun zetta-tab-bar--battery-mdicon ()
-  "Nerd-icons material battery glyph name reflecting the current percentage."
-  (let* ((s (and (boundp 'battery-mode-line-string) battery-mode-line-string))
-         (pct (and s (string-match "\\([0-9]+\\)%" s)
-                   (string-to-number (match-string 1 s)))))
-    (cond ((null pct)   "nf-md-battery")
-          ((>= pct 95)  "nf-md-battery")
-          ((<= pct 10)  "nf-md-battery_alert")
-          (t (format "nf-md-battery_%d0" (max 1 (round (/ pct 10.0))))))))
+(defcustom zetta-tab-bar-battery-low 20
+  "At or below this battery percentage the indicator is drawn red."
+  :type 'integer :group 'zetta)
+(defcustom zetta-tab-bar-battery-medium 50
+  "At or below this battery percentage the indicator is drawn orange (red wins
+below `zetta-tab-bar-battery-low'); above it the indicator is green."
+  :type 'integer :group 'zetta)
+(defcustom zetta-tab-bar-battery-colors '((low . "#f85149")
+                                          (medium . "#d29922")
+                                          (full . "#3fb950"))
+  "Colours for low / medium / full battery levels."
+  :type '(alist :key-type symbol :value-type color) :group 'zetta)
 
-(defun zetta-tab-bar-battery-icon ()
-  "Battery glyph (percentage-aware) when `display-battery-mode' is on."
-  (when (and (bound-and-true-p display-battery-mode) (boundp 'battery-mode-line-string))
+(defun zetta-tab-bar--battery-data ()
+  "Return (PCT . PLUGGED) from `battery-status-function', or nil.
+PCT is the integer charge percentage; PLUGGED is non-nil when on AC power."
+  (when (and (boundp 'battery-status-function) (functionp battery-status-function))
+    (let ((data (ignore-errors (funcall battery-status-function))))
+      (when data
+        (cons (string-to-number (or (cdr (assq ?p data)) "0"))
+              (and (member (cdr (assq ?L data)) '("AC" "on-line" "on")) t))))))
+
+(defun zetta-tab-bar--battery-fa-glyph (pct)
+  "Font-Awesome battery glyph (nf-fa-battery_0..4) for PCT, or nil."
+  (let ((n (cond ((>= pct 88) 4) ((>= pct 63) 3) ((>= pct 38) 2)
+                 ((>= pct 13) 1) (t 0))))
     (and (featurep 'nerd-icons)
-         (zetta-line--glyph (ignore-errors (nerd-icons-mdicon (zetta-tab-bar--battery-mdicon)))))))
+         (zetta-line--glyph (ignore-errors
+                              (nerd-icons-faicon (format "nf-fa-battery_%d" n)))))))
 
-(defun zetta-tab-bar-battery-text ()
-  "The battery percentage string, trimmed."
-  (when (boundp 'battery-mode-line-string)
-    (string-trim (or battery-mode-line-string ""))))
+(defun zetta-tab-bar--battery-color (pct)
+  "Return the level colour (red/orange/green) for PCT."
+  (cdr (assq (cond ((<= pct zetta-tab-bar-battery-low) 'low)
+                   ((<= pct zetta-tab-bar-battery-medium) 'medium)
+                   (t 'full))
+             zetta-tab-bar-battery-colors)))
+
+(defun zetta-tab-bar-workspace-lighter ()
+  "The space-tree lighter string, or nil.
+NB: `space-tree-modeline-lighter' is a FUNCTION (it returns the current-space
+string like \"{ 1' }\"), not a variable -- so it must be called."
+  (and (fboundp 'space-tree-modeline-lighter)
+       (let ((s (ignore-errors (space-tree-modeline-lighter))))
+         (and (stringp s) (> (length (string-trim s)) 0)
+              (substring-no-properties s)))))
 
 (defun zetta-tab-bar-workspace-icon ()
-  "Workspace glyph, shown when the space-tree lighter is active."
-  (when (and (boundp 'space-tree-modeline-lighter) space-tree-modeline-lighter)
+  "Workspace glyph, shown when space-tree has a lighter."
+  (when (zetta-tab-bar-workspace-lighter)
     (and (featurep 'nerd-icons)
          (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-view_dashboard"))))))
 
 (defun zetta-tab-bar-workspace-text ()
-  "The space-tree workspace lighter string (a function so svg-line renders it;
-a bare variable segment would not be evaluated)."
-  (when (boundp 'space-tree-modeline-lighter)
-    space-tree-modeline-lighter))
+  "The space-tree workspace lighter string."
+  (zetta-tab-bar-workspace-lighter))
 
 (defun zetta-tab-bar-spotify-icon ()
   "Spotify glyph, sits to the left of the spot mode-line string."
   (and (featurep 'nerd-icons)
        (zetta-line--glyph (ignore-errors (nerd-icons-faicon "nf-fa-spotify")))))
+
+(defun zetta-tab-bar-emacs-icon ()
+  "Emacs-logo glyph for the full-height tab-bar masthead, or nil."
+  (and (featurep 'nerd-icons)
+       (zetta-line--glyph (ignore-errors (nerd-icons-sucicon "nf-custom-emacs")))))
 
 ;;; tab-bar interactive (svg-only) wrappers
 ;; ----------------------------------------------------------------
@@ -691,14 +749,16 @@ a bare variable segment would not be evaluated)."
                      (cons "Save buffer" #'save-buffer)))))
 
 (defun zetta-tab-bar-svg--modal ()
-  "Clickable tab-bar modal-system indicator (describe bindings; menu)."
-  (zetta-svg-seg
-   (zetta-tab-bar-modal) 'tb-modal
-   :help "modal system"
-   :action-help "describe bindings"
-   :action #'describe-bindings
-   :menu (list (cons "Describe bindings" #'describe-bindings)
-               (cons "Command (M-x)" #'execute-extended-command))))
+  "Clickable tab-bar modal-system indicator (keyboard glyph; describe bindings)."
+  (let ((kbd (and (featurep 'nerd-icons)
+                  (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-keyboard_variant"))))))
+    (zetta-svg-seg
+     (concat (and kbd (concat kbd " ")) (zetta-tab-bar-modal)) 'tb-modal
+     :help "modal system"
+     :action-help "describe bindings"
+     :action #'describe-bindings
+     :menu (list (cons "Describe bindings" #'describe-bindings)
+                 (cons "Command (M-x)" #'execute-extended-command)))))
 
 (defun zetta-tab-bar-svg--spotify ()
   "Clickable Spotify cluster (glyph + spot string): play/pause; transport menu."
@@ -740,11 +800,13 @@ a bare variable segment would not be evaluated)."
                          (and (fboundp 'mu4e-compose-new) (cons "Compose" #'mu4e-compose-new))))))))
 
 (defun zetta-tab-bar-svg--clock ()
-  "Clickable clock: world clock; calendar menu."
-  (let ((txt (zetta-tab-bar-clock)))
+  "Clickable clock (clock glyph + time): world clock; calendar menu."
+  (let* ((txt (zetta-tab-bar-clock))
+         (icon (and (featurep 'nerd-icons)
+                    (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-clock_outline"))))))
     (when (and txt (> (length (string-trim txt)) 0))
       (zetta-svg-seg
-       txt 'tb-clock
+       (concat (and icon (concat icon " ")) txt) 'tb-clock
        :help "time"
        :action-help "world clock"
        :action (if (fboundp 'world-clock) #'world-clock #'display-time-world)
@@ -754,23 +816,28 @@ a bare variable segment would not be evaluated)."
                          (and (fboundp 'org-agenda) (cons "Agenda" #'org-agenda))))))))
 
 (defun zetta-tab-bar-svg--battery ()
-  "Clickable battery cluster (glyph + percent): show status; toggle display."
-  (let* ((icon (ignore-errors (zetta-tab-bar-battery-icon)))
-         (txt  (zetta-tab-bar-battery-text))
-         (label (concat (and icon (concat icon " ")) txt)))
-    (when (and label (> (length (string-trim label)) 0))
-      (zetta-svg-seg
-       label 'tb-battery
-       :help "battery"
-       :action-help "battery status"
-       :action (lambda () (interactive)
-                 (message "%s" (if (boundp 'battery-mode-line-string)
-                                   (string-trim (or battery-mode-line-string "")) "n/a")))
-       :menu (list (cons "Battery status"
-                         (lambda () (interactive)
-                           (message "%s" (if (boundp 'battery-mode-line-string)
-                                             (string-trim (or battery-mode-line-string "")) "n/a"))))
-                   (cons "Toggle battery display" #'display-battery-mode))))))
+  "Clickable battery cluster: a Font-Awesome battery glyph coloured by level
+\(red/orange/green), a plug glyph when on AC, and the percentage.  Click shows
+the full battery status."
+  (when (bound-and-true-p display-battery-mode)
+    (let ((d (zetta-tab-bar--battery-data)))
+      (when d
+        (let* ((pct (car d)) (plugged (cdr d))
+               (batt (zetta-tab-bar--battery-fa-glyph pct))
+               (plug (and plugged (featurep 'nerd-icons)
+                          (zetta-line--glyph (ignore-errors (nerd-icons-faicon "nf-fa-plug")))))
+               (label (concat (and plug (concat plug " "))
+                              (and batt (concat batt " "))
+                              (format "%d%%" pct))))
+          (when (> (length (string-trim label)) 0)
+            (zetta-svg-seg
+             label 'tb-battery
+             :color (zetta-tab-bar--battery-color pct)
+             :help (format "battery: %d%%%s" pct (if plugged " (plugged in)" ""))
+             :action-help "battery status"
+             :action #'battery
+             :menu (list (cons "Battery status" #'battery)
+                         (cons "Toggle battery display" #'display-battery-mode)))))))))
 
 (defun zetta-tab-bar-svg--workspace ()
   "Clickable workspace cluster (glyph + name): switch space; space-tree menu."

@@ -1,6 +1,6 @@
 ;;; header-line-svg.el --- SVG breadcrumb header line (svg-line config) -*- lexical-binding: t; -*-
 
-;; Configures the `svg-line' engine (source/zettapkg/svg-line) to render
+;; Configures the `svg-line' engine (github.com/chiply/svg-line) to render
 ;; the per-window `header-line' as a 2-line SVG image of breadcrumbs --
 ;; the successor to dual-header.el, now on the shared engine.  This file
 ;; supplies only CONTENT + styling + activation; rendering lives in

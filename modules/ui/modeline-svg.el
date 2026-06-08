@@ -1,6 +1,6 @@
 ;;; modeline-svg.el --- SVG multi-line mode line (svg-line config) -*- lexical-binding: t; -*-
 
-;; Configures the `svg-line' engine (source/zettapkg/svg-line) to render a
+;; Configures the `svg-line' engine (github.com/chiply/svg-line) to render a
 ;; per-window, multi-line mode line, with active/inactive styling.  This
 ;; file supplies only CONTENT + styling + activation policy; rendering
 ;; lives in `svg-line'.
@@ -63,20 +63,21 @@ A barely-there light tint."
 ;;; Content -- rows of (LEFT-SEGMENTS . RIGHT-SEGMENTS)
 ;;; ------------------------------------------------------------------
 (defun zetta-modeline-svg-lines ()
-  "Return the mode line as a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS)."
+  "Return the mode line as rows (cons LEFT . RIGHT, or :left/:center/:right)."
   (list
-   ;; line 1:  [file] modal | ace | buffer        ......   mode | line:col
-   (cons '(zetta-modeline-svg--file-icon " "
-           zetta-modeline-svg--modal " " zetta-modeline-svg--ace " "
-           zetta-modeline-svg--buffer)
-         '(zetta-modeline-svg--mode "  " zetta-modeline-svg--point))
+   ;; line 1:  [file] modal | ace | buffer   <progress pie>   mode | line:col
+   (list :left '(zetta-modeline-svg--file-icon " "
+                 zetta-modeline-svg--modal " " zetta-modeline-svg--ace " "
+                 zetta-modeline-svg--buffer)
+         :center '(zetta-modeline-svg--file-progress)
+         :right '(zetta-modeline-svg--mode "  " zetta-modeline-svg--point))
    ;; line 2:  git:branch (clickable -> magit) | [copilot] lsp | flycheck | flags
-   ;;          ......   doc-position | <progress pie>
+   ;;          ......   doc-position
    ;; (the git + branch glyphs are folded into the clickable vc segment)
    (cons '(zetta-modeline-svg--vc " "
-           zetta-modeline-svg--copilot-icon " " zetta-modeline-svg--checkers
+           zetta-modeline-svg--copilot-icon " " zetta-modeline-svg--checkers " "
            zetta-modeline-svg--flycheck " " zetta-modeline-svg--indicators)
-         '(zetta-modeline-svg--docpos " " zetta-modeline-svg--file-progress))))
+         '(zetta-modeline-svg--docpos))))
 
 (svg-line-define 'zetta-mode-line
   :target 'mode-line

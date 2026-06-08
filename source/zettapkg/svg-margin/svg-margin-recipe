@@ -1,2 +1,0 @@
-(svg-margin :fetcher github :repo "chiply/svg-margin"
-            :files ("svg-margin.el"))

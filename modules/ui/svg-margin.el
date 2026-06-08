@@ -1,22 +1,22 @@
 ;;; svg-margin.el --- svg-margin gutter configuration -*- lexical-binding: t; -*-
 
-;; Loads the in-tree `svg-margin' package (source/zettapkg/svg-margin) and
-;; wires up MY providers in the window margins instead of the fringe: VC
-;; (via git-gutter), flycheck, TODO/FIXME, bookmarks, evil marks, an Org
+;; Loads the `svg-margin' package (https://github.com/chiply/svg-margin)
+;; and wires up MY providers in the window margins instead of the fringe:
+;; VC (via git-gutter), flycheck, TODO/FIXME, bookmarks, evil marks, an Org
 ;; heading rail, long-line and trailing-whitespace hygiene, and live
 ;; symbol-at-point occurrences.
 ;;
-;; This is the config-level analogue of the package's examples/ gallery --
-;; the gallery stays in zettapkg as published reference; this file is my own
-;; setup, so it survives a restart.  Providers read the source packages'
-;; data and guard on their availability at runtime, so this loads cleanly
-;; even before evil/git-gutter/flycheck/bookmark are loaded; the activation
-;; (disabling the fringe drawers it replaces, enabling the mode) runs from
-;; `emacs-startup-hook', and refresh triggers are deferred per package.
+;; This is the config-level analogue of the provider examples in the
+;; package's README; this file is my own setup, so it survives a restart.
+;; Providers read the source packages' data and guard on their availability
+;; at runtime, so this loads cleanly even before evil/git-gutter/flycheck/
+;; bookmark are loaded; the activation (disabling the fringe drawers it
+;; replaces, enabling the mode) runs from `emacs-startup-hook', and refresh
+;; triggers are deferred per package.  `:wait t' makes elpaca finish
+;; installing svg-margin before the `(require 'svg-margin)' below runs.
 
 (use-package svg-margin
-  :ensure nil
-  :load-path "source/zettapkg/svg-margin")
+  :ensure (:host github :repo "chiply/svg-margin" :wait t))
 
 (require 'svg-margin)
 (require 'svg)
@@ -96,17 +96,33 @@
 ;; Each returns a list of indicator plists; :side and :priority are set at
 ;; registration (below), so the providers only describe what/where to draw.
 
+(defvar zetta-svg-margin-icon-font
+  (or (and (boundp 'zetta-svg-line-font) zetta-svg-line-font)
+      "Symbols Nerd Font Mono")
+  "Font family used to draw Nerd-Font icon glyphs in the margin.")
+
+(defun zetta-svg-margin--glyph (name &optional collection)
+  "Return the Nerd-Font glyph NAME (via COLLECTION fn, default mdicon), or nil."
+  (and (featurep 'nerd-icons)
+       (let ((g (ignore-errors (funcall (or collection #'nerd-icons-mdicon) name))))
+         (and (stringp g) (> (length (string-trim g)) 0) (substring-no-properties g)))))
+
 (defun zetta-svg-margin-todo (buffer)
-  "Dots for TODO/FIXME/HACK keywords in BUFFER."
+  "Keyword icons for TODO/FIXME/HACK in BUFFER (checkbox / wrench / note)."
   (with-current-buffer buffer
     (let (out)
       (save-excursion
         (goto-char (point-min))
         (while (re-search-forward "\\_<\\(TODO\\|FIXME\\|HACK\\)\\_>" nil t)
           (let ((p (match-beginning 0)) (kw (match-string 1)))
-            (push (list :pos p :shape 'dot
+            (push (list :pos p :font zetta-svg-margin-icon-font :scale 1.1
+                        :text (zetta-svg-margin--glyph
+                               (pcase kw
+                                 ("TODO" "nf-md-checkbox_blank_outline")
+                                 ("FIXME" "nf-md-wrench")
+                                 (_ "nf-md-note_outline")))
                         :color (pcase kw
-                                 ("TODO" "#d29922") ("FIXME" "#f85149") (_ "#a371f7"))
+                                 ("TODO" "#c7ab74") ("FIXME" "#cf9999") (_ "#a698c9"))
                         :help kw
                         :action-help "go to keyword"
                         :action (lambda () (interactive) (goto-char p))
@@ -132,7 +148,7 @@
                (cl-loop for ln from start to (min end (+ start 1000)) do
                         (let ((l ln) (ty type))
                           (push (list :line l :shape 'bar
-                                      :color (if (eq ty 'added) "#3fb950" "#d29922")
+                                      :color (if (eq ty 'added) "#8fb39a" "#c7ab74")
                                       :help (format "git: %s hunk" ty)
                                       :action-help "show hunk diff"
                                       :action (zetta-svg-margin--gg-action l #'git-gutter:popup-hunk)
@@ -140,7 +156,7 @@
                                 out))))
               ('deleted
                (let ((l start))
-                 (push (list :line l :shape 'triangle :color "#f85149"
+                 (push (list :line l :shape 'triangle :color "#cf9999"
                              :help "git: deleted hunk"
                              :action-help "show hunk diff"
                              :action (zetta-svg-margin--gg-action l #'git-gutter:popup-hunk)
@@ -159,7 +175,9 @@
                 (pos (ignore-errors (bookmark-get-position bm))))
             (when (and bmfile pos (string= (file-truename bmfile) file))
               (let ((name (car bm)))
-                (push (list :pos pos :shape 'bookmark :color "#7d5bed"
+                (push (list :pos pos :color "#9f90c7"
+                            :font zetta-svg-margin-icon-font :scale 1.1
+                            :text (zetta-svg-margin--glyph "nf-md-bookmark")
                             :help (format "bookmark: %s" name)
                             :action-help "jump to bookmark"
                             :action (lambda () (interactive) (bookmark-jump name))
@@ -182,7 +200,7 @@
             (when (and (markerp val) (eq (marker-buffer val) buffer)
                        (>= char ?a) (<= char ?z))
               (push (list :pos (marker-position val) :text (char-to-string char)
-                          :face 'warning
+                          :color "#a698c9"
                           :help (format "evil mark `%c'" char)
                           :action-help (format "jump to mark `%c'" char)
                           :action (lambda () (interactive) (evil-goto-mark char))
@@ -195,7 +213,7 @@
         out))))
 
 (defun zetta-svg-margin-flycheck (buffer)
-  "Severity dots for flycheck diagnostics in BUFFER."
+  "Severity icons for flycheck diagnostics in BUFFER (bug / alert / info)."
   (with-current-buffer buffer
     (when (bound-and-true-p flycheck-mode)
       (let (out)
@@ -204,9 +222,13 @@
                 (level (flycheck-error-level err)))
             (when line
               (let ((l line))
-                (push (list :line l :shape 'dot
+                (push (list :line l :font zetta-svg-margin-icon-font :scale 1.1
+                            :text (pcase level
+                                    ('error (zetta-svg-margin--glyph "nf-cod-bug" #'nerd-icons-codicon))
+                                    ('warning (zetta-svg-margin--glyph "nf-md-alert"))
+                                    (_ (zetta-svg-margin--glyph "nf-md-information_outline")))
                             :color (pcase level
-                                     ('error "#f85149") ('warning "#d29922") (_ "#3fb950"))
+                                     ('error "#cf9999") ('warning "#c7ab74") (_ "#8fb39a"))
                             :help (ignore-errors (flycheck-error-message err))
                             :action-help "show error"
                             :action (lambda () (interactive)
@@ -237,7 +259,9 @@
             (end-of-line)
             (when (> (current-column) col)
               (let ((bol (line-beginning-position)))
-                (push (list :pos bol :shape 'bar :color "#b08800"
+                (push (list :pos bol :color "#bfae7e"
+                            :font zetta-svg-margin-icon-font :scale 1.1
+                            :text (zetta-svg-margin--glyph "nf-md-ruler")
                             :help (format "line exceeds %d columns" col)
                             :action-help "go to overflow"
                             :action (lambda () (interactive) (goto-char bol) (end-of-line)))
@@ -253,7 +277,9 @@
         (goto-char (point-min))
         (while (re-search-forward "[ \t]+$" nil t)
           (let ((bol (line-beginning-position)))
-            (push (list :pos bol :shape 'dot :color "#8b949e"
+            (push (list :pos bol :color "#8a909a"
+                        :font zetta-svg-margin-icon-font :scale 1.2
+                        :text (zetta-svg-margin--glyph "nf-md-format_pilcrow")
                         :help "trailing whitespace"
                         :action-help "go to line"
                         :action (lambda () (interactive) (goto-char bol) (end-of-line))
@@ -269,35 +295,91 @@
       out)))
 
 (defun zetta-svg-margin-org-headings (buffer)
-  "A left rail bar per Org heading, sized and coloured by depth."
+  "A numbered-circle level marker per Org heading in the left margin.
+This is the org-margin idea delivered through an svg-margin provider: each
+heading gets a Nerd-Font numbered circle (level 1-9, cycling) coloured by the
+heading's `org-level-N' face, while the stars stay in the buffer."
   (with-current-buffer buffer
     (when (derived-mode-p 'org-mode)
-      (let (out)
+      (let ((font (and (boundp 'zetta-svg-line-font) zetta-svg-line-font))
+            out)
         (save-excursion
           (goto-char (point-min))
           (while (re-search-forward "^\\(\\*+\\) " nil t)
             (let* ((level (length (match-string 1)))
-                   (face (intern (format "org-level-%d" (1+ (mod (1- level) 8)))))
-                   (color (or (face-foreground face nil 'default) "#888888"))
+                   (n     (1+ (mod (1- level) 9)))   ; numbered circles run 1..9
+                   (face  (intern (format "org-level-%d" (1+ (mod (1- level) 8)))))
+                   (color (or (face-foreground face nil 'default) "#9aa0a8"))
+                   (glyph (and (featurep 'nerd-icons)
+                               (ignore-errors
+                                 (substring-no-properties
+                                  (nerd-icons-mdicon (format "nf-md-numeric_%d_circle" n))))))
                    (p (line-beginning-position)))
-              (push (list :pos p :color color
-                          :help (format "heading level %d" level)
-                          :action-help "go to heading"
-                          :action (lambda () (interactive) (goto-char p))
-                          :menu (list (cons "Go to heading"
-                                            (lambda () (interactive) (goto-char p)))
-                                      (cons "Toggle fold"
-                                            (lambda () (interactive) (goto-char p) (org-cycle)))
-                                      (cons "Narrow to subtree"
+              (when (and glyph (> (length (string-trim glyph)) 0))
+                (push (list :pos p :text glyph :color color :font font :scale 1.2
+                            :help (format "heading level %d" level)
+                            :action-help "go to heading"
+                            :action (lambda () (interactive) (goto-char p))
+                            :menu (list (cons "Go to heading"
+                                              (lambda () (interactive) (goto-char p)))
+                                        (cons "Toggle fold"
+                                              (lambda () (interactive) (goto-char p) (org-cycle)))
+                                        (cons "Narrow to subtree"
+                                              (lambda () (interactive)
+                                                (goto-char p) (org-narrow-to-subtree)))))
+                      out)))))
+        out))))
+
+(defun zetta-svg-margin-org-blocks (buffer)
+  "Margin icons for Org block starts (the block-marker half of org-margin).
+Marks `#+begin_src' (babel), `#+begin_quote', `#+begin_example',
+`#+begin_export' and `#+begin_verse' lines with a Nerd-Font glyph; src blocks
+edit/execute from the menu."
+  (with-current-buffer buffer
+    (when (derived-mode-p 'org-mode)
+      (let ((font (and (boundp 'zetta-svg-line-font) zetta-svg-line-font))
+            (case-fold-search t)
+            ;; (KIND GLYPH COLOUR)
+            (specs '(("src"     "nf-md-code_tags"          "#98accb")
+                     ("quote"   "nf-md-format_quote_close" "#aeb4bb")
+                     ("example" "nf-md-console"            "#aeb4bb")
+                     ("export"  "nf-md-export"             "#aeb4bb")
+                     ("verse"   "nf-md-script_text"        "#aeb4bb")))
+            out)
+        (save-excursion
+          (dolist (spec specs)
+            (let* ((kind (nth 0 spec))
+                   (glyph (and (featurep 'nerd-icons)
+                               (ignore-errors
+                                 (substring-no-properties (nerd-icons-mdicon (nth 1 spec))))))
+                   (color (nth 2 spec))
+                   (srcp (string= kind "src"))
+                   (re (format "^[ \t]*#\\+begin_%s\\b" kind)))
+              (when (and glyph (> (length (string-trim glyph)) 0))
+                (goto-char (point-min))
+                (while (re-search-forward re nil t)
+                  (let ((p (line-beginning-position)))
+                    (push (list :pos p :text glyph :color color :font font :scale 1.1
+                                :help (format "org %s block" kind)
+                                :action-help (if srcp "edit block" "go to block")
+                                :action (if srcp
                                             (lambda () (interactive)
-                                              (goto-char p) (org-narrow-to-subtree))))
-                          :draw (lambda (svg x y w h c)
-                                  (let* ((frac (/ (max 1 (- 7 level)) 6.0))
-                                         (bh (max 3 (round (* h frac))))
-                                         (yy (+ y (/ (- h bh) 2))))
-                                    (svg-rectangle svg x yy (max 2 (round (* w 0.4))) bh
-                                                   :rx 1 :fill c))))
-                    out))))
+                                              (goto-char p)
+                                              (when (fboundp 'org-edit-special)
+                                                (ignore-errors (org-edit-special))))
+                                          (lambda () (interactive) (goto-char p)))
+                                :menu (delq nil
+                                            (list (cons "Go to block"
+                                                        (lambda () (interactive) (goto-char p)))
+                                                  (and srcp (fboundp 'org-edit-special)
+                                                       (cons "Edit block"
+                                                             (lambda () (interactive) (goto-char p) (org-edit-special))))
+                                                  (and srcp (fboundp 'org-babel-execute-src-block)
+                                                       (cons "Execute block"
+                                                             (lambda () (interactive) (goto-char p) (org-babel-execute-src-block))))
+                                                  (cons "Toggle fold"
+                                                        (lambda () (interactive) (goto-char p) (org-cycle))))))
+                          out)))))))
         out))))
 
 (defvar zetta-svg-margin--last-symbol nil
@@ -321,7 +403,10 @@
                 (unless (gethash bol seen)
                   (puthash bol t seen)
                   (let ((p bol) (s sym))
-                    (push (list :pos p :shape 'dot :color "#58a6ff"
+                    (push (list :pos p :color "#98accb"
+                                :font zetta-svg-margin-icon-font :scale 1.1
+                                :text (zetta-svg-margin--glyph "nf-cod-symbol_namespace"
+                                                               #'nerd-icons-codicon)
                                 :help (format "occurrence of `%s'" s)
                                 :action-help "go to occurrence"
                                 :action (lambda () (interactive) (goto-char p))
@@ -386,6 +471,7 @@ the recompute yields the same hunks we skip, breaking the cycle."
 (svg-margin-register-provider 'bookmarks    #'zetta-svg-margin-bookmarks    :side 'right :priority 6)
 (svg-margin-register-provider 'evil-marks   #'zetta-svg-margin-evil-marks   :side 'left  :priority 5)
 (svg-margin-register-provider 'org-headings #'zetta-svg-margin-org-headings :side 'left  :priority 4)
+(svg-margin-register-provider 'org-blocks   #'zetta-svg-margin-org-blocks   :side 'left  :priority 4)
 (svg-margin-register-provider 'long-lines   #'zetta-svg-margin-long-lines   :side 'right :priority 3)
 (svg-margin-register-provider 'symbol       #'zetta-svg-margin-symbol       :side 'left  :priority 2)
 (svg-margin-register-provider 'trailing-ws  #'zetta-svg-margin-trailing-ws  :side 'right :priority 1)

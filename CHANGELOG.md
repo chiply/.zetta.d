@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13](https://github.com/chiply/.zetta.d/compare/v0.1.12...v0.1.13) (2026-06-09)
+
+
+### Features
+
+* **svg-bench:** add self-contained SVG-vs-native render benchmark ([#43](https://github.com/chiply/.zetta.d/issues/43)) ([6b9b475](https://github.com/chiply/.zetta.d/commit/6b9b475b60dfb26063002cc70fcd9a7a562ba8b2))
+
 ## [0.1.12](https://github.com/chiply/.zetta.d/compare/v0.1.11...v0.1.12) (2026-06-08)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.14](https://github.com/chiply/.zetta.d/compare/v0.1.13...v0.1.14) (2026-06-11)
+
+
+### Features
+
+* **svg-bench:** bounce three purple icons in the line animation ([#45](https://github.com/chiply/.zetta.d/issues/45)) ([64ab1eb](https://github.com/chiply/.zetta.d/commit/64ab1eb3e138be1129fe5f3224ccb6aa16fbcb1c))
+
 ## [0.1.13](https://github.com/chiply/.zetta.d/compare/v0.1.12...v0.1.13) (2026-06-09)
 
 

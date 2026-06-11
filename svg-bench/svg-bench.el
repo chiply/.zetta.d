@@ -7,7 +7,7 @@
 ;;
 ;; The thesis: SVG raster cost scales with image PIXEL AREA.  A status bar is
 ;; short, so even a very wide (ultrawide-monitor) SVG bar stays well above the
-;; 60 fps that high-frame-rate apps target; only a large 2-D image (the circle
+;; 60 fps that high-frame-rate apps target; only a large 2-D image (the icon
 ;; animation) pushes past it.
 ;;
 ;; Everything needs a GRAPHICAL frame -- raster and fps are meaningless under
@@ -40,14 +40,22 @@ engine scales with the glyph count it implies.")
 (defvar svg-bench-anim-widths '(("small" . 300) ("medium" . 700) ("large" . 1400))
   "Alist of (NAME . WIDTH-PX) for the line animation, `svg-perf-animation'.
 The animation is a thin mode-line-sized bar (height `svg-bench-anim-height')
-with circles bouncing horizontally -- representative of an inline SVG animation
+with three icons (Emacs, Org, image) bouncing horizontally -- representative of an inline SVG animation
 you might actually put in a status line -- so its cost scales with width like
 the status-bar benchmarks.")
-(defvar svg-bench-anim-height 40 "Height in px of the line animation bar.")
+(defvar svg-bench-anim-height 56 "Height in px of the line animation bar.")
 (defvar svg-bench-anim-speed 1.2
-  "Angular speed of the bouncing circles, in radians/second (wall-clock).
+  "Angular speed of the bouncing icon, in radians/second (wall-clock).
 A full there-and-back bounce takes 2*pi / this many seconds (~5.2s at 1.2);
 lower is slower and smoother.")
+
+(defvar svg-bench-anim-icons
+  (list (char-to-string #xe632)    ; nf-custom-emacs
+        (char-to-string #xe633)    ; nf-custom-orgmode
+        (char-to-string #xf03e))   ; nf-fa-image
+  "Nerd-Font glyphs that bounce in the line animation: Emacs, Org, image.")
+(defvar svg-bench-emacs-purple "#7F5AB6"
+  "Emacs-logo purple; all animated icons share it.")
 
 (defvar svg-bench-trials 20 "Trials per (benchmark, size) cell.")
 (defvar svg-bench-reps 100 "Forced-redisplay frames timed per trial.")
@@ -121,23 +129,27 @@ miss and is rasterised afresh."
     (svg-image svg :scale 1.0 :ascent 'center)))
 
 (defun svg-bench--anim-image (width frame)
-  "Thin WIDTH x `svg-bench-anim-height' bar with circles bouncing left-right.
-Representative of an inline status-line animation; cost scales with WIDTH."
+  "Thin WIDTH x `svg-bench-anim-height' white bar with three purple icons
+(Emacs, Org, image) gliding left-right at staggered phases.  Representative of
+an inline status-line animation; cost scales with WIDTH."
   (let* ((h svg-bench-anim-height)
          (svg (svg-create width h))
-         (r (max 4 (round (/ h 3.0))))
-         (cy (/ h 2))
-         (span (max 1 (- width (* 2 (+ r 4))))))
-    (svg-rectangle svg 0 0 width h :fill "#0d1117")
+         (fs (max 10 (round (* h 0.95))))          ; big glyphs, fill the bar
+         (gw fs)                                   ; glyph advance ~ font size
+         (span (max 1 (- width gw 8)))
+         (y (round (* h 0.77)))                    ; baseline that centres the glyph
+         (font (or (svg-bench--glyph-font) "Monospace")))
+    (svg-rectangle svg 0 0 width h :fill "#ffffff")
     ;; Position from wall-clock (not the frame index) so the motion is the same
     ;; smooth, slow speed regardless of how many fps we render at.
     (let ((t* (* (float-time) svg-bench-anim-speed)))
-      (dolist (c (list (cons 0.0 "#f25c54") (cons 1.9 "#58a6ff") (cons 3.8 "#3fb950")))
-        (let* ((ph (+ (car c) t*))
-               ;; sine oscillation -> smooth back-and-forth across the bar
-               (x (+ r 4 (round (* (/ span 2.0) (1+ (sin ph)))))))
-          (svg-circle svg x cy r :fill (cdr c)))))
-    ;; per-frame marker so each frame is a unique image (no cache hits)
+      (cl-loop for g in svg-bench-anim-icons
+               for ph in '(0.0 1.9 3.8)            ; staggered so they spread out
+               do (let ((x (+ 4 (round (* (/ span 2.0) (1+ (sin (+ ph t*))))))))
+                    ;; sine oscillation -> smooth back-and-forth across the bar
+                    (svg-text svg g :x x :y y :font-size fs
+                              :font-family font :fill svg-bench-emacs-purple))))
+    ;; per-frame marker so each frame is a unique image (cache MISS, real raster)
     (svg-rectangle svg (- width 2) 0 2 2
                    :fill (format "#%06x" (logand (* (1+ frame) 2654435761) #xffffff)))
     (svg-image svg :scale 1.0 :ascent 'center)))
@@ -251,7 +263,7 @@ One table, a row per width, same statistics as `svg-perf-benchmark'."
          (work (get-buffer-create "*svg-bench-work*"))
          (out (get-buffer-create "*svg-bench*")))
     (with-current-buffer out (let ((inhibit-read-only t)) (erase-buffer))
-      (insert (format "Line animation (3 circles bouncing in a bar): SVG width vs fps\n"))
+      (insert (format "Line animation (3 icons bouncing in a bar): SVG width vs fps\n"))
       (insert (format "Emacs %s | bar height %dpx | %d trials x %d frames\n\n"
                       emacs-version svg-bench-anim-height trials reps))
       (insert (svg-bench--table-header "animation width")))
@@ -323,9 +335,9 @@ narrow row of the data table; LABEL names the engine and data on screen."
 
 ;;;###autoload
 (defun svg-perf-animation (&optional width)
-  "Live demo: three circles bouncing in a thin SVG bar of WIDTH (default 460).
-Representative of an inline status-line animation; shows a running fps counter;
-any key stops it."
+  "Live demo: three icons bouncing in a thin SVG bar of WIDTH (default 460).
+The icons are Emacs, Org, and image, all purple.  Representative of an inline
+status-line animation; shows a running fps counter; any key stops it."
   (interactive)
   (unless (display-graphic-p) (user-error "svg-bench needs a graphical frame"))
   (let* ((width (or width 460)) (h svg-bench-anim-height)

@@ -3,7 +3,7 @@
 A self-contained benchmark (`svg-bench.el`, only built-in `svg` + `cl-lib`, no
 packages, no I/O) for the cost of rendering a status bar in Emacs two ways — as
 an **SVG image** (`svg.el` → `create-image` → librsvg → redisplay) versus the
-**native text engine** — plus a circle animation that shows where SVG size
+**native text engine** — plus an icon animation that shows where SVG size
 starts to bite.
 
 It backs a blog post, so it has both **live, recordable demos** and **headless
@@ -33,7 +33,7 @@ and a live fps counter):
 | `M-x svg-perf-text` | an SVG bar drawing text |
 | `M-x svg-perf-icons` | an SVG bar drawing Nerd-Font icon glyphs |
 | `M-x builtin-perf-text` | the native text engine drawing text |
-| `M-x svg-perf-animation` | three circles bouncing in a thin inline bar (optional width arg) |
+| `M-x svg-perf-animation` | the purple Emacs icon bouncing in a thin inline bar (optional width arg) |
 
 **Data tables:**
 
@@ -116,13 +116,14 @@ canvas-area-bound, so glyph *type* barely matters. The native engine is
 
 ```
 animation width        | mean ms | min ms | max ms | mean fps | min fps
-small   300x40px        |   1.31  |  1.13  |  1.78  |     762  |    561
-medium  700x40px        |   2.57  |  2.31  |  2.95  |     389  |    339
-large   1400x40px       |   4.75  |  4.29  |  5.01  |     211  |    199
+small   300x56px        |   1.94  |  1.77  |  2.26  |     517  |    443
+medium  700x56px        |   4.03  |  3.75  |  4.55  |     248  |    220
+large   1400x56px       |   7.45  |  7.04  |  7.77  |     134  |    129
 ```
 
-A thin inline animation that re-rasterises a fresh SVG **every frame** runs at
-**200–760 fps** across these widths — the worst trial is still ~200 fps. So an
+A thin inline animation (three large purple icons — Emacs, Org, image — gliding
+along a white bar) that re-rasterises a fresh SVG **every frame** runs at
+**130–520 fps** across these widths — the worst trial is still ~129 fps. So an
 SVG animation you'd actually drop into a status line is silky, not just "fast
 enough."
 

@@ -82,11 +82,32 @@ completing-read prompter."
   ;; file/URL/symbol a command just mentioned.  `embark--end-of-target'
   ;; (a default pre-action hook) is neutralised so the action does not
   ;; move point inside *Messages*.
+  ;;
+  ;; Noise lines are skipped: every C-g logs "Quit" (so bailing out of
+  ;; one attempt would make "Quit" the next attempt's target), and
+  ;; embark's own minimal indicator logs its "Act on ..." prompt.
+  (defvar zetta-embark-last-message-noise
+    (rx bos (or "" "Quit" "Mark set" "Mark saved" "Mark activated"
+                "Mark deactivated"
+                (seq "Act on " (* nonl)))
+        eos)
+    "Regexp for *Messages* lines `embark-on-last-message' skips over.")
+
   (defun embark-on-last-message (arg)
-    "Act on the last message displayed in the echo area."
+    "Act on the last substantive message displayed in the echo area.
+Trailing lines matching `zetta-embark-last-message-noise' are skipped."
     (interactive "P")
     (with-current-buffer "*Messages*"
-      (goto-char (1- (point-max)))
+      (goto-char (point-max))
+      (skip-chars-backward "\n")
+      (while (string-match-p
+              zetta-embark-last-message-noise
+              (buffer-substring-no-properties
+               (line-beginning-position) (line-end-position)))
+        (when (<= (line-beginning-position) (point-min))
+          (user-error "No substantive message to act on"))
+        (forward-line -1))
+      (end-of-line)
       (cl-letf (((symbol-function #'embark--end-of-target) #'ignore))
         (embark-act arg))))
 

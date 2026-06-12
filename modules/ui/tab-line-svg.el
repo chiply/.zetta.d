@@ -71,40 +71,22 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
                    (ignore-errors (delete-window window)))))))
       (force-mode-line-update)))
 
-  (defvar ct/circle-numbers-alist
-    '(
-      ;;(0 . "⓪")
-      ;;(1 . "①")
-      ;;(2 . "②")
-      ;;(3 . "③")
-      ;;(4 . "④")
-      ;;(5 . "⑤")
-      ;;(6 . "⑥")
-      ;;(7 . "⑦")
-      ;;(8 . "⑧")
-      ;;(9 . "⑨")
-      (0 . "0")
-      (1 . "1")
-      (2 . "2")
-      (3 . "3")
-      (4 . "4")
-      (5 . "5")
-      (6 . "6")
-      (7 . "7")
-      (8 . "8")
-      (9 . "9")
-      (10 . "10")
-      (11 . "11")
-      (12 . "12")
-      (13 . "13")
-      (14 . "14")
-      (15 . "15")
-      (16 . "16")
-      (17 . "17")
-      (18 . "18")
-      (19 . "19")
-      )
-    "Alist of integers to strings of circled unicode numbers.")
+  (defun ct/circle-number (n)
+    "Return a Nerd Font circled-number glyph for tab index N (1-based).
+1-9 use `nf-md-numeric_N_circle'; 10 uses `nf-md-numeric_10_circle';
+anything higher falls back to `nf-md-numeric_9_plus_circle'.  The glyph is
+re-faced to \"Terminess Nerd Font Mono\" (installed) rather than nerd-icons'
+default \"Symbols Nerd Font Mono\" (NOT installed here) so it renders in the
+plain-text tab line instead of tofu.  Trailing space keeps it off the icon."
+    (when (require 'nerd-icons nil t)
+      (let ((glyph (cond ((<= 1 n 9)
+                          (nerd-icons-mdicon (format "nf-md-numeric_%d_circle" n)))
+                         ((= n 10) (nerd-icons-mdicon "nf-md-numeric_10_circle"))
+                         (t (nerd-icons-mdicon "nf-md-numeric_9_plus_circle")))))
+        (when glyph
+          (concat (propertize (substring-no-properties glyph)
+                              'face '(:family "Terminess Nerd Font Mono"))
+                  " ")))))
 
   (defun zetta-tab-line-tab-name-buffer (buffer &optional _buffers)
     (let* ((buffer-name (buffer-name buffer))
@@ -121,7 +103,7 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
            (icon (cond (fname (all-the-icons-icon-for-file fname))
                        (t (all-the-icons-icon-for-mode (with-current-buffer buffer major-mode))))))
       (concat
-       (alist-get (+ 1 (cl-position buffer (funcall tab-line-tabs-function))) ct/circle-numbers-alist)
+       (ct/circle-number (+ 1 (cl-position buffer (funcall tab-line-tabs-function))))
        icon
        (propertize (if fname
                        ;; the file name including the suffix
@@ -134,18 +116,6 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
 
   (setq tab-line-tabs-function 'tab-line-tabs-window-buffers)
 
-  ;;:brushup
-  ;; NOTE This achieves the desired effect of having all tabs be
-  ;; rendered simply in white, and then to have the active tab only
-  ;; rendered with highlighting and also an underline and bold weight
-  ;; for ease of reading, basically. This fits into the higher level
-  ;; styling scheme of having minimum viable visual components on the
-  ;; screen, but the tabline still provides some indication of
-  ;; separation between inactive windows that are stacked vertically
-  ;; or horizontally. active tabs in other windows are underlined to
-  ;; preserve that visual of which is the actual buffer being
-  ;; displayed and this also enhances separation between vertically
-  ;; stacked windows
   (add-to-list
    'brushup-styles
    '(progn

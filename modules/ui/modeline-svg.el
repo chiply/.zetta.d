@@ -5,12 +5,6 @@
 ;; file supplies only CONTENT + styling + activation policy; rendering
 ;; lives in `svg-line'.
 ;;
-;; It RECREATES the data from `telephone-line.el' as TEXT.  telephone-line
-;; is mostly icons/animations, which single-font SVG text cannot draw, so
-;; those become short text labels or are dropped; the textual segments
-;; (modal tag, ace path, repo:branch, flycheck, R/T/D/N/H indicators, doc
-;; position, point position) recreate faithfully.
-;;
 ;; Switch at runtime:
 ;;   M-x zetta-modeline-use-svg            ; activate this renderer
 ;;   M-x zetta-modeline-use-telephone-line ; restore telephone-line
@@ -66,11 +60,12 @@ A barely-there light tint."
   "Return the mode line as rows (cons LEFT . RIGHT, or :left/:center/:right)."
   (list
    ;; line 1:  [file] modal | ace | buffer   <progress pie>   mode | line:col
-   (list :left '(zetta-modeline-svg--file-icon " "
-                 zetta-modeline-svg--modal " " zetta-modeline-svg--ace " "
-                 zetta-modeline-svg--buffer)
-         :center '(zetta-modeline-svg--file-progress)
-         :right '(zetta-modeline-svg--mode "  " zetta-modeline-svg--point))
+   (list :left '(zetta-modeline-svg--buffer " "
+                 zetta-modeline-svg--ace " "
+                 zetta-modeline-svg--modal)
+         :center nil
+         :right '(zetta-modeline-svg--file-icon " "
+                  zetta-modeline-svg--mode "  " zetta-modeline-svg--point))
    ;; line 2:  git:branch (clickable -> magit) | [copilot] lsp | flycheck | flags
    ;;          ......   doc-position
    ;; (the git + branch glyphs are folded into the clickable vc segment)
@@ -79,11 +74,18 @@ A barely-there light tint."
            zetta-modeline-svg--flycheck " " zetta-modeline-svg--indicators)
          '(zetta-modeline-svg--docpos))))
 
+(defun zetta-modeline-svg-spans ()
+  "Centred overlay for the SVG mode line: a progress pie spanning both rows."
+  (let* ((total (max 1 (- (point-max) (point-min))))
+         (frac (/ (float (- (point) (point-min))) total)))
+    (list (list :pie '(0 . 1) frac "#2a4d77" "#d4dcea"))))
+
 (svg-line-define 'zetta-mode-line
   :target 'mode-line
   :layout 'lines
   :width 'window
   :content #'zetta-modeline-svg-lines
+  :spans #'zetta-modeline-svg-spans
   :active #'mode-line-window-selected-p
   :font (lambda () zetta-svg-line-font)
   :font-size (lambda () zetta-modeline-svg-font-size)

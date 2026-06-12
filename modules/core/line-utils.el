@@ -306,19 +306,48 @@ up far to the left of the actual key/command.  Returns nil when idle."
 
 ;;; mode-line text segments
 (defun zetta-modeline-svg--modal ()
-  ;; show the modal STATE (normal/insert/...), not the modal system
-  (let ((st (zetta-line-modal-state)))
-    (zetta-svg-seg
-     st 'ml-modal
-     :help (format "modal state: %s" (string-trim (format "%s" st)))
-     :action-help "show key bindings"
-     :action #'describe-bindings
-     :menu (list (cons "Describe bindings" #'describe-bindings)
-                 (cons "Describe mode" #'describe-mode)
-                 (cons "Command (M-x)" #'execute-extended-command)))))
+  ;; show the modal STATE (normal/insert/...), styled per state:
+  ;; normal -> regular; insert -> dark bg + light fg; visual -> distinct colour.
+  (let* ((st (zetta-line-modal-state))
+         (style (cond
+                 ((string= st "insert") (list :bg "#33503f" :color "#dcecdf" :weight 'bold))
+                 ((string= st "visual") (list :bg "#5c3733" :color "#f0dcd8" :weight 'bold))
+                 ((string= st "emacs")  (list :color "#6aa0c8"))
+                 (t nil))))   ; normal & friends: plain foreground
+    (apply #'zetta-svg-seg st 'ml-modal
+           (append
+            (list :help (format "modal state: %s" (string-trim (format "%s" st)))
+                  :action-help "show key bindings"
+                  :action #'describe-bindings
+                  :menu (list (cons "Describe bindings" #'describe-bindings)
+                              (cons "Describe mode" #'describe-mode)
+                              (cons "Command (M-x)" #'execute-extended-command)))
+            style))))
 
 (defun zetta-modeline-svg--ace ()
-  (or (window-parameter (selected-window) 'ace-window-path) ""))
+  "Ace-window key for this window as a bold standout badge (dark bg, light fg)."
+  (let ((path (window-parameter (selected-window) 'ace-window-path)))
+    (and path (> (length path) 0)
+         (zetta-svg-seg (format " %s " path) 'ml-ace
+                        :bg "#aab4c4" :color "#262c38" :weight 'bold
+                        :help (format "ace-window key: %s" path)))))
+
+(defvar zetta-modeline--buffer-bg-cache nil
+  "Cons (BG . LIGHTER) caching the lightened buffer-name pill background.")
+(defun zetta-modeline--lighter-bg ()
+  "The modeline active background blended ~halfway to white, as #rrggbb.
+Gives the buffer name a subtle, slightly-lighter pill so it stands out."
+  (let ((bg (bound-and-true-p zetta-modeline-svg-bg-active)))
+    (cond ((not (stringp bg)) nil)
+          ((equal (car zetta-modeline--buffer-bg-cache) bg)
+           (cdr zetta-modeline--buffer-bg-cache))
+          (t (cdr (setq zetta-modeline--buffer-bg-cache
+                        (cons bg (ignore-errors
+                                   (require 'color)
+                                   (apply #'color-rgb-to-hex
+                                          (append (mapcar (lambda (c) (+ c (* (- 1.0 c) 0.5)))
+                                                          (color-name-to-rgb bg))
+                                                  (list 2)))))))))))
 
 (defun zetta-modeline-svg--buffer ()
   (let* ((buf (current-buffer))
@@ -328,6 +357,7 @@ up far to the left of the actual key/command.  Returns nil when idle."
      label
      ;; id includes the buffer so only THIS window's name boxes on hover
      :id (list 'ml-buffer buf)
+     :bg (zetta-modeline--lighter-bg)
      :help (format "buffer: %s" n)
      :action-help "switch buffer"
      :action #'switch-to-buffer
@@ -478,14 +508,17 @@ Shown whenever `flycheck-mode' is active."
    (t "")))
 
 (defun zetta-modeline-svg--point ()
-  (zetta-svg-seg
-   (format-mode-line "%l:%c") 'ml-point
-   :help "line:column"
-   :action-help "go to line"
-   :action #'goto-line
-   :menu (list (cons "Go to line…" #'goto-line)
-               (cons "What cursor position" #'what-cursor-position)
-               (cons "Go to char…" #'goto-char))))
+  (let* ((cur (line-number-at-pos))
+         (tot (max 1 (line-number-at-pos (point-max))))
+         (pct (round (* 100.0 (/ (float cur) tot)))))
+    (zetta-svg-seg
+     (format "%s  %d%%" (format-mode-line "%l:%c") pct) 'ml-point
+     :help (format "line %d/%d (%d%%) : column" cur tot pct)
+     :action-help "go to line"
+     :action #'goto-line
+     :menu (list (cons "Go to line…" #'goto-line)
+                 (cons "What cursor position" #'what-cursor-position)
+                 (cons "Go to char…" #'goto-char)))))
 
 ;;; header-line breadcrumb content
 (defvar zetta-header-line-svg-line1-format
@@ -500,6 +533,9 @@ Shown whenever `flycheck-mode' is active."
     " "
     (:eval (when (fboundp 'spinner-print) (spinner-print spinner-current)))
     " "
+    (:eval (ignore-errors (let ((i (nerd-icons-icon-for-buffer)))
+                            (and (stringp i) (> (length i) 0) (concat i " ")))))
+    (:eval (ignore-errors (concat (nerd-icons-mdicon "nf-md-folder") " ")))
     (:eval
      (let* ((dir default-directory)
             (path (abbreviate-file-name dir))
@@ -512,22 +548,22 @@ Shown whenever `flycheck-mode' is active."
                              (define-key m [header-line mouse-1]
                                (lambda () (interactive) (dired dir)))
                              m)
-                   'help-echo (format "mouse-1: dired %s" dir))))
-    " "
-    "%c|%l(%p)")
-  "Mode-line construct for header-line row 1 (path / position).")
+                   'help-echo (format "mouse-1: dired %s" dir)))))
+  "Mode-line construct for header-line row 1 (mode icon / folder / path).")
 
 (defvar zetta-header-line-svg-line2-format
   '((:eval
      (cond
       ((and (boundp 'lsp-mode) lsp-mode)
-       (window-parameter nil 'lsp-headerline--string))
+       (concat (ignore-errors (concat (nerd-icons-mdicon "nf-md-sitemap") " "))
+               (window-parameter nil 'lsp-headerline--string)))
       ((derived-mode-p 'org-mode)
        ;; Prefer breadcrumb's imenu crumbs (each carries a clickable keymap our
        ;; header-line harvests) over `org-display-outline-path' (no per-crumb
        ;; keymap, so it would render as plain, non-clickable text).
        (if (fboundp 'breadcrumb-imenu-crumbs)
-           (breadcrumb-imenu-crumbs)
+           (concat (ignore-errors (concat (nerd-icons-mdicon "nf-md-format_list_bulleted") " "))
+                   (breadcrumb-imenu-crumbs))
          (propertize
           (or (ignore-errors (org-display-outline-path nil t "/" t)) "/")
           'face '(:height 0.8))))
@@ -536,7 +572,9 @@ Shown whenever `flycheck-mode' is active."
       ((or (equal major-mode 'docker-compose-mode)
            (equal major-mode 'yaml-mode))
        (concat (jpt-yaml-path-to-point)))
-      (t (when (fboundp 'breadcrumb-imenu-crumbs) (breadcrumb-imenu-crumbs))))))
+      (t (when (fboundp 'breadcrumb-imenu-crumbs)
+           (concat (ignore-errors (concat (nerd-icons-mdicon "nf-md-format_list_bulleted") " "))
+                   (breadcrumb-imenu-crumbs)))))))
   "Mode-line construct for header-line row 2 (lsp / org / imenu crumbs).")
 
 (defun zetta-header-line-svg--line1 ()
@@ -649,10 +687,10 @@ keep their own font (`zetta-font').")
   "At or below this battery percentage the indicator is drawn orange (red wins
 below `zetta-tab-bar-battery-low'); above it the indicator is green."
   :type 'integer :group 'zetta)
-(defcustom zetta-tab-bar-battery-colors '((low . "#f85149")
-                                          (medium . "#d29922")
-                                          (full . "#3fb950"))
-  "Colours for low / medium / full battery levels."
+(defcustom zetta-tab-bar-battery-colors '((low . "#a85949")
+                                          (medium . "#a8843f")
+                                          (full . "#6f8a55"))
+  "Colours for low / medium / full battery levels (muted earth tones)."
   :type '(alist :key-type symbol :value-type color) :group 'zetta)
 
 (defun zetta-tab-bar--battery-data ()

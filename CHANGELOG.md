@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.16](https://github.com/chiply/.zetta.d/compare/v0.1.15...v0.1.16) (2026-06-12)
+
+
+### Features
+
+* **svg-margin:** margin scrollbar provider replacing yascroll's fringe thumb ([#50](https://github.com/chiply/.zetta.d/issues/50)) ([925081d](https://github.com/chiply/.zetta.d/commit/925081d9e543b9d352ba7758d64ccf61ad7fab02))
+
 ## [0.1.15](https://github.com/chiply/.zetta.d/compare/v0.1.14...v0.1.15) (2026-06-12)
 
 

@@ -43,6 +43,32 @@
                                    (side . right)
                                    (window-width . 0.25)))
 
+  ;;;; vertico-repeat hygiene
+  ;; Embark's completing-read action prompter runs inside `embark-act',
+  ;; so its minibuffer session is recorded under `embark-act' -- and
+  ;; repeating that re-runs embark-act with no target ("No target
+  ;; found") instead of anything useful.  Keep those sessions out of
+  ;; the history entirely.
+  (with-eval-after-load 'vertico-repeat
+    (dolist (cmd '(embark-act embark-act-noquit embark-act-all
+                   embark-dwim embark-become))
+      (cl-pushnew cmd vertico-repeat-filter))
+
+    ;; A `repeatable-wrap-FOO' wrapper leaves `this-command' as the
+    ;; wrapper when FOO's minibuffer is set up, so the session would
+    ;; repeat the wrapper -- re-entering the repeat loop.  Record it
+    ;; as plain FOO so `vertico-repeat' resumes the command itself.
+    (defun zetta-vertico-repeat-unwrap-repeatable (session)
+      "Record a `repeatable-wrap-FOO' SESSION as plain FOO."
+      (when session
+        (let ((name (symbol-name (car session))))
+          (when (string-prefix-p "repeatable-wrap-" name)
+            (setcar session
+                    (intern (substring name (length "repeatable-wrap-")))))))
+      session)
+    (add-to-list 'vertico-repeat-transformers
+                 #'zetta-vertico-repeat-unwrap-repeatable t))
+
   ;; this is super super hacky and bizarre... but it's the only way I
   ;; can get this to work
 

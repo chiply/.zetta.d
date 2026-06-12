@@ -63,24 +63,43 @@
 
     (define-advice call-interactively
         (:around (fn cmd &rest args) zetta-keycast-repeatable)
-      (let ((zetta-keycast--in-repeatable
-             (or zetta-keycast--in-repeatable
-                 (and (symbolp cmd)
-                      (string-prefix-p "repeatable-wrap" (symbol-name cmd))))))
+      (let* ((wrapper (and (symbolp cmd)
+                           (string-prefix-p "repeatable-wrap" (symbol-name cmd))))
+             (zetta-keycast--in-repeatable
+              (or zetta-keycast--in-repeatable wrapper)))
+        ;; Show the wrapped command as soon as the wrapper STARTS.  The
+        ;; post-return update below only fires after the inner command
+        ;; finishes -- for a minibuffer command that is after the whole
+        ;; minibuffer interaction, so without this keycast keeps showing
+        ;; whatever ran before the wrapper was invoked.
+        (when (and wrapper (bound-and-true-p zetta-keycast-mode))
+          (setq keycast--this-command-desc
+                (intern (string-remove-prefix "repeatable-wrap-"
+                                              (symbol-name cmd)))
+                keycast--this-command-keys (this-single-command-keys)
+                keycast--command-repetitions 0)
+          (force-mode-line-update t))
         (prog1 (apply fn cmd args)
           (when (and zetta-keycast--in-repeatable
                      (bound-and-true-p zetta-keycast-mode)
                      (symbolp cmd)
-                     (not (string-prefix-p "repeatable-wrap" (symbol-name cmd))))
+                     (not wrapper))
             (setq keycast--this-command-desc cmd
                   keycast--this-command-keys (this-single-command-keys)
                   keycast--command-repetitions 0)
             (force-mode-line-update t)))))
 
+    (defvar zetta-keycast-ignored-commands '(file-notify-handle-event)
+      "Commands whose post-command updates keycast should ignore.
+These arrive as (special) events outside the user's typing -- e.g.
+file watchers firing while a project minibuffer is open -- and would
+overwrite the genuinely last-typed command in the display.")
+
     (define-advice keycast--update
         (:around (fn) zetta-skip-repeatable-wrappers)
-      (if (and (symbolp this-command)
-               (string-prefix-p "repeatable-wrap" (symbol-name this-command)))
+      (if (or (memq this-command zetta-keycast-ignored-commands)
+              (and (symbolp this-command)
+                   (string-prefix-p "repeatable-wrap" (symbol-name this-command))))
           (force-mode-line-update t)
         (funcall fn)))
 

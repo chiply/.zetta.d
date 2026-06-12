@@ -82,12 +82,31 @@ completing-read prompter."
   (add-to-list 'embark-keymap-alist '(project embark-project-map))
 
   ;; find file
-  (defun embark-consult-project-find-in-dir (dir)
-    (let ((default-directory dir)
-          ;; to disable preview -- this is bc consult uses 'this
-          ;; command' to determine what the active preview function is
-          (this-command 'consult-project-extra-find))
+  (defvar zetta-embark-project-find-dir nil
+    "Project directory last acted on with `embark-consult-project-find-in-dir'.")
+
+  (defun zetta-embark-project-find ()
+    "Run `consult-project-extra-find' in `zetta-embark-project-find-dir'.
+A real command (not just a `this-command' alias) so the minibuffer
+session is recorded by `vertico-repeat' under a name that, when
+resumed, restores the project directory it was acting on."
+    (interactive)
+    (let ((default-directory (or zetta-embark-project-find-dir
+                                 default-directory)))
       (call-interactively 'consult-project-extra-find)))
+
+  ;; Same on-demand preview as consult-project-extra-find (consult looks
+  ;; up customizations by `this-command', which is this symbol here).
+  (with-eval-after-load 'consult
+    (consult-customize zetta-embark-project-find :preview-key "C-="))
+
+  (defun embark-consult-project-find-in-dir (dir)
+    (setq zetta-embark-project-find-dir dir)
+    ;; `call-interactively' does not set `this-command'; bind it so both
+    ;; consult's preview lookup and `vertico-repeat-save' see the
+    ;; resumable command rather than `embark-act'.
+    (let ((this-command 'zetta-embark-project-find))
+      (call-interactively 'zetta-embark-project-find)))
 
   ;; vc dir
   (defun embark-vc-dir (dir)

@@ -104,7 +104,7 @@ jitters as keycast changes width."
                  zetta-gptel-processes
                  blinker-tab-bar)
          :center nil
-         :right '(zetta-tab-bar-svg--mu4e))
+         :right '(zetta-tab-bar-svg--elfeed "  " zetta-tab-bar-svg--mu4e))
    ;; line 3 -- Spotify left; calendar centre; space-tree (+battery/prefix) right
    (list :left '(zetta-tab-bar-svg--spotify)
          :center nil

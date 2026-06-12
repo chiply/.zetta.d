@@ -312,6 +312,78 @@ This implementation is derived from `elfeed-search-print-entry--default'."
    :keymaps '(elfeed-search-mode-map)
    "x" 'elfeed-score-explain))
 
+;;;; consult-elfeed (a la consult-mu)
+;; Search recent entries from anywhere with live preview: candidates are
+;; the most recent `zetta-consult-elfeed-limit' db entries (title, feed
+;; and tags all match the filter -- type "unread" to narrow to unread),
+;; previews render in *elfeed-entry* as you move, RET opens the entry.
+
+(defcustom zetta-consult-elfeed-limit 2000
+  "Most-recent entries offered by `zetta-consult-elfeed'.
+The db holds tens of thousands; formatting them all would lag the
+minibuffer, and old entries are reachable via elfeed's own search."
+  :type 'integer :group 'zetta)
+
+(defvar zetta-consult-elfeed--history nil)
+
+(defun zetta-consult-elfeed--candidates ()
+  "Format the most recent db entries as propertized candidate strings."
+  (let ((n 0) out)
+    (with-elfeed-db-visit (entry feed)
+      (let* ((date (format-time-string "%Y-%m-%d" (elfeed-entry-date entry)))
+             (title (or (elfeed-meta entry :title) (elfeed-entry-title entry) ""))
+             (feed-title (and feed (or (elfeed-meta feed :title)
+                                       (elfeed-feed-title feed))))
+             (tags (mapconcat #'symbol-name (elfeed-entry-tags entry) ","))
+             (cand (concat
+                    (propertize date 'face 'font-lock-comment-face) " "
+                    title " "
+                    (and feed-title
+                         (propertize feed-title 'face 'elfeed-search-feed-face))
+                    (and (> (length tags) 0)
+                         (concat " " (propertize (concat "(" tags ")")
+                                                 'face 'elfeed-search-tag-face))))))
+        (push (propertize
+               (if (fboundp 'consult--tofu-encode)
+                   (concat cand (consult--tofu-encode n))
+                 cand)
+               'zetta-elfeed-entry entry)
+              out)
+        (when (>= (setq n (1+ n)) zetta-consult-elfeed-limit)
+          (elfeed-db-return))))
+    (nreverse out)))
+
+(defun zetta-consult-elfeed--state ()
+  "Preview state function: render the candidate entry in *elfeed-entry*."
+  (let ((preview (consult--buffer-preview)))
+    (lambda (action cand)
+      (if (eq action 'preview)
+          (funcall preview 'preview
+                   (when-let* ((entry (and cand (get-text-property
+                                                 0 'zetta-elfeed-entry cand))))
+                     (let ((elfeed-show-entry-switch #'identity))
+                       (ignore-errors (elfeed-show-entry entry)))))
+        (funcall preview action nil)))))
+
+(defun zetta-consult-elfeed ()
+  "Search recent elfeed entries with live preview (a la consult-mu).
+Filters over title, feed and tags of the `zetta-consult-elfeed-limit'
+most recent entries; RET opens the selection in the show buffer."
+  (interactive)
+  (require 'elfeed)
+  (elfeed-db-ensure)
+  (let* ((cand (consult--read
+                (zetta-consult-elfeed--candidates)
+                :prompt "Elfeed entry: "
+                :category 'elfeed-entry
+                :require-match t
+                :sort nil
+                :lookup #'consult--lookup-member
+                :state (zetta-consult-elfeed--state)
+                :history 'zetta-consult-elfeed--history))
+         (entry (and cand (get-text-property 0 'zetta-elfeed-entry cand))))
+    (when entry (elfeed-show-entry entry))))
+
 ;;;; Background auto-update (mu4e-style)
 ;; Incremental pulls in the background, so opening elfeed shows fresh
 ;; entries without a foreground update.  The network side is async curl;

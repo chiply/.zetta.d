@@ -382,6 +382,66 @@ edit/execute from the menu."
                           out)))))))
         out))))
 
+(defcustom zetta-svg-margin-scroll-hide-delay 0.8
+  "Seconds the margin scrollbar thumb stays visible after scrolling."
+  :type 'number :group 'zetta)
+
+(defvar-local zetta-svg-margin-scroll--until nil
+  "Time until which the scrollbar thumb is shown, or nil.")
+
+(defvar-local zetta-svg-margin-scroll--hide-timer nil
+  "Timer that refreshes the margin to hide the thumb after the delay.")
+
+(defun zetta-svg-margin-scrollbar (buffer)
+  "Background highlight on the visible lines covered by the scrollbar thumb.
+The yascroll idea delivered through svg-margin's `:background' indicators:
+within the window's visible rows, the thumb's offset and size are
+proportional to the viewport's position in and coverage of the whole buffer.
+Emitted only while `zetta-svg-margin-scroll--until' is in the future (stamped
+by `zetta-svg-margin-scroll--on-scroll'), so it disappears on the refresh
+after `zetta-svg-margin-scroll-hide-delay'.  Backgrounds claim no indicator
+column, so the thumb tints the margin behind the icons without widening it."
+  (with-current-buffer buffer
+    (when (and zetta-svg-margin-scroll--until
+               (time-less-p nil zetta-svg-margin-scroll--until))
+      (when-let* ((win (get-buffer-window buffer)))
+        (let* ((total (save-restriction (widen)
+                                        (max 1 (line-number-at-pos (point-max)))))
+               (first (line-number-at-pos (window-start win) t))
+               (last (line-number-at-pos (window-end win t) t))
+               (visible (max 1 (1+ (- last first)))))
+          (when (> total visible)       ; buffer scrolls at all
+            (let* ((size (max 1 (round (* visible (/ (float visible) total)))))
+                   (frac (/ (float (1- first)) (max 1 (- total visible))))
+                   (start (+ first (round (* (min 1.0 frac) (- visible size)))))
+                   (face (if (facep 'yascroll:thumb-fringe)
+                             'yascroll:thumb-fringe 'shadow))
+                   out)
+              (dotimes (i size)
+                (push (list :line (+ start i) :background t
+                            :face face :opacity 0.45)
+                      out))
+              out)))))))
+
+(defun zetta-svg-margin-scroll--on-scroll (win _new-start)
+  "Show the scrollbar thumb for WIN's buffer and schedule its hiding.
+On `window-scroll-functions', which runs during redisplay -- so this only
+stamps the visibility deadline and (re)schedules timers; the rendering
+itself happens through svg-margin's debounced refresh."
+  (let ((buf (window-buffer win)))
+    (when (buffer-local-value 'svg-margin-mode buf)
+      (with-current-buffer buf
+        (setq zetta-svg-margin-scroll--until
+              (time-add nil zetta-svg-margin-scroll-hide-delay))
+        (when (timerp zetta-svg-margin-scroll--hide-timer)
+          (cancel-timer zetta-svg-margin-scroll--hide-timer))
+        (setq zetta-svg-margin-scroll--hide-timer
+              (run-at-time (+ zetta-svg-margin-scroll-hide-delay 0.05) nil
+                           (lambda (b)
+                             (when (buffer-live-p b) (svg-margin-refresh b)))
+                           buf))
+        (svg-margin-refresh buf)))))
+
 (defvar zetta-svg-margin--last-symbol nil
   "Last symbol at point, to refresh only when it changes.")
 
@@ -453,9 +513,9 @@ the recompute yields the same hunks we skip, breaking the cycle."
 ;;;; Configuration + registration
 ;; ----------------------------------------------------------------
 
-;; Reclaim only the left fringe (evil-fringe-mark's old home); the right
-;; fringe stays for yascroll.  Margins are independent of fringes, so the
-;; right-margin providers below still show.
+;; Reclaim only the left fringe (evil-fringe-mark's old home).  The right
+;; fringe no longer hosts yascroll (the scrollbar provider draws in the
+;; margin now) but keeps the line-continuation arrows, so leave it alone.
 (setq svg-margin-disable-fringe 'left)
 
 ;; Reserve a baseline margin width so buffer text doesn't shift as indicators
@@ -475,6 +535,7 @@ the recompute yields the same hunks we skip, breaking the cycle."
 (svg-margin-register-provider 'long-lines   #'zetta-svg-margin-long-lines   :side 'right :priority 3)
 (svg-margin-register-provider 'symbol       #'zetta-svg-margin-symbol       :side 'left  :priority 2)
 (svg-margin-register-provider 'trailing-ws  #'zetta-svg-margin-trailing-ws  :side 'right :priority 1)
+(svg-margin-register-provider 'scrollbar    #'zetta-svg-margin-scrollbar    :side 'right)
 
 ;; Refresh triggers, deferred until each source package loads.
 (with-eval-after-load 'evil
@@ -485,6 +546,7 @@ the recompute yields the same hunks we skip, breaking the cycle."
 (with-eval-after-load 'flycheck
   (add-hook 'flycheck-after-syntax-check-hook #'zetta-svg-margin--refresh))
 (add-hook 'post-command-hook #'zetta-svg-margin--symbol-watch)
+(add-hook 'window-scroll-functions #'zetta-svg-margin-scroll--on-scroll)
 
 ;;;; Activation
 ;; ----------------------------------------------------------------
@@ -508,6 +570,11 @@ calling both is safe; this is the single `show-help-function' both hook into."
   ;; evil marks now come from the margin provider, not the fringe.
   (when (fboundp 'global-evil-fringe-mark-mode)
     (global-evil-fringe-mark-mode -1))
+  ;; The scrollbar now comes from the margin provider, not yascroll's fringe
+  ;; thumb (the yascroll module still loads -- its brushup-themed faces
+  ;; colour the margin thumb).
+  (when (fboundp 'global-yascroll-bar-mode)
+    (global-yascroll-bar-mode -1))
   ;; Let git-gutter keep computing hunks, but stop it drawing (svg-margin draws).
   (when (and (fboundp 'git-gutter:view-diff-infos)
              (not (advice-member-p #'zetta-svg-margin--gg-feed 'git-gutter:view-diff-infos)))

@@ -67,7 +67,30 @@
                     (intern (substring name (length "repeatable-wrap-")))))))
       session)
     (add-to-list 'vertico-repeat-transformers
-                 #'zetta-vertico-repeat-unwrap-repeatable t))
+                 #'zetta-vertico-repeat-unwrap-repeatable t)
+
+    ;; `vertico-repeat--filter-empty' drops sessions with no input, so a
+    ;; C-g straight out of a minibuffer leaves nothing to resume.  For
+    ;; context-carrying commands the context IS the point of resuming --
+    ;; `zetta-embark-project-find' remembers which project it was acting
+    ;; on -- so spare those from the empty filter.
+    (defvar zetta-vertico-repeat-keep-empty '(zetta-embark-project-find)
+      "Commands whose vertico-repeat sessions are saved even with empty input.")
+
+    (defun zetta-vertico-repeat--filter-empty (session)
+      "Like `vertico-repeat--filter-empty', sparing context-carrying commands.
+SESSION is kept regardless of input if its command is listed in
+`zetta-vertico-repeat-keep-empty'."
+      (if (memq (car session) zetta-vertico-repeat-keep-empty)
+          session
+        (vertico-repeat--filter-empty session)))
+
+    (setq vertico-repeat-transformers
+          (mapcar (lambda (f)
+                    (if (eq f #'vertico-repeat--filter-empty)
+                        #'zetta-vertico-repeat--filter-empty
+                      f))
+                  vertico-repeat-transformers)))
 
   ;; this is super super hacky and bizarre... but it's the only way I
   ;; can get this to work

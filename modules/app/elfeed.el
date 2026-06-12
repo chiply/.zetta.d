@@ -23,6 +23,10 @@
 
   (setq elfeed-protocol-fever-update-unread-only nil)
   (setq elfeed-protocol-fever-fetch-category-as-tag t)
+  ;; Entries fetched per request (default 50).  A bigger batch means
+  ;; fewer round trips when catching up after hours away; each batch is
+  ;; still parsed in one main-thread chunk, so don't go huge.
+  (setq elfeed-protocol-fever-maxsize 200)
   ;; elfeed-protocol-feeds set in ~/.private.el
 
   (setq elfeed-protocol-enabled-protocols '(fever))
@@ -171,7 +175,10 @@ minibuffer with something like `exit-minibuffer'."
    "S-SPC" 'elfeed-show-prev
    )
 
-  :hook (elfeed-search-update . elfeed-score-enable)
+  ;; NB: elfeed-score-enable used to be hooked on `elfeed-search-update'
+  ;; here -- but enable RELOADS the score file and stats file and runs
+  ;; serde cleanup every call, so every search refresh paid that cost.
+  ;; It is called once in the elfeed-score :config below; that's enough.
   )
 
 ;; Bind elfeed-search keys after evil-collection sets up its bindings.
@@ -179,7 +186,14 @@ minibuffer with something like `exit-minibuffer'."
 ;; evil-collection's hook.
 (add-hook 'elfeed-search-mode-hook
           (lambda ()
-            (evil-local-set-key 'normal "R" #'elfeed-protocol-fever-reinit)
+            ;; R = INCREMENTAL update (fetch only entries newer than the
+            ;; stored update mark, sync pending read/star states).
+            ;; gR = full resync: re-fetches and re-parses EVERY starred
+            ;; and unread entry -- slow against a 50k-entry db; only for
+            ;; first sync, recovery, or pulling remote read-state
+            ;; changes for old entries (fever's API has no better way).
+            (evil-local-set-key 'normal "R" #'elfeed-update)
+            (evil-local-set-key 'normal "gR" #'elfeed-protocol-fever-reinit)
             (evil-local-set-key 'normal "tt" #'prot-elfeed-search-tag-filter)
             ;; quick filters
             (evil-local-set-key 'normal "fu" (my-elfeed-filter "@6-months-ago +unread"))
@@ -290,4 +304,34 @@ This implementation is derived from `elfeed-search-print-entry--default'."
    :states '(normal)
    :keymaps '(elfeed-search-mode-map)
    "x" 'elfeed-score-explain))
+
+;;;; Background auto-update (mu4e-style)
+;; Incremental pulls in the background, so opening elfeed shows fresh
+;; entries without a foreground update.  The network side is async curl;
+;; only parsing runs on the main thread, one maxsize-entry batch at a
+;; time.  The FIRST run also loads elfeed and its db (the one-time
+;; multi-second index load for a 50k-entry db), so it waits for genuine
+;; idle rather than firing mid-typing.
+
+(defvar zetta-elfeed-auto-update-interval (* 15 60)
+  "Seconds between background incremental elfeed updates.")
+
+(defvar zetta-elfeed--auto-update-timer nil
+  "Active timer for `zetta-elfeed--auto-update', or nil.")
+
+(defun zetta-elfeed--auto-update ()
+  "Incrementally update all elfeed feeds in the background."
+  (require 'elfeed)
+  (elfeed-update))
+
+(unless zetta-elfeed--auto-update-timer
+  (setq zetta-elfeed--auto-update-timer
+        (run-with-idle-timer
+         120 nil
+         (lambda ()
+           (zetta-elfeed--auto-update)
+           (setq zetta-elfeed--auto-update-timer
+                 (run-with-timer zetta-elfeed-auto-update-interval
+                                 zetta-elfeed-auto-update-interval
+                                 #'zetta-elfeed--auto-update))))))
 ;;; elfeed.el ends here

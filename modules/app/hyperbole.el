@@ -22,6 +22,14 @@
   :config
   (hyperbole-mode 1)
 
+  ;; --- HyWiki: highlight/buttonize WikiWords (pages live in ~/hywiki/) ---
+  ;; `hyperbole-mode' alone does NOT highlight WikiWords; the global
+  ;; `hywiki-mode' does.  `hywiki-directory' defaults to ~/hywiki/, which is
+  ;; where the generated chiply.dev WikiWord pages live.  Follow a WikiWord
+  ;; with the Action Key {s-H} (relocated from {M-RET} below).
+  (require 'hywiki)
+  (hywiki-mode 1)
+
   ;; --- Relocate the minibuffer menu: {C-h h} -> {C-h H} ---
   ;; Hyperbole binds `hyperbole' to {C-h h} globally; undo that and rebind.
   (when (eq (lookup-key (current-global-map) (kbd "C-h h")) 'hyperbole)

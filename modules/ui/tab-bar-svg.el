@@ -16,6 +16,7 @@
 ;; so the icon-rich built-in (text) format defined below is the fallback.
 
 (require 'svg-line)
+(require 'svg-lib nil t)   ; for the svg-lib-date calendar page (optional)
 
 (defcustom zetta-tab-bar-svg-font-size 15
   "Font size (px) for SVG tab-bar text."
@@ -89,37 +90,179 @@ Icons are nerd-font glyphs (plain text in `zetta-svg-line-font'), so every
 side is one font-accurate text run -- no char-advance estimation, nothing
 jitters as keycast changes width."
   (list
-   ;; line 1 -- file-type glyph + buffer name (buffer name is clickable)
+   ;; line 1 -- file glyph + buffer (left); keycast + recursion + thing-at-point (right)
    (cons '(zetta-tab-bar-file-icon " "
                                    zetta-tab-bar-svg--buffer
                                    zmc-modeline-indicator
                                    zetta-pyvenv-activate-poetry-modeline)
-         ;; keycast (caps-kbd glyph, padding trimmed) + recursion depth (hierarchy glyph)
-         '(zetta-tab-bar-svg--keycast
-           " "
-           zetta-tab-bar-recursion-icon " " zetta-tab-bar-recursion-level
-           " "
-           recursion-indicator--string
-           ))
-   ;; line 2 -- Spotify left; workspace (space-tree) centered; mail right
-   (list :left '(zetta-tab-bar-svg--spotify)
-         :center '(zetta-tab-bar-svg--workspace)
-         :right '(zetta-tab-bar-svg--mu4e))
-   ;; line 3 -- modal (clickable) left; current-thing centered;
-   ;;           clock/battery (clickable) right
-   (list :left '(zetta-tab-bar-svg--modal
+         '(zetta-tab-bar-svg--keycast " "
+           zetta-tab-bar-recursion-icon " " zetta-tab-bar-recursion-level " "
+           recursion-indicator--string))
+   ;; line 2 -- modal etc left; <analog clock spans the centre>; mail right
+   (list :left '(zetta-tab-bar-svg--modal " "
+                 zetta-tab-bar-current-thing
                  zetta-gptel-processes
                  blinker-tab-bar)
-         :center '(zetta-tab-bar-current-thing)
-         :right '(zetta-tab-bar-svg--clock " "
-                  zetta-tab-bar-svg--battery " "
-                  zetta-current-prefix))))
+         :center nil
+         :right '(zetta-tab-bar-svg--mu4e))
+   ;; line 3 -- Spotify left; calendar centre; space-tree (+battery/prefix) right
+   (list :left '(zetta-tab-bar-svg--spotify)
+         :center nil
+         :right '(zetta-tab-bar-svg--battery " "
+                  zetta-current-prefix "  "
+                  zetta-tab-bar-svg--workspace))))
+
+(defun zetta-tab-bar-calendar ()
+  "Calendar glyph + weekday/day/month/year, for the SVG tab bar's last row."
+  (concat (and (featurep 'nerd-icons)
+               (ignore-errors (concat (nerd-icons-mdicon "nf-md-calendar_month") " ")))
+          (format-time-string "%a  %d %b %Y")))
+
+(defcustom zetta-tab-bar-calendar-color "#9aa0aa"
+  "Gray colour for the tab-bar clock and the minimalist date widget (kept uniform)."
+  :type 'color :group 'zetta)
+
+(defconst zetta-tab-bar--moon-glyph-names
+  ["nf-md-moon_new" "nf-md-moon_waxing_crescent" "nf-md-moon_first_quarter"
+   "nf-md-moon_waxing_gibbous" "nf-md-moon_full" "nf-md-moon_waning_gibbous"
+   "nf-md-moon_last_quarter" "nf-md-moon_waning_crescent"]
+  "Nerd Font moon glyphs indexed by lunar octant (0=new, 4=full).")
+
+(defun zetta-tab-bar--moon-octant ()
+  "Return the current lunar octant 0-7 (0=new, 2=first quarter, 4=full, 6=last).
+Phase age is days since the 2000-01-06 18:14 UTC new moon, modulo the mean
+synodic month (29.530588853 d), rounded to the nearest eighth."
+  (let* ((synodic 29.530588853)
+         (ref 947182440.0)                       ; 2000-01-06 18:14 UTC, epoch seconds
+         (days (/ (- (float-time) ref) 86400.0))
+         (cycles (/ days synodic))
+         (frac (- cycles (floor cycles))))
+    (mod (round (* frac 8)) 8)))
+
+(defun zetta-tab-bar--moon-glyph ()
+  "Raw (unpropertized) Nerd Font glyph for the current moon phase, or nil."
+  (when (require 'nerd-icons nil t)
+    (let ((g (ignore-errors
+               (nerd-icons-mdicon
+                (aref zetta-tab-bar--moon-glyph-names (zetta-tab-bar--moon-octant))))))
+      (and g (substring-no-properties g)))))
+
+(defun zetta-tab-bar-calendar--build ()
+  "Build the minimalist date widget as an svg.el DOM (spliced as vectors, sharp):
+an outlined weekday badge + an outlined date box (small month over big day) +
+the current moon-phase glyph, monochrome in `zetta-tab-bar-calendar-color'."
+  (let* ((col zetta-tab-bar-calendar-color)
+         (h 30) (gap (round (* h 0.24))) (wd-w (round (* h 1.05))) (pw (round (* h 0.98)))
+         (rx (max 2 (round (* h 0.16))))
+         ;; vertical inset so the outline stroke isn't clipped at the bar edge
+         (vm 2) (bh (- h (* 2 vm)))
+         (svg (svg-create 600 h)) (x 0))
+    ;; weekday -- outlined
+    (svg-rectangle svg x vm wd-w bh :rx rx :fill "none" :stroke col :stroke-width 1.5)
+    (svg-text svg (upcase (format-time-string "%a")) :x (+ x (/ wd-w 2)) :y (round (* h 0.69))
+              :text-anchor "middle" :font-family "Helvetica" :font-size (round (* h 0.46)) :font-weight "bold" :fill col)
+    (setq x (+ x wd-w gap))
+    ;; date -- outlined box, small month over big day
+    (svg-rectangle svg x vm pw bh :rx rx :fill "none" :stroke col :stroke-width 1.5)
+    (svg-text svg (upcase (format-time-string "%b")) :x (+ x (/ pw 2)) :y (round (* h 0.36))
+              :text-anchor "middle" :font-family "Helvetica" :font-size (round (* h 0.27)) :font-weight "bold" :fill col)
+    (svg-text svg (format-time-string "%-d") :x (+ x (/ pw 2)) :y (round (* h 0.88))
+              :text-anchor "middle" :font-family "Helvetica" :font-size (round (* h 0.5)) :font-weight "bold" :fill col)
+    (setq x (+ x pw))
+    ;; moon phase -- nerd-font glyph to the right of the date box
+    (let ((moon (zetta-tab-bar--moon-glyph)))
+      (when moon
+        (setq x (+ x gap))
+        (svg-text svg moon :x (+ x (round (* h 0.34))) :y (round (* h 0.74))
+                  :text-anchor "middle" :font-family "Terminess Nerd Font Mono"
+                  :font-size (round (* h 0.78)) :fill col)
+        (setq x (+ x (round (* h 0.68))))))
+    (dom-set-attribute svg 'width (number-to-string x))
+    svg))
+
+(defvar zetta-tab-bar-calendar--cache nil
+  "Cons of (DAY-KEY . SVG-DOM) so the date widget is rebuilt at most once a day.")
+(defun zetta-tab-bar-calendar-image ()
+  "The date-widget SVG DOM, rebuilt only when the day changes."
+  (let ((key (format-time-string "%Y%m%d")))
+    (if (equal (car zetta-tab-bar-calendar--cache) key)
+        (cdr zetta-tab-bar-calendar--cache)
+      (cdr (setq zetta-tab-bar-calendar--cache (cons key (zetta-tab-bar-calendar--build)))))))
+
+;;; ------------------------------------------------------------------
+;;; Sunrise / sunset (flanking the clock on the first row).  Needs a
+;;; location for `solar-sunrise-sunset'; set it here (only when unset, so
+;;; an explicit setting elsewhere wins) so the feature works at startup.
+;;; ------------------------------------------------------------------
+(with-eval-after-load 'solar
+  (unless (numberp (bound-and-true-p calendar-latitude))
+    (setq calendar-latitude 39.95
+          calendar-longitude -75.17
+          calendar-location-name "Philadelphia, PA"
+          calendar-time-zone -300
+          calendar-standard-time-zone-name "EST"
+          calendar-daylight-time-zone-name "EDT")))
+
+(defun zetta-tab-bar--fmt-suntime (decimal)
+  "Format DECIMAL hours (0-24) as a 24-hour \"HH:MM\" string."
+  (let* ((h24 (floor decimal))
+         (m (round (* 60 (- decimal h24)))))
+    (when (= m 60) (setq m 0 h24 (1+ h24)))
+    (format "%02d:%02d" (mod h24 24) m)))
+
+(defun zetta-tab-bar--compute-sun ()
+  "Compute ((SUNRISE . GLYPH) . (SUNSET . GLYPH)) for the clock flank.
+Returns nil if `solar'/`nerd-icons' or a location is unavailable."
+  (when (and (require 'solar nil t) (require 'nerd-icons nil t)
+             (numberp (bound-and-true-p calendar-latitude))
+             (numberp (bound-and-true-p calendar-longitude)))
+    (let* ((ss (ignore-errors (solar-sunrise-sunset (calendar-current-date))))
+           (rise (car ss)) (set (cadr ss))
+           (rise-s (and (numberp (car rise)) (zetta-tab-bar--fmt-suntime (car rise))))
+           (set-s  (and (numberp (car set))  (zetta-tab-bar--fmt-suntime (car set))))
+           (gr (ignore-errors (substring-no-properties (nerd-icons-wicon "nf-weather-sunrise"))))
+           (gs (ignore-errors (substring-no-properties (nerd-icons-wicon "nf-weather-sunset")))))
+      ;; Each side is (TIME . GLYPH); the `:flank' span draws the glyph nearest
+      ;; the clock at a larger size and the time on its outer side.
+      (cons (and rise-s gr (cons rise-s gr))
+            (and set-s gs (cons set-s gs))))))
+
+(defvar zetta-tab-bar--sun-cache nil
+  "Cons of (DAY-KEY . (LEFT . RIGHT)) so sunrise/sunset compute once a day.")
+(defun zetta-tab-bar--sun-strings ()
+  "The (LEFT . RIGHT) sunrise/sunset flank strings, recomputed once a day."
+  (let ((key (format-time-string "%Y%m%d")))
+    (if (equal (car zetta-tab-bar--sun-cache) key)
+        (cdr zetta-tab-bar--sun-cache)
+      (cdr (setq zetta-tab-bar--sun-cache (cons key (zetta-tab-bar--compute-sun)))))))
+
+(defun zetta-tab-bar-svg-spans ()
+  "Analog clock spanning lines 1-2 (centre), sunrise/sunset flanking it on the
+first row; the date widget (with moon phase) below, on the last row."
+  (let* ((gray zetta-tab-bar-calendar-color)
+         (cal (zetta-tab-bar-calendar-image))
+         (sun (zetta-tab-bar--sun-strings)))
+    (append
+     (list (list :clock '(0 . 1) gray gray))
+     (and sun (or (car sun) (cdr sun))
+          (list (list :flank '(0 . 1) (car sun) (cdr sun) gray)))
+     (and cal (list (list :image '(2 . 2) cal 'center))))))
+
+(defvar zetta-tab-bar-svg--clock-timer nil
+  "Periodic timer that re-renders the SVG tab bar so the analog clock ticks.")
+(unless zetta-tab-bar-svg--clock-timer
+  (setq zetta-tab-bar-svg--clock-timer
+        (run-at-time t 30 (lambda ()
+                            (when (and (fboundp 'zetta-tab-bar-using-svg-p)
+                                       (zetta-tab-bar-using-svg-p))
+                              (force-mode-line-update t))))))
 
 (svg-line-define 'zetta-tab-bar
                  :target 'tab-bar
                  :layout 'lines
                  :width 'frame
                  :content #'zetta-tab-bar-svg-lines
+                 :spans #'zetta-tab-bar-svg-spans
                  :font (lambda () zetta-svg-line-font)
                  :font-size (lambda () zetta-tab-bar-svg-font-size)
                  :line-pad (lambda () zetta-tab-bar-svg-line-pad)

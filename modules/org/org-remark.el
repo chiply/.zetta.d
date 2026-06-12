@@ -10,14 +10,27 @@
   (require 'org-remark-global-tracking)
   (org-remark-global-tracking-mode +1)
 
-  (defun my-org-remark-transform-org-link-to-filename ()
-    (let ((link-parts (split-string (org-store-link nil) "\\]\\[")))
+  (defun my-org-remark-transform-org-link-to-filename (&optional link-string)
+    "Derive the notes filename from LINK-STRING (default: `org-store-link')."
+    (let ((link-parts (split-string (or link-string (org-store-link nil))
+                                    "\\]\\[")))
       (string-replace
        "#" ""
        (concat
         (nth 1 (split-string (nth 0 link-parts) "\\[\\["))
         ": "
         (nth 0 (split-string (nth 1 link-parts) "\\]\\]"))))))
+
+  (defun my-org-remark-elfeed-link-string ()
+    "Org bracket link for the shown elfeed entry, without `org-store-link'.
+Several org link types can store from an elfeed-show buffer, so
+`org-store-link' PROMPTS to pick one -- and the org-remark wiring made
+that fire on every RET in elfeed-search (and every consult preview).
+Builds the same string as elfeed's own store function: link
+\"elfeed:FEED-ID#ENTRY-ID\", description the entry title."
+    (let ((id (elfeed-entry-id elfeed-show-entry)))
+      (org-link-make-string (format "elfeed:%s#%s" (car id) (cdr id))
+                            (elfeed-entry-title elfeed-show-entry))))
 
   ;; wombag.el support
   (define-minor-mode org-remark-wombag-mode
@@ -99,11 +112,12 @@
 
   (defun org-remark-elfeed-find-file-name ()
     (when (equal major-mode 'elfeed-show-mode)
-      (my-org-remark-transform-org-link-to-filename)))
+      (my-org-remark-transform-org-link-to-filename
+       (my-org-remark-elfeed-link-string))))
 
-  (defun org-remark-elfeed-highlight-link-to-source (filename _point)
+  (defun org-remark-elfeed-highlight-link-to-source (_filename _point)
     (when (equal major-mode 'elfeed-show-mode)
-      (org-store-link nil)))
+      (my-org-remark-elfeed-link-string)))
 
   ;; Sanitize filenames to match logseq's :triple-lowbar naming format.
   ;; Logseq uses ___ for / and percent-encoding for other unsafe chars.
@@ -137,11 +151,11 @@
       (concat (file-name-sans-extension buffer-file-name) "-annotations.org"))
      ;; Elfeed
      ((eq major-mode 'elfeed-show-mode)
-      (message "major mode is elfeed-show-mode")
       (expand-file-name
        (concat
         "~/logseq/pages/(highlights elfeed) "
-        (let ((link-parts (split-string (org-store-link nil) "\\]\\[")))
+        (let ((link-parts (split-string (my-org-remark-elfeed-link-string)
+                                        "\\]\\[")))
           (my-org-remark-sanitize-notes-file-name
            (concat (nth 0 (split-string (nth 1 link-parts) "\\]\\]"))
                    "-annotations.org"))))))

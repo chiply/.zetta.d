@@ -354,7 +354,10 @@ minibuffer, and old entries are reachable via elfeed's own search."
     (nreverse out)))
 
 (defun zetta-consult-elfeed--state ()
-  "Preview state function: render the candidate entry in *elfeed-entry*."
+  "Preview state function: render the candidate entry in *elfeed-entry*.
+org-remark's elfeed wiring (an :after advice on `elfeed-show-entry')
+is suppressed during previews -- it would look up/load a notes file
+for every candidate the cursor crosses."
   (let ((preview (consult--buffer-preview)))
     (lambda (action cand)
       (if (eq action 'preview)
@@ -362,7 +365,11 @@ minibuffer, and old entries are reachable via elfeed's own search."
                    (when-let* ((entry (and cand (get-text-property
                                                  0 'zetta-elfeed-entry cand))))
                      (let ((elfeed-show-entry-switch #'identity))
-                       (ignore-errors (elfeed-show-entry entry)))))
+                       (if (fboundp 'org-remark-auto-on)
+                           (cl-letf (((symbol-function 'org-remark-auto-on)
+                                      #'ignore))
+                             (ignore-errors (elfeed-show-entry entry)))
+                         (ignore-errors (elfeed-show-entry entry))))))
         (funcall preview action nil)))))
 
 (defun zetta-consult-elfeed ()

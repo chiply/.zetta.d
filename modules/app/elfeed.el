@@ -21,12 +21,19 @@
   :demand t
   :config
 
-  (setq elfeed-protocol-fever-update-unread-only nil)
+  ;; UNREAD-ONLY is required for reader.miniflux.app: the hosted
+  ;; miniflux's entry ids auto-increment across ALL tenants, so fever's
+  ;; default incremental strategy -- request the next maxsize ids after
+  ;; the last-seen id -- almost never hits OUR entries (verified: update
+  ;; requested ids ...572-...771 after mark ...571 and parsed 0, while
+  ;; new posts sat unread on the server).  With unread-only, each update
+  ;; fetches the server's actual unread_item_ids list instead.
+  (setq elfeed-protocol-fever-update-unread-only t)
   (setq elfeed-protocol-fever-fetch-category-as-tag t)
-  ;; Entries fetched per request (default 50).  A bigger batch means
-  ;; fewer round trips when catching up after hours away; each batch is
-  ;; still parsed in one main-thread chunk, so don't go huge.
-  (setq elfeed-protocol-fever-maxsize 200)
+  ;; Do NOT raise this: reader.miniflux.app caps fever responses at 50
+  ;; items per request (verified: 60 ids requested -> 50 returned), so a
+  ;; bigger batch silently DROPS the rest.
+  (setq elfeed-protocol-fever-maxsize 50)
   ;; elfeed-protocol-feeds set in ~/.private.el
 
   (setq elfeed-protocol-enabled-protocols '(fever))

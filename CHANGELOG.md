@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.15](https://github.com/chiply/.zetta.d/compare/v0.1.14...v0.1.15) (2026-06-12)
+
+
+### Features
+
+* **svg-bench:** add CPU-profiling companion for flamegraphs ([#47](https://github.com/chiply/.zetta.d/issues/47)) ([dde387b](https://github.com/chiply/.zetta.d/commit/dde387bffcf036e91ee03be42b4ad83b7dd4b0a1))
+* **ui:** tab-bar sun/moon/clock cluster + circled tab-line numbers ([#49](https://github.com/chiply/.zetta.d/issues/49)) ([a583eb8](https://github.com/chiply/.zetta.d/commit/a583eb8178f84742fae18f1fc1c2db83ecb7ffa3))
+
 ## [0.1.14](https://github.com/chiply/.zetta.d/compare/v0.1.13...v0.1.14) (2026-06-11)
 
 

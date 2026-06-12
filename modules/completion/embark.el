@@ -77,6 +77,19 @@ completing-read prompter."
                     latex-environment latex-fragment))
       (cl-pushnew type embark-org--types)))
 
+  ;; Act on the last echo-area message (from oantolin's config): jump to
+  ;; the end of *Messages* and act on whatever target is there -- the
+  ;; file/URL/symbol a command just mentioned.  `embark--end-of-target'
+  ;; (a default pre-action hook) is neutralised so the action does not
+  ;; move point inside *Messages*.
+  (defun embark-on-last-message (arg)
+    "Act on the last message displayed in the echo area."
+    (interactive "P")
+    (with-current-buffer "*Messages*"
+      (goto-char (1- (point-max)))
+      (cl-letf (((symbol-function #'embark--end-of-target) #'ignore))
+        (embark-act arg))))
+
   ;; project
   (defvar-keymap embark-project-map :parent embark-general-map)
   (add-to-list 'embark-keymap-alist '(project embark-project-map))
@@ -149,6 +162,7 @@ resumed, restores the project directory it was acting on."
    :keymaps (append zetta-modal-states-non-insert '(override))
    "C-." 'embark-act
    "C-h B" 'embark-bindings
+   "C-h E" 'embark-on-last-message
    "C-;" 'embark-dwim
    "C->" 'embark-act-all)
   (
@@ -171,6 +185,7 @@ resumed, restores the project directory it was acting on."
                 evil-visual-state-map)
      "C-."   'embark-act
      "C-h B" 'embark-bindings
+     "C-h E" 'embark-on-last-message
      "C-;"   'embark-dwim
      "C->"   'embark-act-all)))
 

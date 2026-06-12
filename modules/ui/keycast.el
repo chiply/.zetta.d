@@ -38,6 +38,26 @@
   ;;
   ;; All advice is installed only after repeatable loads.
 
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;;                     embark integration                            ;;
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;;
+  ;; `embark-act' runs the selected action within its own command-loop
+  ;; turn.  For single-target command actions embark itself sets
+  ;; `this-command' to the action (embark--act), so keycast's
+  ;; post-command update names the action.  But actions in
+  ;; `embark-multitarget-actions' (e.g. `embark-copy-as-kill') run via
+  ;; `funcall' on that path and `this-command' is left as `embark-act' --
+  ;; which is what keycast then shows.  Stamp `this-command' after every
+  ;; normally-completed action so the action is reported instead.  (On
+  ;; the quit-minibuffer path `embark--act' exits non-locally and the
+  ;; :after advice does not run, same as embark's own stamping.)
+
+  (with-eval-after-load 'embark
+    (define-advice embark--act (:after (action &rest _) zetta-keycast-action)
+      (when (and (bound-and-true-p zetta-keycast-mode) (symbolp action))
+        (setq this-command action))))
+
   (with-eval-after-load 'repeatable
     (defvar zetta-keycast--in-repeatable nil)
 

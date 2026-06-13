@@ -43,6 +43,55 @@
                                    (side . right)
                                    (window-width . 0.25)))
 
+  ;;;; vertico-repeat hygiene
+  ;; Embark's completing-read action prompter runs inside `embark-act',
+  ;; so its minibuffer session is recorded under `embark-act' -- and
+  ;; repeating that re-runs embark-act with no target ("No target
+  ;; found") instead of anything useful.  Keep those sessions out of
+  ;; the history entirely.
+  (with-eval-after-load 'vertico-repeat
+    (dolist (cmd '(embark-act embark-act-noquit embark-act-all
+                   embark-dwim embark-become))
+      (cl-pushnew cmd vertico-repeat-filter))
+
+    ;; A `repeatable-wrap-FOO' wrapper leaves `this-command' as the
+    ;; wrapper when FOO's minibuffer is set up, so the session would
+    ;; repeat the wrapper -- re-entering the repeat loop.  Record it
+    ;; as plain FOO so `vertico-repeat' resumes the command itself.
+    (defun zetta-vertico-repeat-unwrap-repeatable (session)
+      "Record a `repeatable-wrap-FOO' SESSION as plain FOO."
+      (when session
+        (let ((name (symbol-name (car session))))
+          (when (string-prefix-p "repeatable-wrap-" name)
+            (setcar session
+                    (intern (substring name (length "repeatable-wrap-")))))))
+      session)
+    (add-to-list 'vertico-repeat-transformers
+                 #'zetta-vertico-repeat-unwrap-repeatable t)
+
+    ;; `vertico-repeat--filter-empty' drops sessions with no input, so a
+    ;; C-g straight out of a minibuffer leaves nothing to resume.  For
+    ;; context-carrying commands the context IS the point of resuming --
+    ;; `zetta-embark-project-find' remembers which project it was acting
+    ;; on -- so spare those from the empty filter.
+    (defvar zetta-vertico-repeat-keep-empty '(zetta-embark-project-find)
+      "Commands whose vertico-repeat sessions are saved even with empty input.")
+
+    (defun zetta-vertico-repeat--filter-empty (session)
+      "Like `vertico-repeat--filter-empty', sparing context-carrying commands.
+SESSION is kept regardless of input if its command is listed in
+`zetta-vertico-repeat-keep-empty'."
+      (if (memq (car session) zetta-vertico-repeat-keep-empty)
+          session
+        (vertico-repeat--filter-empty session)))
+
+    (setq vertico-repeat-transformers
+          (mapcar (lambda (f)
+                    (if (eq f #'vertico-repeat--filter-empty)
+                        #'zetta-vertico-repeat--filter-empty
+                      f))
+                  vertico-repeat-transformers)))
+
   ;; this is super super hacky and bizarre... but it's the only way I
   ;; can get this to work
 

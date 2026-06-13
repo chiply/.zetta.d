@@ -77,17 +77,70 @@ completing-read prompter."
                     latex-environment latex-fragment))
       (cl-pushnew type embark-org--types)))
 
+  ;; Act on the last echo-area message (from oantolin's config): jump to
+  ;; the end of *Messages* and act on whatever target is there -- the
+  ;; file/URL/symbol a command just mentioned.  `embark--end-of-target'
+  ;; (a default pre-action hook) is neutralised so the action does not
+  ;; move point inside *Messages*.
+  ;;
+  ;; Noise lines are skipped: every C-g logs "Quit" (so bailing out of
+  ;; one attempt would make "Quit" the next attempt's target), and
+  ;; embark's own minimal indicator logs its "Act on ..." prompt.
+  (defvar zetta-embark-last-message-noise
+    (rx bos (or "" "Quit" "Mark set" "Mark saved" "Mark activated"
+                "Mark deactivated"
+                (seq "Act on " (* nonl)))
+        eos)
+    "Regexp for *Messages* lines `embark-on-last-message' skips over.")
+
+  (defun embark-on-last-message (arg)
+    "Act on the last substantive message displayed in the echo area.
+Trailing lines matching `zetta-embark-last-message-noise' are skipped."
+    (interactive "P")
+    (with-current-buffer "*Messages*"
+      (goto-char (point-max))
+      (skip-chars-backward "\n")
+      (while (string-match-p
+              zetta-embark-last-message-noise
+              (buffer-substring-no-properties
+               (line-beginning-position) (line-end-position)))
+        (when (<= (line-beginning-position) (point-min))
+          (user-error "No substantive message to act on"))
+        (forward-line -1))
+      (end-of-line)
+      (cl-letf (((symbol-function #'embark--end-of-target) #'ignore))
+        (embark-act arg))))
+
   ;; project
   (defvar-keymap embark-project-map :parent embark-general-map)
   (add-to-list 'embark-keymap-alist '(project embark-project-map))
 
   ;; find file
-  (defun embark-consult-project-find-in-dir (dir)
-    (let ((default-directory dir)
-          ;; to disable preview -- this is bc consult uses 'this
-          ;; command' to determine what the active preview function is
-          (this-command 'consult-project-extra-find))
+  (defvar zetta-embark-project-find-dir nil
+    "Project directory last acted on with `embark-consult-project-find-in-dir'.")
+
+  (defun zetta-embark-project-find ()
+    "Run `consult-project-extra-find' in `zetta-embark-project-find-dir'.
+A real command (not just a `this-command' alias) so the minibuffer
+session is recorded by `vertico-repeat' under a name that, when
+resumed, restores the project directory it was acting on."
+    (interactive)
+    (let ((default-directory (or zetta-embark-project-find-dir
+                                 default-directory)))
       (call-interactively 'consult-project-extra-find)))
+
+  ;; Same on-demand preview as consult-project-extra-find (consult looks
+  ;; up customizations by `this-command', which is this symbol here).
+  (with-eval-after-load 'consult
+    (consult-customize zetta-embark-project-find :preview-key "C-="))
+
+  (defun embark-consult-project-find-in-dir (dir)
+    (setq zetta-embark-project-find-dir dir)
+    ;; `call-interactively' does not set `this-command'; bind it so both
+    ;; consult's preview lookup and `vertico-repeat-save' see the
+    ;; resumable command rather than `embark-act'.
+    (let ((this-command 'zetta-embark-project-find))
+      (call-interactively 'zetta-embark-project-find)))
 
   ;; vc dir
   (defun embark-vc-dir (dir)
@@ -130,6 +183,7 @@ completing-read prompter."
    :keymaps (append zetta-modal-states-non-insert '(override))
    "C-." 'embark-act
    "C-h B" 'embark-bindings
+   "C-h E" 'embark-on-last-message
    "C-;" 'embark-dwim
    "C->" 'embark-act-all)
   (
@@ -152,6 +206,7 @@ completing-read prompter."
                 evil-visual-state-map)
      "C-."   'embark-act
      "C-h B" 'embark-bindings
+     "C-h E" 'embark-on-last-message
      "C-;"   'embark-dwim
      "C->"   'embark-act-all)))
 

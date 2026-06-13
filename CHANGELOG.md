@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.17](https://github.com/chiply/.zetta.d/compare/v0.1.16...v0.1.17) (2026-06-13)
+
+
+### Features
+
+* **elfeed:** incremental updates by default + background auto-update ([#53](https://github.com/chiply/.zetta.d/issues/53)) ([862163f](https://github.com/chiply/.zetta.d/commit/862163fc694c2a5a1f64d8f89900e571c1e9eaf6))
+* **keycast,vertico:** accurate command reporting for embark/repeatable chains ([#52](https://github.com/chiply/.zetta.d/issues/52)) ([3533052](https://github.com/chiply/.zetta.d/commit/353305292295ad9a560882b18c12eafc1639d881))
+
 ## [0.1.16](https://github.com/chiply/.zetta.d/compare/v0.1.15...v0.1.16) (2026-06-12)
 
 

@@ -676,6 +676,54 @@ keep their own font (`zetta-font').")
   (when (fboundp 'mu4e--modeline-string)
     (string-trim (or (ignore-errors (mu4e--modeline-string)) ""))))
 
+;; Elfeed unread count, CACHED: the db holds 50k+ entries, so counting at
+;; render time (the tab bar redraws every keystroke) is out.  The count is
+;; recomputed off-render -- debounced on elfeed's update/tag hooks -- and
+;; the segment just reads the cache.
+(defvar zetta-tab-bar--elfeed-unread nil
+  "Cached number of unread elfeed entries, or nil before elfeed loads.")
+
+(defvar zetta-tab-bar--elfeed-count-timer nil)
+
+(defcustom zetta-tab-bar-elfeed-count-window (* 6 30 24 60 60)
+  "Age window (seconds) for the tab-bar elfeed unread count.
+Matches the \"@6-months-ago\" horizon of the elfeed quick filters, so the
+indicator agrees with what the search buffer shows -- and keeps ancient
+entries whose read-state never synced back (a fever API limitation) from
+inflating the number forever."
+  :type 'integer :group 'zetta)
+
+(defun zetta-tab-bar--elfeed-count-unread ()
+  "Count unread entries within `zetta-tab-bar-elfeed-count-window'.
+The db visits newest-first, so the scan stops at the window edge."
+  (let ((n 0)
+        (cutoff (- (float-time) zetta-tab-bar-elfeed-count-window)))
+    (with-elfeed-db-visit (entry _feed)
+      (if (< (elfeed-entry-date entry) cutoff)
+          (elfeed-db-return)
+        (when (memq 'unread (elfeed-entry-tags entry))
+          (setq n (1+ n)))))
+    n))
+
+(defun zetta-tab-bar--elfeed-recount (&rest _)
+  "Debounced recount of elfeed unread entries; refreshes the tab bar."
+  (when (timerp zetta-tab-bar--elfeed-count-timer)
+    (cancel-timer zetta-tab-bar--elfeed-count-timer))
+  (setq zetta-tab-bar--elfeed-count-timer
+        (run-with-idle-timer
+         2 nil
+         (lambda ()
+           (when (featurep 'elfeed)
+             (setq zetta-tab-bar--elfeed-unread
+                   (ignore-errors (zetta-tab-bar--elfeed-count-unread)))
+             (force-mode-line-update t))))))
+
+(with-eval-after-load 'elfeed
+  (add-hook 'elfeed-update-hooks #'zetta-tab-bar--elfeed-recount)
+  (add-hook 'elfeed-tag-hooks #'zetta-tab-bar--elfeed-recount)
+  (add-hook 'elfeed-untag-hooks #'zetta-tab-bar--elfeed-recount)
+  (zetta-tab-bar--elfeed-recount))
+
 (defun zetta-tab-bar-clock ()
   "The `display-time' clock string, trimmed."
   (when (boundp 'display-time-string) (string-trim (or display-time-string ""))))
@@ -818,6 +866,30 @@ string like \"{ 1' }\"), not a variable -- so it must be called."
                               (cons "Update mail"
                                     (lambda () (interactive) (mu4e-update-mail-and-index t))))
                          (and (fboundp 'mu4e-compose-new) (cons "Compose" #'mu4e-compose-new))))))))
+
+(defun zetta-tab-bar-svg--elfeed ()
+  "Clickable feed cluster (rss glyph + unread count): open elfeed; feeds menu.
+Hidden until elfeed loads (the count cache is nil); the count comes from
+`zetta-tab-bar--elfeed-unread', recomputed off-render on elfeed's hooks."
+  (when (numberp zetta-tab-bar--elfeed-unread)
+    (let* ((icon (and (featurep 'nerd-icons)
+                      (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-rss")))))
+           (label (concat (and icon (concat icon " "))
+                          (number-to-string zetta-tab-bar--elfeed-unread))))
+      (zetta-svg-seg
+       label 'tb-elfeed
+       :help (format "elfeed: %d unread" zetta-tab-bar--elfeed-unread)
+       :action-help "open elfeed"
+       :action (if (fboundp 'elfeed) #'elfeed #'ignore)
+       :menu (delq nil
+                   (list (and (fboundp 'elfeed) (cons "Open elfeed" #'elfeed))
+                         (and (fboundp 'elfeed-update)
+                              (cons "Update feeds" #'elfeed-update))
+                         (and (fboundp 'zetta-consult-elfeed)
+                              (cons "Search entries" #'zetta-consult-elfeed))
+                         (and (fboundp 'elfeed-protocol-fever-reinit)
+                              (cons "Full resync (reinit)"
+                                    #'elfeed-protocol-fever-reinit))))))))
 
 (defun zetta-tab-bar-svg--clock ()
   "Clickable clock (clock glyph + time): world clock; calendar menu."

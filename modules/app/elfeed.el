@@ -21,8 +21,19 @@
   :demand t
   :config
 
-  (setq elfeed-protocol-fever-update-unread-only nil)
+  ;; UNREAD-ONLY is required for reader.miniflux.app: the hosted
+  ;; miniflux's entry ids auto-increment across ALL tenants, so fever's
+  ;; default incremental strategy -- request the next maxsize ids after
+  ;; the last-seen id -- almost never hits OUR entries (verified: update
+  ;; requested ids ...572-...771 after mark ...571 and parsed 0, while
+  ;; new posts sat unread on the server).  With unread-only, each update
+  ;; fetches the server's actual unread_item_ids list instead.
+  (setq elfeed-protocol-fever-update-unread-only t)
   (setq elfeed-protocol-fever-fetch-category-as-tag t)
+  ;; Do NOT raise this: reader.miniflux.app caps fever responses at 50
+  ;; items per request (verified: 60 ids requested -> 50 returned), so a
+  ;; bigger batch silently DROPS the rest.
+  (setq elfeed-protocol-fever-maxsize 50)
   ;; elfeed-protocol-feeds set in ~/.private.el
 
   (setq elfeed-protocol-enabled-protocols '(fever))
@@ -171,7 +182,10 @@ minibuffer with something like `exit-minibuffer'."
    "S-SPC" 'elfeed-show-prev
    )
 
-  :hook (elfeed-search-update . elfeed-score-enable)
+  ;; NB: elfeed-score-enable used to be hooked on `elfeed-search-update'
+  ;; here -- but enable RELOADS the score file and stats file and runs
+  ;; serde cleanup every call, so every search refresh paid that cost.
+  ;; It is called once in the elfeed-score :config below; that's enough.
   )
 
 ;; Bind elfeed-search keys after evil-collection sets up its bindings.
@@ -179,7 +193,14 @@ minibuffer with something like `exit-minibuffer'."
 ;; evil-collection's hook.
 (add-hook 'elfeed-search-mode-hook
           (lambda ()
-            (evil-local-set-key 'normal "R" #'elfeed-protocol-fever-reinit)
+            ;; R = INCREMENTAL update (fetch only entries newer than the
+            ;; stored update mark, sync pending read/star states).
+            ;; gR = full resync: re-fetches and re-parses EVERY starred
+            ;; and unread entry -- slow against a 50k-entry db; only for
+            ;; first sync, recovery, or pulling remote read-state
+            ;; changes for old entries (fever's API has no better way).
+            (evil-local-set-key 'normal "R" #'elfeed-update)
+            (evil-local-set-key 'normal "gR" #'elfeed-protocol-fever-reinit)
             (evil-local-set-key 'normal "tt" #'prot-elfeed-search-tag-filter)
             ;; quick filters
             (evil-local-set-key 'normal "fu" (my-elfeed-filter "@6-months-ago +unread"))
@@ -290,4 +311,113 @@ This implementation is derived from `elfeed-search-print-entry--default'."
    :states '(normal)
    :keymaps '(elfeed-search-mode-map)
    "x" 'elfeed-score-explain))
+
+;;;; consult-elfeed (a la consult-mu)
+;; Search recent entries from anywhere with live preview: candidates are
+;; the most recent `zetta-consult-elfeed-limit' db entries (title, feed
+;; and tags all match the filter -- type "unread" to narrow to unread),
+;; previews render in *elfeed-entry* as you move, RET opens the entry.
+
+(defcustom zetta-consult-elfeed-limit 2000
+  "Most-recent entries offered by `zetta-consult-elfeed'.
+The db holds tens of thousands; formatting them all would lag the
+minibuffer, and old entries are reachable via elfeed's own search."
+  :type 'integer :group 'zetta)
+
+(defvar zetta-consult-elfeed--history nil)
+
+(defun zetta-consult-elfeed--candidates ()
+  "Format the most recent db entries as propertized candidate strings."
+  (let ((n 0) out)
+    (with-elfeed-db-visit (entry feed)
+      (let* ((date (format-time-string "%Y-%m-%d" (elfeed-entry-date entry)))
+             (title (or (elfeed-meta entry :title) (elfeed-entry-title entry) ""))
+             (feed-title (and feed (or (elfeed-meta feed :title)
+                                       (elfeed-feed-title feed))))
+             (tags (mapconcat #'symbol-name (elfeed-entry-tags entry) ","))
+             (cand (concat
+                    (propertize date 'face 'font-lock-comment-face) " "
+                    title " "
+                    (and feed-title
+                         (propertize feed-title 'face 'elfeed-search-feed-face))
+                    (and (> (length tags) 0)
+                         (concat " " (propertize (concat "(" tags ")")
+                                                 'face 'elfeed-search-tag-face))))))
+        (push (propertize
+               (if (fboundp 'consult--tofu-encode)
+                   (concat cand (consult--tofu-encode n))
+                 cand)
+               'zetta-elfeed-entry entry)
+              out)
+        (when (>= (setq n (1+ n)) zetta-consult-elfeed-limit)
+          (elfeed-db-return))))
+    (nreverse out)))
+
+(defun zetta-consult-elfeed--state ()
+  "Preview state function: render the candidate entry in *elfeed-entry*.
+org-remark's elfeed wiring (an :after advice on `elfeed-show-entry')
+is suppressed during previews -- it would look up/load a notes file
+for every candidate the cursor crosses."
+  (let ((preview (consult--buffer-preview)))
+    (lambda (action cand)
+      (if (eq action 'preview)
+          (funcall preview 'preview
+                   (when-let* ((entry (and cand (get-text-property
+                                                 0 'zetta-elfeed-entry cand))))
+                     (let ((elfeed-show-entry-switch #'identity))
+                       (if (fboundp 'org-remark-auto-on)
+                           (cl-letf (((symbol-function 'org-remark-auto-on)
+                                      #'ignore))
+                             (ignore-errors (elfeed-show-entry entry)))
+                         (ignore-errors (elfeed-show-entry entry))))))
+        (funcall preview action nil)))))
+
+(defun zetta-consult-elfeed ()
+  "Search recent elfeed entries with live preview (a la consult-mu).
+Filters over title, feed and tags of the `zetta-consult-elfeed-limit'
+most recent entries; RET opens the selection in the show buffer."
+  (interactive)
+  (require 'elfeed)
+  (elfeed-db-ensure)
+  (let* ((cand (consult--read
+                (zetta-consult-elfeed--candidates)
+                :prompt "Elfeed entry: "
+                :category 'elfeed-entry
+                :require-match t
+                :sort nil
+                :lookup #'consult--lookup-member
+                :state (zetta-consult-elfeed--state)
+                :history 'zetta-consult-elfeed--history))
+         (entry (and cand (get-text-property 0 'zetta-elfeed-entry cand))))
+    (when entry (elfeed-show-entry entry))))
+
+;;;; Background auto-update (mu4e-style)
+;; Incremental pulls in the background, so opening elfeed shows fresh
+;; entries without a foreground update.  The network side is async curl;
+;; only parsing runs on the main thread, one maxsize-entry batch at a
+;; time.  The FIRST run also loads elfeed and its db (the one-time
+;; multi-second index load for a 50k-entry db), so it waits for genuine
+;; idle rather than firing mid-typing.
+
+(defvar zetta-elfeed-auto-update-interval (* 15 60)
+  "Seconds between background incremental elfeed updates.")
+
+(defvar zetta-elfeed--auto-update-timer nil
+  "Active timer for `zetta-elfeed--auto-update', or nil.")
+
+(defun zetta-elfeed--auto-update ()
+  "Incrementally update all elfeed feeds in the background."
+  (require 'elfeed)
+  (elfeed-update))
+
+(unless zetta-elfeed--auto-update-timer
+  (setq zetta-elfeed--auto-update-timer
+        (run-with-idle-timer
+         120 nil
+         (lambda ()
+           (zetta-elfeed--auto-update)
+           (setq zetta-elfeed--auto-update-timer
+                 (run-with-timer zetta-elfeed-auto-update-interval
+                                 zetta-elfeed-auto-update-interval
+                                 #'zetta-elfeed--auto-update))))))
 ;;; elfeed.el ends here

@@ -104,7 +104,7 @@ jitters as keycast changes width."
                  zetta-gptel-processes
                  blinker-tab-bar)
          :center nil
-         :right '(zetta-tab-bar-svg--mu4e))
+         :right '(zetta-tab-bar-svg--elfeed "  " zetta-tab-bar-svg--mu4e))
    ;; line 3 -- Spotify left; calendar centre; space-tree (+battery/prefix) right
    (list :left '(zetta-tab-bar-svg--spotify)
          :center nil
@@ -257,10 +257,34 @@ first row; the date widget (with moon phase) below, on the last row."
                                        (zetta-tab-bar-using-svg-p))
                               (force-mode-line-update t))))))
 
+;; Pin the tab bar's buffer-dependent segments (buffer name, file icon,
+;; modal state, thing-at-point, ...) to the buffer the user came FROM
+;; while a minibuffer is active.  Completion previews flip the selected
+;; window's buffer on every candidate (original <-> previewed buffer),
+;; and without pinning each flip re-rendered the bar with different
+;; content -- alternating images repainting ~90px of frame top, a
+;; visible flash -- while keycast should (and does) stay live.
+(defvar zetta-tab-bar--minibuffer-entry-buffer nil
+  "The buffer current when the (outermost) minibuffer session began.")
+
+(defun zetta-tab-bar--note-minibuffer-entry ()
+  (when (= (minibuffer-depth) 1)
+    (setq zetta-tab-bar--minibuffer-entry-buffer
+          (window-buffer (minibuffer-selected-window)))))
+
+(add-hook 'minibuffer-setup-hook #'zetta-tab-bar--note-minibuffer-entry)
+
+(defun zetta-tab-bar--context-buffer ()
+  "The stable content context: the entry buffer during minibuffer sessions."
+  (and (> (minibuffer-depth) 0)
+       (buffer-live-p zetta-tab-bar--minibuffer-entry-buffer)
+       zetta-tab-bar--minibuffer-entry-buffer))
+
 (svg-line-define 'zetta-tab-bar
                  :target 'tab-bar
                  :layout 'lines
                  :width 'frame
+                 :context-buffer #'zetta-tab-bar--context-buffer
                  :content #'zetta-tab-bar-svg-lines
                  :spans #'zetta-tab-bar-svg-spans
                  :font (lambda () zetta-svg-line-font)

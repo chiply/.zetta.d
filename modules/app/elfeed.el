@@ -324,16 +324,6 @@ The db holds tens of thousands; formatting them all would lag the
 minibuffer, and old entries are reachable via elfeed's own search."
   :type 'integer :group 'zetta)
 
-(defcustom zetta-consult-elfeed-keep-tab-line t
-  "When non-nil, keep the tab-line during `zetta-consult-elfeed' preview.
-Every entry previews into the single *elfeed-entry* buffer, so its
-tab-line is stable (same buffer, fixed height) and can show the previewed
-entry as the selected tab.  When nil, fall back to the default behaviour
-of hiding the tab-line for the whole preview (as with consult-buffer).
-Read by the `consult--buffer-preview' tab-line advice in
-`modules/completion/consult.el'."
-  :type 'boolean :group 'zetta)
-
 (defvar zetta-consult-elfeed--history nil)
 
 (defun zetta-elfeed--ensure-db ()
@@ -387,9 +377,9 @@ re-running the mode strips the tab-line on the live buffer; the heavy
 `elfeed-show-refresh' that follows gives redisplay a chance to paint the
 stripped state, and `global-tab-line-mode' restores it a moment later --
 i.e. the tab-line flashes once per candidate (visible when the tab-line is
-kept, `zetta-consult-elfeed-keep-tab-line').  Reuse the live elfeed-show
-buffer in place, running the major mode only when it is not already active,
-so the tab-line is never stripped between previews.
+kept during preview, `zetta-consult-preview-keep-tab-line').  Reuse the live
+elfeed-show buffer in place, running the major mode only when it is not
+already active, so the tab-line is never stripped between previews.
 
 Also bypasses `elfeed-show-entry' (and so its `:after' advice -- org-remark
 auto-notes), which we do not want firing for every candidate the cursor

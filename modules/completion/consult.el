@@ -47,25 +47,30 @@
    consult-theme
    :preview-key "C-=")
 
-  ;;;; Hide the tab-line during buffer preview
-  ;; The tab-line is meaningless while previewing, and as preview swaps
-  ;; buffers in and out of the window its tab-line flickers in and out (a
-  ;; distracting pop -- independent of the renderer, it happens with the
-  ;; built-in text tab-line too).  Rather than try to hold it steady,
-  ;; hide it on every previewed buffer and restore on exit, so it is
-  ;; consistently absent for the whole preview instead of popping.
-  ;; `consult--buffer-preview' backs consult-buffer, consult-project-buffer
-  ;; AND `zetta-consult-elfeed' (which reuses it), so one wrapper covers
-  ;; them all.
-  ;; NB2: re-apply `tab-line-format nil' on EVERY preview, not just the
-  ;; first time a buffer is seen.  consult-buffer previews a fresh buffer
-  ;; per candidate, but `zetta-consult-elfeed' renders every entry into the
-  ;; same *elfeed-entry* buffer via `elfeed-show-entry', which re-runs
-  ;; `elfeed-show-mode' (=> `kill-all-local-variables') each time and so
-  ;; wipes the local nil we set -- making the tab-line pop back in on the
-  ;; 2nd+ preview.  Record the ORIGINAL value once (guarded), but force the
-  ;; hide unconditionally.
-  ;; NB: split into a wrapper-maker + a plain helper, joined with
+  ;;;; Keep the tab-line steady during buffer preview
+  ;; `consult--buffer-preview' (consult-buffer, consult-project-buffer AND
+  ;; `zetta-consult-elfeed', which reuses it) swaps buffers in and out of the
+  ;; window as you move candidates.  Left alone the tab-line flickers in and
+  ;; out -- a distracting vertical pop -- because some candidates (special
+  ;; buffers) carry no tab-line, so it disappears for those and reappears for
+  ;; the next normal buffer.  The other preview family (`consult--jump-preview':
+  ;; ripgrep, grep, line, imenu, ...) doesn't need this -- it switches to the
+  ;; target's NATURAL tab-line and never hides it.
+  ;;
+  ;; We want the tab-line PRESENT and steady for the whole preview rather than
+  ;; popping, so force uniform presence: on every previewed buffer that lacks a
+  ;; tab-line, give it the standard one for the duration; restore on exit.  The
+  ;; height never changes, so no vertical pop -- only the (meaningful) tab
+  ;; content reflects the buffer under preview.  Set
+  ;; `zetta-consult-preview-keep-tab-line' to nil to hide it instead (force it
+  ;; absent), which is also steady but blank.
+  ;;
+  ;; NB: re-evaluate the target on EVERY preview, not just the first time a
+  ;; buffer is seen -- `zetta-consult-elfeed' rendered into a buffer whose
+  ;; `tab-line-format' could be clobbered between previews (see
+  ;; `zetta-consult-elfeed--show'); only act when the value actually needs to
+  ;; change, and record the ORIGINAL once so restore is exact.
+  ;; NB2: split into a wrapper-maker + a plain helper, joined with
   ;; `apply-partially', rather than returning a lambda that closes over
   ;; STATE-FN.  A closure would need this file to be loaded lexically; if
   ;; anything ever (re)defines this in a dynamic-binding context, that
@@ -74,38 +79,39 @@
   ;; state-fn") and hangs.  `apply-partially' is defined lexically in
   ;; subr.el, so the partial it returns captures STATE-FN/SAVED correctly
   ;; no matter how THIS file was loaded.
-  (defun zetta--consult-preview-keep-tabline-p (buf)
-    "Non-nil when BUF's tab-line should STAY (and show the preview), not hide.
-`zetta-consult-elfeed' reuses the single *elfeed-entry* buffer, so its
-tab-line is stable -- same buffer, fixed height, no accumulation (consult
-previews with `norecord') -- and can show the previewed entry as the
-selected tab instead of being hidden.  Gated on the user toggle
-`zetta-consult-elfeed-keep-tab-line' so it can be A/B'd against the hide;
-scoped to elfeed-show buffers so consult-buffer's churnier preview (a
-different buffer per candidate) still hides cleanly."
-    (and (bound-and-true-p zetta-consult-elfeed-keep-tab-line)
-         (eq (buffer-local-value 'major-mode buf) 'elfeed-show-mode)))
-  (defun zetta--consult-preview-hide-tabline-1 (state-fn saved action cand)
-    "Run consult STATE-FN, hiding/restoring previewed buffers' tab-line.
-SAVED is a hash table tracking touched buffers' prior `tab-line-format'."
+  (defcustom zetta-consult-preview-keep-tab-line t
+    "How `consult--buffer-preview' treats the tab-line while previewing.
+When non-nil, keep the tab-line PRESENT and steady on every previewed
+buffer (giving a standard tab-line to candidates that lack one) so it
+never pops in and out as preview swaps buffers.  When nil, hide it for
+the whole preview instead (steady but blank).  Restored on exit either
+way."
+    :type 'boolean :group 'zetta)
+  (defun zetta--consult-preview-tabline-1 (state-fn saved action cand)
+    "Run consult STATE-FN, keeping/hiding previewed buffers' tab-line steady.
+Per `zetta-consult-preview-keep-tab-line'.  SAVED is a hash table tracking
+touched buffers' prior `tab-line-format' so it can be restored on exit."
     (prog1 (funcall state-fn action cand)
       (pcase action
         ('preview
          (when-let* ((buf (and cand (get-buffer cand)))
-                     ((buffer-live-p buf))
-                     ((not (zetta--consult-preview-keep-tabline-p buf))))
+                     ((buffer-live-p buf)))
            (with-current-buffer buf
-             ;; Record the original ONCE (don't clobber it on re-preview):
-             ;; `t'-tagged cons = had a buffer-local value to restore;
-             ;; `global' = was not buffer-local (kill on restore).
-             (unless (gethash buf saved)
-               (puthash buf (if (local-variable-p 'tab-line-format)
-                                (cons t tab-line-format)
-                              'global)
-                        saved))
-             ;; ...but force the hide every time -- elfeed-show-mode resets
-             ;; the local var between previews of the *elfeed-entry* buffer.
-             (setq-local tab-line-format nil))))
+             ;; keep => ensure a tab-line is present (give one if missing);
+             ;; hide => force it absent.
+             (let ((target (if zetta-consult-preview-keep-tab-line
+                               (or tab-line-format '(:eval (tab-line-format)))
+                             nil)))
+               (unless (equal tab-line-format target)
+                 ;; Record the original ONCE before first changing it:
+                 ;; `t'-tagged cons = had a buffer-local value to restore;
+                 ;; `global' = was not buffer-local (kill on restore).
+                 (unless (gethash buf saved)
+                   (puthash buf (if (local-variable-p 'tab-line-format)
+                                    (cons t tab-line-format)
+                                  'global)
+                            saved))
+                 (setq-local tab-line-format target))))))
         ((or 'exit 'return)
          (maphash (lambda (buf orig)
                     (when (buffer-live-p buf)
@@ -115,12 +121,12 @@ SAVED is a hash table tracking touched buffers' prior `tab-line-format'."
                           (setq-local tab-line-format (cdr orig))))))
                   saved)
          (clrhash saved)))))
-  (defun zetta--consult-preview-hide-tabline (state-fn)
-    "Wrap consult buffer-preview STATE-FN to hide previewed buffers' tab-line."
-    (apply-partially #'zetta--consult-preview-hide-tabline-1
+  (defun zetta--consult-preview-tabline (state-fn)
+    "Wrap consult buffer-preview STATE-FN to keep previewed buffers' tab-line steady."
+    (apply-partially #'zetta--consult-preview-tabline-1
                      state-fn (make-hash-table :test 'eq)))
   (advice-add 'consult--buffer-preview :filter-return
-              #'zetta--consult-preview-hide-tabline)
+              #'zetta--consult-preview-tabline)
 
   (setq consult-async-split-style 'comma)
   ;; NOTE consult-omni--get-split-style-character fix moved to consult-omni.el

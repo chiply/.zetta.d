@@ -724,6 +724,46 @@ The db visits newest-first, so the scan stops at the window edge."
   (add-hook 'elfeed-untag-hooks #'zetta-tab-bar--elfeed-recount)
   (zetta-tab-bar--elfeed-recount))
 
+;; "+N new this pull": how many entries the most recent update added, shown
+;; mu4e-style beside the unread count and cleared when you open elfeed.  New
+;; entries arrive asynchronously (curl/fever callbacks), so accumulate per
+;; entry and promote the batch to the indicator once update activity settles.
+(defvar zetta-tab-bar--elfeed-new-count 0
+  "New elfeed entries from the last completed pull (the +N indicator).")
+(defvar zetta-tab-bar--elfeed-new-accum 0
+  "New entries seen so far in the in-progress pull, before promotion.")
+(defvar zetta-tab-bar--elfeed-new-timer nil)
+
+(defun zetta-tab-bar--elfeed-note-new (&rest _)
+  "Count one new entry for the current pull (on `elfeed-new-entry-hook')."
+  (setq zetta-tab-bar--elfeed-new-accum (1+ zetta-tab-bar--elfeed-new-accum)))
+
+(defun zetta-tab-bar--elfeed-promote-new (&rest _)
+  "Debounced: promote the pull's accumulated new count to the indicator.
+Runs after update activity settles, so a burst of feeds reads as one pull.
+A pull that added nothing leaves the previous +N (entries you've not seen)."
+  (when (timerp zetta-tab-bar--elfeed-new-timer)
+    (cancel-timer zetta-tab-bar--elfeed-new-timer))
+  (setq zetta-tab-bar--elfeed-new-timer
+        (run-with-idle-timer
+         2 nil
+         (lambda ()
+           (when (> zetta-tab-bar--elfeed-new-accum 0)
+             (setq zetta-tab-bar--elfeed-new-count zetta-tab-bar--elfeed-new-accum
+                   zetta-tab-bar--elfeed-new-accum 0)
+             (force-mode-line-update t))))))
+
+(defun zetta-tab-bar--elfeed-clear-new (&rest _)
+  "Clear the +N indicator -- you've opened elfeed, so the new ones are seen."
+  (setq zetta-tab-bar--elfeed-new-count 0
+        zetta-tab-bar--elfeed-new-accum 0)
+  (force-mode-line-update t))
+
+(with-eval-after-load 'elfeed
+  (add-hook 'elfeed-new-entry-hook #'zetta-tab-bar--elfeed-note-new)
+  (add-hook 'elfeed-update-hooks #'zetta-tab-bar--elfeed-promote-new)
+  (advice-add 'elfeed :after #'zetta-tab-bar--elfeed-clear-new))
+
 (defun zetta-tab-bar-clock ()
   "The `display-time' clock string, trimmed."
   (when (boundp 'display-time-string) (string-trim (or display-time-string ""))))
@@ -874,11 +914,16 @@ Hidden until elfeed loads (the count cache is nil); the count comes from
   (when (numberp zetta-tab-bar--elfeed-unread)
     (let* ((icon (and (featurep 'nerd-icons)
                       (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-rss")))))
+           (new zetta-tab-bar--elfeed-new-count)
            (label (concat (and icon (concat icon " "))
-                          (number-to-string zetta-tab-bar--elfeed-unread))))
+                          (number-to-string zetta-tab-bar--elfeed-unread)
+                          (when (> new 0) (format " +%d" new)))))
       (zetta-svg-seg
        label 'tb-elfeed
-       :help (format "elfeed: %d unread" zetta-tab-bar--elfeed-unread)
+       :help (if (> new 0)
+                 (format "elfeed: %d unread (+%d new this pull)"
+                         zetta-tab-bar--elfeed-unread new)
+               (format "elfeed: %d unread" zetta-tab-bar--elfeed-unread))
        :action-help "open elfeed"
        :action (if (fboundp 'elfeed) #'elfeed #'ignore)
        :menu (delq nil

@@ -18,11 +18,30 @@
 (use-package svg-margin
   :ensure (:host github :repo "chiply/svg-margin" :wait t))
 
-(require 'svg-margin)
+;; `nil t' (no-error): `use-package' above installs+loads svg-margin at LOAD
+;; time (`:wait t'), but `compile-angel' byte/native-compiles this file as it
+;; loads, and at COMPILE time the `use-package' has not run yet -- so a plain
+;; `(require 'svg-margin)' aborts compilation with "Cannot open load file"
+;; until elpaca has built the package.  No-error keeps compilation going; the
+;; svg-margin symbols below are declared so it compiles cleanly regardless.
+(require 'svg-margin nil t)
 (require 'svg)
 (require 'cl-lib)
 
 ;; External symbols (declared so this byte-compiles without those packages).
+;; svg-margin itself is declared here too: it may be absent at compile time
+;; (see the no-error require above), but `use-package' loads it before any of
+;; these run at load time.
+(declare-function svg-margin-define-shape "svg-margin")
+(declare-function svg-margin-register-provider "svg-margin")
+(declare-function svg-margin-refresh "svg-margin")
+(declare-function svg-margin-refresh-all "svg-margin")
+(declare-function svg-margin--note-help "svg-margin")
+(declare-function global-svg-margin-mode "svg-margin")
+(defvar svg-margin-disable-fringe)
+(defvar svg-margin-min-left-columns)
+(defvar svg-margin-min-right-columns)
+(defvar svg-margin-hover-highlight)
 (defvar evil-markers-alist)
 (defvar git-gutter:diffinfos)
 (defvar bookmark-alist)

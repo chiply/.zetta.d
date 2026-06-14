@@ -57,6 +57,14 @@
   ;; `consult--buffer-preview' backs consult-buffer, consult-project-buffer
   ;; AND `zetta-consult-elfeed' (which reuses it), so one wrapper covers
   ;; them all.
+  ;; NB2: re-apply `tab-line-format nil' on EVERY preview, not just the
+  ;; first time a buffer is seen.  consult-buffer previews a fresh buffer
+  ;; per candidate, but `zetta-consult-elfeed' renders every entry into the
+  ;; same *elfeed-entry* buffer via `elfeed-show-entry', which re-runs
+  ;; `elfeed-show-mode' (=> `kill-all-local-variables') each time and so
+  ;; wipes the local nil we set -- making the tab-line pop back in on the
+  ;; 2nd+ preview.  Record the ORIGINAL value once (guarded), but force the
+  ;; hide unconditionally.
   ;; NB: split into a wrapper-maker + a plain helper, joined with
   ;; `apply-partially', rather than returning a lambda that closes over
   ;; STATE-FN.  A closure would need this file to be loaded lexically; if
@@ -73,15 +81,18 @@ SAVED is a hash table tracking touched buffers' prior `tab-line-format'."
       (pcase action
         ('preview
          (when-let* ((buf (and cand (get-buffer cand)))
-                     ((buffer-live-p buf))
-                     ((not (gethash buf saved))))
+                     ((buffer-live-p buf)))
            (with-current-buffer buf
+             ;; Record the original ONCE (don't clobber it on re-preview):
              ;; `t'-tagged cons = had a buffer-local value to restore;
              ;; `global' = was not buffer-local (kill on restore).
-             (puthash buf (if (local-variable-p 'tab-line-format)
-                              (cons t tab-line-format)
-                            'global)
-                      saved)
+             (unless (gethash buf saved)
+               (puthash buf (if (local-variable-p 'tab-line-format)
+                                (cons t tab-line-format)
+                              'global)
+                        saved))
+             ;; ...but force the hide every time -- elfeed-show-mode resets
+             ;; the local var between previews of the *elfeed-entry* buffer.
              (setq-local tab-line-format nil))))
         ((or 'exit 'return)
          (maphash (lambda (buf orig)

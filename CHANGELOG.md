@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.18](https://github.com/chiply/.zetta.d/compare/v0.1.17...v0.1.18) (2026-06-14)
+
+
+### Bug Fixes
+
+* **consult:** hide the tab-line during buffer preview ([#56](https://github.com/chiply/.zetta.d/issues/56)) ([95bced6](https://github.com/chiply/.zetta.d/commit/95bced60461da35d883f310f7440587b9fbc62d1))
+
 ## [0.1.17](https://github.com/chiply/.zetta.d/compare/v0.1.16...v0.1.17) (2026-06-13)
 
 

@@ -326,6 +326,19 @@ minibuffer, and old entries are reachable via elfeed's own search."
 
 (defvar zetta-consult-elfeed--history nil)
 
+(defun zetta-elfeed--ensure-db ()
+  "Ensure the elfeed db is loaded AND its index is a usable avl-tree.
+`elfeed-db-ensure' only loads when `elfeed-db' is nil, so it cannot
+recover a db left half-loaded or with a clobbered global (index not an
+avl-tree) -- which makes `with-elfeed-db-visit' signal
+\"Wrong type argument: avl-tree-, nil\".  Force a fresh load from disk
+in that case so elfeed commands self-heal instead of erroring."
+  (require 'elfeed-db)
+  (elfeed-db-ensure)
+  (unless (avl-tree-p elfeed-db-index)
+    (setq elfeed-db nil)
+    (elfeed-db-load)))
+
 (defun zetta-consult-elfeed--candidates ()
   "Format the most recent db entries as propertized candidate strings."
   (let ((n 0) out)
@@ -378,7 +391,7 @@ Filters over title, feed and tags of the `zetta-consult-elfeed-limit'
 most recent entries; RET opens the selection in the show buffer."
   (interactive)
   (require 'elfeed)
-  (elfeed-db-ensure)
+  (zetta-elfeed--ensure-db)
   (let* ((cand (consult--read
                 (zetta-consult-elfeed--candidates)
                 :prompt "Elfeed entry: "

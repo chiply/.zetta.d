@@ -430,6 +430,73 @@ froze the picker -- especially the first render, which sets up
          (entry (and cand (get-text-property 0 'zetta-elfeed-entry cand))))
     (when entry (elfeed-show-entry entry))))
 
+;;;; Prune old entries to keep the db (and its saves) small
+;; `elfeed-db-save' serializes the WHOLE index with one synchronous `prin1';
+;; its cost scales with entry count, so a 50k-entry db freezes Emacs for
+;; seconds on every save.  Dropping old, already-read entries shrinks the
+;; index and shortens that freeze proportionally.  Fever resync won't bring
+;; old read entries back (the server only sends recent/unread), so this is
+;; safe for an elfeed-protocol setup.
+
+(defcustom zetta-elfeed-prune-keep-months 6
+  "`zetta-elfeed-prune' removes read entries older than this many months.
+Unread and protected entries (`zetta-elfeed-prune-protect-tags') are kept."
+  :type 'integer :group 'zetta)
+
+(defvar zetta-elfeed-prune-protect-tags '(unread starred important)
+  "Entries carrying any of these tags are never removed by `zetta-elfeed-prune'.")
+
+(defun zetta-elfeed-prune--victims (cutoff)
+  "Collect read, unprotected entries older than CUTOFF (a `float-time').
+Gathers into a list first -- never mutates the index mid-traversal."
+  (let (out)
+    (with-elfeed-db-visit (entry _feed)
+      (when (< (elfeed-entry-date entry) cutoff)
+        (unless (seq-some (lambda (tag) (memq tag (elfeed-entry-tags entry)))
+                          zetta-elfeed-prune-protect-tags)
+          (push entry out))))
+    out))
+
+(defun zetta-elfeed-prune (&optional months)
+  "Remove old, already-read entries to shrink the elfeed db and speed saves.
+Removes entries older than MONTHS (prefix arg; default
+`zetta-elfeed-prune-keep-months') that are read and not tagged in
+`zetta-elfeed-prune-protect-tags'.  Backs up the index to index.bak first,
+then removes from the in-memory db, runs `elfeed-db-gc' to reclaim content,
+and saves.  Fever resync will not re-add old read entries.
+
+To restore: copy index.bak over index in `elfeed-db-directory' and restart."
+  (interactive (list (and current-prefix-arg
+                          (prefix-numeric-value current-prefix-arg))))
+  (require 'elfeed)
+  (zetta-elfeed--ensure-db)
+  (let* ((months (or months zetta-elfeed-prune-keep-months))
+         (cutoff (- (float-time) (* months 30 24 60 60)))
+         (total (hash-table-count elfeed-db-entries))
+         (victims (zetta-elfeed-prune--victims cutoff))
+         (n (length victims)))
+    (cond
+     ((zerop n)
+      (message "elfeed-prune: nothing to remove (0 read entries older than %d months)"
+               months))
+     ((yes-or-no-p
+       (format "elfeed-prune: remove %d of %d entries (read, older than %d months)? "
+               n total months))
+      (let ((backup (expand-file-name "index.bak" elfeed-db-directory)))
+        (copy-file (expand-file-name "index" elfeed-db-directory) backup t)
+        (message "elfeed-prune: backed up index -> %s" backup))
+      (dolist (entry victims)
+        (let ((id (elfeed-entry-id entry)))
+          (avl-tree-delete elfeed-db-index id)
+          (remhash id elfeed-db-entries)))
+      (message "elfeed-prune: removed %d entries; running gc + save..." n)
+      (elfeed-db-gc)
+      (let ((t0 (float-time)))
+        (elfeed-db-save)
+        (message "elfeed-prune: done -- %d -> %d entries; db-save now %.2fs"
+                 total (hash-table-count elfeed-db-entries)
+                 (- (float-time) t0)))))))
+
 ;;;; Background auto-update (mu4e-style)
 ;; Incremental pulls in the background, so opening elfeed shows fresh
 ;; entries without a foreground update.  The network side is async curl;

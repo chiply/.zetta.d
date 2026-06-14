@@ -57,36 +57,45 @@
   ;; `consult--buffer-preview' backs consult-buffer, consult-project-buffer
   ;; AND `zetta-consult-elfeed' (which reuses it), so one wrapper covers
   ;; them all.
-  (defun zetta--consult-preview-hide-tabline (state-fn)
-    "Wrap a consult buffer-preview STATE-FN to hide previewed buffers' tab-line.
-On `preview' the shown buffer's `tab-line-format' is set nil (hiding the
-tab-line); on `exit'/`return' every buffer touched this session is
-restored to its prior value."
-    (let ((saved (make-hash-table :test 'eq)))
-      (lambda (action cand)
-        (prog1 (funcall state-fn action cand)
-          (pcase action
-            ('preview
-             (when-let* ((buf (and cand (get-buffer cand)))
-                         ((buffer-live-p buf))
-                         ((not (gethash buf saved))))
-               (with-current-buffer buf
-                 ;; `t'-tagged cons = had a buffer-local value to restore;
-                 ;; `global' = was not buffer-local (kill on restore).
-                 (puthash buf (if (local-variable-p 'tab-line-format)
-                                  (cons t tab-line-format)
-                                'global)
-                          saved)
-                 (setq-local tab-line-format nil))))
-            ((or 'exit 'return)
-             (maphash (lambda (buf orig)
-                        (when (buffer-live-p buf)
-                          (with-current-buffer buf
-                            (if (eq orig 'global)
-                                (kill-local-variable 'tab-line-format)
-                              (setq-local tab-line-format (cdr orig))))))
+  ;; NB: split into a wrapper-maker + a plain helper, joined with
+  ;; `apply-partially', rather than returning a lambda that closes over
+  ;; STATE-FN.  A closure would need this file to be loaded lexically; if
+  ;; anything ever (re)defines this in a dynamic-binding context, that
+  ;; closure's STATE-FN is void and consult's state call -- which fires on
+  ;; `setup' the instant the picker opens -- errors ("void-variable
+  ;; state-fn") and hangs.  `apply-partially' is defined lexically in
+  ;; subr.el, so the partial it returns captures STATE-FN/SAVED correctly
+  ;; no matter how THIS file was loaded.
+  (defun zetta--consult-preview-hide-tabline-1 (state-fn saved action cand)
+    "Run consult STATE-FN, hiding/restoring previewed buffers' tab-line.
+SAVED is a hash table tracking touched buffers' prior `tab-line-format'."
+    (prog1 (funcall state-fn action cand)
+      (pcase action
+        ('preview
+         (when-let* ((buf (and cand (get-buffer cand)))
+                     ((buffer-live-p buf))
+                     ((not (gethash buf saved))))
+           (with-current-buffer buf
+             ;; `t'-tagged cons = had a buffer-local value to restore;
+             ;; `global' = was not buffer-local (kill on restore).
+             (puthash buf (if (local-variable-p 'tab-line-format)
+                              (cons t tab-line-format)
+                            'global)
                       saved)
-             (clrhash saved)))))))
+             (setq-local tab-line-format nil))))
+        ((or 'exit 'return)
+         (maphash (lambda (buf orig)
+                    (when (buffer-live-p buf)
+                      (with-current-buffer buf
+                        (if (eq orig 'global)
+                            (kill-local-variable 'tab-line-format)
+                          (setq-local tab-line-format (cdr orig))))))
+                  saved)
+         (clrhash saved)))))
+  (defun zetta--consult-preview-hide-tabline (state-fn)
+    "Wrap consult buffer-preview STATE-FN to hide previewed buffers' tab-line."
+    (apply-partially #'zetta--consult-preview-hide-tabline-1
+                     state-fn (make-hash-table :test 'eq)))
   (advice-add 'consult--buffer-preview :filter-return
               #'zetta--consult-preview-hide-tabline)
 

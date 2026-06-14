@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.19](https://github.com/chiply/.zetta.d/compare/v0.1.18...v0.1.19) (2026-06-14)
+
+
+### Bug Fixes
+
+* **elfeed:** manual preview for zetta-consult-elfeed to stop the freeze ([#58](https://github.com/chiply/.zetta.d/issues/58)) ([aae5188](https://github.com/chiply/.zetta.d/commit/aae51889065d438e1be051459b80e50d95de431f))
+* **svg-margin:** don't abort compilation when the package isn't built yet ([#59](https://github.com/chiply/.zetta.d/issues/59)) ([562e123](https://github.com/chiply/.zetta.d/commit/562e12394b1ca7465ee799204a99910109c50109))
+
 ## [0.1.18](https://github.com/chiply/.zetta.d/compare/v0.1.17...v0.1.18) (2026-06-14)
 
 

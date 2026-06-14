@@ -386,9 +386,16 @@ for every candidate the cursor crosses."
         (funcall preview action nil)))))
 
 (defun zetta-consult-elfeed ()
-  "Search recent elfeed entries with live preview (a la consult-mu).
+  "Search recent elfeed entries with preview (a la consult-mu).
 Filters over title, feed and tags of the `zetta-consult-elfeed-limit'
-most recent entries; RET opens the selection in the show buffer."
+most recent entries; RET opens the selection in the show buffer.
+
+Preview is MANUAL (press \\`C-=' to preview the current candidate),
+matching the other heavy consult commands: each preview renders a full
+elfeed entry (shr/HTML, ~0.2s+), so auto-previewing on every keystroke
+froze the picker -- especially the first render, which sets up
+`elfeed-show-mode'.  For preview-while-browsing instead, set
+`:preview-key' to e.g. \\='(:debounce 0.3 any)."
   (interactive)
   (require 'elfeed)
   (zetta-elfeed--ensure-db)
@@ -398,6 +405,7 @@ most recent entries; RET opens the selection in the show buffer."
                 :category 'elfeed-entry
                 :require-match t
                 :sort nil
+                :preview-key "C-="
                 :lookup #'consult--lookup-member
                 :state (zetta-consult-elfeed--state)
                 :history 'zetta-consult-elfeed--history))

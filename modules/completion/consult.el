@@ -74,6 +74,17 @@
   ;; state-fn") and hangs.  `apply-partially' is defined lexically in
   ;; subr.el, so the partial it returns captures STATE-FN/SAVED correctly
   ;; no matter how THIS file was loaded.
+  (defun zetta--consult-preview-keep-tabline-p (buf)
+    "Non-nil when BUF's tab-line should STAY (and show the preview), not hide.
+`zetta-consult-elfeed' reuses the single *elfeed-entry* buffer, so its
+tab-line is stable -- same buffer, fixed height, no accumulation (consult
+previews with `norecord') -- and can show the previewed entry as the
+selected tab instead of being hidden.  Gated on the user toggle
+`zetta-consult-elfeed-keep-tab-line' so it can be A/B'd against the hide;
+scoped to elfeed-show buffers so consult-buffer's churnier preview (a
+different buffer per candidate) still hides cleanly."
+    (and (bound-and-true-p zetta-consult-elfeed-keep-tab-line)
+         (eq (buffer-local-value 'major-mode buf) 'elfeed-show-mode)))
   (defun zetta--consult-preview-hide-tabline-1 (state-fn saved action cand)
     "Run consult STATE-FN, hiding/restoring previewed buffers' tab-line.
 SAVED is a hash table tracking touched buffers' prior `tab-line-format'."
@@ -81,7 +92,8 @@ SAVED is a hash table tracking touched buffers' prior `tab-line-format'."
       (pcase action
         ('preview
          (when-let* ((buf (and cand (get-buffer cand)))
-                     ((buffer-live-p buf)))
+                     ((buffer-live-p buf))
+                     ((not (zetta--consult-preview-keep-tabline-p buf))))
            (with-current-buffer buf
              ;; Record the original ONCE (don't clobber it on re-preview):
              ;; `t'-tagged cons = had a buffer-local value to restore;

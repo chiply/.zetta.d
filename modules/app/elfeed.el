@@ -376,23 +376,41 @@ in that case so elfeed commands self-heal instead of erroring."
           (elfeed-db-return))))
     (nreverse out)))
 
+(defun zetta-consult-elfeed--show (entry)
+  "Render ENTRY in *elfeed-entry* for PREVIEW, without re-running the mode.
+Return the buffer (so the consult preview can display it).
+
+`elfeed-show-entry' calls `elfeed-show-mode' on EVERY invocation, and that
+runs `kill-all-local-variables', which strips `tab-line-format'.  After the
+first preview *elfeed-entry* is already on screen WITH its tab-line, so
+re-running the mode strips the tab-line on the live buffer; the heavy
+`elfeed-show-refresh' that follows gives redisplay a chance to paint the
+stripped state, and `global-tab-line-mode' restores it a moment later --
+i.e. the tab-line flashes once per candidate (visible when the tab-line is
+kept, `zetta-consult-elfeed-keep-tab-line').  Reuse the live elfeed-show
+buffer in place, running the major mode only when it is not already active,
+so the tab-line is never stripped between previews.
+
+Also bypasses `elfeed-show-entry' (and so its `:after' advice -- org-remark
+auto-notes), which we do not want firing for every candidate the cursor
+crosses anyway."
+  (let ((buff (get-buffer-create "*elfeed-entry*")))
+    (with-current-buffer buff
+      (unless (derived-mode-p 'elfeed-show-mode)
+        (elfeed-show-mode))
+      (setq elfeed-show-entry entry)
+      (elfeed-show-refresh))
+    buff))
+
 (defun zetta-consult-elfeed--state ()
-  "Preview state function: render the candidate entry in *elfeed-entry*.
-org-remark's elfeed wiring (an :after advice on `elfeed-show-entry')
-is suppressed during previews -- it would look up/load a notes file
-for every candidate the cursor crosses."
+  "Preview state function: render the candidate entry in *elfeed-entry*."
   (let ((preview (consult--buffer-preview)))
     (lambda (action cand)
       (if (eq action 'preview)
           (funcall preview 'preview
                    (when-let* ((entry (and cand (get-text-property
                                                  0 'zetta-elfeed-entry cand))))
-                     (let ((elfeed-show-entry-switch #'identity))
-                       (if (fboundp 'org-remark-auto-on)
-                           (cl-letf (((symbol-function 'org-remark-auto-on)
-                                      #'ignore))
-                             (ignore-errors (elfeed-show-entry entry)))
-                         (ignore-errors (elfeed-show-entry entry))))))
+                     (ignore-errors (zetta-consult-elfeed--show entry))))
         (funcall preview action nil)))))
 
 (defun zetta-consult-elfeed ()

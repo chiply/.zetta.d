@@ -46,6 +46,12 @@
   :commands elfeed
   :ensure t
   :config
+  ;; Cap the search buffer at 500 entries (elfeed's `#N' filter limit).
+  ;; The default "@6-months-ago +unread" yields ~6000 entries, and elfeed
+  ;; renders ALL matching entries -- ~380ms/refresh, most of it drawing rows.
+  ;; Capping cuts every refresh/filter/live-filter to a fraction; raise the
+  ;; number or drop "#500" in a live filter to see more.
+  (setq-default elfeed-search-filter "@6-months-ago +unread #500")
   (setq elfeed-use-curl t)
   (elfeed-set-timeout 36000)
   (setq elfeed-curl-extra-arguments '("--insecure"))

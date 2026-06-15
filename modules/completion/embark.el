@@ -69,6 +69,43 @@ targets."
   (advice-add 'embark--format-targets :around
               #'zetta-embark--full-minibuffer-target)
 
+  ;; In a file-completion minibuffer, also offer the candidate FILENAME's
+  ;; subwords as cyclable `identifier' targets, so `embark-act' can step
+  ;; file -> "config" -> "utils" -> ... like the at-point types you get in a
+  ;; regular buffer (dired etc.).  `embark-act' uses only the FIRST finder that
+  ;; returns in a minibuffer, so a new finder can't add targets; instead append
+  ;; to the one that wins (the vertico candidate finder) via `:filter-return',
+  ;; reusing embark's already-correct (directory-aware) file target as the
+  ;; first/default entry.
+  (defcustom zetta-embark-file-subword-targets t
+    "When non-nil, `embark-act' in a file minibuffer also offers the candidate's
+filename subwords as cyclable `identifier' targets."
+    :type 'boolean :group 'zetta)
+
+  (defun zetta-embark--append-file-subwords (target)
+    "Append filename-subword `identifier' targets to a file candidate TARGET.
+In a file-completion minibuffer return a LIST -- TARGET first (so the file
+stays the default), then one `identifier' target per >=2-char filename subword
+-- else TARGET unchanged."
+    (if (and zetta-embark-file-subword-targets
+             (consp target)
+             (minibufferp) minibuffer-completing-file-name)
+        (let* ((tb (cdr target))
+               (path (if (consp tb) (car tb) tb))
+               (base (and (stringp path)
+                          (file-name-nondirectory (directory-file-name path))))
+               (subs (and base
+                          (seq-uniq (seq-filter (lambda (s) (>= (length s) 2))
+                                                (split-string base "[^[:alnum:]]+" t))))))
+          (if subs
+              (cons target (mapcar (lambda (s) (cons 'identifier s)) subs))
+            target))
+      target))
+
+  (with-eval-after-load 'vertico
+    (advice-add 'embark--vertico-selected :filter-return
+                #'zetta-embark--append-file-subwords))
+
   (defun embark-hide-which-key-indicator (fn &rest args)
     "Hide the which-key indicator immediately when using the
 completing-read prompter."

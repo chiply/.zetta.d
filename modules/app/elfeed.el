@@ -16,7 +16,11 @@
     (elfeed-search-toggle-all mytag)))
 
 (use-package elfeed-protocol
-  :ensure (elfeed-protocol :host github :repo "fasheng/elfeed-protocol")
+  ;; Pinned to 1.0.0: first release supporting elfeed 4.0; feeds move from
+  ;; `elfeed-protocol-feeds' to `elfeed-feeds' (see ~/.private.el), and it
+  ;; integrates with elfeed-org automatically (saves/re-appends protocol
+  ;; feeds, tags org feeds `:no-update').
+  :ensure (elfeed-protocol :host github :repo "fasheng/elfeed-protocol" :ref "1.0.0")
   :after elfeed
   :demand t
   :config
@@ -44,7 +48,10 @@
 (use-package elfeed
   :after embark
   :commands elfeed
-  :ensure t
+  ;; Pinned to 4.0.x (elpaca otherwise tracks the old `master'; 4.0 lives on
+  ;; tag 4.0.1 / branch `main').  4.0 brings native search-redraw debouncing
+  ;; (`elfeed-search-update-delay'), which supersedes our manual debounce.
+  :ensure (elfeed :ref "4.0.1")
   :config
   ;; Cap the search buffer at 500 entries (elfeed's `#N' filter limit).
   ;; The default "@6-months-ago +unread" yields ~6000 entries, and elfeed

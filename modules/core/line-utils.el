@@ -884,11 +884,41 @@ recolours it via `zetta-tab-bar-svg-icon-color', so the raw glyph is returned."
      :menu (list (cons "Describe bindings" #'describe-bindings)
                  (cons "Command (M-x)" #'execute-extended-command)))))
 
+(defun zetta-tab-bar--left-of-clock-chars ()
+  "How many characters a line-3 LEFT segment may use before the centred clock.
+Derived from the LIVE frame width and the tab bar's own geometry, so it
+adapts to any screen width: the clock spans all three rows, centred at
+WIDTH/2 with radius ~0.86*(3*LH)/2; the left content starts past the square
+masthead (width = bar height); inline-segment rows lay out at
+`zetta-tab-bar-svg-char-advance' px/char.  These mirror `svg-line''s internal
+geometry -- keep in sync if its clock-radius/masthead formulas change."
+  (let* ((width (frame-inner-width))
+         (fz   (or (bound-and-true-p zetta-tab-bar-svg-font-size) 15))
+         (lp   (or (bound-and-true-p zetta-tab-bar-svg-line-pad) 4))
+         (lh   (+ fz lp))
+         (rows 3)
+         (height (* lh rows))                              ; full bar height
+         (r    (round (* 0.86 (/ (float height) 2))))      ; clock radius
+         (masthead (if (bound-and-true-p zetta-tab-bar-svg-icon) height 0))
+         (gap  (* 2 fz))                                    ; breathing room
+         (ca   (max 1 (or (bound-and-true-p zetta-tab-bar-svg-char-advance) 8)))
+         (avail (- (/ width 2) r masthead gap)))
+    (max 0 (floor avail ca))))
+
 (defun zetta-tab-bar-svg--spotify ()
-  "Clickable Spotify cluster (glyph + spot string): play/pause; transport menu."
+  "Clickable Spotify cluster (glyph + spot string): play/pause; transport menu.
+The track string is truncated so the cluster never reaches the centred clock,
+at any frame width (see `zetta-tab-bar--left-of-clock-chars')."
   (let* ((icon (ignore-errors (zetta-tab-bar-spotify-icon)))
          (txt  (zetta-tab-bar-spot-mode-line-string))
-         (label (concat (and icon (concat icon " ")) txt)))
+         (prefix (if icon (concat icon " ") ""))
+         (maxc (zetta-tab-bar--left-of-clock-chars))
+         (budget (- maxc (length prefix)))
+         (txt (cond
+               ((or (null txt) (<= (length txt) budget)) txt)
+               ((> budget 1) (concat (substring txt 0 (1- budget)) "…"))
+               (t "")))                                     ; no room -> icon only
+         (label (concat prefix txt)))
     (zetta-svg-seg
      label 'tb-spotify
      :help "Spotify"

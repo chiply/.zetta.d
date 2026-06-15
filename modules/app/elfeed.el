@@ -242,7 +242,13 @@ minibuffer with something like `exit-minibuffer'."
 (use-package elfeed-org
   :demand t
   :ensure t
-  :after elfeed org
+  ;; MUST load after elfeed-protocol: protocol 1.0 keeps the Fever feed in
+  ;; `elfeed-feeds' alongside elfeed-org's, via an advice on
+  ;; `rmh-elfeed-org-process' installed by `elfeed-protocol-enable'.  If
+  ;; `(elfeed-org)' runs first it clears `elfeed-feeds' (dropping the Fever
+  ;; feed) before that advice exists, so enable registers 0 protocol feeds and
+  ;; elfeed tries to curl `fever+https://…' directly ("Unsupported protocol").
+  :after elfeed org elfeed-protocol
   :config
   (setq rmh-elfeed-org-files
         (list

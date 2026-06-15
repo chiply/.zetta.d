@@ -55,6 +55,20 @@ targets."
           embark-highlight-indicator
           embark-isearch-highlight-indicator))
 
+  ;; Show the target TYPE (and any shadowed target types) in the minibuffer,
+  ;; the same as in a regular buffer.  `embark--format-targets' deliberately
+  ;; collapses to a bare "Act" when acting from a non-prompter minibuffer
+  ;; (hiding the type and the other cyclable types); neutralise just the one
+  ;; `minibufferp' check inside it so the minibuffer gets the full
+  ;; "Act on TYPE ‘TARGET’(other-types…)" indicator -- and so the extra types
+  ;; `embark-cycle' can reach become visible there too.
+  (defun zetta-embark--full-minibuffer-target (orig &rest args)
+    "Run ORIG `embark--format-targets' as if not in a minibuffer (full indicator)."
+    (cl-letf (((symbol-function 'minibufferp) #'ignore))
+      (apply orig args)))
+  (advice-add 'embark--format-targets :around
+              #'zetta-embark--full-minibuffer-target)
+
   (defun embark-hide-which-key-indicator (fn &rest args)
     "Hide the which-key indicator immediately when using the
 completing-read prompter."

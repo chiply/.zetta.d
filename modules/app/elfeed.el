@@ -570,7 +570,7 @@ To restore: copy index.bak over index in `elfeed-db-directory' and restart."
 ;; persist on the next idle after each pull (the ~0.6s save then never lands
 ;; on active work; a clean exit also saves via elfeed's `kill-emacs-hook').
 
-(defcustom zetta-elfeed-auto-update-interval (* 5 60)
+(defcustom zetta-elfeed-auto-update-interval (* 15 60)
   "Seconds between background incremental elfeed updates."
   :type 'integer :group 'zetta)
 

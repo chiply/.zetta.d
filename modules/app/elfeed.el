@@ -246,6 +246,32 @@ minibuffer with something like `exit-minibuffer'."
   :config
   (progn
     (elfeed-score-enable)
+    ;; FREEZE FIX: elfeed-protocol/Fever fires `elfeed-update-hooks' once per
+    ;; protocol sub-feed, each with the curl queue already drained, so
+    ;; elfeed-score's `elfeed-score-rule-stats-update-hook' (guarded only by
+    ;; (= (elfeed-queue-count-total) 0)) passes every time and writes the WHOLE
+    ;; rule-stats file once per feed -- ~300 full-file writes (each a visible
+    ;; "Wrote .../tmpXXXX") per sync, a multi-second freeze.  Replace that
+    ;; per-feed write with ONE debounced idle write per sync, disable the
+    ;; mid-scoring periodic flush (every 64 matches -- same whole-file write on
+    ;; a different trigger), and persist once more on exit.
+    (remove-hook 'elfeed-update-hooks #'elfeed-score-rule-stats-update-hook)
+    (setq elfeed-score-rule-stats-dirty-threshold nil)
+    (defun zetta-elfeed-score-stats-write ()
+      "Persist elfeed-score rule stats now, if enabled."
+      (when (and (bound-and-true-p elfeed-score-rule-stats-file)
+                 (fboundp 'elfeed-score-rule-stats-write))
+        (ignore-errors
+          (elfeed-score-rule-stats-write elfeed-score-rule-stats-file))))
+    (defvar zetta-elfeed-score-stats--timer nil)
+    (defun zetta-elfeed-score-stats-write-debounced (&rest _)
+      "Persist rule stats once, after update activity settles."
+      (when (timerp zetta-elfeed-score-stats--timer)
+        (cancel-timer zetta-elfeed-score-stats--timer))
+      (setq zetta-elfeed-score-stats--timer
+            (run-with-idle-timer 3 nil #'zetta-elfeed-score-stats-write)))
+    (add-hook 'elfeed-update-hooks #'zetta-elfeed-score-stats-write-debounced)
+    (add-hook 'kill-emacs-hook #'zetta-elfeed-score-stats-write)
     (define-key elfeed-search-mode-map "=" elfeed-score-map))
   (setq elfeed-search-print-entry-function #'elfeed-score-print-entry)
   ;; TODO add as a hook?

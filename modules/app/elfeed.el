@@ -547,29 +547,52 @@ To restore: copy index.bak over index in `elfeed-db-directory' and restart."
 (with-eval-after-load 'elfeed-search
   (setq elfeed-search-update-delay 0.5))
 
-;;;; Background auto-update (mu4e-style)
-;; Incremental pulls in the background, so opening elfeed shows fresh
-;; entries without a foreground update.  The network side is async curl;
-;; only parsing runs on the main thread, one maxsize-entry batch at a
-;; time.  The FIRST run also loads elfeed and its db (the one-time
-;; multi-second index load for a 50k-entry db), so it waits for genuine
-;; idle rather than firing mid-typing.
+;;;; Background auto-update (mu4e-style, non-blocking)
+;; Pull incrementally in the background so the tab-bar unread count + the
+;; new-items (+N) counter stay fresh without opening elfeed.  Use elfeed
+;; 4.0's `elfeed-update-background': unlike `elfeed-update' it skips the
+;; INITIAL forced search refresh and the synchronous end-of-update
+;; `elfeed-db-save', so it neither jumps nor hangs a visible *elfeed-search*.
+;; (elfeed-protocol's fetcher still fires `elfeed-update-hooks' per sub-feed,
+;; but those are all debounced now -- 4.0 native search refresh + our
+;; stats-write / +N-promote / unread-recount -- so they coalesce into one
+;; cheap refresh.)  New entries are counted live via `elfeed-new-entry-hook'.
+;;
+;; The FIRST run loads the ~48M db index (a one-time multi-second BLOCKING
+;; read), so it waits for a short idle after startup rather than firing
+;; mid-typing.  Because `elfeed-update-background' does not save the db, we
+;; persist on the next idle after each pull (the ~0.6s save then never lands
+;; on active work; a clean exit also saves via elfeed's `kill-emacs-hook').
 
-(defvar zetta-elfeed-auto-update-interval (* 15 60)
-  "Seconds between background incremental elfeed updates.")
+(defcustom zetta-elfeed-auto-update-interval (* 15 60)
+  "Seconds between background incremental elfeed updates."
+  :type 'integer :group 'zetta)
+
+(defcustom zetta-elfeed-auto-update-initial-idle 20
+  "Idle seconds after startup before the FIRST background elfeed update.
+Deferred so the one-time db load doesn't run during active startup."
+  :type 'integer :group 'zetta)
 
 (defvar zetta-elfeed--auto-update-timer nil
-  "Active timer for `zetta-elfeed--auto-update', or nil.")
+  "Active repeating timer for `zetta-elfeed--auto-update', or nil.")
 
 (defun zetta-elfeed--auto-update ()
-  "Incrementally update all elfeed feeds in the background."
+  "Pull all feeds in the background without disturbing visible elfeed windows.
+Indicators refresh via the (debounced) update hooks; the db is persisted on
+the next idle, since `elfeed-update-background' does not save it itself."
   (require 'elfeed)
-  (elfeed-update))
+  (cond
+   ((fboundp 'elfeed-update-background)
+    (elfeed-update-background)
+    (run-with-idle-timer
+     90 nil
+     (lambda () (when (fboundp 'elfeed-db-save) (ignore-errors (elfeed-db-save))))))
+   (t (elfeed-update))))                 ; pre-4.0 fallback
 
 (unless zetta-elfeed--auto-update-timer
   (setq zetta-elfeed--auto-update-timer
         (run-with-idle-timer
-         120 nil
+         zetta-elfeed-auto-update-initial-idle nil
          (lambda ()
            (zetta-elfeed--auto-update)
            (setq zetta-elfeed--auto-update-timer

@@ -834,6 +834,22 @@ string like \"{ 1' }\"), not a variable -- so it must be called."
   (and (featurep 'nerd-icons)
        (zetta-line--glyph (ignore-errors (nerd-icons-sucicon "nf-custom-emacs")))))
 
+(defun zetta-tab-bar-mode-icon ()
+  "Nerd-Font glyph for the (context) buffer's major mode, for the masthead.
+Reflects the buffer the tab bar reports on -- the minibuffer entry buffer
+during completion/preview (`zetta-tab-bar--context-buffer'), else the current
+buffer -- so it does not flicker as previews swap buffers.  The masthead
+recolours it via `zetta-tab-bar-svg-icon-color', so the raw glyph is returned."
+  (when (featurep 'nerd-icons)
+    (let ((buf (or (and (fboundp 'zetta-tab-bar--context-buffer)
+                        (zetta-tab-bar--context-buffer))
+                   (current-buffer))))
+      (with-current-buffer buf
+        (let ((g (ignore-errors (nerd-icons-icon-for-buffer))))
+          (and (stringp g)
+               (let ((s (substring-no-properties (string-trim g))))
+                 (and (> (length s) 0) s))))))))
+
 ;;; tab-bar interactive (svg-only) wrappers
 ;; ----------------------------------------------------------------
 ;; The base tab-bar segments above are shared with the *text* `tab-bar-format'

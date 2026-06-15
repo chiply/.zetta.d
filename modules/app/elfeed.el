@@ -536,37 +536,16 @@ To restore: copy index.bak over index in `elfeed-db-directory' and restart."
                  total (hash-table-count elfeed-db-entries)
                  (- (float-time) t0)))))))
 
-;;;; Debounce the search-buffer refresh during updates (THE freeze fix)
-;; `elfeed-search-mode' adds `elfeed-search-update' to `elfeed-update-hooks',
-;; which elfeed-protocol/Fever fires ONCE PER SUB-FEED.  Each call re-filters
-;; AND re-sorts the whole *elfeed-search* buffer; with ~6000 entries and a
-;; score-recomputing sort comparator (`elfeed-score-sort'), 150+ refreshes per
-;; sync = a multi-minute, 98%-CPU freeze (profiled: 155x elfeed-search-update =
-;; ~260s; the actual new-entry work was ~5s).  Replace the per-feed refresh
-;; with a single debounced one that fires after update activity settles.
-
-(defvar zetta-elfeed--search-update-timer nil)
-
-(defun zetta-elfeed--search-update-debounced (&rest _)
-  "Refresh *elfeed-search* once, shortly after update activity settles."
-  (when (timerp zetta-elfeed--search-update-timer)
-    (cancel-timer zetta-elfeed--search-update-timer))
-  (setq zetta-elfeed--search-update-timer
-        (run-with-idle-timer
-         0.5 nil
-         (lambda ()
-           (when (fboundp 'elfeed-search-update)
-             (ignore-errors (elfeed-search-update :force)))))))
-
-(defun zetta-elfeed--install-search-debounce ()
-  "Swap the per-feed `elfeed-search-update' hook for the debounced one.
-Runs from `elfeed-search-mode-hook' so it re-asserts after the mode body
-re-adds the stock hook each time elfeed-search is entered."
-  (remove-hook 'elfeed-update-hooks #'elfeed-search-update)
-  (add-hook 'elfeed-update-hooks #'zetta-elfeed--search-update-debounced))
-
+;;;; Search-buffer refresh during updates
+;; elfeed 4.0 debounces the per-update search refresh NATIVELY via
+;; `elfeed-search-update-delay' (it puts a debounced `elfeed-search--update-debounce'
+;; on `elfeed-update-hooks'), which supersedes the manual debounce we needed on
+;; 3.4.2.  Background: elfeed-protocol/Fever fires `elfeed-update-hooks' once per
+;; sub-feed, and without debouncing each fired a full re-filter+re-sort of the
+;; whole search buffer -- 150+ per sync, a multi-minute 98%-CPU freeze.  Just
+;; tune the native delay a touch tighter than the 1.0s default.
 (with-eval-after-load 'elfeed-search
-  (add-hook 'elfeed-search-mode-hook #'zetta-elfeed--install-search-debounce))
+  (setq elfeed-search-update-delay 0.5))
 
 ;;;; Background auto-update (mu4e-style)
 ;; Incremental pulls in the background, so opening elfeed shows fresh

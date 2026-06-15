@@ -564,7 +564,7 @@ To restore: copy index.bak over index in `elfeed-db-directory' and restart."
 ;; persist on the next idle after each pull (the ~0.6s save then never lands
 ;; on active work; a clean exit also saves via elfeed's `kill-emacs-hook').
 
-(defcustom zetta-elfeed-auto-update-interval (* 15 60)
+(defcustom zetta-elfeed-auto-update-interval (* 5 60)
   "Seconds between background incremental elfeed updates."
   :type 'integer :group 'zetta)
 
@@ -584,6 +584,9 @@ the next idle, since `elfeed-update-background' does not save it itself."
   (cond
    ((fboundp 'elfeed-update-background)
     (elfeed-update-background)
+    ;; Light the tab-bar "refreshing" (sync) glyph now -- it self-clears when
+    ;; the queue drains; force a redraw so it shows even while idle.
+    (force-mode-line-update t)
     (run-with-idle-timer
      90 nil
      (lambda () (when (fboundp 'elfeed-db-save) (ignore-errors (elfeed-db-save))))))

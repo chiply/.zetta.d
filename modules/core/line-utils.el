@@ -912,18 +912,27 @@ string like \"{ 1' }\"), not a variable -- so it must be called."
 Hidden until elfeed loads (the count cache is nil); the count comes from
 `zetta-tab-bar--elfeed-unread', recomputed off-render on elfeed's hooks."
   (when (numberp zetta-tab-bar--elfeed-unread)
-    (let* ((icon (and (featurep 'nerd-icons)
-                      (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-rss")))))
+    (let* ((refreshing (and (fboundp 'elfeed-queue-count-total)
+                            (ignore-errors (> (elfeed-queue-count-total) 0))))
+           ;; While a pull is in flight show a sync glyph instead of the rss
+           ;; glyph; `elfeed-queue-count-total' > 0 means curl fetches are
+           ;; active, so this self-clears when the pull drains.
+           (icon (and (featurep 'nerd-icons)
+                      (zetta-line--glyph
+                       (ignore-errors
+                         (nerd-icons-mdicon (if refreshing "nf-md-sync" "nf-md-rss"))))))
            (new zetta-tab-bar--elfeed-new-count)
            (label (concat (and icon (concat icon " "))
                           (number-to-string zetta-tab-bar--elfeed-unread)
                           (when (> new 0) (format " +%d" new)))))
       (zetta-svg-seg
        label 'tb-elfeed
-       :help (if (> new 0)
-                 (format "elfeed: %d unread (+%d new this pull)"
-                         zetta-tab-bar--elfeed-unread new)
-               (format "elfeed: %d unread" zetta-tab-bar--elfeed-unread))
+       :help (cond
+              (refreshing (format "elfeed: refreshing… (%d unread)"
+                                  zetta-tab-bar--elfeed-unread))
+              ((> new 0) (format "elfeed: %d unread (+%d new this pull)"
+                                 zetta-tab-bar--elfeed-unread new))
+              (t (format "elfeed: %d unread" zetta-tab-bar--elfeed-unread)))
        :action-help "open elfeed"
        :action (if (fboundp 'elfeed) #'elfeed #'ignore)
        :menu (delq nil

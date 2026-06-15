@@ -401,65 +401,203 @@ edit/execute from the menu."
                           out)))))))
         out))))
 
-(defcustom zetta-svg-margin-scroll-hide-delay 0.8
-  "Seconds the margin scrollbar thumb stays visible after scrolling."
+;;;; Scroll thumb -- window-anchored, pixel-smooth, synchronous
+;; A yascroll-style thumb in the right margin, done right.  The old version
+;; was a buffer-anchored `:background' provider rendered on svg-margin's 0.1s
+;; IDLE debounce, so during a continuous scroll it never re-rendered: the
+;; thumb (pinned to text) scrolled away and only snapped back on pause
+;; (hence the flash + no ultra-scroll response), and line-number math made it
+;; jitter and vary in height.  This is anchored to the WINDOW, recomputed from
+;; the live viewport and drawn SYNCHRONOUSLY on every scroll (no idle debounce
+;; -- tracks ultra-scroll, never flashes).  Position/size come from the
+;; viewport's CHAR-fraction (O(1), smooth); the top/bottom rows get a PARTIAL
+;; SVG fill for sub-line precision.  It re-composites visible lines from
+;; svg-margin's render cache, so providers never re-run while scrolling.
+
+(defcustom zetta-svg-margin-scroll-color "#7c828c"
+  "Colour of the margin scroll thumb." :type 'color :group 'zetta)
+(defcustom zetta-svg-margin-scroll-opacity 0.6
+  "Opacity (0..1) of the margin scroll thumb." :type 'number :group 'zetta)
+(defcustom zetta-svg-margin-scroll-width 0.55
+  "Thumb width: a fraction of the right margin when < 1, else pixels."
+  :type 'number :group 'zetta)
+(defcustom zetta-svg-margin-scroll-min-pixels 18
+  "Minimum thumb height in pixels." :type 'integer :group 'zetta)
+(defcustom zetta-svg-margin-scroll-hide-delay 1.0
+  "Seconds the thumb stays visible after scrolling stops."
   :type 'number :group 'zetta)
 
+(defvar-local zetta-svg-margin-scroll--ovs nil
+  "Thumb-only overlays created on the current tick.")
+(defvar-local zetta-svg-margin-scroll--saved nil
+  "Alist (CONTENT-OVERLAY . ORIG-BEFORE-STRING) composited onto this tick.")
 (defvar-local zetta-svg-margin-scroll--until nil
-  "Time until which the scrollbar thumb is shown, or nil.")
+  "Time until which the thumb is shown, or nil.")
+(defvar-local zetta-svg-margin-scroll--hide-timer nil)
 
-(defvar-local zetta-svg-margin-scroll--hide-timer nil
-  "Timer that refreshes the margin to hide the thumb after the delay.")
+(defun zetta-svg-margin-scroll--clear ()
+  "Undo this tick's thumb layer: restore composited overlays, delete ours."
+  (dolist (pair zetta-svg-margin-scroll--saved)
+    (when (overlayp (car pair))
+      (overlay-put (car pair) 'before-string (cdr pair))))
+  (setq zetta-svg-margin-scroll--saved nil)
+  (dolist (ov zetta-svg-margin-scroll--ovs)
+    (when (overlayp ov) (delete-overlay ov)))
+  (setq zetta-svg-margin-scroll--ovs nil))
 
-(defun zetta-svg-margin-scrollbar (buffer)
-  "Background highlight on the visible lines covered by the scrollbar thumb.
-The yascroll idea delivered through svg-margin's `:background' indicators:
-within the window's visible rows, the thumb's offset and size are
-proportional to the viewport's position in and coverage of the whole buffer.
-Emitted only while `zetta-svg-margin-scroll--until' is in the future (stamped
-by `zetta-svg-margin-scroll--on-scroll'), so it disappears on the refresh
-after `zetta-svg-margin-scroll-hide-delay'.  Backgrounds claim no indicator
-column, so the thumb tints the margin behind the icons without widening it."
-  (with-current-buffer buffer
-    (when (and zetta-svg-margin-scroll--until
-               (time-less-p nil zetta-svg-margin-scroll--until))
-      (when-let* ((win (get-buffer-window buffer)))
-        (let* ((total (save-restriction (widen)
-                                        (max 1 (line-number-at-pos (point-max)))))
-               (first (line-number-at-pos (window-start win) t))
-               (last (line-number-at-pos (window-end win t) t))
-               (visible (max 1 (1+ (- last first)))))
-          (when (> total visible)       ; buffer scrolls at all
-            (let* ((size (max 1 (round (* visible (/ (float visible) total)))))
-                   (frac (/ (float (1- first)) (max 1 (- total visible))))
-                   (start (+ first (round (* (min 1.0 frac) (- visible size)))))
-                   (face (if (facep 'yascroll:thumb-fringe)
-                             'yascroll:thumb-fringe 'shadow))
-                   out)
-              (dotimes (i size)
-                (push (list :line (+ start i) :background t
-                            :face face :opacity 0.45)
-                      out))
-              out)))))))
+(defun zetta-svg-margin-scroll--line-y (pos win)
+  "Top pixel Y of POS within WIN's body, or nil if POS is not visible."
+  (let ((v (pos-visible-in-window-p pos win t)))
+    (and v (nth 1 v))))
 
-(defun zetta-svg-margin-scroll--on-scroll (win _new-start)
-  "Show the scrollbar thumb for WIN's buffer and schedule its hiding.
-On `window-scroll-functions', which runs during redisplay -- so this only
-stamps the visibility deadline and (re)schedules timers; the rendering
-itself happens through svg-margin's debounced refresh."
-  (let ((buf (window-buffer win)))
+(defun zetta-svg-margin-scroll--rows (win start lh)
+  "Return (BOL Y0 Y1) per LOGICAL line WIN's thumb covers, from START.
+Each entry becomes ONE LH-tall (single screen row) margin image at a line's
+bol.  Margin images MUST be one screen row tall -- a taller one (e.g. a whole
+wrapped line) does not fit and Emacs falls back to rendering the overlay
+string INLINE, inserting whitespace into the buffer.  So each line contributes
+only its FIRST screen row; on wrapped lines the continuation rows stay unpainted
+\(a margin limitation), but the buffer is never disturbed.  The viewport's
+char-fraction is intersected with each first row for sub-line partial fills."
+  (let ((total (- (point-max) (point-min)))
+        (track (window-body-height win t)))
+    (when (> total 0)
+      (let (lines (end start))
+        (save-excursion
+          (goto-char start)
+          (catch 'done
+            (while (not (eobp))
+              (let* ((bol (line-beginning-position))
+                     (y (zetta-svg-margin-scroll--line-y bol win)))
+                (when (or (null y) (>= y track)) (throw 'done nil))
+                (push (cons bol (float y)) lines)
+                (forward-line 1)
+                (setq end (point))
+                (when (eobp) (throw 'done nil))))))
+        (setq lines (nreverse lines))
+        (let* ((tp (* track (/ (float (- start (point-min))) total)))
+               (bp (* track (/ (float (- end (point-min))) total))))
+          (when (< (- bp tp) zetta-svg-margin-scroll-min-pixels)
+            (let ((g (/ (- zetta-svg-margin-scroll-min-pixels (- bp tp)) 2.0)))
+              (setq tp (- tp g) bp (+ bp g))))
+          (setq tp (max 0.0 (min tp (float track)))
+                bp (max 0.0 (min bp (float track))))
+          (when (> bp (+ tp 0.5))
+            (let (rows)
+              (dolist (ln lines)
+                (let* ((bol (car ln)) (ytop (cdr ln))
+                       (ybot (+ ytop lh))            ; first screen row only
+                       (o0 (max tp (max 0.0 ytop))) (o1 (min bp ybot)))
+                  (when (> o1 o0)
+                    (push (list bol (- o0 ytop) (- o1 ytop)) rows))))
+              (nreverse rows))))))))
+
+(defun zetta-svg-margin-scroll--image (rcols cw rh y0 y1 right-packed)
+  "SVG for one thumb row: a partial fill (Y0..Y1) plus cached RIGHT-PACKED icons."
+  (let* ((w (max 1 (* rcols cw)))
+         (h (max 1 (round rh)))
+         (svg (svg-create w h))
+         (tw (if (>= zetta-svg-margin-scroll-width 1)
+                 (round zetta-svg-margin-scroll-width)
+               (max 2 (round (* w zetta-svg-margin-scroll-width)))))
+         (tx (max 0 (- w tw)))
+         (fy (max 0 (round y0)))
+         (fh (max 1 (round (- y1 y0)))))
+    ;; Square corners: each line is a separate image, so rounding every row
+    ;; would pinch the bar into a stack of pills.  A flat bar reads as one
+    ;; continuous thumb.
+    (svg-rectangle svg tx fy tw fh
+                   :fill (if (fboundp 'svg-margin--color)
+                             (svg-margin--color zetta-svg-margin-scroll-color)
+                           zetta-svg-margin-scroll-color)
+                   :fill-opacity zetta-svg-margin-scroll-opacity)
+    (dolist (cell right-packed)
+      (let ((col (plist-get cell :column)) (ind (plist-get cell :indicator)))
+        (when (and col (fboundp 'svg-margin--draw))
+          (ignore-errors (svg-margin--draw ind svg (* col cw) 0 cw h)))))
+    (svg-image svg :ascent 'center :scale 1.0)))
+
+(defun zetta-svg-margin-scroll--right-overlay (pos)
+  "The svg-margin RIGHT-margin content overlay at POS, if any."
+  (cl-find-if
+   (lambda (o)
+     (and (overlay-get o 'svg-margin)
+          (let ((bs (overlay-get o 'before-string)))
+            (and (stringp bs) (> (length bs) 0)
+                 (let ((d (get-text-property 0 'display bs)))
+                   (and (consp d) (consp (car d))
+                        (eq (cadr (car d)) 'right-margin)))))))
+   (overlays-in pos pos)))
+
+(defun zetta-svg-margin-scroll--update (win start)
+  "Redraw WIN's scroll thumb now (window-anchored, synchronous)."
+  (when (window-live-p win)
+    (let ((buf (window-buffer win)))
+      (when (buffer-local-value 'svg-margin-mode buf)
+        (with-current-buffer buf
+          (zetta-svg-margin-scroll--clear)
+          (when (and zetta-svg-margin-scroll--until
+                     (time-less-p nil zetta-svg-margin-scroll--until)
+                     (bound-and-true-p svg-margin--render-cache))
+            (let* ((cache svg-margin--render-cache)
+                   (content (plist-get cache :content))
+                   (cw (or (plist-get cache :cw) (frame-char-width)))
+                   (lh (or (plist-get cache :lh) (default-line-height)))
+                   (rcols (max 1 (or (plist-get cache :right) 2)))
+                   (rows (zetta-svg-margin-scroll--rows
+                          win (or start (window-start win)) lh)))
+              (dolist (r rows)
+                (cl-destructuring-bind (pos y0 y1) r
+                  (let* ((cell (and content (gethash pos content)))
+                         (right (and (consp cell) (cdr cell)))
+                         (img (zetta-svg-margin-scroll--image rcols cw lh y0 y1 right))
+                         (str (propertize " " 'display
+                                          (list '(margin right-margin) img)
+                                          'face 'svg-margin-cell))
+                         (ex (and right (zetta-svg-margin-scroll--right-overlay pos))))
+                    (if ex
+                        (progn
+                          (push (cons ex (overlay-get ex 'before-string))
+                                zetta-svg-margin-scroll--saved)
+                          (overlay-put ex 'before-string str))
+                      (let ((ov (make-overlay pos pos)))
+                        (overlay-put ov 'svg-margin-scroll t)
+                        (overlay-put ov 'before-string str)
+                        (push ov zetta-svg-margin-scroll--ovs)))))))))))))
+
+(defun zetta-svg-margin-scroll--hide (buf)
+  "Drop the thumb in BUF after the hide delay."
+  (when (buffer-live-p buf)
+    (with-current-buffer buf
+      (setq zetta-svg-margin-scroll--until nil)
+      (zetta-svg-margin-scroll--clear))))
+
+(defvar zetta-svg-margin-scroll--last (make-hash-table :test 'eq :weakness 'key)
+  "Window -> (WINDOW-START . VSCROLL) at the last check, to detect scrolling.")
+
+(defun zetta-svg-margin-scroll--post-command ()
+  "Show + redraw the thumb whenever the selected window's viewport moved.
+Keyed off `window-start'/`window-vscroll', so it catches keyboard, mouse-wheel,
+pixel- and ultra-scroll alike -- the old `window-scroll-functions' trigger
+missed pure-pixel and some wheel scrolls (so the thumb only appeared after a
+big jump, and vanished at the bottom).  Runs post-redisplay, so
+`pos-visible-in-window-p'/overlay edits here are safe."
+  (let* ((win (selected-window))
+         (buf (window-buffer win)))
     (when (buffer-local-value 'svg-margin-mode buf)
-      (with-current-buffer buf
-        (setq zetta-svg-margin-scroll--until
-              (time-add nil zetta-svg-margin-scroll-hide-delay))
-        (when (timerp zetta-svg-margin-scroll--hide-timer)
-          (cancel-timer zetta-svg-margin-scroll--hide-timer))
-        (setq zetta-svg-margin-scroll--hide-timer
-              (run-at-time (+ zetta-svg-margin-scroll-hide-delay 0.05) nil
-                           (lambda (b)
-                             (when (buffer-live-p b) (svg-margin-refresh b)))
-                           buf))
-        (svg-margin-refresh buf)))))
+      (let ((cur (cons (window-start win) (window-vscroll win t)))
+            (prev (gethash win zetta-svg-margin-scroll--last)))
+        (unless (equal cur prev)
+          (puthash win cur zetta-svg-margin-scroll--last)
+          (with-current-buffer buf
+            (setq zetta-svg-margin-scroll--until
+                  (time-add nil zetta-svg-margin-scroll-hide-delay))
+            (when (timerp zetta-svg-margin-scroll--hide-timer)
+              (cancel-timer zetta-svg-margin-scroll--hide-timer))
+            (setq zetta-svg-margin-scroll--hide-timer
+                  (run-at-time (+ zetta-svg-margin-scroll-hide-delay 0.02) nil
+                               #'zetta-svg-margin-scroll--hide buf)))
+          (zetta-svg-margin-scroll--update win (window-start win)))))))
 
 (defvar zetta-svg-margin--last-symbol nil
   "Last symbol at point, to refresh only when it changes.")
@@ -554,7 +692,9 @@ the recompute yields the same hunks we skip, breaking the cycle."
 (svg-margin-register-provider 'long-lines   #'zetta-svg-margin-long-lines   :side 'right :priority 3)
 (svg-margin-register-provider 'symbol       #'zetta-svg-margin-symbol       :side 'left  :priority 2)
 (svg-margin-register-provider 'trailing-ws  #'zetta-svg-margin-trailing-ws  :side 'right :priority 1)
-(svg-margin-register-provider 'scrollbar    #'zetta-svg-margin-scrollbar    :side 'right)
+;; The scroll thumb is NOT a provider -- it is a window-anchored layer driven
+;; synchronously from `post-command-hook' (`zetta-svg-margin-scroll--post-command'
+;; below), not the debounced per-buffer render.
 
 ;; Refresh triggers, deferred until each source package loads.
 (with-eval-after-load 'evil
@@ -565,7 +705,7 @@ the recompute yields the same hunks we skip, breaking the cycle."
 (with-eval-after-load 'flycheck
   (add-hook 'flycheck-after-syntax-check-hook #'zetta-svg-margin--refresh))
 (add-hook 'post-command-hook #'zetta-svg-margin--symbol-watch)
-(add-hook 'window-scroll-functions #'zetta-svg-margin-scroll--on-scroll)
+(add-hook 'post-command-hook #'zetta-svg-margin-scroll--post-command)
 
 ;;;; Activation
 ;; ----------------------------------------------------------------

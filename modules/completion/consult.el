@@ -54,8 +54,10 @@
   ;; out -- a distracting vertical pop -- because some candidates (special
   ;; buffers) carry no tab-line, so it disappears for those and reappears for
   ;; the next normal buffer.  The other preview family (`consult--jump-preview':
-  ;; ripgrep, grep, line, imenu, ...) doesn't need this -- it switches to the
-  ;; target's NATURAL tab-line and never hides it.
+  ;; consult-ripgrep, consult-grep, consult-line, consult-imenu, ...) has the
+  ;; same problem for cross-file hits -- preview opens files with hooks that can
+  ;; skip `global-tab-line-mode', so their tab-line is missing -- so we cover it
+  ;; too; there the previewed buffer is whatever the jump leaves current.
   ;;
   ;; We want the tab-line PRESENT and steady for the whole preview rather than
   ;; popping, so force uniform presence: on every previewed buffer that lacks a
@@ -80,53 +82,72 @@
   ;; subr.el, so the partial it returns captures STATE-FN/SAVED correctly
   ;; no matter how THIS file was loaded.
   (defcustom zetta-consult-preview-keep-tab-line t
-    "How `consult--buffer-preview' treats the tab-line while previewing.
+    "How consult preview treats the tab-line while previewing.
 When non-nil, keep the tab-line PRESENT and steady on every previewed
 buffer (giving a standard tab-line to candidates that lack one) so it
 never pops in and out as preview swaps buffers.  When nil, hide it for
 the whole preview instead (steady but blank).  Restored on exit either
-way."
+way.  Covers both `consult--buffer-preview' and `consult--jump-preview'."
     :type 'boolean :group 'zetta)
+  (defun zetta--consult-preview-set-tabline (buf saved)
+    "Force BUF's `tab-line-format' present (keep) or absent (hide).
+Per `zetta-consult-preview-keep-tab-line'.  Record BUF's prior value in
+SAVED once (so restore is exact); only write when it must actually change."
+    (when (buffer-live-p buf)
+      (with-current-buffer buf
+        (let ((target (if zetta-consult-preview-keep-tab-line
+                          (or tab-line-format '(:eval (tab-line-format)))
+                        nil)))
+          (unless (equal tab-line-format target)
+            ;; `t'-tagged cons = had a buffer-local value to restore;
+            ;; `global' = was not buffer-local (kill on restore).
+            (unless (gethash buf saved)
+              (puthash buf (if (local-variable-p 'tab-line-format)
+                               (cons t tab-line-format)
+                             'global)
+                       saved))
+            (setq-local tab-line-format target))))))
+  (defun zetta--consult-preview-restore-tabline (saved)
+    "Restore `tab-line-format' for every buffer recorded in SAVED, then clear it."
+    (maphash (lambda (buf orig)
+               (when (buffer-live-p buf)
+                 (with-current-buffer buf
+                   (if (eq orig 'global)
+                       (kill-local-variable 'tab-line-format)
+                     (setq-local tab-line-format (cdr orig))))))
+             saved)
+    (clrhash saved))
   (defun zetta--consult-preview-tabline-1 (state-fn saved action cand)
-    "Run consult STATE-FN, keeping/hiding previewed buffers' tab-line steady.
-Per `zetta-consult-preview-keep-tab-line'.  SAVED is a hash table tracking
-touched buffers' prior `tab-line-format' so it can be restored on exit."
+    "tab-line wrapper body for `consult--buffer-preview' (CAND is the buffer)."
     (prog1 (funcall state-fn action cand)
       (pcase action
         ('preview
-         (when-let* ((buf (and cand (get-buffer cand)))
-                     ((buffer-live-p buf)))
-           (with-current-buffer buf
-             ;; keep => ensure a tab-line is present (give one if missing);
-             ;; hide => force it absent.
-             (let ((target (if zetta-consult-preview-keep-tab-line
-                               (or tab-line-format '(:eval (tab-line-format)))
-                             nil)))
-               (unless (equal tab-line-format target)
-                 ;; Record the original ONCE before first changing it:
-                 ;; `t'-tagged cons = had a buffer-local value to restore;
-                 ;; `global' = was not buffer-local (kill on restore).
-                 (unless (gethash buf saved)
-                   (puthash buf (if (local-variable-p 'tab-line-format)
-                                    (cons t tab-line-format)
-                                  'global)
-                            saved))
-                 (setq-local tab-line-format target))))))
+         (when-let* ((buf (and cand (get-buffer cand))))
+           (zetta--consult-preview-set-tabline buf saved)))
         ((or 'exit 'return)
-         (maphash (lambda (buf orig)
-                    (when (buffer-live-p buf)
-                      (with-current-buffer buf
-                        (if (eq orig 'global)
-                            (kill-local-variable 'tab-line-format)
-                          (setq-local tab-line-format (cdr orig))))))
-                  saved)
-         (clrhash saved)))))
+         (zetta--consult-preview-restore-tabline saved)))))
+  (defun zetta--consult-preview-jump-tabline-1 (state-fn saved action cand)
+    "tab-line wrapper body for `consult--jump-preview' (ripgrep/grep/line/...).
+CAND is a location; the previewed buffer is the one the jump left current."
+    (prog1 (funcall state-fn action cand)
+      (pcase action
+        ('preview
+         (when cand
+           (zetta--consult-preview-set-tabline (current-buffer) saved)))
+        ((or 'exit 'return)
+         (zetta--consult-preview-restore-tabline saved)))))
   (defun zetta--consult-preview-tabline (state-fn)
-    "Wrap consult buffer-preview STATE-FN to keep previewed buffers' tab-line steady."
+    "Wrap `consult--buffer-preview' STATE-FN to keep the tab-line steady."
     (apply-partially #'zetta--consult-preview-tabline-1
+                     state-fn (make-hash-table :test 'eq)))
+  (defun zetta--consult-preview-jump-tabline (state-fn)
+    "Wrap `consult--jump-preview' STATE-FN to keep the tab-line steady."
+    (apply-partially #'zetta--consult-preview-jump-tabline-1
                      state-fn (make-hash-table :test 'eq)))
   (advice-add 'consult--buffer-preview :filter-return
               #'zetta--consult-preview-tabline)
+  (advice-add 'consult--jump-preview :filter-return
+              #'zetta--consult-preview-jump-tabline)
 
   (setq consult-async-split-style 'comma)
   ;; NOTE consult-omni--get-split-style-character fix moved to consult-omni.el

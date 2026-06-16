@@ -94,9 +94,7 @@
 ;; Each returns a list of indicator plists; :side and :priority are set at
 ;; registration (below), so the providers only describe what/where to draw.
 
-(defvar zetta-svg-margin-icon-font
-  (or (and (boundp 'zetta-svg-line-font) zetta-svg-line-font)
-      "Symbols Nerd Font Mono")
+(defvar zetta-svg-margin-icon-font "Symbols Nerd Font Mono"
   "Font family used to draw Nerd-Font icon glyphs in the margin.")
 
 (defun zetta-svg-margin--glyph (name &optional collection)
@@ -274,7 +272,7 @@ heading gets a Nerd-Font numbered circle (level 1-9, cycling) coloured by the
 heading's `org-level-N' face, while the stars stay in the buffer."
   (with-current-buffer buffer
     (when (derived-mode-p 'org-mode)
-      (let ((font (and (boundp 'zetta-svg-line-font) zetta-svg-line-font))
+      (let ((font zetta-svg-margin-icon-font)
             out)
         (save-excursion
           (goto-char (point-min))
@@ -310,7 +308,7 @@ Marks `#+begin_src' (babel), `#+begin_quote', `#+begin_example',
 edit/execute from the menu."
   (with-current-buffer buffer
     (when (derived-mode-p 'org-mode)
-      (let ((font (and (boundp 'zetta-svg-line-font) zetta-svg-line-font))
+      (let ((font zetta-svg-margin-icon-font)
             (case-fold-search t)
             ;; (KIND GLYPH COLOUR)
             (specs '(("src"     "nf-md-code_tags"          "#98accb")
@@ -423,14 +421,16 @@ the recompute yields the same hunks we skip, breaking the cycle."
       (setq zetta-svg-margin--last-symbol sym)
       (svg-margin-refresh))))
 
-;;;; Configuration + registration
+;;;; Configuration + registration  (svg-margin's own API)
 ;; ----------------------------------------------------------------
+;; Everything here is svg-margin API: the customs, the provider registrations,
+;; and the per-package refresh triggers.
 
 ;; Reclaim only the LEFT fringe (evil-fringe-mark's old home; evil marks come
 ;; from the margin provider now).  The RIGHT fringe stays: it natively hosts the
-;; per-row line-continuation / visual-line wrap arrows -- which the margin can't
-;; do (right-margin annotations collapse onto a logical line's first screen row,
-;; so per-continuation-row glyphs are impossible there) -- and yascroll's thumb.
+;; per-row line-continuation / visual-line wrap arrows (redisplay draws them per
+;; screen row, for free) and yascroll's thumb -- both jobs the fringe does more
+;; simply than a window-anchored margin layer would.
 (setq svg-margin-disable-fringe 'left)
 
 ;; Reserve a baseline margin width so buffer text doesn't shift as indicators
@@ -457,22 +457,14 @@ the recompute yields the same hunks we skip, breaking the cycle."
   (add-hook 'flycheck-after-syntax-check-hook #'zetta-svg-margin--refresh))
 (add-hook 'post-command-hook #'zetta-svg-margin--symbol-watch)
 
-;;;; Activation
+;;;; Activation  (MY environment glue -- not part of using svg-margin)
 ;; ----------------------------------------------------------------
-;; Runs after init, when the packages svg-margin replaces are loaded: turn
-;; off their fringe drawing, then enable the gutter everywhere.
-
-(defvar zetta-svg-margin--orig-show-help nil
-  "The `show-help-function' in effect before svg-margin wrapped it.")
-
-(defun zetta-svg-margin--show-help (help)
-  "Track hover for svg-margin and svg-line, then show HELP as before.
-Both note-help functions key off their own text property and hover custom, so
-calling both is safe; this is the single `show-help-function' both hook into."
-  (svg-margin-note-help help)
-  (when (fboundp 'svg-line--note-help) (svg-line--note-help help))
-  (when (functionp zetta-svg-margin--orig-show-help)
-    (funcall zetta-svg-margin--orig-show-help help)))
+;; Runs after init, once the packages svg-margin sits alongside are loaded.
+;; This is integration with MY setup -- silencing other gutter drawers
+;; (evil-fringe-mark), keeping yascroll in the fringe, redirecting git-gutter's
+;; drawing into the margin -- plus enabling the mode and the hover highlight.
+;; A minimal svg-margin user needs only `(global-svg-margin-mode 1)' and, for
+;; the hover background, `(svg-margin-hover-mode 1)'.
 
 (defun zetta-svg-margin-activate ()
   "Disable the fringe drawers svg-margin replaces and enable the gutter."
@@ -487,14 +479,10 @@ calling both is safe; this is the single `show-help-function' both hook into."
   (when (and (fboundp 'git-gutter:view-diff-infos)
              (not (advice-member-p #'zetta-svg-margin--gg-feed 'git-gutter:view-diff-infos)))
     (advice-add 'git-gutter:view-diff-infos :override #'zetta-svg-margin--gg-feed))
-  ;; Hover background: route help display through `svg-margin--note-help' so the
-  ;; hovered indicator gets a drawn background (works because show-help-function
-  ;; fires on mouse enter, move AND leave).  Done here (after init) so it sits
-  ;; on top of whatever tooltip.el left in `show-help-function'.
-  (setq svg-margin-hover-highlight t)
-  (unless (eq show-help-function #'zetta-svg-margin--show-help)
-    (setq zetta-svg-margin--orig-show-help show-help-function
-          show-help-function #'zetta-svg-margin--show-help))
+  ;; Hover background behind the indicator under the mouse: the package's own
+  ;; mode installs the `show-help-function' wrapper (chaining any prior) and
+  ;; draws the highlight -- no hand-wiring needed.
+  (svg-margin-hover-mode 1)
   (global-svg-margin-mode 1)
   (svg-margin-refresh-all))
 

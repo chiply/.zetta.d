@@ -326,11 +326,32 @@ Because the glyph is part of the label text it needs no separate icon."
   "Non-nil if the wrapping SVG tab line is currently active."
   (svg-line-active-p 'zetta-tab-line))
 
+;; svg-line delivers mouse enter/leave only through the help-echo machinery,
+;; so its hover highlight needs a `show-help-function' hook feeding
+;; `svg-line--note-help'.  (svg-margin owns the same wiring for the margin via
+;; `svg-margin-hover-mode'; this is svg-line's half, kept here so the svg-margin
+;; module stays free of any svg-line reference.)  The wrapper chains the prior
+;; `show-help-function', so it composes with svg-margin's.
+(declare-function svg-line--note-help "svg-line")
+(defvar zetta-svg-line--prev-show-help nil
+  "The `show-help-function' in effect before svg-line's hover wrapper.")
+(defun zetta-svg-line--show-help (help)
+  "Feed HELP to svg-line's hover tracker, then display it as before."
+  (when (fboundp 'svg-line--note-help) (svg-line--note-help help))
+  (when (functionp zetta-svg-line--prev-show-help)
+    (funcall zetta-svg-line--prev-show-help help)))
+(defun zetta-svg-line--enable-hover ()
+  "Turn on svg-line's hover highlight and install its show-help wrapper."
+  (setq svg-line-hover-highlight t)
+  (unless (eq show-help-function #'zetta-svg-line--show-help)
+    (setq zetta-svg-line--prev-show-help show-help-function
+          show-help-function #'zetta-svg-line--show-help)))
+
 ;;;###autoload
 (defun zetta-tab-line-use-svg ()
   "Switch the tab line to the wrapping SVG renderer."
   (interactive)
-  (setq svg-line-hover-highlight t)   ; highlight the tab under the mouse
+  (zetta-svg-line--enable-hover)      ; highlight the tab/item under the mouse
   (svg-line-activate 'zetta-tab-line)
   (message "tab-line: wrapping SVG renderer active (M-x zetta-tab-line-use-default to revert)"))
 

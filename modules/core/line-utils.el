@@ -724,6 +724,46 @@ The db visits newest-first, so the scan stops at the window edge."
   (add-hook 'elfeed-untag-hooks #'zetta-tab-bar--elfeed-recount)
   (zetta-tab-bar--elfeed-recount))
 
+;; "+N new this pull": how many entries the most recent update added, shown
+;; mu4e-style beside the unread count and cleared when you open elfeed.  New
+;; entries arrive asynchronously (curl/fever callbacks), so accumulate per
+;; entry and promote the batch to the indicator once update activity settles.
+(defvar zetta-tab-bar--elfeed-new-count 0
+  "New elfeed entries from the last completed pull (the +N indicator).")
+(defvar zetta-tab-bar--elfeed-new-accum 0
+  "New entries seen so far in the in-progress pull, before promotion.")
+(defvar zetta-tab-bar--elfeed-new-timer nil)
+
+(defun zetta-tab-bar--elfeed-note-new (&rest _)
+  "Count one new entry for the current pull (on `elfeed-new-entry-hook')."
+  (setq zetta-tab-bar--elfeed-new-accum (1+ zetta-tab-bar--elfeed-new-accum)))
+
+(defun zetta-tab-bar--elfeed-promote-new (&rest _)
+  "Debounced: promote the pull's accumulated new count to the indicator.
+Runs after update activity settles, so a burst of feeds reads as one pull.
+A pull that added nothing leaves the previous +N (entries you've not seen)."
+  (when (timerp zetta-tab-bar--elfeed-new-timer)
+    (cancel-timer zetta-tab-bar--elfeed-new-timer))
+  (setq zetta-tab-bar--elfeed-new-timer
+        (run-with-idle-timer
+         2 nil
+         (lambda ()
+           (when (> zetta-tab-bar--elfeed-new-accum 0)
+             (setq zetta-tab-bar--elfeed-new-count zetta-tab-bar--elfeed-new-accum
+                   zetta-tab-bar--elfeed-new-accum 0)
+             (force-mode-line-update t))))))
+
+(defun zetta-tab-bar--elfeed-clear-new (&rest _)
+  "Clear the +N indicator -- you've opened elfeed, so the new ones are seen."
+  (setq zetta-tab-bar--elfeed-new-count 0
+        zetta-tab-bar--elfeed-new-accum 0)
+  (force-mode-line-update t))
+
+(with-eval-after-load 'elfeed
+  (add-hook 'elfeed-new-entry-hook #'zetta-tab-bar--elfeed-note-new)
+  (add-hook 'elfeed-update-hooks #'zetta-tab-bar--elfeed-promote-new)
+  (advice-add 'elfeed :after #'zetta-tab-bar--elfeed-clear-new))
+
 (defun zetta-tab-bar-clock ()
   "The `display-time' clock string, trimmed."
   (when (boundp 'display-time-string) (string-trim (or display-time-string ""))))
@@ -794,6 +834,22 @@ string like \"{ 1' }\"), not a variable -- so it must be called."
   (and (featurep 'nerd-icons)
        (zetta-line--glyph (ignore-errors (nerd-icons-sucicon "nf-custom-emacs")))))
 
+(defun zetta-tab-bar-mode-icon ()
+  "Nerd-Font glyph for the (context) buffer's major mode, for the masthead.
+Reflects the buffer the tab bar reports on -- the minibuffer entry buffer
+during completion/preview (`zetta-tab-bar--context-buffer'), else the current
+buffer -- so it does not flicker as previews swap buffers.  The masthead
+recolours it via `zetta-tab-bar-svg-icon-color', so the raw glyph is returned."
+  (when (featurep 'nerd-icons)
+    (let ((buf (or (and (fboundp 'zetta-tab-bar--context-buffer)
+                        (zetta-tab-bar--context-buffer))
+                   (current-buffer))))
+      (with-current-buffer buf
+        (let ((g (ignore-errors (nerd-icons-icon-for-buffer))))
+          (and (stringp g)
+               (let ((s (substring-no-properties (string-trim g))))
+                 (and (> (length s) 0) s))))))))
+
 ;;; tab-bar interactive (svg-only) wrappers
 ;; ----------------------------------------------------------------
 ;; The base tab-bar segments above are shared with the *text* `tab-bar-format'
@@ -828,11 +884,41 @@ string like \"{ 1' }\"), not a variable -- so it must be called."
      :menu (list (cons "Describe bindings" #'describe-bindings)
                  (cons "Command (M-x)" #'execute-extended-command)))))
 
+(defun zetta-tab-bar--left-of-clock-chars ()
+  "How many characters a line-3 LEFT segment may use before the centred clock.
+Derived from the LIVE frame width and the tab bar's own geometry, so it
+adapts to any screen width: the clock spans all three rows, centred at
+WIDTH/2 with radius ~0.86*(3*LH)/2; the left content starts past the square
+masthead (width = bar height); inline-segment rows lay out at
+`zetta-tab-bar-svg-char-advance' px/char.  These mirror `svg-line''s internal
+geometry -- keep in sync if its clock-radius/masthead formulas change."
+  (let* ((width (frame-inner-width))
+         (fz   (or (bound-and-true-p zetta-tab-bar-svg-font-size) 15))
+         (lp   (or (bound-and-true-p zetta-tab-bar-svg-line-pad) 4))
+         (lh   (+ fz lp))
+         (rows 3)
+         (height (* lh rows))                              ; full bar height
+         (r    (round (* 0.86 (/ (float height) 2))))      ; clock radius
+         (masthead (if (bound-and-true-p zetta-tab-bar-svg-icon) height 0))
+         (gap  (* 2 fz))                                    ; breathing room
+         (ca   (max 1 (or (bound-and-true-p zetta-tab-bar-svg-char-advance) 8)))
+         (avail (- (/ width 2) r masthead gap)))
+    (max 0 (floor avail ca))))
+
 (defun zetta-tab-bar-svg--spotify ()
-  "Clickable Spotify cluster (glyph + spot string): play/pause; transport menu."
+  "Clickable Spotify cluster (glyph + spot string): play/pause; transport menu.
+The track string is truncated so the cluster never reaches the centred clock,
+at any frame width (see `zetta-tab-bar--left-of-clock-chars')."
   (let* ((icon (ignore-errors (zetta-tab-bar-spotify-icon)))
          (txt  (zetta-tab-bar-spot-mode-line-string))
-         (label (concat (and icon (concat icon " ")) txt)))
+         (prefix (if icon (concat icon " ") ""))
+         (maxc (zetta-tab-bar--left-of-clock-chars))
+         (budget (- maxc (length prefix)))
+         (txt (cond
+               ((or (null txt) (<= (length txt) budget)) txt)
+               ((> budget 1) (concat (substring txt 0 (1- budget)) "…"))
+               (t "")))                                     ; no room -> icon only
+         (label (concat prefix txt)))
     (zetta-svg-seg
      label 'tb-spotify
      :help "Spotify"
@@ -872,13 +958,27 @@ string like \"{ 1' }\"), not a variable -- so it must be called."
 Hidden until elfeed loads (the count cache is nil); the count comes from
 `zetta-tab-bar--elfeed-unread', recomputed off-render on elfeed's hooks."
   (when (numberp zetta-tab-bar--elfeed-unread)
-    (let* ((icon (and (featurep 'nerd-icons)
-                      (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-rss")))))
+    (let* ((refreshing (and (fboundp 'elfeed-queue-count-total)
+                            (ignore-errors (> (elfeed-queue-count-total) 0))))
+           ;; While a pull is in flight show a sync glyph instead of the rss
+           ;; glyph; `elfeed-queue-count-total' > 0 means curl fetches are
+           ;; active, so this self-clears when the pull drains.
+           (icon (and (featurep 'nerd-icons)
+                      (zetta-line--glyph
+                       (ignore-errors
+                         (nerd-icons-mdicon (if refreshing "nf-md-sync" "nf-md-rss"))))))
+           (new zetta-tab-bar--elfeed-new-count)
            (label (concat (and icon (concat icon " "))
-                          (number-to-string zetta-tab-bar--elfeed-unread))))
+                          (number-to-string zetta-tab-bar--elfeed-unread)
+                          (when (> new 0) (format " +%d" new)))))
       (zetta-svg-seg
        label 'tb-elfeed
-       :help (format "elfeed: %d unread" zetta-tab-bar--elfeed-unread)
+       :help (cond
+              (refreshing (format "elfeed: refreshing… (%d unread)"
+                                  zetta-tab-bar--elfeed-unread))
+              ((> new 0) (format "elfeed: %d unread (+%d new this pull)"
+                                 zetta-tab-bar--elfeed-unread new))
+              (t (format "elfeed: %d unread" zetta-tab-bar--elfeed-unread)))
        :action-help "open elfeed"
        :action (if (fboundp 'elfeed) #'elfeed #'ignore)
        :menu (delq nil

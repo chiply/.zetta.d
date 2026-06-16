@@ -25,7 +25,7 @@
     "Set shr-inhibit-images based on URL before calling eww."
     (setq shr-inhibit-images
           (not (string-match-p
-                "reddit\\.com\\|twitter\\.com\\|xkcd\\.com\\|github\\.com\\|wikipedia\\.org"
+                "reddit\\.com\\|twitter\\.com\\|xkcd\\.com\\|github\\.com\\|wikipedia\\.org\\|wikipedia\\.org"
                 url)))
     (apply orig-fun url args))
   (advice-add 'eww :around #'my-eww-inhibit-images-advice)
@@ -33,7 +33,7 @@
   ;; Per-URL readable mode
   (defun zetta-eww-after-render-functions ()
     (unless (string-match-p
-             "reddit\\|xkcd\\|orgmode\\.org"
+             "reddit\\|xkcd\\|orgmode\\.org\\|sachachua\\.com"
              (eww-current-url))
       (eww-readable))
     (setq-local truncate-lines nil)

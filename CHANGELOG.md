@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.22](https://github.com/chiply/.zetta.d/compare/v0.1.21...v0.1.22) (2026-06-16)
+
+
+### Bug Fixes
+
+* **svg-margin:** use the installed Terminess Nerd Font for margin icons ([#68](https://github.com/chiply/.zetta.d/issues/68)) ([d506f7f](https://github.com/chiply/.zetta.d/commit/d506f7f57399f4cb8a44fd616a83273603b58c4d))
+
 ## [0.1.21](https://github.com/chiply/.zetta.d/compare/v0.1.20...v0.1.21) (2026-06-16)
 
 

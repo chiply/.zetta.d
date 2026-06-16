@@ -36,7 +36,7 @@
 (declare-function svg-margin-register-provider "svg-margin")
 (declare-function svg-margin-refresh "svg-margin")
 (declare-function svg-margin-refresh-all "svg-margin")
-(declare-function svg-margin--note-help "svg-margin")
+(declare-function svg-margin-note-help "svg-margin")
 (declare-function global-svg-margin-mode "svg-margin")
 (defvar svg-margin-disable-fringe)
 (defvar svg-margin-min-left-columns)
@@ -519,7 +519,7 @@ the recompute yields the same hunks we skip, breaking the cycle."
   "Track hover for svg-margin and svg-line, then show HELP as before.
 Both note-help functions key off their own text property and hover custom, so
 calling both is safe; this is the single `show-help-function' both hook into."
-  (svg-margin--note-help help)
+  (svg-margin-note-help help)
   (when (fboundp 'svg-line--note-help) (svg-line--note-help help))
   (when (functionp zetta-svg-margin--orig-show-help)
     (funcall zetta-svg-margin--orig-show-help help)))

@@ -2,18 +2,18 @@
 
 ;; Loads the `svg-margin' package (https://github.com/chiply/svg-margin)
 ;; and wires up MY providers in the window margins instead of the fringe:
-;; VC (via git-gutter), flycheck, TODO/FIXME, bookmarks, evil marks, an Org
-;; heading rail, long-line and trailing-whitespace hygiene, and live
-;; symbol-at-point occurrences.
+;; VC (via git-gutter), flycheck, TODO/FIXME, evil marks, an Org heading rail,
+;; long-line and trailing-whitespace hygiene, and live symbol-at-point
+;; occurrences.
 ;;
 ;; This is the config-level analogue of the provider examples in the
 ;; package's README; this file is my own setup, so it survives a restart.
 ;; Providers read the source packages' data and guard on their availability
-;; at runtime, so this loads cleanly even before evil/git-gutter/flycheck/
-;; bookmark are loaded; the activation (disabling the fringe drawers it
-;; replaces, enabling the mode) runs from `emacs-startup-hook', and refresh
-;; triggers are deferred per package.  `:wait t' makes elpaca finish
-;; installing svg-margin before the `(require 'svg-margin)' below runs.
+;; at runtime, so this loads cleanly even before evil/git-gutter/flycheck are
+;; loaded; the activation (disabling the fringe drawers it replaces, enabling
+;; the mode) runs from `emacs-startup-hook', and refresh triggers are deferred
+;; per package.  `:wait t' makes elpaca finish installing svg-margin before the
+;; `(require 'svg-margin)' below runs.
 
 (use-package svg-margin
   :ensure (:host github :repo "chiply/svg-margin" :wait t))
@@ -44,18 +44,12 @@
 (defvar svg-margin-hover-highlight)
 (defvar evil-markers-alist)
 (defvar git-gutter:diffinfos)
-(defvar bookmark-alist)
 (defvar flycheck-current-errors)
 (declare-function git-gutter-hunk-start-line "git-gutter")
 (declare-function git-gutter-hunk-end-line "git-gutter")
 (declare-function git-gutter-hunk-type "git-gutter")
 (declare-function global-git-gutter-mode "git-gutter")
 (declare-function global-evil-fringe-mark-mode "evil-fringe-mark")
-(declare-function bookmark-get-filename "bookmark")
-(declare-function bookmark-get-position "bookmark")
-(declare-function bookmark-jump "bookmark")
-(declare-function bookmark-rename "bookmark")
-(declare-function bookmark-delete "bookmark")
 (declare-function evil-goto-mark "evil-commands")
 (declare-function evil-delete-marks "evil-commands")
 (declare-function git-gutter:next-hunk "git-gutter")
@@ -94,21 +88,6 @@
 (defcustom zetta-svg-margin-long-line-column 80
   "Column past which `zetta-svg-margin-long-lines' flags a line."
   :type 'integer :group 'zetta)
-
-;; A bookmark-ribbon shape (the package ships only geometric primitives).
-(svg-margin-define-shape 'bookmark
-  (lambda (svg x y w h color)
-    (let* ((bw (max 4 (round (* w 0.52))))
-           (bx (+ x (/ (- w bw) 2)))
-           (top (+ y (round (* h 0.16))))
-
-           (bot (+ y (round (* h 0.84))))
-           (notch (+ y (round (* h 0.6)))))
-      (svg-polygon svg
-                   (list (cons bx top) (cons (+ bx bw) top)
-                         (cons (+ bx bw) bot) (cons (+ bx (/ bw 2)) notch)
-                         (cons bx bot))
-                   :fill color))))
 
 ;;;; Providers
 ;; ----------------------------------------------------------------
@@ -182,31 +161,6 @@
 
                              :menu (zetta-svg-margin--gg-menu l))
                        out))))))
-        out))))
-
-(defun zetta-svg-margin-bookmarks (buffer)
-  "Ribbons for bookmarks pointing into BUFFER's file."
-  (with-current-buffer buffer
-    (when (and buffer-file-name (bound-and-true-p bookmark-alist))
-      (let ((file (file-truename buffer-file-name)) out)
-        (dolist (bm bookmark-alist)
-          (let ((bmfile (ignore-errors (bookmark-get-filename bm)))
-                (pos (ignore-errors (bookmark-get-position bm))))
-            (when (and bmfile pos (string= (file-truename bmfile) file))
-              (let ((name (car bm)))
-                (push (list :pos pos :color "#9f90c7"
-                            :font zetta-svg-margin-icon-font :scale 1.1
-                            :text (zetta-svg-margin--glyph "nf-md-bookmark")
-                            :help (format "bookmark: %s" name)
-                            :action-help "jump to bookmark"
-                            :action (lambda () (interactive) (bookmark-jump name))
-                            :menu (list (cons "Jump to bookmark"
-                                              (lambda () (interactive) (bookmark-jump name)))
-                                        (cons "Rename bookmark…"
-                                              (lambda () (interactive) (bookmark-rename name)))
-                                        (cons "Delete bookmark"
-                                              (lambda () (interactive) (bookmark-delete name)))))
-                      out)))))
         out))))
 
 (defun zetta-svg-margin-evil-marks (buffer)
@@ -489,7 +443,6 @@ the recompute yields the same hunks we skip, breaking the cycle."
 (svg-margin-register-provider 'git-gutter   #'zetta-svg-margin-git-gutter   :side 'left  :priority 9)
 (svg-margin-register-provider 'flycheck     #'zetta-svg-margin-flycheck     :side 'left  :priority 8)
 (svg-margin-register-provider 'todo         #'zetta-svg-margin-todo         :side 'right :priority 7)
-(svg-margin-register-provider 'bookmarks    #'zetta-svg-margin-bookmarks    :side 'right :priority 6)
 (svg-margin-register-provider 'evil-marks   #'zetta-svg-margin-evil-marks   :side 'left  :priority 5)
 (svg-margin-register-provider 'org-headings #'zetta-svg-margin-org-headings :side 'left  :priority 4)
 (svg-margin-register-provider 'org-blocks   #'zetta-svg-margin-org-blocks   :side 'left  :priority 4)
@@ -500,9 +453,6 @@ the recompute yields the same hunks we skip, breaking the cycle."
 ;; Refresh triggers, deferred until each source package loads.
 (with-eval-after-load 'evil
   (advice-add 'evil-set-marker :after #'zetta-svg-margin--refresh))
-(with-eval-after-load 'bookmark
-  (advice-add 'bookmark-set :after #'zetta-svg-margin--refresh-all)
-  (advice-add 'bookmark-delete :after #'zetta-svg-margin--refresh-all))
 (with-eval-after-load 'flycheck
   (add-hook 'flycheck-after-syntax-check-hook #'zetta-svg-margin--refresh))
 (add-hook 'post-command-hook #'zetta-svg-margin--symbol-watch)

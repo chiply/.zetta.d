@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.1.20](https://github.com/chiply/.zetta.d/compare/v0.1.19...v0.1.20) (2026-06-16)
+
+
+### Features
+
+* **consult:** keep tab-line steady during jump preview (ripgrep/grep/line) ([3d3f47b](https://github.com/chiply/.zetta.d/commit/3d3f47b029413ce2f7974dfba0dc14c79e0f774f))
+* **consult:** keep the tab-line present during buffer preview ([f71d06c](https://github.com/chiply/.zetta.d/commit/f71d06cd9027ab482d08692f7ad2de37e21cd3ac))
+* **consult:** option to keep tab-line during elfeed preview ([d4ec49a](https://github.com/chiply/.zetta.d/commit/d4ec49a46feb9fd34ee9e687086de1136dd49268))
+* **elfeed:** add zetta-elfeed-prune to shrink the db ([7b7d9ad](https://github.com/chiply/.zetta.d/commit/7b7d9ad4a81f6e9ca4f77ca2986b820877f2a150))
+* **elfeed:** background auto-update via elfeed-update-background ([03f5026](https://github.com/chiply/.zetta.d/commit/03f5026267eaea1cec8c815fbce5952c273e3f31))
+* **elfeed:** tab-bar refresh indicator + 5min interval ([8fd4067](https://github.com/chiply/.zetta.d/commit/8fd4067740c58a5308eccc92c0aaf44e979d803b))
+* **embark-scope:** expand-region nesting levels as expansion targets ([5bd69e4](https://github.com/chiply/.zetta.d/commit/5bd69e4f0da4a4011ce728de83f30f2f7d3baad5))
+* **embark:** file-candidate subwords as cyclable identifier targets ([2a56cf3](https://github.com/chiply/.zetta.d/commit/2a56cf3578a9866860d048dcfb043e3f464e9881))
+* **embark:** show target type in the minibuffer indicator ([1257796](https://github.com/chiply/.zetta.d/commit/1257796ba284a72a766e93087aa932a575144e13))
+* **svg-margin:** rewrite scroll indicator (window-anchored, synchronous) ([eacee7a](https://github.com/chiply/.zetta.d/commit/eacee7a0f2ed33b87d675666aa3646abd4e74f02))
+* **svg-margin:** right-margin wrap indicator, reclaim right fringe ([d5ea303](https://github.com/chiply/.zetta.d/commit/d5ea3032ec422fb61df7f2909bc821888116e9ce))
+* **tab-bar:** major-mode masthead icon, full-height clock, drop sun/moon/date ([e1017bb](https://github.com/chiply/.zetta.d/commit/e1017bb6971fb82175b3900263c68e36499f8df1))
+* **tab-bar:** show +N new elfeed entries from the last pull ([6db27ab](https://github.com/chiply/.zetta.d/commit/6db27abfeb0cea84889f6a5ae1353e66ca40fd1b))
+* **tab-bar:** truncate Spotify cluster so it never reaches the centre clock ([55cf79d](https://github.com/chiply/.zetta.d/commit/55cf79dca79c3d5ffdea5e987ce19af0ad640de5))
+
+
+### Bug Fixes
+
+* **consult:** make preview tab-line advice binding-robust ([09d47dd](https://github.com/chiply/.zetta.d/commit/09d47ddc3ef987619976e6090cc71b53d9999039))
+* **consult:** make preview tab-line advice binding-robust ([f3ec986](https://github.com/chiply/.zetta.d/commit/f3ec9867af64875befc363f71c979e7705785b86))
+* **consult:** re-hide tab-line on every elfeed preview ([faaa2d3](https://github.com/chiply/.zetta.d/commit/faaa2d3798228a590f897528f387f4c700bd8539))
+* **elfeed:** debounce search refresh during updates (THE freeze fix) ([8213aa3](https://github.com/chiply/.zetta.d/commit/8213aa361d6005c8df89322c93c677a7d75bd65d))
+* **elfeed:** load elfeed-org after elfeed-protocol (fixes Fever sync) ([1a59b58](https://github.com/chiply/.zetta.d/commit/1a59b580e9bc9d55f7099c42168a4a32cd458a26))
+* **elfeed:** stop elfeed-score stats writes freezing updates ([f0f7091](https://github.com/chiply/.zetta.d/commit/f0f7091b5f28c9f9ee34f0ca5db57e1f993d8fd2))
+* **elfeed:** stop tab-line flashing on every consult preview ([a52235c](https://github.com/chiply/.zetta.d/commit/a52235cfe96e484897dbcf9a7ccfd4f269069937))
+
+
+### Performance Improvements
+
+* **elfeed:** cap search buffer at 500 entries ([f8606fe](https://github.com/chiply/.zetta.d/commit/f8606fe09b2d16395cb94fe6e7321f82ddd0225b))
+* **gc:** defer collection to idle via gcmh ([616f87d](https://github.com/chiply/.zetta.d/commit/616f87d1a9231550e3ab1c564f0a01656deccd3c))
+
 ## [0.1.19](https://github.com/chiply/.zetta.d/compare/v0.1.18...v0.1.19) (2026-06-14)
 
 

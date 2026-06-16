@@ -94,8 +94,9 @@
 ;; Each returns a list of indicator plists; :side and :priority are set at
 ;; registration (below), so the providers only describe what/where to draw.
 
-(defvar zetta-svg-margin-icon-font "Symbols Nerd Font Mono"
-  "Font family used to draw Nerd-Font icon glyphs in the margin.")
+(defvar zetta-svg-margin-icon-font "Terminess Nerd Font Mono"
+  "Font family used to draw Nerd-Font icon glyphs in the margin.
+Must be a Nerd Font that librsvg can resolve by this exact family name.")
 
 (defun zetta-svg-margin--glyph (name &optional collection)
   "Return the Nerd-Font glyph NAME (via COLLECTION fn, default mdicon), or nil."

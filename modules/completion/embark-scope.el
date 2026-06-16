@@ -23,6 +23,18 @@
   (add-to-list 'embark-target-finders
                #'embark-scope-target-word-at-point)
 
+  ;; expand-region nesting levels as `expansion' targets: the
+  ;; bounds-sorted cycle (`C-.' expand / `C-,' contract) then steps
+  ;; through fine syntactic nesting, not just the coarse
+  ;; thing-at-point rungs.  Dedup (folded into the sort) drops levels
+  ;; coinciding with a named target; the by-type/avy pickers exclude
+  ;; `expansion' (see `embark-scope-pick-exclude-types').  Map it to
+  ;; `sexp' so the nav/instance family treats an expanded level
+  ;; sensibly.
+  (add-to-list 'embark-target-finders
+               #'embark-scope-target-expansions)
+  (setf (alist-get 'expansion embark-scope-nav-type-map) 'sexp)
+
   ;; Register zetta-flavored TAP-thing finders.  brick comes from
   ;; `treesit-tap.el' wrapper; line/sentence/paragraph are stock
   ;; thing-at-point things that embark's built-ins skip in most

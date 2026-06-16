@@ -16,7 +16,11 @@
     (elfeed-search-toggle-all mytag)))
 
 (use-package elfeed-protocol
-  :ensure (elfeed-protocol :host github :repo "fasheng/elfeed-protocol")
+  ;; Pinned to 1.0.0: first release supporting elfeed 4.0; feeds move from
+  ;; `elfeed-protocol-feeds' to `elfeed-feeds' (see ~/.private.el), and it
+  ;; integrates with elfeed-org automatically (saves/re-appends protocol
+  ;; feeds, tags org feeds `:no-update').
+  :ensure (elfeed-protocol :host github :repo "fasheng/elfeed-protocol" :ref "1.0.0")
   :after elfeed
   :demand t
   :config
@@ -44,8 +48,17 @@
 (use-package elfeed
   :after embark
   :commands elfeed
-  :ensure t
+  ;; Pinned to 4.0.x (elpaca otherwise tracks the old `master'; 4.0 lives on
+  ;; tag 4.0.1 / branch `main').  4.0 brings native search-redraw debouncing
+  ;; (`elfeed-search-update-delay'), which supersedes our manual debounce.
+  :ensure (elfeed :ref "4.0.1")
   :config
+  ;; Cap the search buffer at 500 entries (elfeed's `#N' filter limit).
+  ;; The default "@6-months-ago +unread" yields ~6000 entries, and elfeed
+  ;; renders ALL matching entries -- ~380ms/refresh, most of it drawing rows.
+  ;; Capping cuts every refresh/filter/live-filter to a fraction; raise the
+  ;; number or drop "#500" in a live filter to see more.
+  (setq-default elfeed-search-filter "@6-months-ago +unread #500")
   (setq elfeed-use-curl t)
   (elfeed-set-timeout 36000)
   (setq elfeed-curl-extra-arguments '("--insecure"))
@@ -229,7 +242,13 @@ minibuffer with something like `exit-minibuffer'."
 (use-package elfeed-org
   :demand t
   :ensure t
-  :after elfeed org
+  ;; MUST load after elfeed-protocol: protocol 1.0 keeps the Fever feed in
+  ;; `elfeed-feeds' alongside elfeed-org's, via an advice on
+  ;; `rmh-elfeed-org-process' installed by `elfeed-protocol-enable'.  If
+  ;; `(elfeed-org)' runs first it clears `elfeed-feeds' (dropping the Fever
+  ;; feed) before that advice exists, so enable registers 0 protocol feeds and
+  ;; elfeed tries to curl `fever+https://…' directly ("Unsupported protocol").
+  :after elfeed org elfeed-protocol
   :config
   (setq rmh-elfeed-org-files
         (list
@@ -246,6 +265,32 @@ minibuffer with something like `exit-minibuffer'."
   :config
   (progn
     (elfeed-score-enable)
+    ;; FREEZE FIX: elfeed-protocol/Fever fires `elfeed-update-hooks' once per
+    ;; protocol sub-feed, each with the curl queue already drained, so
+    ;; elfeed-score's `elfeed-score-rule-stats-update-hook' (guarded only by
+    ;; (= (elfeed-queue-count-total) 0)) passes every time and writes the WHOLE
+    ;; rule-stats file once per feed -- ~300 full-file writes (each a visible
+    ;; "Wrote .../tmpXXXX") per sync, a multi-second freeze.  Replace that
+    ;; per-feed write with ONE debounced idle write per sync, disable the
+    ;; mid-scoring periodic flush (every 64 matches -- same whole-file write on
+    ;; a different trigger), and persist once more on exit.
+    (remove-hook 'elfeed-update-hooks #'elfeed-score-rule-stats-update-hook)
+    (setq elfeed-score-rule-stats-dirty-threshold nil)
+    (defun zetta-elfeed-score-stats-write ()
+      "Persist elfeed-score rule stats now, if enabled."
+      (when (and (bound-and-true-p elfeed-score-rule-stats-file)
+                 (fboundp 'elfeed-score-rule-stats-write))
+        (ignore-errors
+          (elfeed-score-rule-stats-write elfeed-score-rule-stats-file))))
+    (defvar zetta-elfeed-score-stats--timer nil)
+    (defun zetta-elfeed-score-stats-write-debounced (&rest _)
+      "Persist rule stats once, after update activity settles."
+      (when (timerp zetta-elfeed-score-stats--timer)
+        (cancel-timer zetta-elfeed-score-stats--timer))
+      (setq zetta-elfeed-score-stats--timer
+            (run-with-idle-timer 3 nil #'zetta-elfeed-score-stats-write)))
+    (add-hook 'elfeed-update-hooks #'zetta-elfeed-score-stats-write-debounced)
+    (add-hook 'kill-emacs-hook #'zetta-elfeed-score-stats-write)
     (define-key elfeed-search-mode-map "=" elfeed-score-map))
   (setq elfeed-search-print-entry-function #'elfeed-score-print-entry)
   ;; TODO add as a hook?
@@ -366,23 +411,41 @@ in that case so elfeed commands self-heal instead of erroring."
           (elfeed-db-return))))
     (nreverse out)))
 
+(defun zetta-consult-elfeed--show (entry)
+  "Render ENTRY in *elfeed-entry* for PREVIEW, without re-running the mode.
+Return the buffer (so the consult preview can display it).
+
+`elfeed-show-entry' calls `elfeed-show-mode' on EVERY invocation, and that
+runs `kill-all-local-variables', which strips `tab-line-format'.  After the
+first preview *elfeed-entry* is already on screen WITH its tab-line, so
+re-running the mode strips the tab-line on the live buffer; the heavy
+`elfeed-show-refresh' that follows gives redisplay a chance to paint the
+stripped state, and `global-tab-line-mode' restores it a moment later --
+i.e. the tab-line flashes once per candidate (visible when the tab-line is
+kept during preview, `zetta-consult-preview-keep-tab-line').  Reuse the live
+elfeed-show buffer in place, running the major mode only when it is not
+already active, so the tab-line is never stripped between previews.
+
+Also bypasses `elfeed-show-entry' (and so its `:after' advice -- org-remark
+auto-notes), which we do not want firing for every candidate the cursor
+crosses anyway."
+  (let ((buff (get-buffer-create "*elfeed-entry*")))
+    (with-current-buffer buff
+      (unless (derived-mode-p 'elfeed-show-mode)
+        (elfeed-show-mode))
+      (setq elfeed-show-entry entry)
+      (elfeed-show-refresh))
+    buff))
+
 (defun zetta-consult-elfeed--state ()
-  "Preview state function: render the candidate entry in *elfeed-entry*.
-org-remark's elfeed wiring (an :after advice on `elfeed-show-entry')
-is suppressed during previews -- it would look up/load a notes file
-for every candidate the cursor crosses."
+  "Preview state function: render the candidate entry in *elfeed-entry*."
   (let ((preview (consult--buffer-preview)))
     (lambda (action cand)
       (if (eq action 'preview)
           (funcall preview 'preview
                    (when-let* ((entry (and cand (get-text-property
                                                  0 'zetta-elfeed-entry cand))))
-                     (let ((elfeed-show-entry-switch #'identity))
-                       (if (fboundp 'org-remark-auto-on)
-                           (cl-letf (((symbol-function 'org-remark-auto-on)
-                                      #'ignore))
-                             (ignore-errors (elfeed-show-entry entry)))
-                         (ignore-errors (elfeed-show-entry entry))))))
+                     (ignore-errors (zetta-consult-elfeed--show entry))))
         (funcall preview action nil)))))
 
 (defun zetta-consult-elfeed ()
@@ -412,29 +475,133 @@ froze the picker -- especially the first render, which sets up
          (entry (and cand (get-text-property 0 'zetta-elfeed-entry cand))))
     (when entry (elfeed-show-entry entry))))
 
-;;;; Background auto-update (mu4e-style)
-;; Incremental pulls in the background, so opening elfeed shows fresh
-;; entries without a foreground update.  The network side is async curl;
-;; only parsing runs on the main thread, one maxsize-entry batch at a
-;; time.  The FIRST run also loads elfeed and its db (the one-time
-;; multi-second index load for a 50k-entry db), so it waits for genuine
-;; idle rather than firing mid-typing.
+;;;; Prune old entries to keep the db (and its saves) small
+;; `elfeed-db-save' serializes the WHOLE index with one synchronous `prin1';
+;; its cost scales with entry count, so a 50k-entry db freezes Emacs for
+;; seconds on every save.  Dropping old, already-read entries shrinks the
+;; index and shortens that freeze proportionally.  Fever resync won't bring
+;; old read entries back (the server only sends recent/unread), so this is
+;; safe for an elfeed-protocol setup.
 
-(defvar zetta-elfeed-auto-update-interval (* 15 60)
-  "Seconds between background incremental elfeed updates.")
+(defcustom zetta-elfeed-prune-keep-months 6
+  "`zetta-elfeed-prune' removes read entries older than this many months.
+Unread and protected entries (`zetta-elfeed-prune-protect-tags') are kept."
+  :type 'integer :group 'zetta)
+
+(defvar zetta-elfeed-prune-protect-tags '(unread starred important)
+  "Entries carrying any of these tags are never removed by `zetta-elfeed-prune'.")
+
+(defun zetta-elfeed-prune--victims (cutoff)
+  "Collect read, unprotected entries older than CUTOFF (a `float-time').
+Gathers into a list first -- never mutates the index mid-traversal."
+  (let (out)
+    (with-elfeed-db-visit (entry _feed)
+      (when (< (elfeed-entry-date entry) cutoff)
+        (unless (seq-some (lambda (tag) (memq tag (elfeed-entry-tags entry)))
+                          zetta-elfeed-prune-protect-tags)
+          (push entry out))))
+    out))
+
+(defun zetta-elfeed-prune (&optional months)
+  "Remove old, already-read entries to shrink the elfeed db and speed saves.
+Removes entries older than MONTHS (prefix arg; default
+`zetta-elfeed-prune-keep-months') that are read and not tagged in
+`zetta-elfeed-prune-protect-tags'.  Backs up the index to index.bak first,
+then removes from the in-memory db, runs `elfeed-db-gc' to reclaim content,
+and saves.  Fever resync will not re-add old read entries.
+
+To restore: copy index.bak over index in `elfeed-db-directory' and restart."
+  (interactive (list (and current-prefix-arg
+                          (prefix-numeric-value current-prefix-arg))))
+  (require 'elfeed)
+  (zetta-elfeed--ensure-db)
+  (let* ((months (or months zetta-elfeed-prune-keep-months))
+         (cutoff (- (float-time) (* months 30 24 60 60)))
+         (total (hash-table-count elfeed-db-entries))
+         (victims (zetta-elfeed-prune--victims cutoff))
+         (n (length victims)))
+    (cond
+     ((zerop n)
+      (message "elfeed-prune: nothing to remove (0 read entries older than %d months)"
+               months))
+     ((yes-or-no-p
+       (format "elfeed-prune: remove %d of %d entries (read, older than %d months)? "
+               n total months))
+      (let ((backup (expand-file-name "index.bak" elfeed-db-directory)))
+        (copy-file (expand-file-name "index" elfeed-db-directory) backup t)
+        (message "elfeed-prune: backed up index -> %s" backup))
+      (dolist (entry victims)
+        (let ((id (elfeed-entry-id entry)))
+          (avl-tree-delete elfeed-db-index id)
+          (remhash id elfeed-db-entries)))
+      (message "elfeed-prune: removed %d entries; running gc + save..." n)
+      (elfeed-db-gc)
+      (let ((t0 (float-time)))
+        (elfeed-db-save)
+        (message "elfeed-prune: done -- %d -> %d entries; db-save now %.2fs"
+                 total (hash-table-count elfeed-db-entries)
+                 (- (float-time) t0)))))))
+
+;;;; Search-buffer refresh during updates
+;; elfeed 4.0 debounces the per-update search refresh NATIVELY via
+;; `elfeed-search-update-delay' (it puts a debounced `elfeed-search--update-debounce'
+;; on `elfeed-update-hooks'), which supersedes the manual debounce we needed on
+;; 3.4.2.  Background: elfeed-protocol/Fever fires `elfeed-update-hooks' once per
+;; sub-feed, and without debouncing each fired a full re-filter+re-sort of the
+;; whole search buffer -- 150+ per sync, a multi-minute 98%-CPU freeze.  Just
+;; tune the native delay a touch tighter than the 1.0s default.
+(with-eval-after-load 'elfeed-search
+  (setq elfeed-search-update-delay 0.5))
+
+;;;; Background auto-update (mu4e-style, non-blocking)
+;; Pull incrementally in the background so the tab-bar unread count + the
+;; new-items (+N) counter stay fresh without opening elfeed.  Use elfeed
+;; 4.0's `elfeed-update-background': unlike `elfeed-update' it skips the
+;; INITIAL forced search refresh and the synchronous end-of-update
+;; `elfeed-db-save', so it neither jumps nor hangs a visible *elfeed-search*.
+;; (elfeed-protocol's fetcher still fires `elfeed-update-hooks' per sub-feed,
+;; but those are all debounced now -- 4.0 native search refresh + our
+;; stats-write / +N-promote / unread-recount -- so they coalesce into one
+;; cheap refresh.)  New entries are counted live via `elfeed-new-entry-hook'.
+;;
+;; The FIRST run loads the ~48M db index (a one-time multi-second BLOCKING
+;; read), so it waits for a short idle after startup rather than firing
+;; mid-typing.  Because `elfeed-update-background' does not save the db, we
+;; persist on the next idle after each pull (the ~0.6s save then never lands
+;; on active work; a clean exit also saves via elfeed's `kill-emacs-hook').
+
+(defcustom zetta-elfeed-auto-update-interval (* 15 60)
+  "Seconds between background incremental elfeed updates."
+  :type 'integer :group 'zetta)
+
+(defcustom zetta-elfeed-auto-update-initial-idle 20
+  "Idle seconds after startup before the FIRST background elfeed update.
+Deferred so the one-time db load doesn't run during active startup."
+  :type 'integer :group 'zetta)
 
 (defvar zetta-elfeed--auto-update-timer nil
-  "Active timer for `zetta-elfeed--auto-update', or nil.")
+  "Active repeating timer for `zetta-elfeed--auto-update', or nil.")
 
 (defun zetta-elfeed--auto-update ()
-  "Incrementally update all elfeed feeds in the background."
+  "Pull all feeds in the background without disturbing visible elfeed windows.
+Indicators refresh via the (debounced) update hooks; the db is persisted on
+the next idle, since `elfeed-update-background' does not save it itself."
   (require 'elfeed)
-  (elfeed-update))
+  (cond
+   ((fboundp 'elfeed-update-background)
+    (elfeed-update-background)
+    ;; Light the tab-bar "refreshing" (sync) glyph now -- it self-clears when
+    ;; the queue drains; force a redraw so it shows even while idle.
+    (force-mode-line-update t)
+    (run-with-idle-timer
+     90 nil
+     (lambda () (when (fboundp 'elfeed-db-save) (ignore-errors (elfeed-db-save))))))
+   (t (elfeed-update))))                 ; pre-4.0 fallback
 
 (unless zetta-elfeed--auto-update-timer
   (setq zetta-elfeed--auto-update-timer
         (run-with-idle-timer
-         120 nil
+         zetta-elfeed-auto-update-initial-idle nil
          (lambda ()
            (zetta-elfeed--auto-update)
            (setq zetta-elfeed--auto-update-timer

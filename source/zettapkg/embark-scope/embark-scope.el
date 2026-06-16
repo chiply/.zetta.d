@@ -179,6 +179,103 @@ per `embark-scope-word-finder-modes' +
                   (cons beg end))))))
 
 
+;;;; Expansion-ladder finder (expand-region nesting levels)
+;; ----------------------------------------------------------------
+;; Surface every expand-region nesting level at point as an
+;; `expansion' target, so the bounds-sorted target cycle (`C-.' /
+;; `C-,') steps through fine syntactic nesting -- the rungs embark's
+;; coarse finders skip (they give one `expression', then `defun', and
+;; nothing in between).  Soft dependency on expand-region: a no-op
+;; when it isn't installed.  Add the finder to `embark-target-finders'
+;; to enable (see the README); `embark-scope--dedup-expansion-bounds'
+;; (folded into the sort) then drops levels that coincide with a named
+;; target so expand-region only fills the gaps.
+
+(defvar er/history)
+(defvar expand-region-fast-keys-enabled)
+(declare-function er/expand-region "expand-region" (arg))
+
+(defcustom embark-scope-expansion-finder-modes '(prog-mode text-mode)
+  "Major modes (and derivatives) where `embark-scope-target-expansions' fires."
+  :type '(repeat symbol)
+  :group 'embark-scope)
+
+(defcustom embark-scope-expansion-max-levels 24
+  "Hard cap on the number of nesting levels the expansion finder enumerates."
+  :type 'integer
+  :group 'embark-scope)
+
+(defun embark-scope--enumerate-expansions (cap)
+  "Return up to CAP expand-region levels at point as (BEG . END), innermost first.
+Drives `er/expand-region' inside `save-mark-and-excursion' so the
+user's point, mark and region are left untouched.  Trailing
+whitespace is trimmed from each level's end and exact duplicates are
+dropped."
+  (when (fboundp 'er/expand-region)
+    (let* ((win (selected-window))
+           (wstart (and (eq (window-buffer win) (current-buffer))
+                        (window-start win))))
+      (unwind-protect
+          ;; `inhibit-redisplay' keeps er's far point excursions (expanding an
+          ;; org list/subtree, say) from tripping a redisplay that scrolls the
+          ;; window mid-walk -- `save-mark-and-excursion' restores point but not
+          ;; `window-start', which left `embark-act' repositioning the buffer.
+          (let ((inhibit-redisplay t))
+            (save-mark-and-excursion
+              (let ((er/history (list)) (levels '()) (prev nil)
+                    ;; Drive er purely as a query.  With fast-keys on (default),
+                    ;; `er/expand-region' runs `er/prepare-for-more-expansions'
+                    ;; every call -- it sets `overriding-terminal-local-map' to a
+                    ;; transient map bound to the last key and echoes a hint.
+                    ;; That leftover map hijacked the next keystroke into an
+                    ;; interactive expand+recenter; disabling fast-keys stops it.
+                    (expand-region-fast-keys-enabled nil)
+                    ;; er also `push-mark's during expansion; keep it off the ring.
+                    (mark-ring mark-ring))
+                (deactivate-mark)
+                (catch 'done
+                  (dotimes (_ cap)
+                    (condition-case nil (er/expand-region 1) (error (throw 'done nil)))
+                    (unless (region-active-p) (throw 'done nil))
+                    (let ((raw (cons (region-beginning) (region-end))))
+                      ;; er stopped growing -> ladder exhausted.
+                      (when (equal raw prev) (throw 'done nil))
+                      (setq prev raw)
+                      (let* ((beg (car raw))
+                             (end (save-excursion
+                                    (goto-char (cdr raw))
+                                    (skip-chars-backward " \t\n" beg)
+                                    (point)))
+                             (b (cons beg end)))
+                        (when (and (< beg end) (not (member b levels)))
+                          (push b levels))))))
+                (nreverse levels))))
+        ;; Belt and suspenders: er can still leave the viewport scrolled;
+        ;; restore the original window-start.
+        (when (and wstart (window-live-p win)
+                   (eq (window-buffer win) (current-buffer)))
+          (set-window-start win wstart t))))))
+
+(defun embark-scope-target-expansions ()
+  "Embark target finder: expand-region nesting levels at point.
+Returns a LIST of `expansion' targets (innermost first) so the
+bounds-sorted cycle (`C-.' / `C-,') walks fine syntactic nesting.
+No-op without expand-region, in the minibuffer / pop-up UIs, or
+outside `embark-scope-expansion-finder-modes'."
+  (when (and (fboundp 'er/expand-region)
+             (not (or (minibufferp)
+                      (derived-mode-p 'completion-list-mode
+                                      'embark-collect-mode)))
+             (apply #'derived-mode-p embark-scope-expansion-finder-modes))
+    (let ((levels (embark-scope--enumerate-expansions
+                   embark-scope-expansion-max-levels)))
+      (mapcar (lambda (b)
+                (cons 'expansion
+                      (cons (buffer-substring-no-properties (car b) (cdr b))
+                            (cons (car b) (cdr b)))))
+              levels))))
+
+
 ;;;; Cycle sort
 ;; ----------------------------------------------------------------
 
@@ -192,11 +289,42 @@ target cycle by bounds size (ascending)."
   "Dynamic flip controlling sort direction.  Bound by
 `embark-scope-act-contract'.")
 
+(defcustom embark-scope-expansion-dedup-p t
+  "When non-nil, drop `expansion' targets whose bounds duplicate a
+non-`expansion' target.  This lets the expand-region ladder
+(`embark-scope-target-expansions') fill only the rungs embark's
+named finders leave empty: a level that coincides with the
+`identifier', `expression' or `defun' target is removed so the named
+type -- and its keymap -- wins.  Applied by
+`embark-scope--sort-targets-by-bounds'."
+  :type 'boolean
+  :group 'embark-scope)
+
+(defun embark-scope--dedup-expansion-bounds (targets)
+  "Remove `expansion' TARGETS whose bounds match a non-expansion target."
+  (if embark-scope-expansion-dedup-p
+      (let ((named-bounds
+             (delq nil (mapcar
+                        (lambda (tgt)
+                          (unless (eq (plist-get tgt :type) 'expansion)
+                            (plist-get tgt :bounds)))
+                        targets))))
+        (if named-bounds
+            (cl-remove-if
+             (lambda (tgt)
+               (and (eq (plist-get tgt :type) 'expansion)
+                    (member (plist-get tgt :bounds) named-bounds)))
+             targets)
+          targets))
+    targets))
+
 (defun embark-scope--sort-targets-by-bounds (targets)
   "Sort TARGETS by bounds size ascending (innermost first).
 Targets without bounds keep their relative order at the end of the
 list.  When `embark-scope--sort-reverse' is non-nil, the cycle
-order flips (outermost first)."
+order flips (outermost first).  Duplicate-bounds `expansion' targets
+are dropped first per `embark-scope-expansion-dedup-p'."
+  (setq targets (embark-scope--dedup-expansion-bounds targets))
   (if embark-scope-sort-by-bounds-p
       (let* ((with-bounds (cl-remove-if-not
                            (lambda (tgt) (plist-get tgt :bounds))
@@ -679,6 +807,24 @@ no-op.  Returns ROTATED-TARGETS unchanged."
 ;;;; Pick: target type (consult)
 ;; ----------------------------------------------------------------
 
+(defcustom embark-scope-pick-exclude-types '(expansion)
+  "Target types hidden from the by-type pickers.
+`embark-scope-pick-target-type' and
+`embark-scope-pick-target-type-key' drop targets of these types.
+
+expand-region's `expansion' levels are concentric and all share one
+type, so they belong to the `C-.' / `C-,' expand/contract cycle, not
+the by-type pickers: the single-key picker assigns one key per type,
+which would leave every expansion level but the first unreachable."
+  :type '(repeat symbol)
+  :group 'embark-scope)
+
+(defun embark-scope--pickable-targets ()
+  "`embark--targets' with `embark-scope-pick-exclude-types' removed."
+  (cl-remove-if (lambda (tgt)
+                  (memq (plist-get tgt :type) embark-scope-pick-exclude-types))
+                (embark--targets)))
+
 (defun embark-scope--pick-target-type-do (candidates)
   "Open `consult--read' to pick from CANDIDATES, re-enter
 `embark-act' on the chosen target.  Preview paints the focused
@@ -721,7 +867,7 @@ candidate's bounds with `embark-scope-other-instance-face'."
 Uses `consult--read' with preview.  Defers via `run-at-time' so the
 consult UI opens cleanly after embark-act's prompt exits."
   (interactive)
-  (let* ((targets (embark--targets))
+  (let* ((targets (embark-scope--pickable-targets))
          (candidates
           (cl-loop for tgt in targets
                    when (plist-get tgt :bounds)
@@ -803,7 +949,7 @@ embark-act's prompt exits."
   (interactive)
   (let* ((targets (cl-remove-if-not
                    (lambda (tgt) (plist-get tgt :bounds))
-                   (embark--targets)))
+                   (embark-scope--pickable-targets)))
          (types (mapcar (lambda (tgt) (plist-get tgt :type)) targets))
          (key->type (embark-scope--assign-type-keys types))
          (choices (mapcar

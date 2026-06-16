@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.21](https://github.com/chiply/.zetta.d/compare/v0.1.20...v0.1.21) (2026-06-16)
+
+
+### Bug Fixes
+
+* **svg-margin:** draw wrap + scroll indicators in the fringe, not the margin ([#63](https://github.com/chiply/.zetta.d/issues/63)) ([8b63722](https://github.com/chiply/.zetta.d/commit/8b63722bef7b14f5f6170a7aec3624c038af821c))
+
 ## [0.1.20](https://github.com/chiply/.zetta.d/compare/v0.1.19...v0.1.20) (2026-06-16)
 
 

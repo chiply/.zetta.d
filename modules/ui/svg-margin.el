@@ -313,6 +313,58 @@
           (forward-line 1)))
       out)))
 
+(defcustom zetta-svg-margin-wrap-color "#6b7280"
+  "Colour of the margin line-wrap / visual-line indicator."
+  :type 'color :group 'zetta)
+
+(defcustom zetta-svg-margin-wrap-glyph "nf-md-keyboard_return"
+  "Nerd-Font glyph for a char-wrapped line (`truncate-lines' nil)."
+  :type 'string :group 'zetta)
+
+(defcustom zetta-svg-margin-visual-line-glyph "nf-md-wrap"
+  "Nerd-Font glyph for a wrapped line under `visual-line-mode'."
+  :type 'string :group 'zetta)
+
+(defcustom zetta-svg-margin-wrap-max-lines 10000
+  "Skip the wrap provider in buffers with more than this many lines."
+  :type 'integer :group 'zetta)
+
+(defun zetta-svg-margin-wrap (buffer)
+  "Right-margin glyph on each logical line that wraps in BUFFER's window.
+Replaces the right-fringe continuation/visual-line arrows, which vanish once
+the right fringe is zeroed (see `svg-margin-disable-fringe').  One indicator
+per wrapped logical line, drawn at its first screen row; a distinct glyph is
+used under `visual-line-mode'.  No-op when lines are truncated (no wrap) or the
+buffer is huge (`zetta-svg-margin-wrap-max-lines').
+
+A line is judged to wrap when its display-column width exceeds the displaying
+window's body width -- a cheap, fixed-pitch approximation; exact pixel layout
+(variable-pitch, `wrap-prefix') is not consulted."
+  (with-current-buffer buffer
+    (when (and (not truncate-lines)
+               (<= (count-lines (point-min) (point-max))
+                   zetta-svg-margin-wrap-max-lines))
+      (let* ((win (get-buffer-window buffer))
+             (cols (and win (window-body-width win)))
+             (vlm (bound-and-true-p visual-line-mode))
+             (glyph (zetta-svg-margin--glyph
+                     (if vlm zetta-svg-margin-visual-line-glyph
+                       zetta-svg-margin-wrap-glyph)))
+             out)
+        (when (and cols glyph)
+          (save-excursion
+            (goto-char (point-min))
+            (while (not (eobp))
+              (when (> (progn (end-of-line) (current-column)) cols)
+                (let ((bol (line-beginning-position)))
+                  (push (list :pos bol :text glyph
+                              :color zetta-svg-margin-wrap-color
+                              :font zetta-svg-margin-icon-font :scale 1.0
+                              :help (if vlm "visual-line wrap" "line wraps"))
+                        out)))
+              (forward-line 1))))
+        out))))
+
 (defun zetta-svg-margin-org-headings (buffer)
   "A numbered-circle level marker per Org heading in the left margin.
 This is the org-margin idea delivered through an svg-margin provider: each
@@ -670,10 +722,12 @@ the recompute yields the same hunks we skip, breaking the cycle."
 ;;;; Configuration + registration
 ;; ----------------------------------------------------------------
 
-;; Reclaim only the left fringe (evil-fringe-mark's old home).  The right
-;; fringe no longer hosts yascroll (the scrollbar provider draws in the
-;; margin now) but keeps the line-continuation arrows, so leave it alone.
-(setq svg-margin-disable-fringe 'left)
+;; Reclaim BOTH fringes.  Left was evil-fringe-mark's old home; right hosted
+;; the line-continuation / visual-line arrows.  Those arrows now come from the
+;; `zetta-svg-margin-wrap' provider in the right margin, so the right fringe is
+;; redundant -- zero it too (`zetta-svg-margin-visual-line-glyph' /
+;; `-wrap-glyph' replace `top-right-angle' and the continuation arrow).
+(setq svg-margin-disable-fringe 'both)
 
 ;; Reserve a baseline margin width so buffer text doesn't shift as indicators
 ;; come and go (the margin still grows past this when a line needs more).
@@ -692,6 +746,7 @@ the recompute yields the same hunks we skip, breaking the cycle."
 (svg-margin-register-provider 'long-lines   #'zetta-svg-margin-long-lines   :side 'right :priority 3)
 (svg-margin-register-provider 'symbol       #'zetta-svg-margin-symbol       :side 'left  :priority 2)
 (svg-margin-register-provider 'trailing-ws  #'zetta-svg-margin-trailing-ws  :side 'right :priority 1)
+(svg-margin-register-provider 'wrap         #'zetta-svg-margin-wrap         :side 'right :priority 0)
 ;; The scroll thumb is NOT a provider -- it is a window-anchored layer driven
 ;; synchronously from `post-command-hook' (`zetta-svg-margin-scroll--post-command'
 ;; below), not the debounced per-buffer render.
@@ -706,6 +761,10 @@ the recompute yields the same hunks we skip, breaking the cycle."
   (add-hook 'flycheck-after-syntax-check-hook #'zetta-svg-margin--refresh))
 (add-hook 'post-command-hook #'zetta-svg-margin--symbol-watch)
 (add-hook 'post-command-hook #'zetta-svg-margin-scroll--post-command)
+;; Wrap state depends on `truncate-lines' / `visual-line-mode'; window resize is
+;; already covered by the package's `window-configuration-change-hook'.
+(add-hook 'visual-line-mode-hook #'zetta-svg-margin--refresh)
+(advice-add 'toggle-truncate-lines :after #'zetta-svg-margin--refresh)
 
 ;;;; Activation
 ;; ----------------------------------------------------------------

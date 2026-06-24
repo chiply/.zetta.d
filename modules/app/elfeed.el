@@ -587,6 +587,18 @@ Deferred so the one-time db load doesn't run during active startup."
 Indicators refresh via the (debounced) update hooks; the db is persisted on
 the next idle, since `elfeed-update-background' does not save it itself."
   (require 'elfeed)
+  ;; A healthy background pull drains well within the interval, so a non-zero
+  ;; queue at tick time means a curl sentinel never decremented the active
+  ;; counter (sleep/wake, network drop, killed process) -- once that happens
+  ;; `elfeed-update-background' silently no-ops forever (its guard skips when
+  ;; `elfeed-queue-count-total' > 0, and it logs nothing in that case), so the
+  ;; timer keeps looking healthy while updates quietly stop.  Clear the stuck
+  ;; connection pool before pulling.
+  (when (and (fboundp 'elfeed-queue-count-total)
+             (> (elfeed-queue-count-total) 0))
+    (elfeed-log 'warn "auto-update: queue jammed (%d), unjamming"
+                (elfeed-queue-count-total))
+    (when (fboundp 'elfeed-unjam) (elfeed-unjam)))
   (cond
    ((fboundp 'elfeed-update-background)
     (elfeed-update-background)

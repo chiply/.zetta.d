@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.23](https://github.com/chiply/.zetta.d/compare/v0.1.22...v0.1.23) (2026-06-25)
+
+
+### Bug Fixes
+
+* **elfeed:** unjam stuck curl queue before background pulls ([#71](https://github.com/chiply/.zetta.d/issues/71)) ([b3f822f](https://github.com/chiply/.zetta.d/commit/b3f822f285dcd4ceca97e2d4cedc782ae381226a))
+* **svg-margin:** keep the left fringe for line-wrap indicators ([#70](https://github.com/chiply/.zetta.d/issues/70)) ([089f7a7](https://github.com/chiply/.zetta.d/commit/089f7a78b89346b4a06531bf7ea3d958bdaf3ca0))
+
 ## [0.1.22](https://github.com/chiply/.zetta.d/compare/v0.1.21...v0.1.22) (2026-06-16)
 
 

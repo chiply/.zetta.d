@@ -27,6 +27,13 @@
 
 (require 'svg-line)
 
+;; `ct/circle-number' (defined in the `tab-line' use-package :config below)
+;; wraps `zetta-circle-number' (line-utils) -- the shared source of the
+;; numbered-circle glyphs also used by svg-margin's org rail.  Declared here so
+;; the top-level SVG content function compiles cleanly.
+(declare-function ct/circle-number "tab-line-svg")
+(declare-function zetta-circle-number "line-utils")
+
 ;;; ==================================================================
 ;;; Tab-line SYSTEM (merged from the former tab-line.el): enables
 ;;; global-tab-line-mode, the buffer selector + scopes, close commands,
@@ -72,21 +79,11 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
       (force-mode-line-update)))
 
   (defun ct/circle-number (n)
-    "Return a Nerd Font circled-number glyph for tab index N (1-based).
-1-9 use `nf-md-numeric_N_circle'; 10 uses `nf-md-numeric_10_circle';
-anything higher falls back to `nf-md-numeric_9_plus_circle'.  The glyph is
-re-faced to \"Terminess Nerd Font Mono\" (installed) rather than nerd-icons'
-default \"Symbols Nerd Font Mono\" (NOT installed here) so it renders in the
-plain-text tab line instead of tofu.  Trailing space keeps it off the icon."
-    (when (require 'nerd-icons nil t)
-      (let ((glyph (cond ((<= 1 n 9)
-                          (nerd-icons-mdicon (format "nf-md-numeric_%d_circle" n)))
-                         ((= n 10) (nerd-icons-mdicon "nf-md-numeric_10_circle"))
-                         (t (nerd-icons-mdicon "nf-md-numeric_9_plus_circle")))))
-        (when glyph
-          (concat (propertize (substring-no-properties glyph)
-                              'face '(:family "Terminess Nerd Font Mono"))
-                  " ")))))
+    "Circled-number glyph for tab index N (1-based), or nil.
+A thin wrapper over `zetta-circle-number' (the shared glyph source).  No
+trailing space -- the number sits flush against the file/mode glyph that
+follows; callers add their own separator before the buffer name."
+    (zetta-circle-number n))
 
   (defun zetta-tab-line-tab-name-buffer (buffer &optional _buffers)
     (let* ((buffer-name (buffer-name buffer))
@@ -261,9 +258,8 @@ Because the glyph is part of the label text it needs no separate icon."
              ;; binding for `real', so action/menu closures must not close over
              ;; it directly (they would all see the last tab's buffer).
              collect (let ((b real) (nm name))
-                       (cons (format "%d %s%s%s"
-                                     i
-                                     (if glyph (concat glyph " ") "")
+                       (cons (concat (or (ct/circle-number i) (format "%d" i))
+                                     (if glyph (concat glyph " ") " ")
                                      short
                                      (if modifiedp zetta-tab-line-svg-modified-marker ""))
                              (list :current currentp :modified modifiedp
@@ -315,6 +311,32 @@ Because the glyph is part of the label text it needs no separate icon."
   :inactive-current-foreground (lambda () zetta-tab-line-svg-inactive-current-foreground)
   :inactive-current-background (lambda () zetta-tab-line-svg-inactive-current-background)
   :inactive-modified-foreground (lambda () zetta-tab-line-svg-inactive-modified-foreground))
+
+;;; ------------------------------------------------------------------
+;;; Left padding.  The `wrap' layout starts its content flush at x=0, so the
+;;; first tab sits against the window's left edge.  svg-line installs the tab
+;;; line by `:override'-advising `tab-line-format' to return a one-space
+;;; display-image string; we `:filter-return' that to prepend a fixed-width
+;;; space.  Safe for clicks: window-level bars hit-test with IMAGE-relative
+;;; `posn-object-x-y', and the margin space is a separate display object, so it
+;;; doesn't shift the image's internal coordinates.
+;;; ------------------------------------------------------------------
+(defcustom zetta-tab-line-svg-left-pad 8
+  "Left padding, in pixels, before the SVG tab-line content (0 to disable)."
+  :type 'integer :group 'zetta)
+
+(defun zetta-tab-line-svg--pad-left (result)
+  "Prepend `zetta-tab-line-svg-left-pad' px of margin to RESULT.
+A `:filter-return' advice on `tab-line-format'; passes RESULT through
+unchanged when it is not the svg-line image string or padding is disabled."
+  (if (and (stringp result) (> zetta-tab-line-svg-left-pad 0)
+           (zetta-tab-line-using-svg-p))
+      (concat (propertize " " 'display
+                          (list 'space :width (list zetta-tab-line-svg-left-pad)))
+              result)
+    result))
+
+(advice-add 'tab-line-format :filter-return #'zetta-tab-line-svg--pad-left)
 
 ;;; ------------------------------------------------------------------
 ;;; Switching.  svg-line installs the tab line by advising the

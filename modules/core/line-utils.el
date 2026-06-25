@@ -619,6 +619,23 @@ keep their own font (`zetta-font').")
        (with-current-buffer (or buffer (current-buffer))
          (zetta-line--glyph (ignore-errors (nerd-icons-icon-for-buffer))))))
 
+(defun zetta-circle-number (n)
+  "Return a Nerd-Font circled-number glyph for integer N, or nil.
+0-9 use `nf-md-numeric_N_circle'; 10 uses `nf-md-numeric_10_circle'; anything
+higher falls back to `nf-md-numeric_9_plus_circle'.  The glyph carries
+`:family' `zetta-svg-line-font' so it renders even in a plain-text context (an
+SVG bar uses the engine's own font instead, so the face is harmless there).
+This is the single source of the numbered-circle glyphs shared by the tab-line,
+the space-tree tab-bar lighter, and (visually) svg-margin's org-heading rail."
+  (and (featurep 'nerd-icons)
+       (integerp n)
+       (let ((g (zetta-line--glyph
+                 (ignore-errors
+                   (cond ((<= 0 n 9) (nerd-icons-mdicon (format "nf-md-numeric_%d_circle" n)))
+                         ((= n 10)   (nerd-icons-mdicon "nf-md-numeric_10_circle"))
+                         (t          (nerd-icons-mdicon "nf-md-numeric_9_plus_circle")))))))
+         (and g (propertize g 'face (list :family zetta-svg-line-font))))))
+
 ;;; mode line
 (defun zetta-modeline-svg--file-icon ()
   "File-type glyph for the current buffer."
@@ -872,17 +889,28 @@ recolours it via `zetta-tab-bar-svg-icon-color', so the raw glyph is returned."
                           (cons "Recent files…" #'consult-recent-file))
                      (cons "Save buffer" #'save-buffer)))))
 
+(defun zetta-tab-bar-modal-glyph ()
+  "Nerd-Font glyph for the active modal SYSTEM: vim for evil, cat for meow,
+the Emacs logo for emacs.  Falls back to the `zetta-tab-bar-modal' string when
+nerd-icons or the glyph is unavailable."
+  (or (and (featurep 'nerd-icons)
+           (zetta-line--glyph
+            (ignore-errors
+              (pcase (zetta-tab-bar-modal)
+                ("evil" (nerd-icons-sucicon "nf-custom-vim"))
+                ("meow" (nerd-icons-mdicon  "nf-md-cat"))
+                (_      (nerd-icons-sucicon "nf-custom-emacs"))))))
+      (zetta-tab-bar-modal)))
+
 (defun zetta-tab-bar-svg--modal ()
-  "Clickable tab-bar modal-system indicator (keyboard glyph; describe bindings)."
-  (let ((kbd (and (featurep 'nerd-icons)
-                  (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-keyboard_variant"))))))
-    (zetta-svg-seg
-     (concat (and kbd (concat kbd " ")) (zetta-tab-bar-modal)) 'tb-modal
-     :help "modal system"
-     :action-help "describe bindings"
-     :action #'describe-bindings
-     :menu (list (cons "Describe bindings" #'describe-bindings)
-                 (cons "Command (M-x)" #'execute-extended-command)))))
+  "Clickable tab-bar modal-system indicator (vim/cat/Emacs glyph; describe bindings)."
+  (zetta-svg-seg
+   (zetta-tab-bar-modal-glyph) 'tb-modal
+   :help (format "modal system: %s" (zetta-tab-bar-modal))
+   :action-help "describe bindings"
+   :action #'describe-bindings
+   :menu (list (cons "Describe bindings" #'describe-bindings)
+               (cons "Command (M-x)" #'execute-extended-command))))
 
 (defun zetta-tab-bar--left-of-clock-chars ()
   "How many characters a line-3 LEFT segment may use before the centred clock.
@@ -1031,31 +1059,71 @@ the full battery status."
              :menu (list (cons "Battery status" #'battery)
                          (cons "Toggle battery display" #'display-battery-mode)))))))))
 
+(defcustom zetta-tab-bar-svg-active-space-color "#6c4dab"
+  "Colour for the active (selected) space-tree space in the tab-bar workspace.
+Replaces space-tree's trailing-apostrophe marker; matches the masthead
+Emacs-icon purple (`zetta-tab-bar-svg-icon-color')."
+  :type 'color :group 'zetta)
+
+(defcustom zetta-tab-bar-svg-inactive-space-color "#b0b5be"
+  "Colour for the non-active tokens (spaces, braces, level bars) of the
+tab-bar workspace cluster.  A light gray that recedes against the white bar so
+the active space (`zetta-tab-bar-svg-active-space-color') stands out."
+  :type 'color :group 'zetta)
+
 (defun zetta-tab-bar-svg--workspace ()
-  "Clickable workspace cluster (glyph + name): switch space; space-tree menu."
+  "Clickable workspace cluster (glyph + spaces) for the SVG tab bar.
+space-tree's lighter marks each level's selected space with a trailing
+apostrophe; we render those labels in `zetta-tab-bar-svg-active-space-color'
+and drop the apostrophe, since svg-line colours per-segment, not per-character.
+
+We split on whitespace into one segment per token (space label / brace / level
+bar), separators included as their own segments.  Those boundaries don't move
+as you cycle spaces -- dropping the apostrophe keeps every token's width fixed,
+so only one token's colour changes.  A shifting split point would instead jitter
+its neighbours: svg-line starts each run on a fixed char-advance grid but flows
+text by the font's natural advance within a run, so where that boundary lands
+matters.  Every piece shares one hover id and the workspace action/menu, so the
+cluster still behaves as one clickable unit."
   (let* ((icon (ignore-errors (zetta-tab-bar-workspace-icon)))
-         (txt  (zetta-tab-bar-workspace-text))
-         (label (concat (and icon (concat icon " ")) (and (stringp txt) txt))))
-    (when (and label (> (length (string-trim label)) 0))
-      (zetta-svg-seg
-       label 'tb-workspace
-       :help "workspace"
-       :action-help "switch workspace"
-       :action (cond ((fboundp 'space-tree-switch-space-by-name) #'space-tree-switch-space-by-name)
-                     ((fboundp 'space-tree-switch-current-level) #'space-tree-switch-current-level)
-                     (t #'ignore))
-       :menu (delq nil
-                   (list (and (fboundp 'space-tree-switch-space-by-name)
-                              (cons "Switch by name…" #'space-tree-switch-space-by-name))
-                         (and (fboundp 'space-tree-go-left) (cons "Previous space" #'space-tree-go-left))
-                         (and (fboundp 'space-tree-go-right) (cons "Next space" #'space-tree-go-right))
-                         (and (fboundp 'space-tree-create-space-current-level)
-                              (cons "New space (here)" #'space-tree-create-space-current-level))
-                         (and (fboundp 'space-tree-create-space-top-level)
-                              (cons "New space (top)" #'space-tree-create-space-top-level))
-                         (and (fboundp 'space-tree-name-current-space)
-                              (cons "Rename space…" #'space-tree-name-current-space))
-                         (and (fboundp 'space-tree-delete-space)
-                              (cons "Delete space" #'space-tree-delete-space))))))))
+         (txt  (zetta-tab-bar-workspace-text)))
+    (when (and (stringp txt) (> (length (string-trim txt)) 0))
+      (let* ((action (cond ((fboundp 'space-tree-switch-space-by-name) #'space-tree-switch-space-by-name)
+                           ((fboundp 'space-tree-switch-current-level) #'space-tree-switch-current-level)
+                           (t #'ignore)))
+             (menu (delq nil
+                         (list (and (fboundp 'space-tree-switch-space-by-name)
+                                    (cons "Switch by name…" #'space-tree-switch-space-by-name))
+                               (and (fboundp 'space-tree-go-left) (cons "Previous space" #'space-tree-go-left))
+                               (and (fboundp 'space-tree-go-right) (cons "Next space" #'space-tree-go-right))
+                               (and (fboundp 'space-tree-create-space-current-level)
+                                    (cons "New space (here)" #'space-tree-create-space-current-level))
+                               (and (fboundp 'space-tree-create-space-top-level)
+                                    (cons "New space (top)" #'space-tree-create-space-top-level))
+                               (and (fboundp 'space-tree-name-current-space)
+                                    (cons "Rename space…" #'space-tree-name-current-space))
+                               (and (fboundp 'space-tree-delete-space)
+                                    (cons "Delete space" #'space-tree-delete-space)))))
+             (mkseg (lambda (s color)
+                      (and (stringp s) (> (length s) 0)
+                           (apply #'zetta-svg-seg s 'tb-workspace
+                                  :help "workspace" :action-help "switch workspace"
+                                  :action action :menu menu
+                                  (and color (list :color color))))))
+             (items (list (funcall mkseg (and icon (concat icon " ")) nil)))
+             (first t))
+        ;; One segment per whitespace-delimited token, with a fixed " " segment
+        ;; between them.  A token ending in "'" is the selected space: strip the
+        ;; apostrophe and colour it.  Boundaries stay put as the selection moves.
+        (dolist (tok (split-string (string-trim txt) " " t))
+          (unless first (push (funcall mkseg " " nil) items))
+          (setq first nil)
+          (let ((active (string-suffix-p "'" tok)))
+            (push (funcall mkseg (if active (substring tok 0 -1) tok)
+                           (if active
+                               zetta-tab-bar-svg-active-space-color
+                             zetta-tab-bar-svg-inactive-space-color))
+                  items)))
+        (apply #'svg-line-segs (nreverse (delq nil items)))))))
 
 ;;; line-utils.el ends here

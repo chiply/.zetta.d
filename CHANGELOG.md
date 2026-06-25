@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.24](https://github.com/chiply/.zetta.d/compare/v0.1.23...v0.1.24) (2026-06-25)
+
+
+### Features
+
+* **ui:** circled-number glyphs, coloured active space, modal glyphs, tab-line polish ([#73](https://github.com/chiply/.zetta.d/issues/73)) ([c2d2a00](https://github.com/chiply/.zetta.d/commit/c2d2a00f33001f192beba5a4445dde824048b4d3))
+
 ## [0.1.23](https://github.com/chiply/.zetta.d/compare/v0.1.22...v0.1.23) (2026-06-25)
 
 

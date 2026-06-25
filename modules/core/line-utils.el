@@ -889,17 +889,28 @@ recolours it via `zetta-tab-bar-svg-icon-color', so the raw glyph is returned."
                           (cons "Recent files…" #'consult-recent-file))
                      (cons "Save buffer" #'save-buffer)))))
 
+(defun zetta-tab-bar-modal-glyph ()
+  "Nerd-Font glyph for the active modal SYSTEM: vim for evil, cat for meow,
+the Emacs logo for emacs.  Falls back to the `zetta-tab-bar-modal' string when
+nerd-icons or the glyph is unavailable."
+  (or (and (featurep 'nerd-icons)
+           (zetta-line--glyph
+            (ignore-errors
+              (pcase (zetta-tab-bar-modal)
+                ("evil" (nerd-icons-sucicon "nf-custom-vim"))
+                ("meow" (nerd-icons-mdicon  "nf-md-cat"))
+                (_      (nerd-icons-sucicon "nf-custom-emacs"))))))
+      (zetta-tab-bar-modal)))
+
 (defun zetta-tab-bar-svg--modal ()
-  "Clickable tab-bar modal-system indicator (keyboard glyph; describe bindings)."
-  (let ((kbd (and (featurep 'nerd-icons)
-                  (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-keyboard_variant"))))))
-    (zetta-svg-seg
-     (concat (and kbd (concat kbd " ")) (zetta-tab-bar-modal)) 'tb-modal
-     :help "modal system"
-     :action-help "describe bindings"
-     :action #'describe-bindings
-     :menu (list (cons "Describe bindings" #'describe-bindings)
-                 (cons "Command (M-x)" #'execute-extended-command)))))
+  "Clickable tab-bar modal-system indicator (vim/cat/Emacs glyph; describe bindings)."
+  (zetta-svg-seg
+   (zetta-tab-bar-modal-glyph) 'tb-modal
+   :help (format "modal system: %s" (zetta-tab-bar-modal))
+   :action-help "describe bindings"
+   :action #'describe-bindings
+   :menu (list (cons "Describe bindings" #'describe-bindings)
+               (cons "Command (M-x)" #'execute-extended-command))))
 
 (defun zetta-tab-bar--left-of-clock-chars ()
   "How many characters a line-3 LEFT segment may use before the centred clock.

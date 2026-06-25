@@ -14,5 +14,11 @@
 ;; svg-line before those `(require 'svg-line)' calls run.
 
 (use-package svg-line
-  :ensure (:host github :repo "chiply/svg-line" :wait t))
+  :ensure (:host github :repo "chiply/svg-line" :wait t)
+  :custom
+  ;; Enlarge Nerd-Font icon glyphs (numbers, buffer/calendar icons, ...) a
+  ;; touch over the 1.3 default.  This only scales the glyph tspans, not the
+  ;; fixed char-advance grid, so the reserved width is unchanged and nothing
+  ;; is pushed off the right edge.
+  (svg-line-glyph-scale 1.4))
 ;;; svg-line.el ends here

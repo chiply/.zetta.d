@@ -79,11 +79,11 @@ Lastly, if no tabs are left in the window, it is deleted with the `delete-window
       (force-mode-line-update)))
 
   (defun ct/circle-number (n)
-    "Circled-number glyph for tab index N (1-based) plus a trailing space.
-A thin wrapper over `zetta-circle-number' (the shared glyph source); the
-trailing space separates the number from the file glyph that follows."
-    (when-let ((g (zetta-circle-number n)))
-      (concat g " ")))
+    "Circled-number glyph for tab index N (1-based), or nil.
+A thin wrapper over `zetta-circle-number' (the shared glyph source).  No
+trailing space -- the number sits flush against the file/mode glyph that
+follows; callers add their own separator before the buffer name."
+    (zetta-circle-number n))
 
   (defun zetta-tab-line-tab-name-buffer (buffer &optional _buffers)
     (let* ((buffer-name (buffer-name buffer))
@@ -258,8 +258,8 @@ Because the glyph is part of the label text it needs no separate icon."
              ;; binding for `real', so action/menu closures must not close over
              ;; it directly (they would all see the last tab's buffer).
              collect (let ((b real) (nm name))
-                       (cons (concat (or (ct/circle-number i) (format "%d " i))
-                                     (if glyph (concat glyph " ") "")
+                       (cons (concat (or (ct/circle-number i) (format "%d" i))
+                                     (if glyph (concat glyph " ") " ")
                                      short
                                      (if modifiedp zetta-tab-line-svg-modified-marker ""))
                              (list :current currentp :modified modifiedp
@@ -311,6 +311,32 @@ Because the glyph is part of the label text it needs no separate icon."
   :inactive-current-foreground (lambda () zetta-tab-line-svg-inactive-current-foreground)
   :inactive-current-background (lambda () zetta-tab-line-svg-inactive-current-background)
   :inactive-modified-foreground (lambda () zetta-tab-line-svg-inactive-modified-foreground))
+
+;;; ------------------------------------------------------------------
+;;; Left padding.  The `wrap' layout starts its content flush at x=0, so the
+;;; first tab sits against the window's left edge.  svg-line installs the tab
+;;; line by `:override'-advising `tab-line-format' to return a one-space
+;;; display-image string; we `:filter-return' that to prepend a fixed-width
+;;; space.  Safe for clicks: window-level bars hit-test with IMAGE-relative
+;;; `posn-object-x-y', and the margin space is a separate display object, so it
+;;; doesn't shift the image's internal coordinates.
+;;; ------------------------------------------------------------------
+(defcustom zetta-tab-line-svg-left-pad 8
+  "Left padding, in pixels, before the SVG tab-line content (0 to disable)."
+  :type 'integer :group 'zetta)
+
+(defun zetta-tab-line-svg--pad-left (result)
+  "Prepend `zetta-tab-line-svg-left-pad' px of margin to RESULT.
+A `:filter-return' advice on `tab-line-format'; passes RESULT through
+unchanged when it is not the svg-line image string or padding is disabled."
+  (if (and (stringp result) (> zetta-tab-line-svg-left-pad 0)
+           (zetta-tab-line-using-svg-p))
+      (concat (propertize " " 'display
+                          (list 'space :width (list zetta-tab-line-svg-left-pad)))
+              result)
+    result))
+
+(advice-add 'tab-line-format :filter-return #'zetta-tab-line-svg--pad-left)
 
 ;;; ------------------------------------------------------------------
 ;;; Switching.  svg-line installs the tab line by advising the

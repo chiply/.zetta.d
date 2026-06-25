@@ -60,7 +60,10 @@
   ;; number or drop "#500" in a live filter to see more.
   (setq-default elfeed-search-filter "@6-months-ago +unread #500")
   (setq elfeed-use-curl t)
-  (elfeed-set-timeout 36000)
+  ;; 60s, not 36000 (10h): with elfeed-protocol active only the Fever feed is
+  ;; fetched, so a hung request should free its slot promptly rather than block
+  ;; for hours.  (The old 10h value dated from the all-feeds direct-fetch era.)
+  (elfeed-set-timeout 60)
   (setq elfeed-curl-extra-arguments '("--insecure"))
   (defun prot-common-crm-exclude-selected-p (input)
     "Filter out INPUT from `completing-read-multiple'.
@@ -254,6 +257,20 @@ minibuffer with something like `exit-minibuffer'."
         (list
          (expand-file-name "elfeed.org" user-emacs-directory)
          ))
+  ;; Enable the protocol HERE, immediately before processing the org file.
+  ;; `elfeed-protocol-enable' installs the advice on `rmh-elfeed-org-process'
+  ;; that keeps the Fever feed in `elfeed-feeds' (set in ~/.private.el) and
+  ;; absorbs the org feeds' tags WITHOUT adding them as fetch targets.  Doing
+  ;; this only in elfeed-protocol's own :config was racy: under elpaca,
+  ;; elfeed-org's :config could run (and call `(elfeed-org)') before that
+  ;; :config executed `elfeed-protocol-enable' -- so the advice didn't exist
+  ;; yet, `(elfeed-org)' cleared `elfeed-feeds' (dropping the Fever feed), 0
+  ;; protocol feeds registered, and elfeed fell back to directly curling all
+  ;; ~193 org feeds (the Reddit 429 / dead-feed 4xx-5xx storm in *elfeed-log*).
+  ;; Enabling here -- idempotent, and `elfeed-feeds' still holds the Fever feed
+  ;; at this point since `(elfeed-org)' has not run yet -- guarantees the advice
+  ;; is in place first.  See also `:after elfeed org elfeed-protocol' above.
+  (when (fboundp 'elfeed-protocol-enable) (elfeed-protocol-enable))
   (elfeed-org)
   (message "loaded elfeed-org")
   )

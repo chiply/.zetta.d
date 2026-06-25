@@ -427,12 +427,13 @@ the recompute yields the same hunks we skip, breaking the cycle."
 ;; Everything here is svg-margin API: the customs, the provider registrations,
 ;; and the per-package refresh triggers.
 
-;; Reclaim only the LEFT fringe (evil-fringe-mark's old home; evil marks come
-;; from the margin provider now).  The RIGHT fringe stays: it natively hosts the
-;; per-row line-continuation / visual-line wrap arrows (redisplay draws them per
-;; screen row, for free) and yascroll's thumb -- both jobs the fringe does more
-;; simply than a window-anchored margin layer would.
-(setq svg-margin-disable-fringe 'left)
+;; Keep BOTH fringes at full width.  The fringe natively hosts the per-row
+;; line-continuation / visual-line wrap arrows (redisplay draws them per screen
+;; row, for free) and yascroll's thumb -- jobs a window-anchored margin can't do.
+;; Evil marks no longer need the left fringe (the activate below turns off
+;; evil-fringe-mark; they render in the margin instead), so the left fringe stays
+;; free for those wrap indicators.
+(setq svg-margin-disable-fringe nil)
 
 ;; Reserve a baseline margin width so buffer text doesn't shift as indicators
 ;; come and go (the margin still grows past this when a line needs more).

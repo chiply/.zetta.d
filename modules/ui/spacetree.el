@@ -43,3 +43,29 @@
    "gT" 'space-tree-switch-space-by-digit-arg
    "g+" 'space-tree-create-space-top-level
    "gn" 'space-tree-create-space-current-level))
+
+;;; ------------------------------------------------------------------
+;;; Circled-number lighter -- render the space-tree tab-bar numbers as
+;;; the same nf-md-numeric_N_circle glyphs the tab-line and svg-margin
+;;; use.  space-tree's per-level renderer calls `number-to-string' for an
+;;; unnamed space; we rebind that, for the duration of just that one
+;;; function, so the display number becomes a circle glyph.  Its only
+;;; `number-to-string' use is the display number, and NAMED spaces never
+;;; reach it -- so names and the package's internals are untouched.
+;;; ------------------------------------------------------------------
+(require 'cl-lib)
+(declare-function zetta-circle-number "line-utils")
+(declare-function space-tree--modeline-string-for-level "space-tree")
+
+(defun zetta-space-tree--circle-numbers (orig &rest args)
+  "Around-advice for `space-tree--modeline-string-for-level': circle the numbers.
+Falls back to the real `number-to-string' when nerd-icons is unavailable or the
+value isn't an integer (`zetta-circle-number' returns nil in those cases)."
+  (cl-letf* ((nts (symbol-function 'number-to-string))
+             ((symbol-function 'number-to-string)
+              (lambda (n) (or (zetta-circle-number n) (funcall nts n)))))
+    (apply orig args)))
+
+(with-eval-after-load 'space-tree
+  (advice-add 'space-tree--modeline-string-for-level
+              :around #'zetta-space-tree--circle-numbers))

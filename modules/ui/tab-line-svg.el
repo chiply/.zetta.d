@@ -169,6 +169,12 @@ Too high leaves whitespace inside tab boxes; too low overlaps tabs."
   :type 'number :group 'zetta)
 (defcustom zetta-tab-line-svg-tab-gap 1.0
   "Gap between tabs, in character widths." :type 'number :group 'zetta)
+(defcustom zetta-tab-line-svg-tab-pad 1
+  "Horizontal padding INSIDE each tab, in spaces, on each side of the label.
+Keeps the index number off the tab's left edge (and the name off its right),
+so a per-tab background reads as a padded pill rather than text flush to the
+box edges."
+  :type 'integer :group 'zetta)
 (defcustom zetta-tab-line-svg-max-name 30
   "Truncate an individual tab name to this many characters (then …)."
   :type 'integer :group 'zetta)
@@ -180,7 +186,8 @@ normal flush-left flow."
 
 (defcustom zetta-tab-line-svg-background "#ece4f6"
   "Light purple background for the SVG tab line (selected window).
-Distinguishes the tab line from the tab-bar and header-line.  nil = transparent."
+Distinguishes the tab line from the tab-bar and header-line, and is the colour
+the inactive tabs sit just slightly darker than.  nil = transparent."
   :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
 
 (defcustom zetta-tab-line-svg-current-background "#4b2e83"
@@ -192,6 +199,13 @@ while staying dark enough for the white current-tab label to read."
 (defcustom zetta-tab-line-svg-current-foreground "#ffffff"
   "Foreground for the current tab's label (light, to read on the dark box)."
   :type 'color :group 'zetta)
+
+(defcustom zetta-tab-line-svg-tab-background "#e4dbf2"
+  "Background box drawn behind each ordinary (inactive) tab to delineate it,
+the way the built-in tab line distinguishes inactive tabs.  Just a touch darker
+than `zetta-tab-line-svg-background' -- the delineation is meant to be subtle, so
+each tab reads as a faintly recessed pill against the bar.  nil = transparent."
+  :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
 
 (defcustom zetta-tab-line-svg-modified-foreground "#c1641e"
   "Foreground for a tab whose buffer has unsaved changes.
@@ -218,6 +232,11 @@ Empty by default -- the modified colour alone marks unsaved tabs."
 (defcustom zetta-tab-line-svg-inactive-current-background "#b0a3cf"
   "Highlight behind the current tab in NON-selected windows (muted purple)."
   :type '(choice (const :tag "None" nil) color) :group 'zetta)
+
+(defcustom zetta-tab-line-svg-inactive-tab-background "#ede6f5"
+  "Background box behind ordinary tabs in NON-selected windows: just a touch
+darker than `zetta-tab-line-svg-inactive-background', a subtle delineation."
+  :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
 
 (defcustom zetta-tab-line-svg-inactive-current-foreground "#ffffff"
   "Current tab's label colour in NON-selected windows."
@@ -257,11 +276,14 @@ Because the glyph is part of the label text it needs no separate icon."
              ;; capture the buffer in a fresh binding -- cl-loop reuses one
              ;; binding for `real', so action/menu closures must not close over
              ;; it directly (they would all see the last tab's buffer).
-             collect (let ((b real) (nm name))
-                       (cons (concat (or (ct/circle-number i) (format "%d" i))
+             collect (let ((b real) (nm name)
+                           (pad (make-string (max 0 zetta-tab-line-svg-tab-pad) ?\s)))
+                       (cons (concat pad
+                                     (or (ct/circle-number i) (format "%d" i))
                                      (if glyph (concat glyph " ") " ")
                                      short
-                                     (if modifiedp zetta-tab-line-svg-modified-marker ""))
+                                     (if modifiedp zetta-tab-line-svg-modified-marker "")
+                                     pad)
                              (list :current currentp :modified modifiedp
                                    :id b
                                    :help (format "buffer: %s" nm)
@@ -304,39 +326,15 @@ Because the glyph is part of the label text it needs no separate icon."
                              (face-foreground 'shadow nil t) "#888888"))
   :current-foreground (lambda () zetta-tab-line-svg-current-foreground)
   :current-background (lambda () zetta-tab-line-svg-current-background)
+  :tab-background (lambda () zetta-tab-line-svg-tab-background)
   :modified-foreground (lambda () zetta-tab-line-svg-modified-foreground)
   ;; inactive (unfocused-window) palette
   :inactive-background (lambda () zetta-tab-line-svg-inactive-background)
   :inactive-foreground (lambda () zetta-tab-line-svg-inactive-foreground)
   :inactive-current-foreground (lambda () zetta-tab-line-svg-inactive-current-foreground)
   :inactive-current-background (lambda () zetta-tab-line-svg-inactive-current-background)
+  :inactive-tab-background (lambda () zetta-tab-line-svg-inactive-tab-background)
   :inactive-modified-foreground (lambda () zetta-tab-line-svg-inactive-modified-foreground))
-
-;;; ------------------------------------------------------------------
-;;; Left padding.  The `wrap' layout starts its content flush at x=0, so the
-;;; first tab sits against the window's left edge.  svg-line installs the tab
-;;; line by `:override'-advising `tab-line-format' to return a one-space
-;;; display-image string; we `:filter-return' that to prepend a fixed-width
-;;; space.  Safe for clicks: window-level bars hit-test with IMAGE-relative
-;;; `posn-object-x-y', and the margin space is a separate display object, so it
-;;; doesn't shift the image's internal coordinates.
-;;; ------------------------------------------------------------------
-(defcustom zetta-tab-line-svg-left-pad 8
-  "Left padding, in pixels, before the SVG tab-line content (0 to disable)."
-  :type 'integer :group 'zetta)
-
-(defun zetta-tab-line-svg--pad-left (result)
-  "Prepend `zetta-tab-line-svg-left-pad' px of margin to RESULT.
-A `:filter-return' advice on `tab-line-format'; passes RESULT through
-unchanged when it is not the svg-line image string or padding is disabled."
-  (if (and (stringp result) (> zetta-tab-line-svg-left-pad 0)
-           (zetta-tab-line-using-svg-p))
-      (concat (propertize " " 'display
-                          (list 'space :width (list zetta-tab-line-svg-left-pad)))
-              result)
-    result))
-
-(advice-add 'tab-line-format :filter-return #'zetta-tab-line-svg--pad-left)
 
 ;;; ------------------------------------------------------------------
 ;;; Switching.  svg-line installs the tab line by advising the

@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.25](https://github.com/chiply/.zetta.d/compare/v0.1.24...v0.1.25) (2026-06-26)
+
+
+### Features
+
+* **tab-line:** per-tab padding and a subtle inactive-tab background ([#77](https://github.com/chiply/.zetta.d/issues/77)) ([624f35a](https://github.com/chiply/.zetta.d/commit/624f35adf927e86680fb4ce507b2e1f9ed161568))
+
+
+### Bug Fixes
+
+* **elfeed:** enable protocol before elfeed-org to stop direct-fetch fallback ([#75](https://github.com/chiply/.zetta.d/issues/75)) ([af19e49](https://github.com/chiply/.zetta.d/commit/af19e498f70b44d1612cbcea97267ddfa56fc80f))
+* **pdf-tools:** hide hl-line band and evil cursor over the PDF page ([#78](https://github.com/chiply/.zetta.d/issues/78)) ([03d235a](https://github.com/chiply/.zetta.d/commit/03d235aad074ec9a4ae97cd62a30ba85fcb58013))
+
 ## [0.1.24](https://github.com/chiply/.zetta.d/compare/v0.1.23...v0.1.24) (2026-06-25)
 
 

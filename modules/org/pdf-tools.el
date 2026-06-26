@@ -21,7 +21,19 @@
   (add-hook 'pdf-view-mode-hook 'pdf-view-fit-height-to-window)
   (add-hook 'pdf-view-mode-hook (lambda ()
                                   (display-fill-column-indicator-mode -1)
-                                  (display-line-numbers-mode -1)))
+                                  (display-line-numbers-mode -1)
+                                  ;; Horizontal band: hl-line highlighting point's line over the page.
+                                  (setq global-hl-line-mode nil)
+                                  (when (fboundp 'hl-line-mode) (hl-line-mode -1))
+                                  ;; Vertical bar: pdf-view sets `cursor-type' nil, but evil re-applies
+                                  ;; its state cursor (and our evil state cursors are nil, so it falls
+                                  ;; back to `evil-default-cursor', a box).  Over the one tall page
+                                  ;; "line" that box renders as a full-height vertical bar.  Force
+                                  ;; evil's default cursor to keep the cursor hidden in PDF buffers.
+                                  (setq-local cursor-type nil)
+                                  (when (boundp 'evil-default-cursor)
+                                    (setq-local evil-default-cursor (lambda () (setq cursor-type nil))))
+                                  (when (fboundp 'evil-refresh-cursor) (evil-refresh-cursor))))
   ;; Sharp rendering on retina displays
   (setq pdf-view-use-scaling t)
   ;; Midnight mode colors for dark reading (toggle with M-x pdf-view-midnight-minor-mode)

@@ -41,6 +41,11 @@
 ;;          to see every node it connects to.  Never tangles, whatever the
 ;;          density.  No external dependency.
 ;;
+;;   dag    A git-log style rail diagram: every node on its own row in one
+;;          column, each edge a vertical rail in a lane to the left.  Narrow
+;;          and clean on sparse/tree-like graphs (busier on dense clusters).
+;;          No external dependency.
+;;
 ;; To get the `graph' style, install graph-easy once, e.g. with a user-local
 ;; Perl lib (no sudo):
 ;;
@@ -64,7 +69,7 @@
 ;;
 ;; In the display buffer:
 ;;   1-9  re-render at that many degrees from the current centre
-;;   v    cycle the text view style (graph -> tree -> matrix)
+;;   v    cycle the text view style (graph -> tree -> matrix -> dag)
 ;;   s    open the force-directed SVG view (graph-fa2, separate buffer)
 ;;   h    toggle hub pruning on/off
 ;;   [ ]  lower / raise the hub-degree threshold (also enables pruning)
@@ -522,6 +527,91 @@ connections.  EXCLUDE nodes are omitted."
                           (t (propertize "·" 'face 'shadow)))))
           (insert "  " (hywiki-graph--node-display row) "\n"))))))
 
+;;;; DAG rendering (git-log style: nodes in one column, edges as side rails)
+
+(defconst hywiki-graph--dag-glyphs
+  [?\s ?│ ?│ ?│ ?─ ?╯ ?╮ ?┤ ?─ ?╰ ?╭ ?├ ?─ ?┴ ?┬ ?┼]
+  "Box-drawing glyph for each 4-bit cell mask (U=1 D=2 L=4 R=8).")
+
+(defun hywiki-graph--dfs-order (center adj nodeset)
+  "Return a depth-first ordering of NODESET from CENTER over ADJ.
+DFS keeps most edges short, which narrows the rail diagram."
+  (let ((visited (make-hash-table :test 'equal)) (order '()))
+    (cl-labels ((visit (n)
+                  (unless (gethash n visited)
+                    (puthash n t visited)
+                    (push n order)
+                    (dolist (m (sort (copy-sequence (gethash n adj)) #'string<))
+                      (when (gethash m nodeset) (visit m))))))
+      (visit center))
+    (nreverse order)))
+
+(defun hywiki-graph--render-dag (center degree adj exclude)
+  "Render the CENTER/DEGREE neighbourhood as a git-log style rail diagram.
+Every node sits on its own row in a single column; each edge is a vertical
+rail in a lane to the left, joining its two nodes.  EXCLUDE nodes are
+omitted."
+  (pcase-let* ((`(,all . ,edges) (hywiki-graph--induced center degree adj exclude))
+               (nodeset (let ((h (make-hash-table :test 'equal)))
+                          (dolist (nd all) (puthash nd t h)) h))
+               (nodes (hywiki-graph--dfs-order center adj nodeset))
+               (n (length nodes))
+               (idx (make-hash-table :test 'equal)))
+    (cl-loop for nd in nodes for i from 0 do (puthash nd i idx))
+    (hywiki-graph--insert-header center degree n (length edges) 'dag)
+    ;; Edges as row intervals (i . j), i<j; assign each a lane by greedy
+    ;; interval colouring (lowest lane whose previous edge has ended).
+    ;; Longest-span edges first so they take the leftmost lanes; short edges
+    ;; then land in lanes nearest the node column, minimising the crossings
+    ;; their connectors make.
+    (let* ((ivs (sort (delq nil
+                            (mapcar (lambda (e)
+                                      (let ((a (gethash (car e) idx))
+                                            (b (gethash (cdr e) idx)))
+                                        (when (and a b (/= a b))
+                                          (cons (min a b) (max a b)))))
+                                    edges))
+                      (lambda (x y)
+                        (let ((sx (- (cdr x) (car x))) (sy (- (cdr y) (car y))))
+                          (or (> sx sy)
+                              (and (= sx sy) (< (car x) (car y))))))))
+           (lane-free (make-vector (max 1 (length ivs)) 0))
+           (nlanes 0)
+           (assign '()))
+      (dolist (iv ivs)
+        (let ((lane 0))
+          (while (and (< lane nlanes) (> (aref lane-free lane) (car iv)))
+            (setq lane (1+ lane)))
+          (when (= lane nlanes) (setq nlanes (1+ nlanes)))
+          (aset lane-free lane (cdr iv))
+          (push (list (car iv) (cdr iv) lane) assign)))
+      ;; Build a mask grid: N rows x (nlanes + 1) cols; col `nlanes' is the node.
+      (let* ((ncol nlanes)
+             (width (1+ nlanes))
+             (grid (make-vector n nil)))
+        (dotimes (r n) (aset grid r (make-vector width 0)))
+        (cl-flet ((addm (r c bits)
+                    (when (and (>= r 0) (< r n) (>= c 0) (< c width))
+                      (aset (aref grid r) c (logior (aref (aref grid r) c) bits)))))
+          (dolist (a assign)
+            (let ((i (nth 0 a)) (j (nth 1 a)) (lane (nth 2 a)))
+              (addm i lane 2)                                  ; rail goes down
+              (cl-loop for r from (1+ i) to (1- j) do (addm r lane 3)) ; passing
+              (addm j lane 1)                                  ; rail ends (up)
+              (dolist (r (list i j))                           ; join to node col
+                (addm r lane 8)                                ; right toward node
+                (cl-loop for c from (1+ lane) to (1- ncol) do (addm r c 12))
+                (addm r ncol 4)))))                            ; left into node
+        (dotimes (r n)
+          (let ((node (nth r nodes)))
+            (dotimes (c nlanes)
+              (insert (char-to-string
+                       (aref hywiki-graph--dag-glyphs (aref (aref grid r) c)))))
+            (insert (propertize "●" 'face (if (equal node center)
+                                              'hywiki-graph-center 'hywiki-graph-node)
+                                'hywiki-graph-node node 'mouse-face 'highlight)
+                    " " (hywiki-graph--node-display node) "\n")))))))
+
 ;;;; Render dispatch
 
 (defun hywiki-graph--render ()
@@ -536,6 +626,7 @@ connections.  EXCLUDE nodes are omitted."
     (pcase hywiki-graph--style
       ('graph  (hywiki-graph--render-graph-easy center degree adj exclude))
       ('matrix (hywiki-graph--render-matrix center degree adj exclude))
+      ('dag    (hywiki-graph--render-dag center degree adj exclude))
       (_       (hywiki-graph--render-tree center degree adj exclude)))
     (goto-char (point-min))))
 
@@ -647,10 +738,10 @@ buffer, or prompts for a WikiWord.  Click a node to recentre."
 
 (defun hywiki-graph--available-styles ()
   "Return the list of selectable text rendering styles, in cycle order."
-  '(graph tree matrix))
+  '(graph tree matrix dag))
 
 (defun hywiki-graph-cycle-style ()
-  "Switch to the next text rendering style (graph -> tree -> matrix)."
+  "Switch to the next text rendering style (graph -> tree -> matrix -> dag)."
   (interactive)
   (let* ((styles (hywiki-graph--available-styles))
          (next (or (cadr (member hywiki-graph--style styles)) (car styles))))

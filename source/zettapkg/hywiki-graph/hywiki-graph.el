@@ -394,7 +394,7 @@ oriented centre-outward."))
               "hubs shown"))
     'face 'shadow)
    (propertize
-    "[1-9] degree · v view · s svg · S dagviz · h hubs · [ ] threshold · RET recenter · o open · g refresh · ? help · q quit\n\n"
+    "[1-9] degree · v/V view · s svg · S dagviz · h hubs · [ ] threshold · RET recenter · o open · g refresh · ? help · q quit\n\n"
     'face 'shadow)))
 
 ;;;; Tree rendering
@@ -1058,6 +1058,45 @@ included only when their backend is available."
     (hywiki-graph--render)
     (message "HyWiki graph style: %s" next)))
 
+(defun hywiki-graph--view-available-p (style)
+  "Return non-nil when STYLE's backend is usable."
+  (pcase style
+    ('graph    (hywiki-graph--graph-easy-available-p))
+    ('layered  (hywiki-graph--dag-draw-available-p))
+    ('asciidag (hywiki-graph--ascii-dag-available-p))
+    ('svg      (hywiki-graph--graph-fa2-available-p))
+    ('dagviz   (hywiki-graph--dagviz-available-p))
+    (_ t)))
+
+(defun hywiki-graph-set-view (view)
+  "Switch to VIEW by name, chosen with completion.
+Text views (graph, tree, matrix, dag, layered, asciidag) render in this
+buffer; the image views `svg' and `dagviz' open their own buffer.
+Candidates are annotated with their backend and availability."
+  (interactive
+   (list
+    (intern
+     (let* ((cands (mapcar (lambda (e) (symbol-name (car e))) hywiki-graph--view-info))
+            (completion-extra-properties
+             (list :annotation-function
+                   (lambda (c)
+                     (let ((s (intern c)))
+                       (concat
+                        (propertize (format "  — %s" (hywiki-graph--view-backend s))
+                                    'face 'shadow)
+                        (unless (hywiki-graph--view-available-p s)
+                          (propertize "  (backend not available)" 'face 'warning))))))))
+       (completing-read "HyWiki graph view: " cands nil t)))))
+  (pcase view
+    ('svg (hywiki-graph-svg))
+    ('dagviz (hywiki-graph-dagviz))
+    (_
+     (unless (and (boundp 'hywiki-graph--center) hywiki-graph--center)
+       (user-error "Run from a HyWiki graph buffer"))
+     (setq hywiki-graph--style view)
+     (hywiki-graph--render)
+     (message "HyWiki graph view: %s (%s)" view (hywiki-graph--view-backend view)))))
+
 (defun hywiki-graph-describe-view ()
   "Pop a help buffer documenting every view: representation and backend.
 The current view is marked, and unavailable backends are flagged."
@@ -1070,19 +1109,13 @@ The current view is marked, and unavailable backends are flagged."
         (insert "Nodes are WikiWords.  An (undirected) edge joins two WikiWords when one\n"
                 "page's text mentions the other.  The numeric prefix / digit keys set how\n"
                 "many link hops out from the centre to show; hub pruning (h, [ ]) drops\n"
-                "over-connected index pages.  Cycle the text views with `v'; `s' opens the\n"
-                "SVG view in its own buffer.\n\n")
+                "over-connected index pages.  Cycle the text views with `v', or jump to\n"
+                "any view by name with `V'; `s'/`S' open the SVG views in their own buffer.\n\n")
         (dolist (entry hywiki-graph--view-info)
           (let* ((style (car entry))
                  (backend (plist-get (cdr entry) :backend))
                  (doc (plist-get (cdr entry) :doc))
-                 (avail (pcase style
-                          ('layered (hywiki-graph--dag-draw-available-p))
-                          ('asciidag (hywiki-graph--ascii-dag-available-p))
-                          ('svg (hywiki-graph--graph-fa2-available-p))
-                          ('dagviz (hywiki-graph--dagviz-available-p))
-                          ('graph (hywiki-graph--graph-easy-available-p))
-                          (_ t))))
+                 (avail (hywiki-graph--view-available-p style)))
             (insert (format "%s%-9s [%s]%s\n"
                             (if (eq style current) "▸ " "  ")
                             (symbol-name style) backend
@@ -1160,6 +1193,7 @@ The current view is marked, and unavailable backends are flagged."
   (define-key hywiki-graph-mode-map (number-to-string (1+ i))
               #'hywiki-graph-set-degree))
 (define-key hywiki-graph-mode-map (kbd "v")   #'hywiki-graph-cycle-style)
+(define-key hywiki-graph-mode-map (kbd "V")   #'hywiki-graph-set-view)
 (define-key hywiki-graph-mode-map (kbd "s")   #'hywiki-graph-svg)
 (define-key hywiki-graph-mode-map (kbd "S")   #'hywiki-graph-dagviz)
 (define-key hywiki-graph-mode-map (kbd "h")   #'hywiki-graph-toggle-hubs)

@@ -13,10 +13,16 @@
 ;; autoloaded, so the binding pulls in the package (and Hyperbole) on first
 ;; use.
 
-;; Optional force-directed SVG view.  `hywiki-graph' soft-requires this; when
-;; absent, only the text views (graph/tree/matrix) are offered.
+;; Optional view backends.  `hywiki-graph' soft-requires each; when absent,
+;; that view is simply omitted (the built-in text views always work).
 (use-package graph-fa2
   :ensure (graph-fa2 :type git :host github :repo "elij/graph-fa2")
+  :defer t)
+
+;; Layered DAG flowchart view (the `layered' style).
+(use-package dag-draw
+  :ensure (dag-draw :type git :host codeberg :repo "Trevoke/dag-draw.el"
+                    :branch "congruence")
   :defer t)
 
 (use-package hywiki-graph

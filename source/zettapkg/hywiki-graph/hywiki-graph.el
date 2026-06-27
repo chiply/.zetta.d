@@ -42,9 +42,15 @@
 ;;          density.  No external dependency.
 ;;
 ;;   dag    A git-log style rail diagram: every node on its own row in one
-;;          column, each edge a vertical rail in a lane to the left.  Narrow
-;;          and clean on sparse/tree-like graphs (busier on dense clusters).
-;;          No external dependency.
+;;          column, each edge a vertical rail in a lane to the left, coloured
+;;          per lane so crossing rails stay distinct.  Narrow and clean on
+;;          sparse/tree-like graphs (busier on dense clusters).  No external
+;;          dependency.
+;;
+;;   layered  A hierarchical flowchart (Sugiyama layout) rooted at the centre,
+;;          drawn as ASCII boxes and arrows by the optional `dag-draw'
+;;          package.  Edges are oriented centre-outward.  Offered only when
+;;          dag-draw is installed.
 ;;
 ;; To get the `graph' style, install graph-easy once, e.g. with a user-local
 ;; Perl lib (no sudo):
@@ -169,6 +175,13 @@ See `hywiki-graph-prune-hubs'."
 (defface hywiki-graph-edge
   '((t :inherit shadow))
   "Face for tree branches and cross-link annotations.")
+
+(defcustom hywiki-graph-dag-lane-colors
+  '("#89b4fa" "#a6e3a1" "#f9e2af" "#fab387" "#cba6f7" "#94e2d5" "#f38ba8" "#74c7ec")
+  "Foreground colours cycled across lanes in the `dag' view.
+Each vertical rail is coloured by its lane so crossing rails stay
+distinguishable."
+  :type '(repeat color))
 
 ;;;; Graph construction
 
@@ -602,15 +615,83 @@ omitted."
                 (addm r lane 8)                                ; right toward node
                 (cl-loop for c from (1+ lane) to (1- ncol) do (addm r c 12))
                 (addm r ncol 4)))))                            ; left into node
-        (dotimes (r n)
-          (let ((node (nth r nodes)))
-            (dotimes (c nlanes)
-              (insert (char-to-string
-                       (aref hywiki-graph--dag-glyphs (aref (aref grid r) c)))))
-            (insert (propertize "●" 'face (if (equal node center)
-                                              'hywiki-graph-center 'hywiki-graph-node)
-                                'hywiki-graph-node node 'mouse-face 'highlight)
-                    " " (hywiki-graph--node-display node) "\n")))))))
+        (let* ((palette hywiki-graph-dag-lane-colors)
+               (np (length palette)))
+          (dotimes (r n)
+            (let ((node (nth r nodes)))
+              (dotimes (c nlanes)
+                (let* ((m (aref (aref grid r) c))
+                       (glyph (char-to-string (aref hywiki-graph--dag-glyphs m))))
+                  (insert (cond
+                           ((zerop m) glyph)
+                           ;; vertical present -> colour by lane so crossing
+                           ;; rails are distinguishable; pure horizontals dim.
+                           ((/= 0 (logand m 3))
+                            (propertize glyph 'face
+                                        (list :foreground (nth (mod c np) palette))))
+                           (t (propertize glyph 'face 'hywiki-graph-edge))))))
+              (insert (propertize "●" 'face (if (equal node center)
+                                                'hywiki-graph-center 'hywiki-graph-node)
+                                  'hywiki-graph-node node 'mouse-face 'highlight)
+                      " " (hywiki-graph--node-display node) "\n"))))))))
+
+;;;; Layered rendering (Sugiyama flowchart, via dag-draw.el)
+
+(declare-function dag-draw-create-from-spec "dag-draw")
+(declare-function dag-draw-layout-graph "dag-draw")
+(declare-function dag-draw-render-graph "dag-draw")
+
+(defun hywiki-graph--dag-draw-available-p ()
+  "Return non-nil when the dag-draw package can be loaded."
+  (and (require 'dag-draw nil t) (fboundp 'dag-draw-render-graph)))
+
+(defun hywiki-graph--oriented-spec (nodes edges adj degree center exclude)
+  "Return a dag-draw spec orienting EDGES into a DAG rooted at CENTER.
+Each undirected edge is directed from the endpoint nearer CENTER (by BFS
+distance) to the farther one; ties break by name, giving a hierarchy."
+  (let ((dist (plist-get (hywiki-graph--bfs center adj degree exclude) :dist)))
+    (list :nodes (mapcar (lambda (n) (list (intern n) :label n)) nodes)
+          :edges (mapcar (lambda (e)
+                           (let* ((a (car e)) (b (cdr e))
+                                  (da (or (gethash a dist) 0))
+                                  (db (or (gethash b dist) 0)))
+                             (if (or (< da db) (and (= da db) (string< a b)))
+                                 (list (intern a) (intern b))
+                               (list (intern b) (intern a)))))
+                         edges))))
+
+(defun hywiki-graph--render-layered (center degree adj exclude)
+  "Render the CENTER/DEGREE neighbourhood as a layered DAG via dag-draw.
+Falls back to the tree view when dag-draw is unavailable, the graph is too
+dense, or rendering fails."
+  (pcase-let* ((`(,nodes . ,edges) (hywiki-graph--induced center degree adj exclude))
+               (n-edges (length edges)))
+    (cond
+     ((not (hywiki-graph--dag-draw-available-p))
+      (hywiki-graph--render-tree center degree adj exclude
+                                 "dag-draw not installed — showing tree"))
+     ((> n-edges hywiki-graph-graph-easy-max-edges)
+      (hywiki-graph--render-tree
+       center degree adj exclude
+       (format "%d edges > cap (%d) — showing tree (lower degree, or h to prune)"
+               n-edges hywiki-graph-graph-easy-max-edges)))
+     (t
+      (let ((out (condition-case err
+                     (let ((g (apply #'dag-draw-create-from-spec
+                                     (hywiki-graph--oriented-spec
+                                      nodes edges adj degree center exclude))))
+                       (dag-draw-layout-graph g)
+                       (dag-draw-render-graph g 'ascii))
+                   (error (format "dag-draw error: %S" err)))))
+        (if (not (stringp out))
+            (hywiki-graph--render-tree center degree adj exclude
+                                       "dag-draw failed — showing tree")
+          (hywiki-graph--insert-header center degree (length nodes) n-edges 'layered)
+          (let ((start (point)))
+            (insert (string-trim-right out) "\n")
+            (save-restriction
+              (narrow-to-region start (point))
+              (hywiki-graph--fontify-nodes nodes)))))))))
 
 ;;;; Render dispatch
 
@@ -624,10 +705,11 @@ omitted."
                        (hywiki-graph--hub-set adj hywiki-graph--hub-threshold center))))
     (erase-buffer)
     (pcase hywiki-graph--style
-      ('graph  (hywiki-graph--render-graph-easy center degree adj exclude))
-      ('matrix (hywiki-graph--render-matrix center degree adj exclude))
-      ('dag    (hywiki-graph--render-dag center degree adj exclude))
-      (_       (hywiki-graph--render-tree center degree adj exclude)))
+      ('graph   (hywiki-graph--render-graph-easy center degree adj exclude))
+      ('matrix  (hywiki-graph--render-matrix center degree adj exclude))
+      ('dag     (hywiki-graph--render-dag center degree adj exclude))
+      ('layered (hywiki-graph--render-layered center degree adj exclude))
+      (_        (hywiki-graph--render-tree center degree adj exclude)))
     (goto-char (point-min))))
 
 ;;;; SVG view (force-directed, via graph-fa2)
@@ -737,11 +819,13 @@ buffer, or prompts for a WikiWord.  Click a node to recentre."
       (message "HyWiki graph: %s, degree %d" hywiki-graph--center d))))
 
 (defun hywiki-graph--available-styles ()
-  "Return the list of selectable text rendering styles, in cycle order."
-  '(graph tree matrix dag))
+  "Return the list of selectable text rendering styles, in cycle order.
+The `layered' (dag-draw) style is included only when dag-draw is present."
+  (append '(graph tree matrix dag)
+          (and (hywiki-graph--dag-draw-available-p) '(layered))))
 
 (defun hywiki-graph-cycle-style ()
-  "Switch to the next text rendering style (graph -> tree -> matrix -> dag)."
+  "Switch to the next available text rendering style."
   (interactive)
   (let* ((styles (hywiki-graph--available-styles))
          (next (or (cadr (member hywiki-graph--style styles)) (car styles))))

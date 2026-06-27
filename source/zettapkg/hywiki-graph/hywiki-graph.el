@@ -472,9 +472,16 @@ oriented centre-outward."))
   "Insert the buffer header lines for CENTER, DEGREE, NODES, EDGES, STYLE."
   (insert
    (propertize (format "HyWiki graph: %s\n" center) 'face 'hywiki-graph-center)
+   ;; The view label is a button -> show this view's underlying graph code.
+   (propertize (format "%s (%s)" style (hywiki-graph--view-backend style))
+               'face 'shadow 'mouse-face 'highlight
+               'help-echo "mouse-1 / c: show this view's graph code"
+               'keymap (let ((m (make-sparse-keymap)))
+                         (define-key m [mouse-1] #'hywiki-graph-show-code)
+                         m))
    (propertize
-    (format "%s (%s) · degree %d · %d node%s · %d edge%s · %s%s\n"
-            style (hywiki-graph--view-backend style) degree
+    (format " · degree %d · %d node%s · %d edge%s · %s%s\n"
+            degree
             nodes (if (= nodes 1) "" "s")
             edges (if (= edges 1) "" "s")
             (if hywiki-graph--prune-hubs
@@ -483,7 +490,7 @@ oriented centre-outward."))
             (if hywiki-graph--include-rolo " · +rolo" ""))
     'face 'shadow)
    (propertize
-    "[1-9] degree · v/V view · s svg · S dagviz · h hubs · [ ] threshold · r rolo · RET recenter · o open · g refresh · ? help · q quit\n\n"
+    "[1-9] degree · v/V view · s svg · S dagviz · h hubs · [ ] threshold · r rolo · RET recenter · o open · c code · g refresh · ? help · q quit\n\n"
     'face 'shadow)))
 
 ;;;; Tree rendering
@@ -1216,6 +1223,66 @@ The current view is marked, and unavailable backends are flagged."
                             (if avail "" "  — backend not available")))
             (insert "    " (string-replace "\n" "\n    " doc) "\n\n")))))))
 
+(defun hywiki-graph--view-code (style center degree adj exclude)
+  "Return (TITLE MODE-FN CONTENT) describing the source code for STYLE.
+CONTENT is the intermediate representation a view's backend consumes (DOT,
+a spec, helper stdin, ...); built-in views show portable DOT."
+  (pcase-let ((`(,nodes . ,edges) (hywiki-graph--induced center degree adj exclude)))
+    (pcase style
+      ('graph
+       (list "Graphviz DOT — graph (graph-easy input)" #'fundamental-mode
+             (hywiki-graph--dot center nodes edges)))
+      ('layered
+       (list "dag-draw spec — layered (Emacs Lisp)" #'emacs-lisp-mode
+             (pp-to-string
+              (hywiki-graph--oriented-spec nodes edges adj degree center exclude))))
+      ('asciidag
+       (list "ascii-dag helper stdin — asciidag" #'fundamental-mode
+             (hywiki-graph--ascii-dag-input nodes edges adj degree center exclude)))
+      ('dagviz
+       (list "dagviz helper stdin (fed to networkx) — dagviz" #'fundamental-mode
+             (hywiki-graph--ascii-dag-input nodes edges adj degree center exclude)))
+      ('svg
+       (list "graph-fa2 nodes/edges — svg (Emacs Lisp)" #'emacs-lisp-mode
+             (pp-to-string (hywiki-graph--fa2-data center degree adj exclude))))
+      (_
+       (list (format "Graphviz DOT — %s (rendered in Emacs Lisp; DOT is a portable form)"
+                     style)
+             #'fundamental-mode
+             (hywiki-graph--dot center nodes edges))))))
+
+(defun hywiki-graph-show-code (&optional style)
+  "Display the graph code behind the current view in a buffer.
+With a prefix argument, prompt for which view's code to show.  The header's
+view label is a clickable button for this command."
+  (interactive
+   (list (if current-prefix-arg
+             (intern (completing-read
+                      "Graph code for view: "
+                      (mapcar (lambda (e) (symbol-name (car e))) hywiki-graph--view-info)
+                      nil t nil nil (symbol-name (or hywiki-graph--style 'graph))))
+           hywiki-graph--style)))
+  (unless (and (boundp 'hywiki-graph--center) hywiki-graph--center)
+    (user-error "Run from a HyWiki graph buffer"))
+  (let* ((center hywiki-graph--center)
+         (degree hywiki-graph--degree)
+         (adj (hywiki-graph--effective-adjacency))
+         (exclude (and hywiki-graph--prune-hubs
+                       (hywiki-graph--hub-set adj hywiki-graph--hub-threshold center))))
+    (pcase-let ((`(,title ,mode-fn ,content)
+                 (hywiki-graph--view-code (or style hywiki-graph--style)
+                                          center degree adj exclude)))
+      (let ((buf (get-buffer-create "*HyWiki Graph Code*")))
+        (with-current-buffer buf
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (funcall mode-fn)
+            (insert (or content "")))
+          (goto-char (point-min))
+          (view-mode 1))
+        (pop-to-buffer buf)
+        (message "%s — centre %s, degree %d" title center degree)))))
+
 (defun hywiki-graph-toggle-hubs ()
   "Toggle pruning of high-degree hub nodes from the display."
   (interactive)
@@ -1316,6 +1383,7 @@ Also rebuilds the HyRolo adjacency when rolo nodes are included."
 (define-key hywiki-graph-mode-map (kbd "RET") #'hywiki-graph-recenter)
 (define-key hywiki-graph-mode-map (kbd "o")   #'hywiki-graph-visit)
 (define-key hywiki-graph-mode-map (kbd "g")   #'hywiki-graph-refresh)
+(define-key hywiki-graph-mode-map (kbd "c")   #'hywiki-graph-show-code)
 (define-key hywiki-graph-mode-map (kbd "?")   #'hywiki-graph-describe-view)
 (define-key hywiki-graph-mode-map [mouse-1]   #'hywiki-graph-recenter-mouse)
 

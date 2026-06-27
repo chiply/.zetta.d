@@ -26,6 +26,7 @@ hub-pruning and a second class of HyRolo-sourced nodes.
 | `r` | toggle HyRolo-sourced nodes |
 | `RET` / `mouse-1` | recentre on the node at point |
 | `o` | open the WikiWord page at point |
+| `c` | show this view's underlying graph code (DOT, spec, helper input...); the header view label is also a button for it |
 | `g` | rebuild the link graph from disk and re-render |
 | `?` | view catalog (what each view is + its backend) |
 | `q` | quit |

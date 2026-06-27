@@ -25,7 +25,7 @@
 ;; hops ("degrees") out to include -- `C-u 3 M-x hywiki-graph' shows three
 ;; degrees; the default is one.
 ;;
-;; Two rendering styles (toggle with `v'):
+;; Three text rendering styles, cycled with `v':
 ;;
 ;;   graph  A real node-and-line diagram drawn as text, via the external
 ;;          `graph-easy' program (which reads Graphviz DOT).  This is the
@@ -36,6 +36,10 @@
 ;;   tree   A breadth-first spanning tree (indentation = distance from the
 ;;          centre) plus the remaining edges shown inline as `╌╌' cross-links.
 ;;          No external dependency; always available.
+;;
+;;   matrix An adjacency matrix (centre first): read a node's row or column
+;;          to see every node it connects to.  Never tangles, whatever the
+;;          density.  No external dependency.
 ;;
 ;; To get the `graph' style, install graph-easy once, e.g. with a user-local
 ;; Perl lib (no sudo):
@@ -54,7 +58,7 @@
 ;;
 ;; In the display buffer:
 ;;   1-9  re-render at that many degrees from the current centre
-;;   v    toggle between the graph and tree styles
+;;   v    cycle the view style (graph -> tree -> matrix)
 ;;   h    toggle hub pruning on/off
 ;;   [ ]  lower / raise the hub-degree threshold (also enables pruning)
 ;;   RET  recentre the graph on the node at point
@@ -301,7 +305,7 @@ list of (A . B) cons cells with A string< B."
               "hubs shown"))
     'face 'shadow)
    (propertize
-    "[1-9] degree · v style · h hubs · [ ] threshold · RET recenter · o open · g refresh · q quit\n\n"
+    "[1-9] degree · v view · h hubs · [ ] threshold · RET recenter · o open · g refresh · q quit\n\n"
     'face 'shadow)))
 
 ;;;; Tree rendering
@@ -475,6 +479,42 @@ fails."
               (narrow-to-region start (point))
               (hywiki-graph--fontify-nodes nodes)))))))))
 
+;;;; Matrix rendering
+
+(defun hywiki-graph--render-matrix (center degree adj exclude)
+  "Render the CENTER/DEGREE neighbourhood over ADJ as an adjacency matrix.
+Rows and columns are the neighbourhood's nodes (CENTRE first); a filled
+cell marks an edge.  Read a node's row -- or its column -- to see all its
+connections.  EXCLUDE nodes are omitted."
+  (pcase-let* ((`(,all . ,edges) (hywiki-graph--induced center degree adj exclude))
+               (nodes (cons center (sort (remove center (copy-sequence all)) #'string<)))
+               (vnodes (vconcat nodes))
+               (n (length nodes))
+               (eset (make-hash-table :test 'equal)))
+    (dolist (e edges)
+      (puthash (cons (car e) (cdr e)) t eset)
+      (puthash (cons (cdr e) (car e)) t eset))
+    (hywiki-graph--insert-header center degree n (length edges) 'matrix)
+    (if (= n 1)
+        (insert (propertize "  (no links)\n" 'face 'shadow))
+      ;; Column-index header (column j corresponds to row j's node).
+      (insert (make-string 4 ?\s))
+      (dotimes (j n)
+        (insert (propertize (format "%2d" (1+ j))
+                            'face (if (zerop j) 'hywiki-graph-center 'shadow))))
+      (insert "\n")
+      (dotimes (i n)
+        (let ((row (aref vnodes i)))
+          (insert (propertize (format "%2d " (1+ i))
+                              'face (if (zerop i) 'hywiki-graph-center 'shadow))
+                  (if (zerop i) (propertize "▸" 'face 'hywiki-graph-center) " "))
+          (dotimes (j n)
+            (insert " "
+                    (cond ((= i j) (propertize "╲" 'face 'shadow))
+                          ((gethash (cons row (aref vnodes j)) eset) "●")
+                          (t (propertize "·" 'face 'shadow)))))
+          (insert "  " (hywiki-graph--node-display row) "\n"))))))
+
 ;;;; Render dispatch
 
 (defun hywiki-graph--render ()
@@ -486,9 +526,10 @@ fails."
          (exclude (and hywiki-graph--prune-hubs
                        (hywiki-graph--hub-set adj hywiki-graph--hub-threshold center))))
     (erase-buffer)
-    (if (eq hywiki-graph--style 'graph)
-        (hywiki-graph--render-graph-easy center degree adj exclude)
-      (hywiki-graph--render-tree center degree adj exclude))
+    (pcase hywiki-graph--style
+      ('graph  (hywiki-graph--render-graph-easy center degree adj exclude))
+      ('matrix (hywiki-graph--render-matrix center degree adj exclude))
+      (_       (hywiki-graph--render-tree center degree adj exclude)))
     (goto-char (point-min))))
 
 ;;;; Commands
@@ -508,12 +549,18 @@ fails."
       (hywiki-graph--render)
       (message "HyWiki graph: %s, degree %d" hywiki-graph--center d))))
 
-(defun hywiki-graph-toggle-style ()
-  "Toggle between the graph (graph-easy) and tree rendering styles."
+(defun hywiki-graph--available-styles ()
+  "Return the list of selectable text rendering styles, in cycle order."
+  '(graph tree matrix))
+
+(defun hywiki-graph-cycle-style ()
+  "Switch to the next text rendering style (graph -> tree -> matrix)."
   (interactive)
-  (setq hywiki-graph--style (if (eq hywiki-graph--style 'graph) 'tree 'graph))
-  (hywiki-graph--render)
-  (message "HyWiki graph style: %s" hywiki-graph--style))
+  (let* ((styles (hywiki-graph--available-styles))
+         (next (or (cadr (member hywiki-graph--style styles)) (car styles))))
+    (setq hywiki-graph--style next)
+    (hywiki-graph--render)
+    (message "HyWiki graph style: %s" next)))
 
 (defun hywiki-graph-toggle-hubs ()
   "Toggle pruning of high-degree hub nodes from the display."
@@ -577,20 +624,22 @@ fails."
   (message "HyWiki graph refreshed (%d pages)"
            (hash-table-count hywiki-graph--adjacency)))
 
-(defvar hywiki-graph-mode-map
-  (let ((map (make-sparse-keymap)))
-    (dotimes (i 9)
-      (define-key map (number-to-string (1+ i)) #'hywiki-graph-set-degree))
-    (define-key map (kbd "v")   #'hywiki-graph-toggle-style)
-    (define-key map (kbd "h")   #'hywiki-graph-toggle-hubs)
-    (define-key map (kbd "[")   #'hywiki-graph-hub-threshold-down)
-    (define-key map (kbd "]")   #'hywiki-graph-hub-threshold-up)
-    (define-key map (kbd "RET") #'hywiki-graph-recenter)
-    (define-key map (kbd "o")   #'hywiki-graph-visit)
-    (define-key map (kbd "g")   #'hywiki-graph-refresh)
-    (define-key map [mouse-1]   #'hywiki-graph-recenter-mouse)
-    map)
+(defvar hywiki-graph-mode-map (make-sparse-keymap)
   "Keymap for `hywiki-graph-mode'.")
+
+;; Bind at top level (not inside the defvar) so reloading the file refreshes
+;; the bindings on the existing keymap object instead of being skipped.
+(dotimes (i 9)
+  (define-key hywiki-graph-mode-map (number-to-string (1+ i))
+              #'hywiki-graph-set-degree))
+(define-key hywiki-graph-mode-map (kbd "v")   #'hywiki-graph-cycle-style)
+(define-key hywiki-graph-mode-map (kbd "h")   #'hywiki-graph-toggle-hubs)
+(define-key hywiki-graph-mode-map (kbd "[")   #'hywiki-graph-hub-threshold-down)
+(define-key hywiki-graph-mode-map (kbd "]")   #'hywiki-graph-hub-threshold-up)
+(define-key hywiki-graph-mode-map (kbd "RET") #'hywiki-graph-recenter)
+(define-key hywiki-graph-mode-map (kbd "o")   #'hywiki-graph-visit)
+(define-key hywiki-graph-mode-map (kbd "g")   #'hywiki-graph-refresh)
+(define-key hywiki-graph-mode-map [mouse-1]   #'hywiki-graph-recenter-mouse)
 
 (define-derived-mode hywiki-graph-mode special-mode "HyWiki-Graph"
   "Major mode for the HyWiki link-graph display."

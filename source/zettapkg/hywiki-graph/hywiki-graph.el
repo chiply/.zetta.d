@@ -5,7 +5,7 @@
 ;; Author: Charlie Holland <charliebkr707@gmail.com>
 ;; Maintainer: Charlie Holland <charliebkr707@gmail.com>
 ;; URL: https://github.com/<TBD>/hywiki-graph
-;; Version: 0.2.0
+;; Version: 0.3.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: hypermedia, outlines, convenience
 
@@ -46,9 +46,17 @@
 ;; then ensure `hywiki-graph-graph-easy-program' / `-lib' point at it
 ;; (the defaults probe ~/perl5 and the PATH).
 ;;
+;; Densely-connected "index" hubs (a page linked from nearly everywhere)
+;; explode a neighbourhood and force the graph style to fall back to the
+;; tree.  `hywiki-graph-prune-hubs' (default on) drops nodes whose global
+;; degree exceeds `hywiki-graph-hub-threshold', keeping the neighbourhood
+;; local enough to draw.  Toggle and tune it live with `h' / `[' / `]'.
+;;
 ;; In the display buffer:
 ;;   1-9  re-render at that many degrees from the current centre
 ;;   v    toggle between the graph and tree styles
+;;   h    toggle hub pruning on/off
+;;   [ ]  lower / raise the hub-degree threshold (also enables pruning)
 ;;   RET  recentre the graph on the node at point
 ;;   o    open the WikiWord page at point
 ;;   g    rebuild the link graph from disk and re-render
@@ -119,6 +127,21 @@ Neighbourhoods with more edges fall back to the tree view, since
 graph-easy tangles and slows badly on dense graphs."
   :type 'integer)
 
+(defcustom hywiki-graph-prune-hubs t
+  "When non-nil, omit high-degree hub nodes from rendered neighbourhoods.
+A node counts as a hub when its global degree exceeds
+`hywiki-graph-hub-threshold'.  The centre node is never pruned.  Pruning
+index-style hubs (e.g. a page linked from everywhere) keeps a
+neighbourhood local enough to draw as a graph.  Toggle live in the
+display buffer with \\<hywiki-graph-mode-map>\\[hywiki-graph-toggle-hubs]."
+  :type 'boolean)
+
+(defcustom hywiki-graph-hub-threshold 30
+  "Global degree above which a node is treated as a hub and may be pruned.
+Adjust live in the display buffer with \\<hywiki-graph-mode-map>\\[hywiki-graph-hub-threshold-down] / \\[hywiki-graph-hub-threshold-up].
+See `hywiki-graph-prune-hubs'."
+  :type 'integer)
+
 (defface hywiki-graph-center
   '((t :inherit bold))
   "Face for the centre WikiWord of the graph.")
@@ -136,6 +159,19 @@ graph-easy tangles and slows badly on dense graphs."
 (defvar hywiki-graph--adjacency nil
   "Cached adjacency hash: WikiWord -> list of neighbour WikiWords.
 Undirected; rebuilt by `hywiki-graph--get-adjacency' with FORCE non-nil.")
+
+;;;; Per-buffer display state
+
+(defvar-local hywiki-graph--center nil
+  "WikiWord at the centre of the currently displayed graph.")
+(defvar-local hywiki-graph--degree 1
+  "Number of link hops currently displayed.")
+(defvar-local hywiki-graph--style 'graph
+  "Current rendering style, `graph' or `tree'.")
+(defvar-local hywiki-graph--prune-hubs nil
+  "Whether high-degree hub nodes are pruned from the current display.")
+(defvar-local hywiki-graph--hub-threshold 30
+  "Degree above which a node is pruned as a hub in the current display.")
 
 (defun hywiki-graph--page-set ()
   "Return a hash set (equal test) of all existing HyWiki page names."
@@ -199,10 +235,21 @@ PAGESET is the hash set of valid page names; tokens matching
        (let ((adj (hywiki-graph--get-adjacency)))
          (not (eq (gethash word adj :absent) :absent)))))
 
-(defun hywiki-graph--bfs (center adj degree)
+(defun hywiki-graph--hub-set (adj threshold center)
+  "Return a hash set of hub nodes over ADJ, excluding CENTER.
+A node is a hub when its degree (neighbour count) exceeds THRESHOLD."
+  (let ((h (make-hash-table :test 'equal)))
+    (maphash (lambda (n nbrs)
+               (when (and (> (length nbrs) threshold) (not (equal n center)))
+                 (puthash n t h)))
+             adj)
+    h))
+
+(defun hywiki-graph--bfs (center adj degree &optional exclude)
   "Breadth-first search from CENTER over ADJ up to DEGREE hops.
-Return a plist (:dist HASH :parent HASH :order LIST) covering the nodes
-within DEGREE of CENTER, in first-visit order."
+Nodes in the EXCLUDE hash set are never visited or traversed through (the
+CENTER is always kept).  Return a plist (:dist HASH :parent HASH :order
+LIST) covering the reached nodes, in first-visit order."
   (let ((dist (make-hash-table :test 'equal))
         (parent (make-hash-table :test 'equal))
         (order '())
@@ -214,17 +261,19 @@ within DEGREE of CENTER, in first-visit order."
              (d (gethash node dist)))
         (when (< d degree)
           (dolist (nbr (sort (copy-sequence (gethash node adj)) #'string<))
-            (unless (gethash nbr dist)
+            (unless (or (gethash nbr dist)
+                        (and exclude (gethash nbr exclude)))
               (puthash nbr (1+ d) dist)
               (puthash nbr node parent)
               (push nbr order)
               (setq queue (nconc queue (list nbr))))))))
     (list :dist dist :parent parent :order (nreverse order))))
 
-(defun hywiki-graph--induced (center degree adj)
+(defun hywiki-graph--induced (center degree adj &optional exclude)
   "Return (NODES . EDGES) for the CENTER neighbourhood within DEGREE over ADJ.
-NODES is sorted; EDGES is a list of (A . B) cons cells with A string< B."
-  (let* ((bfs (hywiki-graph--bfs center adj degree))
+Nodes in the EXCLUDE hash set are omitted.  NODES is sorted; EDGES is a
+list of (A . B) cons cells with A string< B."
+  (let* ((bfs (hywiki-graph--bfs center adj degree exclude))
          (dist (plist-get bfs :dist))
          (nodes (sort (hash-table-keys dist) #'string<))
          (nodeset (let ((h (make-hash-table :test 'equal)))
@@ -239,14 +288,21 @@ NODES is sorted; EDGES is a list of (A . B) cons cells with A string< B."
 ;;;; Header
 
 (defun hywiki-graph--insert-header (center degree nodes edges style)
-  "Insert the buffer header line(s) for CENTER, DEGREE, NODES, EDGES, STYLE."
-  (insert (propertize (format "HyWiki graph: %s\n" center) 'face 'hywiki-graph-center)
-          (propertize
-           (format "%s · degree %d · %d node%s · %d edge%s   [1-9] degree · v style · RET recenter · o open · g refresh · q quit\n\n"
-                   style degree
-                   nodes (if (= nodes 1) "" "s")
-                   edges (if (= edges 1) "" "s"))
-           'face 'shadow)))
+  "Insert the buffer header lines for CENTER, DEGREE, NODES, EDGES, STYLE."
+  (insert
+   (propertize (format "HyWiki graph: %s\n" center) 'face 'hywiki-graph-center)
+   (propertize
+    (format "%s · degree %d · %d node%s · %d edge%s · %s\n"
+            style degree
+            nodes (if (= nodes 1) "" "s")
+            edges (if (= edges 1) "" "s")
+            (if hywiki-graph--prune-hubs
+                (format "hubs>%d pruned" hywiki-graph--hub-threshold)
+              "hubs shown"))
+    'face 'shadow)
+   (propertize
+    "[1-9] degree · v style · h hubs · [ ] threshold · RET recenter · o open · g refresh · q quit\n\n"
+    'face 'shadow)))
 
 ;;;; Tree rendering
 
@@ -255,13 +311,6 @@ NODES is sorted; EDGES is a list of (A . B) cons cells with A string< B."
 (defvar hywiki-graph--r-parent nil)
 (defvar hywiki-graph--r-idx nil)
 (defvar hywiki-graph--r-adj nil)
-
-(defvar-local hywiki-graph--center nil
-  "WikiWord at the centre of the currently displayed graph.")
-(defvar-local hywiki-graph--degree 1
-  "Number of link hops currently displayed.")
-(defvar-local hywiki-graph--style 'graph
-  "Current rendering style, `graph' or `tree'.")
 
 (defun hywiki-graph--node-display (node)
   "Return NODE as a propertized, clickable string."
@@ -319,16 +368,16 @@ branch glyphs."
                for i from 1
                do (hywiki-graph--print-tree c child-prefix nil (= i n))))))
 
-(defun hywiki-graph--render-tree (center degree adj &optional note)
-  "Render the tree view for CENTER/DEGREE over ADJ.
+(defun hywiki-graph--render-tree (center degree adj exclude &optional note)
+  "Render the tree view for CENTER/DEGREE over ADJ, omitting EXCLUDE nodes.
 Optional NOTE is an extra shadow line inserted under the header."
-  (let* ((bfs (hywiki-graph--bfs center adj degree))
+  (let* ((bfs (hywiki-graph--bfs center adj degree exclude))
          (dist (plist-get bfs :dist))
          (parent (plist-get bfs :parent))
          (order (plist-get bfs :order))
          (idx (make-hash-table :test 'equal))
          (children (make-hash-table :test 'equal))
-         (edges (cdr (hywiki-graph--induced center degree adj))))
+         (edges (cdr (hywiki-graph--induced center degree adj exclude))))
     (cl-loop for n in order for i from 0 do (puthash n i idx))
     (maphash (lambda (n p) (push n (gethash p children))) parent)
     (maphash (lambda (p kids) (puthash p (sort kids #'string<) children)) children)
@@ -395,29 +444,30 @@ WikiWords are valid bare DOT identifiers (capitalised, alphabetic)."
                  'mouse-face 'highlight
                  'help-echo "RET/mouse-1: recenter   o: open page")))))))
 
-(defun hywiki-graph--render-graph-easy (center degree adj)
-  "Render CENTER/DEGREE over ADJ as a graph-easy diagram.
+(defun hywiki-graph--render-graph-easy (center degree adj exclude)
+  "Render CENTER/DEGREE over ADJ as a graph-easy diagram, omitting EXCLUDE nodes.
 Fall back to the tree view when graph-easy is unavailable, the
 neighbourhood exceeds `hywiki-graph-graph-easy-max-edges', or the program
 fails."
-  (pcase-let* ((`(,nodes . ,edges) (hywiki-graph--induced center degree adj))
+  (pcase-let* ((`(,nodes . ,edges) (hywiki-graph--induced center degree adj exclude))
                (n-edges (length edges)))
     (cond
      ((not (hywiki-graph--graph-easy-available-p))
       (hywiki-graph--render-tree
-       center degree adj
+       center degree adj exclude
        "graph-easy not found — showing tree (see hywiki-graph-graph-easy-program)"))
      ((> n-edges hywiki-graph-graph-easy-max-edges)
       (hywiki-graph--render-tree
-       center degree adj
-       (format "%d edges > hywiki-graph-graph-easy-max-edges (%d) — showing tree (try a lower degree)"
-               n-edges hywiki-graph-graph-easy-max-edges)))
+       center degree adj exclude
+       (format "%d edges > cap (%d)%s — showing tree"
+               n-edges hywiki-graph-graph-easy-max-edges
+               (if hywiki-graph--prune-hubs "" "; try h to prune hubs"))))
      (t
       (let ((out (hywiki-graph--run-graph-easy
                   (hywiki-graph--dot center nodes edges))))
         (if (null out)
             (hywiki-graph--render-tree
-             center degree adj "graph-easy failed — showing tree")
+             center degree adj exclude "graph-easy failed — showing tree")
           (hywiki-graph--insert-header center degree (length nodes) n-edges 'graph)
           (let ((start (point)))
             (insert out "\n")
@@ -428,15 +478,17 @@ fails."
 ;;;; Render dispatch
 
 (defun hywiki-graph--render ()
-  "Render the graph for the buffer-local centre, degree and style."
-  (let ((inhibit-read-only t)
-        (center hywiki-graph--center)
-        (degree hywiki-graph--degree)
-        (adj (hywiki-graph--get-adjacency)))
+  "Render the graph for the buffer-local centre, degree, style and pruning."
+  (let* ((inhibit-read-only t)
+         (center hywiki-graph--center)
+         (degree hywiki-graph--degree)
+         (adj (hywiki-graph--get-adjacency))
+         (exclude (and hywiki-graph--prune-hubs
+                       (hywiki-graph--hub-set adj hywiki-graph--hub-threshold center))))
     (erase-buffer)
     (if (eq hywiki-graph--style 'graph)
-        (hywiki-graph--render-graph-easy center degree adj)
-      (hywiki-graph--render-tree center degree adj))
+        (hywiki-graph--render-graph-easy center degree adj exclude)
+      (hywiki-graph--render-tree center degree adj exclude))
     (goto-char (point-min))))
 
 ;;;; Commands
@@ -462,6 +514,33 @@ fails."
   (setq hywiki-graph--style (if (eq hywiki-graph--style 'graph) 'tree 'graph))
   (hywiki-graph--render)
   (message "HyWiki graph style: %s" hywiki-graph--style))
+
+(defun hywiki-graph-toggle-hubs ()
+  "Toggle pruning of high-degree hub nodes from the display."
+  (interactive)
+  (setq hywiki-graph--prune-hubs (not hywiki-graph--prune-hubs))
+  (hywiki-graph--render)
+  (message "HyWiki graph: hub pruning %s%s"
+           (if hywiki-graph--prune-hubs "ON" "OFF")
+           (if hywiki-graph--prune-hubs
+               (format " (degree > %d)" hywiki-graph--hub-threshold) "")))
+
+(defun hywiki-graph--adjust-hub-threshold (delta)
+  "Change the hub-pruning threshold by DELTA, enable pruning, and re-render."
+  (setq hywiki-graph--hub-threshold (max 1 (+ hywiki-graph--hub-threshold delta))
+        hywiki-graph--prune-hubs t)
+  (hywiki-graph--render)
+  (message "HyWiki graph: hub threshold %d (pruning ON)" hywiki-graph--hub-threshold))
+
+(defun hywiki-graph-hub-threshold-down ()
+  "Lower the hub-pruning threshold (prune more nodes)."
+  (interactive)
+  (hywiki-graph--adjust-hub-threshold -2))
+
+(defun hywiki-graph-hub-threshold-up ()
+  "Raise the hub-pruning threshold (prune fewer nodes)."
+  (interactive)
+  (hywiki-graph--adjust-hub-threshold 2))
 
 (defun hywiki-graph-recenter ()
   "Recenter the graph on the HyWiki node at point."
@@ -503,6 +582,9 @@ fails."
     (dotimes (i 9)
       (define-key map (number-to-string (1+ i)) #'hywiki-graph-set-degree))
     (define-key map (kbd "v")   #'hywiki-graph-toggle-style)
+    (define-key map (kbd "h")   #'hywiki-graph-toggle-hubs)
+    (define-key map (kbd "[")   #'hywiki-graph-hub-threshold-down)
+    (define-key map (kbd "]")   #'hywiki-graph-hub-threshold-up)
     (define-key map (kbd "RET") #'hywiki-graph-recenter)
     (define-key map (kbd "o")   #'hywiki-graph-visit)
     (define-key map (kbd "g")   #'hywiki-graph-refresh)
@@ -543,7 +625,9 @@ WIKIWORD to include (default `hywiki-graph-default-degree').  So
         (hywiki-graph-mode))
       (setq hywiki-graph--center wikiword
             hywiki-graph--degree (max 1 (or degree hywiki-graph-default-degree))
-            hywiki-graph--style hywiki-graph-default-style)
+            hywiki-graph--style hywiki-graph-default-style
+            hywiki-graph--prune-hubs hywiki-graph-prune-hubs
+            hywiki-graph--hub-threshold hywiki-graph-hub-threshold)
       (hywiki-graph--render))
     (pop-to-buffer buf)))
 

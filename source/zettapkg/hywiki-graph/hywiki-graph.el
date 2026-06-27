@@ -56,9 +56,16 @@
 ;; degree exceeds `hywiki-graph-hub-threshold', keeping the neighbourhood
 ;; local enough to draw.  Toggle and tune it live with `h' / `[' / `]'.
 ;;
+;; A fourth view, `svg', opens a force-directed diagram (via the optional
+;; `graph-fa2' package) in its own buffer with the `s' key -- a settled
+;; node-and-line layout rendered as an inline image; click a node to
+;; recentre.  It is separate from the `v' cycle because graph-fa2 manages
+;; its own (image) buffer.
+;;
 ;; In the display buffer:
 ;;   1-9  re-render at that many degrees from the current centre
-;;   v    cycle the view style (graph -> tree -> matrix)
+;;   v    cycle the text view style (graph -> tree -> matrix)
+;;   s    open the force-directed SVG view (graph-fa2, separate buffer)
 ;;   h    toggle hub pruning on/off
 ;;   [ ]  lower / raise the hub-degree threshold (also enables pruning)
 ;;   RET  recentre the graph on the node at point
@@ -305,7 +312,7 @@ list of (A . B) cons cells with A string< B."
               "hubs shown"))
     'face 'shadow)
    (propertize
-    "[1-9] degree · v view · h hubs · [ ] threshold · RET recenter · o open · g refresh · q quit\n\n"
+    "[1-9] degree · v view · s svg · h hubs · [ ] threshold · RET recenter · o open · g refresh · q quit\n\n"
     'face 'shadow)))
 
 ;;;; Tree rendering
@@ -532,6 +539,95 @@ connections.  EXCLUDE nodes are omitted."
       (_       (hywiki-graph--render-tree center degree adj exclude)))
     (goto-char (point-min))))
 
+;;;; SVG view (force-directed, via graph-fa2)
+
+(declare-function graph-fa2-start "graph-fa2")
+(defvar graph-fa2-simulation-frames)
+(defvar graph-fa2-node-clicked-functions)
+
+(defcustom hywiki-graph-svg-buffer-name "*HyWiki Graph SVG*"
+  "Buffer used for the force-directed SVG view."
+  :type 'string)
+
+(defcustom hywiki-graph-svg-frames 240
+  "ForceAtlas2 simulation frames for the SVG view.
+Bound to `graph-fa2-simulation-frames' while rendering.  Lower settles
+faster with less background work; higher relaxes the layout further."
+  :type 'integer)
+
+(defvar-local hywiki-graph--svg-center nil
+  "Centre WikiWord of an SVG buffer; non-nil marks the buffer as ours.")
+(defvar-local hywiki-graph--svg-degree 1)
+(defvar-local hywiki-graph--svg-prune-hubs nil)
+(defvar-local hywiki-graph--svg-hub-threshold 30)
+
+(defun hywiki-graph--graph-fa2-available-p ()
+  "Return non-nil when the graph-fa2 package can be loaded."
+  (and (require 'graph-fa2 nil t) (fboundp 'graph-fa2-start)))
+
+(defun hywiki-graph--fa2-data (center degree adj exclude)
+  "Return (NODES . EDGES) in graph-fa2 form for the CENTER neighbourhood.
+NODES are plists (:id :label :colour :radius); EDGES are (src . tgt)."
+  (pcase-let* ((`(,nodes . ,edges) (hywiki-graph--induced center degree adj exclude)))
+    (cons
+     (mapcar (lambda (n)
+               (list :id n :label n
+                     :colour (if (equal n center) "#f38ba8" "#89b4fa")
+                     :radius (if (equal n center) 16.0 11.0)))
+             nodes)
+     (copy-sequence edges))))
+
+(defun hywiki-graph--svg-render (center degree prune threshold)
+  "Render the CENTER/DEGREE neighbourhood as a graph-fa2 SVG.
+PRUNE and THRESHOLD control hub pruning.  Displays (and selects) the SVG
+buffer so graph-fa2's playback, which only draws in a visible window, runs."
+  (let* ((adj (hywiki-graph--get-adjacency))
+         (exclude (and prune (hywiki-graph--hub-set adj threshold center)))
+         (data (hywiki-graph--fa2-data center degree adj exclude))
+         (buf (get-buffer-create hywiki-graph-svg-buffer-name))
+         (graph-fa2-simulation-frames hywiki-graph-svg-frames))
+    (with-current-buffer buf
+      (setq hywiki-graph--svg-center center
+            hywiki-graph--svg-degree degree
+            hywiki-graph--svg-prune-hubs prune
+            hywiki-graph--svg-hub-threshold threshold))
+    (pop-to-buffer buf)
+    (graph-fa2-start buf (car data) (cdr data))
+    (message "HyWiki SVG: %s (degree %d, %d nodes)"
+             center degree (length (car data)))))
+
+(defun hywiki-graph--svg-node-clicked (node-id)
+  "Recenter the SVG view on NODE-ID when it is clicked in our SVG buffer."
+  (when (and (stringp node-id) hywiki-graph--svg-center)
+    (hywiki-graph--svg-render node-id
+                              hywiki-graph--svg-degree
+                              hywiki-graph--svg-prune-hubs
+                              hywiki-graph--svg-hub-threshold)))
+
+(with-eval-after-load 'graph-fa2
+  (add-hook 'graph-fa2-node-clicked-functions #'hywiki-graph--svg-node-clicked))
+
+;;;###autoload
+(defun hywiki-graph-svg ()
+  "Show the current neighbourhood as a force-directed SVG via graph-fa2.
+Uses the centre, degree and hub-pruning of the current `hywiki-graph-mode'
+buffer, or prompts for a WikiWord.  Click a node to recentre."
+  (interactive)
+  (unless (hywiki-graph--graph-fa2-available-p)
+    (user-error "graph-fa2 is not installed"))
+  (let ((center (or hywiki-graph--center
+                    (completing-read "HyWiki SVG graph for word: "
+                                     (hywiki-get-page-list) nil t)))
+        (degree (or (and hywiki-graph--center hywiki-graph--degree)
+                    hywiki-graph-default-degree))
+        (prune (if (local-variable-p 'hywiki-graph--prune-hubs)
+                   hywiki-graph--prune-hubs hywiki-graph-prune-hubs))
+        (threshold (if (local-variable-p 'hywiki-graph--hub-threshold)
+                       hywiki-graph--hub-threshold hywiki-graph-hub-threshold)))
+    (unless (member center (hywiki-get-page-list))
+      (user-error "No HyWiki page for %S" center))
+    (hywiki-graph--svg-render center degree prune threshold)))
+
 ;;;; Commands
 
 (defun hywiki-graph--node-at-point ()
@@ -633,6 +729,7 @@ connections.  EXCLUDE nodes are omitted."
   (define-key hywiki-graph-mode-map (number-to-string (1+ i))
               #'hywiki-graph-set-degree))
 (define-key hywiki-graph-mode-map (kbd "v")   #'hywiki-graph-cycle-style)
+(define-key hywiki-graph-mode-map (kbd "s")   #'hywiki-graph-svg)
 (define-key hywiki-graph-mode-map (kbd "h")   #'hywiki-graph-toggle-hubs)
 (define-key hywiki-graph-mode-map (kbd "[")   #'hywiki-graph-hub-threshold-down)
 (define-key hywiki-graph-mode-map (kbd "]")   #'hywiki-graph-hub-threshold-up)

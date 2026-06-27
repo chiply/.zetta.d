@@ -13,6 +13,12 @@
 ;; autoloaded, so the binding pulls in the package (and Hyperbole) on first
 ;; use.
 
+;; Optional force-directed SVG view.  `hywiki-graph' soft-requires this; when
+;; absent, only the text views (graph/tree/matrix) are offered.
+(use-package graph-fa2
+  :ensure (graph-fa2 :type git :host github :repo "elij/graph-fa2")
+  :defer t)
+
 (use-package hywiki-graph
   :ensure nil
   :load-path "source/zettapkg/hywiki-graph"

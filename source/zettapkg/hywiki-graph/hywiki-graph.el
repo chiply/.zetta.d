@@ -102,10 +102,12 @@
 (declare-function hywiki-get-singular-wikiword "hywiki")
 (declare-function hywiki-find-page "hywiki")
 (declare-function hywiki-word-at "hywiki")
+(declare-function hyrolo-get-file-list "hyrolo")
 (defvar hywiki-word-regexp)
 (defvar hywiki-allow-plurals-flag)
 (defvar hywiki-directory)
 (defvar hywiki-file-suffix)
+(defvar hyrolo-file-list)
 
 ;;;; Customization
 
@@ -121,6 +123,14 @@
 (defcustom hywiki-graph-default-degree 1
   "Default number of link hops to display when no prefix argument is given."
   :type 'integer)
+
+(defcustom hywiki-graph-include-rolo nil
+  "When non-nil, include HyRolo files that reference WikiWords as nodes.
+Each readable file in `hyrolo-file-list' becomes a (non-WikiWord) node
+linked to every WikiWord its text mentions -- a second class of nodes with
+the same mention relationship.  Affects the text views; toggle live with
+\\<hywiki-graph-mode-map>\\[hywiki-graph-toggle-rolo]."
+  :type 'boolean)
 
 (defcustom hywiki-graph-default-style 'graph
   "Initial rendering style.
@@ -181,6 +191,10 @@ See `hywiki-graph-prune-hubs'."
   '((t :inherit shadow))
   "Face for tree branches and cross-link annotations.")
 
+(defface hywiki-graph-rolo-node
+  '((t :inherit font-lock-string-face :slant italic))
+  "Face for HyRolo-sourced (non-WikiWord) nodes.")
+
 (defcustom hywiki-graph-dag-lane-colors
   '("#89b4fa" "#a6e3a1" "#f9e2af" "#fab387" "#cba6f7" "#94e2d5" "#f38ba8" "#74c7ec")
   "Foreground colours cycled across lanes in the `dag' view.
@@ -206,6 +220,8 @@ Undirected; rebuilt by `hywiki-graph--get-adjacency' with FORCE non-nil.")
   "Whether high-degree hub nodes are pruned from the current display.")
 (defvar-local hywiki-graph--hub-threshold 30
   "Degree above which a node is pruned as a hub in the current display.")
+(defvar-local hywiki-graph--include-rolo nil
+  "Whether the current display includes HyRolo-sourced nodes.")
 
 (defun hywiki-graph--page-set ()
   "Return a hash set (equal test) of all existing HyWiki page names."
@@ -268,6 +284,78 @@ PAGESET is the hash set of valid page names; tokens matching
   (and (stringp word)
        (let ((adj (hywiki-graph--get-adjacency)))
          (not (eq (gethash word adj :absent) :absent)))))
+
+;;;; Optional HyRolo-sourced nodes
+
+(defvar hywiki-graph--rolo-adjacency nil
+  "Cached hash of HyRolo edges: rolo-node / WikiWord -> neighbours.")
+(defvar hywiki-graph--rolo-nodes nil
+  "Hash set of the HyRolo-sourced node names in the rolo adjacency.")
+
+(defun hywiki-graph--rolo-files ()
+  "Return the expanded list of HyRolo files from `hyrolo-file-list'.
+Directory entries expand to their text files; wildcard entries expand to
+their matches; plain file entries pass through."
+  (when (and (boundp 'hyrolo-file-list) hyrolo-file-list)
+    (let ((suffix-re "\\.\\(org\\|otl\\|md\\|markdown\\|kotl\\)\\'")
+          files)
+      (dolist (entry (if (listp hyrolo-file-list)
+                         hyrolo-file-list
+                       (list hyrolo-file-list)))
+        (let ((ep (expand-file-name entry)))
+          (cond
+           ((file-directory-p ep)
+            (setq files (nconc files (directory-files ep t suffix-re))))
+           ((string-match-p "[*?]" ep)
+            (setq files (nconc files (file-expand-wildcards ep t))))
+           ((file-readable-p ep) (push ep files)))))
+      (delete-dups files))))
+
+(defun hywiki-graph--build-rolo-adjacency ()
+  "Scan HyRolo files for WikiWord mentions; return the rolo adjacency hash.
+Each file becomes a node (its base name) linked to the WikiWords it
+mentions.  Populates `hywiki-graph--rolo-nodes'."
+  (let ((pageset (hywiki-graph--page-set))
+        (adj (make-hash-table :test 'equal))
+        (nodes (make-hash-table :test 'equal)))
+    (dolist (file (hywiki-graph--rolo-files))
+      (when (and (stringp file) (file-readable-p file))
+        (let ((name (file-name-base file)))
+          ;; Skip files whose name already is a WikiWord (avoids node collision).
+          (unless (gethash name pageset)
+            (let ((links (hywiki-graph--links-in-file file pageset name)))
+              (when links
+                (puthash name t nodes)
+                (dolist (w links)
+                  (cl-pushnew w (gethash name adj) :test #'equal)
+                  (cl-pushnew name (gethash w adj) :test #'equal))))))))
+    (setq hywiki-graph--rolo-nodes nodes)
+    adj))
+
+(defun hywiki-graph--get-rolo-adjacency (&optional force)
+  "Return the cached HyRolo adjacency, building it when FORCE or empty."
+  (when (or force (null hywiki-graph--rolo-adjacency))
+    (message "HyWiki graph: scanning HyRolo files for WikiWord references...")
+    (setq hywiki-graph--rolo-adjacency (hywiki-graph--build-rolo-adjacency)))
+  hywiki-graph--rolo-adjacency)
+
+(defun hywiki-graph--rolo-node-p (name)
+  "Return non-nil if NAME is a HyRolo-sourced node."
+  (and hywiki-graph--rolo-nodes (gethash name hywiki-graph--rolo-nodes)))
+
+(defun hywiki-graph--effective-adjacency ()
+  "Return the adjacency for the current display.
+With `hywiki-graph--include-rolo' non-nil, merge the WikiWord adjacency
+with the HyRolo-sourced edges; otherwise return the WikiWord adjacency."
+  (if (not hywiki-graph--include-rolo)
+      (hywiki-graph--get-adjacency)
+    (let ((combined (make-hash-table :test 'equal)))
+      (maphash (lambda (k v) (puthash k (copy-sequence v) combined))
+               (hywiki-graph--get-adjacency))
+      (maphash (lambda (k v)
+                 (puthash k (cl-union (gethash k combined) v :test #'equal) combined))
+               (hywiki-graph--get-rolo-adjacency))
+      combined)))
 
 (defun hywiki-graph--hub-set (adj threshold center)
   "Return a hash set of hub nodes over ADJ, excluding CENTER.
@@ -385,16 +473,17 @@ oriented centre-outward."))
   (insert
    (propertize (format "HyWiki graph: %s\n" center) 'face 'hywiki-graph-center)
    (propertize
-    (format "%s (%s) · degree %d · %d node%s · %d edge%s · %s\n"
+    (format "%s (%s) · degree %d · %d node%s · %d edge%s · %s%s\n"
             style (hywiki-graph--view-backend style) degree
             nodes (if (= nodes 1) "" "s")
             edges (if (= edges 1) "" "s")
             (if hywiki-graph--prune-hubs
                 (format "hubs>%d pruned" hywiki-graph--hub-threshold)
-              "hubs shown"))
+              "hubs shown")
+            (if hywiki-graph--include-rolo " · +rolo" ""))
     'face 'shadow)
    (propertize
-    "[1-9] degree · v/V view · s svg · S dagviz · h hubs · [ ] threshold · RET recenter · o open · g refresh · ? help · q quit\n\n"
+    "[1-9] degree · v/V view · s svg · S dagviz · h hubs · [ ] threshold · r rolo · RET recenter · o open · g refresh · ? help · q quit\n\n"
     'face 'shadow)))
 
 ;;;; Tree rendering
@@ -405,12 +494,16 @@ oriented centre-outward."))
 (defvar hywiki-graph--r-idx nil)
 (defvar hywiki-graph--r-adj nil)
 
+(defun hywiki-graph--node-face (node)
+  "Return the display face for NODE (centre, HyRolo node, or WikiWord)."
+  (cond ((equal node hywiki-graph--center) 'hywiki-graph-center)
+        ((hywiki-graph--rolo-node-p node) 'hywiki-graph-rolo-node)
+        (t 'hywiki-graph-node)))
+
 (defun hywiki-graph--node-display (node)
   "Return NODE as a propertized, clickable string."
   (propertize node
-              'face (if (equal node hywiki-graph--center)
-                        'hywiki-graph-center
-                      'hywiki-graph-node)
+              'face (hywiki-graph--node-face node)
               'hywiki-graph-node node
               'mouse-face 'highlight
               'help-echo "RET/mouse-1: recenter   o: open page"))
@@ -531,8 +624,7 @@ WikiWords are valid bare DOT identifiers (capitalised, alphabetic)."
         (while (re-search-forward re nil t)
           (add-text-properties
            (match-beginning 0) (match-end 0)
-           (list 'face (if (equal n hywiki-graph--center)
-                           'hywiki-graph-center 'hywiki-graph-node)
+           (list 'face (hywiki-graph--node-face n)
                  'hywiki-graph-node n
                  'mouse-face 'highlight
                  'help-echo "RET/mouse-1: recenter   o: open page")))))))
@@ -843,7 +935,7 @@ density, or failure."
   (let* ((inhibit-read-only t)
          (center hywiki-graph--center)
          (degree hywiki-graph--degree)
-         (adj (hywiki-graph--get-adjacency))
+         (adj (hywiki-graph--effective-adjacency))
          (exclude (and hywiki-graph--prune-hubs
                        (hywiki-graph--hub-set adj hywiki-graph--hub-threshold center))))
     (erase-buffer)
@@ -1109,8 +1201,10 @@ The current view is marked, and unavailable backends are flagged."
         (insert "Nodes are WikiWords.  An (undirected) edge joins two WikiWords when one\n"
                 "page's text mentions the other.  The numeric prefix / digit keys set how\n"
                 "many link hops out from the centre to show; hub pruning (h, [ ]) drops\n"
-                "over-connected index pages.  Cycle the text views with `v', or jump to\n"
-                "any view by name with `V'; `s'/`S' open the SVG views in their own buffer.\n\n")
+                "over-connected index pages.  `r' also includes HyRolo files that\n"
+                "reference WikiWords as a second class of (italic) nodes.  Cycle the text\n"
+                "views with `v', or jump to any view by name with `V'; `s'/`S' open the\n"
+                "SVG views in their own buffer.\n\n")
         (dolist (entry hywiki-graph--view-info)
           (let* ((style (car entry))
                  (backend (plist-get (cdr entry) :backend))
@@ -1149,6 +1243,18 @@ The current view is marked, and unavailable backends are flagged."
   (interactive)
   (hywiki-graph--adjust-hub-threshold 2))
 
+(defun hywiki-graph-toggle-rolo ()
+  "Toggle inclusion of HyRolo-sourced nodes (text views)."
+  (interactive)
+  (setq hywiki-graph--include-rolo (not hywiki-graph--include-rolo))
+  (when hywiki-graph--include-rolo (hywiki-graph--get-rolo-adjacency))
+  (hywiki-graph--render)
+  (message "HyWiki graph: HyRolo nodes %s%s"
+           (if hywiki-graph--include-rolo "ON" "OFF")
+           (if hywiki-graph--include-rolo
+               (format " (%d rolo nodes)" (hash-table-count hywiki-graph--rolo-nodes))
+             "")))
+
 (defun hywiki-graph-recenter ()
   "Recenter the graph on the HyWiki node at point."
   (interactive)
@@ -1172,17 +1278,24 @@ The current view is marked, and unavailable backends are flagged."
   (interactive)
   (let ((node (hywiki-graph--node-at-point)))
     (cond ((null node) (user-error "No HyWiki node at point"))
+          ((hywiki-graph--rolo-node-p node)
+           (user-error "%S is a HyRolo node, not a WikiWord page" node))
           ((fboundp 'hywiki-find-page) (hywiki-find-page node))
           (t (find-file (expand-file-name (concat node hywiki-file-suffix)
                                           hywiki-directory))))))
 
 (defun hywiki-graph-refresh ()
-  "Rebuild the link graph from the HyWiki pages and re-render."
+  "Rebuild the link graph from the HyWiki pages and re-render.
+Also rebuilds the HyRolo adjacency when rolo nodes are included."
   (interactive)
   (hywiki-graph--get-adjacency t)
+  (when hywiki-graph--include-rolo (hywiki-graph--get-rolo-adjacency t))
   (hywiki-graph--render)
-  (message "HyWiki graph refreshed (%d pages)"
-           (hash-table-count hywiki-graph--adjacency)))
+  (message "HyWiki graph refreshed (%d pages%s)"
+           (hash-table-count hywiki-graph--adjacency)
+           (if hywiki-graph--include-rolo
+               (format ", %d rolo nodes" (hash-table-count hywiki-graph--rolo-nodes))
+             "")))
 
 (defvar hywiki-graph-mode-map (make-sparse-keymap)
   "Keymap for `hywiki-graph-mode'.")
@@ -1197,6 +1310,7 @@ The current view is marked, and unavailable backends are flagged."
 (define-key hywiki-graph-mode-map (kbd "s")   #'hywiki-graph-svg)
 (define-key hywiki-graph-mode-map (kbd "S")   #'hywiki-graph-dagviz)
 (define-key hywiki-graph-mode-map (kbd "h")   #'hywiki-graph-toggle-hubs)
+(define-key hywiki-graph-mode-map (kbd "r")   #'hywiki-graph-toggle-rolo)
 (define-key hywiki-graph-mode-map (kbd "[")   #'hywiki-graph-hub-threshold-down)
 (define-key hywiki-graph-mode-map (kbd "]")   #'hywiki-graph-hub-threshold-up)
 (define-key hywiki-graph-mode-map (kbd "RET") #'hywiki-graph-recenter)
@@ -1240,7 +1354,8 @@ WIKIWORD to include (default `hywiki-graph-default-degree').  So
             hywiki-graph--degree (max 1 (or degree hywiki-graph-default-degree))
             hywiki-graph--style hywiki-graph-default-style
             hywiki-graph--prune-hubs hywiki-graph-prune-hubs
-            hywiki-graph--hub-threshold hywiki-graph-hub-threshold)
+            hywiki-graph--hub-threshold hywiki-graph-hub-threshold
+            hywiki-graph--include-rolo hywiki-graph-include-rolo)
       (hywiki-graph--render))
     (pop-to-buffer buf)))
 

@@ -52,6 +52,10 @@
 ;;          package.  Edges are oriented centre-outward.  Offered only when
 ;;          dag-draw is installed.
 ;;
+;;   asciidag Another Sugiyama box-and-arrow view, rendered by the `ascii-dag'
+;;          Rust crate via a small helper binary (build `ascii-dag-cli' with
+;;          cargo).  Offered only when that binary is present.
+;;
 ;; To get the `graph' style, install graph-easy once, e.g. with a user-local
 ;; Perl lib (no sudo):
 ;;
@@ -693,6 +697,75 @@ dense, or rendering fails."
               (narrow-to-region start (point))
               (hywiki-graph--fontify-nodes nodes)))))))))
 
+;;;; ASCII-DAG rendering (Sugiyama boxes, via the ascii-dag Rust crate)
+
+(defcustom hywiki-graph-ascii-dag-program
+  (and load-file-name
+       (let ((p (expand-file-name
+                 "ascii-dag-cli/target/release/hywiki-ascii-dag"
+                 (file-name-directory load-file-name))))
+         (and (file-executable-p p) p)))
+  "Path to the `hywiki-ascii-dag' helper binary, or nil if not built.
+Build it with `cargo build --release' in the `ascii-dag-cli' subdirectory
+of this package (needs a Rust toolchain)."
+  :type '(choice (const :tag "Not built" nil) (file :must-match t)))
+
+(defun hywiki-graph--ascii-dag-available-p ()
+  "Return non-nil when the ascii-dag helper binary is present."
+  (and hywiki-graph-ascii-dag-program
+       (file-executable-p hywiki-graph-ascii-dag-program)))
+
+(defun hywiki-graph--ascii-dag-input (nodes edges adj degree center exclude)
+  "Build the ascii-dag helper stdin: node labels then centre-oriented edges."
+  (let ((idx (make-hash-table :test 'equal))
+        (dist (plist-get (hywiki-graph--bfs center adj degree exclude) :dist)))
+    (cl-loop for nd in nodes for i from 1 do (puthash nd i idx))
+    (with-temp-buffer
+      (insert (number-to-string (length nodes)) "\n")
+      (dolist (nd nodes) (insert nd "\n"))
+      (insert (number-to-string (length edges)) "\n")
+      (dolist (e edges)
+        (let* ((a (car e)) (b (cdr e))
+               (da (or (gethash a dist) 0)) (db (or (gethash b dist) 0)))
+          (if (or (< da db) (and (= da db) (string< a b)))
+              (insert (format "%d %d\n" (gethash a idx) (gethash b idx)))
+            (insert (format "%d %d\n" (gethash b idx) (gethash a idx))))))
+      (buffer-string))))
+
+(defun hywiki-graph--render-ascii-dag (center degree adj exclude)
+  "Render the CENTER/DEGREE neighbourhood via the ascii-dag helper binary.
+Edges are oriented centre-outward; falls back to the tree on absence,
+density, or failure."
+  (pcase-let* ((`(,nodes . ,edges) (hywiki-graph--induced center degree adj exclude))
+               (n-edges (length edges)))
+    (cond
+     ((not (hywiki-graph--ascii-dag-available-p))
+      (hywiki-graph--render-tree
+       center degree adj exclude
+       "ascii-dag binary not built — showing tree (cargo build in ascii-dag-cli/)"))
+     ((> n-edges hywiki-graph-graph-easy-max-edges)
+      (hywiki-graph--render-tree
+       center degree adj exclude
+       (format "%d edges > cap (%d) — showing tree" n-edges hywiki-graph-graph-easy-max-edges)))
+     (t
+      (let ((out (with-temp-buffer
+                   (let ((status (ignore-errors
+                                   (call-process-region
+                                    (hywiki-graph--ascii-dag-input
+                                     nodes edges adj degree center exclude)
+                                    nil hywiki-graph-ascii-dag-program nil t nil))))
+                     (when (and (memq status '(0 nil)) (> (buffer-size) 0))
+                       (string-trim-right (buffer-string)))))))
+        (if (not out)
+            (hywiki-graph--render-tree center degree adj exclude
+                                       "ascii-dag failed — showing tree")
+          (hywiki-graph--insert-header center degree (length nodes) n-edges 'asciidag)
+          (let ((start (point)))
+            (insert out "\n")
+            (save-restriction
+              (narrow-to-region start (point))
+              (hywiki-graph--fontify-nodes nodes)))))))))
+
 ;;;; Render dispatch
 
 (defun hywiki-graph--render ()
@@ -707,9 +780,10 @@ dense, or rendering fails."
     (pcase hywiki-graph--style
       ('graph   (hywiki-graph--render-graph-easy center degree adj exclude))
       ('matrix  (hywiki-graph--render-matrix center degree adj exclude))
-      ('dag     (hywiki-graph--render-dag center degree adj exclude))
-      ('layered (hywiki-graph--render-layered center degree adj exclude))
-      (_        (hywiki-graph--render-tree center degree adj exclude)))
+      ('dag      (hywiki-graph--render-dag center degree adj exclude))
+      ('layered  (hywiki-graph--render-layered center degree adj exclude))
+      ('asciidag (hywiki-graph--render-ascii-dag center degree adj exclude))
+      (_         (hywiki-graph--render-tree center degree adj exclude)))
     (goto-char (point-min))))
 
 ;;;; SVG view (force-directed, via graph-fa2)
@@ -820,9 +894,11 @@ buffer, or prompts for a WikiWord.  Click a node to recentre."
 
 (defun hywiki-graph--available-styles ()
   "Return the list of selectable text rendering styles, in cycle order.
-The `layered' (dag-draw) style is included only when dag-draw is present."
+The `layered' (dag-draw) and `asciidag' (ascii-dag binary) styles are
+included only when their backend is available."
   (append '(graph tree matrix dag)
-          (and (hywiki-graph--dag-draw-available-p) '(layered))))
+          (and (hywiki-graph--dag-draw-available-p) '(layered))
+          (and (hywiki-graph--ascii-dag-available-p) '(asciidag))))
 
 (defun hywiki-graph-cycle-style ()
   "Switch to the next available text rendering style."

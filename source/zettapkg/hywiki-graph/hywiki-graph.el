@@ -365,7 +365,13 @@ placement and optional per-edge ANSI colours (see
      :doc "Force-directed node-and-line diagram as an inline SVG image (not
 text): nodes repel, edges pull, settling into an organic layout like
 Logseq's graph.  Opened in its own buffer with `s'; click a node to
-recentre.  Rendered by the graph-fa2 package."))
+recentre.  Rendered by the graph-fa2 package.")
+    (dagviz
+     :backend "dagviz (Python)"
+     :doc "The git-log style (nodes in one column, edges as side rails) as an
+inline SVG image -- the image counterpart of the text `dag' view, rendered
+by the dagviz Python package.  Opened in its own buffer with `S'; edges
+oriented centre-outward."))
   "Per-view documentation: how each style represents the graph and its backend.")
 
 (defun hywiki-graph--view-backend (style)
@@ -388,7 +394,7 @@ recentre.  Rendered by the graph-fa2 package."))
               "hubs shown"))
     'face 'shadow)
    (propertize
-    "[1-9] degree · v view · s svg · h hubs · [ ] threshold · RET recenter · o open · g refresh · ? help · q quit\n\n"
+    "[1-9] degree · v view · s svg · S dagviz · h hubs · [ ] threshold · RET recenter · o open · g refresh · ? help · q quit\n\n"
     'face 'shadow)))
 
 ;;;; Tree rendering
@@ -939,6 +945,85 @@ buffer, or prompts for a WikiWord.  Click a node to recentre."
       (user-error "No HyWiki page for %S" center))
     (hywiki-graph--svg-render center degree prune threshold)))
 
+;;;; dagviz SVG view (git-log style, via the dagviz Python package)
+
+(defcustom hywiki-graph-dagviz-python
+  (and load-file-name
+       (let ((p (expand-file-name "dagviz-cli/.venv/bin/python"
+                                  (file-name-directory load-file-name))))
+         (and (file-executable-p p) p)))
+  "Python interpreter (a venv) with the dagviz package installed, or nil.
+Set it up in the `dagviz-cli' subdirectory of this package:
+  python3 -m venv .venv && .venv/bin/pip install dagviz networkx"
+  :type '(choice (const :tag "Not set up" nil) (file :must-match t)))
+
+(defcustom hywiki-graph-dagviz-script
+  (and load-file-name
+       (expand-file-name "dagviz-cli/render.py"
+                         (file-name-directory load-file-name)))
+  "Path to the dagviz render helper script."
+  :type '(choice (const nil) file))
+
+(defcustom hywiki-graph-dagviz-buffer-name "*HyWiki Graph dagviz*"
+  "Buffer used for the dagviz git-log style SVG view."
+  :type 'string)
+
+(defcustom hywiki-graph-dagviz-scale 1.5
+  "Scale factor applied to the dagviz SVG image."
+  :type 'number)
+
+(defun hywiki-graph--dagviz-available-p ()
+  "Return non-nil when the dagviz Python helper and SVG support are present."
+  (and hywiki-graph-dagviz-python (file-executable-p hywiki-graph-dagviz-python)
+       hywiki-graph-dagviz-script (file-readable-p hywiki-graph-dagviz-script)
+       (image-type-available-p 'svg)))
+
+;;;###autoload
+(defun hywiki-graph-dagviz ()
+  "Show the current neighbourhood as a dagviz git-log style SVG image.
+Uses the centre/degree/pruning of the current `hywiki-graph-mode' buffer,
+or prompts for a WikiWord.  Rendered by the dagviz Python package."
+  (interactive)
+  (unless (hywiki-graph--dagviz-available-p)
+    (user-error "dagviz helper not set up (see dagviz-cli/ and hywiki-graph-dagviz-python)"))
+  (let* ((center (or hywiki-graph--center
+                     (completing-read "HyWiki dagviz graph for word: "
+                                      (hywiki-get-page-list) nil t)))
+         (degree (or (and hywiki-graph--center hywiki-graph--degree)
+                     hywiki-graph-default-degree))
+         (prune (if (local-variable-p 'hywiki-graph--prune-hubs)
+                    hywiki-graph--prune-hubs hywiki-graph-prune-hubs))
+         (threshold (if (local-variable-p 'hywiki-graph--hub-threshold)
+                        hywiki-graph--hub-threshold hywiki-graph-hub-threshold))
+         (adj (hywiki-graph--get-adjacency))
+         (exclude (and prune (hywiki-graph--hub-set adj threshold center))))
+    (unless (member center (hywiki-get-page-list))
+      (user-error "No HyWiki page for %S" center))
+    (pcase-let* ((`(,nodes . ,edges) (hywiki-graph--induced center degree adj exclude))
+                 (input (hywiki-graph--ascii-dag-input
+                         nodes edges adj degree center exclude))
+                 (svg (with-temp-buffer
+                        (let ((status (ignore-errors
+                                        (call-process-region
+                                         input nil hywiki-graph-dagviz-python nil t nil
+                                         hywiki-graph-dagviz-script))))
+                          (when (and (eq status 0) (> (buffer-size) 0))
+                            (buffer-string))))))
+      (if (not svg)
+          (user-error "dagviz rendering failed")
+        (let ((buf (get-buffer-create hywiki-graph-dagviz-buffer-name)))
+          (with-current-buffer buf
+            (unless (derived-mode-p 'special-mode) (special-mode))
+            (let ((inhibit-read-only t))
+              (erase-buffer)
+              (insert (propertize
+                       (format "dagviz: %s · degree %d · %d nodes   (q quit)\n\n"
+                               center degree (length nodes))
+                       'face 'shadow))
+              (insert-image (create-image svg 'svg t :scale hywiki-graph-dagviz-scale)))
+            (goto-char (point-min)))
+          (pop-to-buffer buf))))))
+
 ;;;; Commands
 
 (defun hywiki-graph--node-at-point ()
@@ -995,6 +1080,7 @@ The current view is marked, and unavailable backends are flagged."
                           ('layered (hywiki-graph--dag-draw-available-p))
                           ('asciidag (hywiki-graph--ascii-dag-available-p))
                           ('svg (hywiki-graph--graph-fa2-available-p))
+                          ('dagviz (hywiki-graph--dagviz-available-p))
                           ('graph (hywiki-graph--graph-easy-available-p))
                           (_ t))))
             (insert (format "%s%-9s [%s]%s\n"
@@ -1075,6 +1161,7 @@ The current view is marked, and unavailable backends are flagged."
               #'hywiki-graph-set-degree))
 (define-key hywiki-graph-mode-map (kbd "v")   #'hywiki-graph-cycle-style)
 (define-key hywiki-graph-mode-map (kbd "s")   #'hywiki-graph-svg)
+(define-key hywiki-graph-mode-map (kbd "S")   #'hywiki-graph-dagviz)
 (define-key hywiki-graph-mode-map (kbd "h")   #'hywiki-graph-toggle-hubs)
 (define-key hywiki-graph-mode-map (kbd "[")   #'hywiki-graph-hub-threshold-down)
 (define-key hywiki-graph-mode-map (kbd "]")   #'hywiki-graph-hub-threshold-up)

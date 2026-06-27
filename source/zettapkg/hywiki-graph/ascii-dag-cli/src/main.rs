@@ -11,9 +11,11 @@
 //!   ...
 
 use ascii_dag::graph::Graph;
+use ascii_dag::render::colors::Palette;
 use std::io::{self, Read};
 
 fn main() {
+    let color = std::env::args().any(|a| a == "--color");
     let mut input = String::new();
     io::stdin().read_to_string(&mut input).expect("read stdin");
     let mut lines = input.lines();
@@ -41,5 +43,10 @@ fn main() {
         .collect();
 
     let dag = Graph::from_edges(&nodes, &edges);
-    print!("{}", dag.render());
+    if color {
+        let ir = dag.compute_layout();
+        print!("{}", ir.render_scanline_colored(Palette::Ansi));
+    } else {
+        print!("{}", dag.render());
+    }
 }

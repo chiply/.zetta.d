@@ -95,6 +95,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'thingatpt)
+(require 'ansi-color)
 (require 'hywiki)
 
 (declare-function hywiki-get-page-list "hywiki")
@@ -318,6 +319,59 @@ list of (A . B) cons cells with A string< B."
           (push (cons n m) edges))))
     (cons nodes (nreverse edges))))
 
+;;;; View documentation
+
+(defconst hywiki-graph--view-info
+  '((graph
+     :backend "graph-easy (Perl)"
+     :doc "Node-and-line box diagram.  Each WikiWord is a box; an edge is a
+drawn line joining two boxes.  Layout is performed by the external
+graph-easy program, which reads Graphviz DOT.  Reads well on sparse
+neighbourhoods; dense ones tangle, and past the edge cap it falls back to
+the tree.")
+    (tree
+     :backend "built-in (Emacs Lisp)"
+     :doc "Breadth-first spanning tree rooted at the centre: indentation is
+hop-distance (the centre's links are children, theirs grandchildren, ...).
+The remaining edges -- the cycles -- are listed after the ╌╌ marker as
+cross-links, each shown once on its later node.  Always available.")
+    (matrix
+     :backend "built-in (Emacs Lisp)"
+     :doc "Adjacency matrix, centre first.  Rows and columns are the
+neighbourhood's nodes; a filled cell at (row, col) means those two link.
+Read a node's row -- or its column -- to see all of its connections.
+Symmetric (links are undirected).  Never tangles, whatever the density.")
+    (dag
+     :backend "built-in (Emacs Lisp)"
+     :doc "git-log style rail diagram.  Every node is on its own row in one
+column; each edge is a vertical rail in a lane to the left, coloured per
+lane so crossing rails stay distinct.  DFS ordering and greedy lane packing
+keep it narrow on sparse / tree-like graphs.")
+    (layered
+     :backend "dag-draw.el"
+     :doc "Hierarchical Sugiyama flowchart: nodes placed in ranks (layers) by
+distance from the centre, drawn as ASCII boxes joined by arrows.  Edges are
+oriented centre-outward into a DAG.  Rendered by the dag-draw package;
+clean on sparse hierarchies, but it can route long edges through labels
+when dense.")
+    (asciidag
+     :backend "ascii-dag (Rust crate)"
+     :doc "Another Sugiyama box-and-arrow layout, computed by the ascii-dag
+Rust crate via a small helper binary.  Like `layered' but with cleaner box
+placement and optional per-edge ANSI colours (see
+`hywiki-graph-ascii-dag-color').  Edges oriented centre-outward.")
+    (svg
+     :backend "graph-fa2"
+     :doc "Force-directed node-and-line diagram as an inline SVG image (not
+text): nodes repel, edges pull, settling into an organic layout like
+Logseq's graph.  Opened in its own buffer with `s'; click a node to
+recentre.  Rendered by the graph-fa2 package."))
+  "Per-view documentation: how each style represents the graph and its backend.")
+
+(defun hywiki-graph--view-backend (style)
+  "Return the backend label for STYLE."
+  (or (plist-get (cdr (assq style hywiki-graph--view-info)) :backend) "built-in"))
+
 ;;;; Header
 
 (defun hywiki-graph--insert-header (center degree nodes edges style)
@@ -325,8 +379,8 @@ list of (A . B) cons cells with A string< B."
   (insert
    (propertize (format "HyWiki graph: %s\n" center) 'face 'hywiki-graph-center)
    (propertize
-    (format "%s · degree %d · %d node%s · %d edge%s · %s\n"
-            style degree
+    (format "%s (%s) · degree %d · %d node%s · %d edge%s · %s\n"
+            style (hywiki-graph--view-backend style) degree
             nodes (if (= nodes 1) "" "s")
             edges (if (= edges 1) "" "s")
             (if hywiki-graph--prune-hubs
@@ -334,7 +388,7 @@ list of (A . B) cons cells with A string< B."
               "hubs shown"))
     'face 'shadow)
    (propertize
-    "[1-9] degree · v view · s svg · h hubs · [ ] threshold · RET recenter · o open · g refresh · q quit\n\n"
+    "[1-9] degree · v view · s svg · h hubs · [ ] threshold · RET recenter · o open · g refresh · ? help · q quit\n\n"
     'face 'shadow)))
 
 ;;;; Tree rendering
@@ -710,6 +764,12 @@ Build it with `cargo build --release' in the `ascii-dag-cli' subdirectory
 of this package (needs a Rust toolchain)."
   :type '(choice (const :tag "Not built" nil) (file :must-match t)))
 
+(defcustom hywiki-graph-ascii-dag-color t
+  "When non-nil, render the `asciidag' view with ascii-dag's ANSI edge colours.
+Each edge is greedily coloured so crossing edges stay distinct; the ANSI
+output is converted to faces with `ansi-color-apply'."
+  :type 'boolean)
+
 (defun hywiki-graph--ascii-dag-available-p ()
   "Return non-nil when the ascii-dag helper binary is present."
   (and hywiki-graph-ascii-dag-program
@@ -748,14 +808,18 @@ density, or failure."
        center degree adj exclude
        (format "%d edges > cap (%d) — showing tree" n-edges hywiki-graph-graph-easy-max-edges)))
      (t
-      (let ((out (with-temp-buffer
-                   (let ((status (ignore-errors
-                                   (call-process-region
-                                    (hywiki-graph--ascii-dag-input
-                                     nodes edges adj degree center exclude)
-                                    nil hywiki-graph-ascii-dag-program nil t nil))))
-                     (when (and (memq status '(0 nil)) (> (buffer-size) 0))
-                       (string-trim-right (buffer-string)))))))
+      (let* ((raw (with-temp-buffer
+                    (let ((status (ignore-errors
+                                    (apply #'call-process-region
+                                           (hywiki-graph--ascii-dag-input
+                                            nodes edges adj degree center exclude)
+                                           nil hywiki-graph-ascii-dag-program nil t nil
+                                           (and hywiki-graph-ascii-dag-color '("--color"))))))
+                      (when (and (memq status '(0 nil)) (> (buffer-size) 0))
+                        (string-trim-right (buffer-string))))))
+             (out (and raw (if hywiki-graph-ascii-dag-color
+                               (ansi-color-apply raw)
+                             raw))))
         (if (not out)
             (hywiki-graph--render-tree center degree adj exclude
                                        "ascii-dag failed — showing tree")
@@ -909,6 +973,36 @@ included only when their backend is available."
     (hywiki-graph--render)
     (message "HyWiki graph style: %s" next)))
 
+(defun hywiki-graph-describe-view ()
+  "Pop a help buffer documenting every view: representation and backend.
+The current view is marked, and unavailable backends are flagged."
+  (interactive)
+  (let ((current (and (boundp 'hywiki-graph--style) hywiki-graph--style)))
+    (with-help-window "*HyWiki Graph Views*"
+      (with-current-buffer "*HyWiki Graph Views*"
+        (insert "HyWiki graph — views\n")
+        (insert "====================\n\n")
+        (insert "Nodes are WikiWords.  An (undirected) edge joins two WikiWords when one\n"
+                "page's text mentions the other.  The numeric prefix / digit keys set how\n"
+                "many link hops out from the centre to show; hub pruning (h, [ ]) drops\n"
+                "over-connected index pages.  Cycle the text views with `v'; `s' opens the\n"
+                "SVG view in its own buffer.\n\n")
+        (dolist (entry hywiki-graph--view-info)
+          (let* ((style (car entry))
+                 (backend (plist-get (cdr entry) :backend))
+                 (doc (plist-get (cdr entry) :doc))
+                 (avail (pcase style
+                          ('layered (hywiki-graph--dag-draw-available-p))
+                          ('asciidag (hywiki-graph--ascii-dag-available-p))
+                          ('svg (hywiki-graph--graph-fa2-available-p))
+                          ('graph (hywiki-graph--graph-easy-available-p))
+                          (_ t))))
+            (insert (format "%s%-9s [%s]%s\n"
+                            (if (eq style current) "▸ " "  ")
+                            (symbol-name style) backend
+                            (if avail "" "  — backend not available")))
+            (insert "    " (string-replace "\n" "\n    " doc) "\n\n")))))))
+
 (defun hywiki-graph-toggle-hubs ()
   "Toggle pruning of high-degree hub nodes from the display."
   (interactive)
@@ -987,6 +1081,7 @@ included only when their backend is available."
 (define-key hywiki-graph-mode-map (kbd "RET") #'hywiki-graph-recenter)
 (define-key hywiki-graph-mode-map (kbd "o")   #'hywiki-graph-visit)
 (define-key hywiki-graph-mode-map (kbd "g")   #'hywiki-graph-refresh)
+(define-key hywiki-graph-mode-map (kbd "?")   #'hywiki-graph-describe-view)
 (define-key hywiki-graph-mode-map [mouse-1]   #'hywiki-graph-recenter-mouse)
 
 (define-derived-mode hywiki-graph-mode special-mode "HyWiki-Graph"

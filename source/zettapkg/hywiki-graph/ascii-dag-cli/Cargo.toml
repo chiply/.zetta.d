@@ -1,0 +1,15 @@
+[package]
+name = "hywiki-ascii-dag"
+version = "0.1.0"
+edition = "2021"
+description = "Tiny stdin->ASCII DAG filter wrapping the ascii-dag crate, for hywiki-graph.el"
+
+[dependencies]
+ascii-dag = "0.9"
+
+[[bin]]
+name = "hywiki-ascii-dag"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 2

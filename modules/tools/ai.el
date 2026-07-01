@@ -196,15 +196,27 @@
 
 (use-package copilot
   :ensure t
-  :hook (prog-mode . copilot-mode)
   :bind (:map copilot-completion-map
               ("C-<return>" . copilot-accept-completion)
               ("C-f" . copilot-accept-completion-by-word)
               ("C-n" . copilot-next-completion)
               ("C-p" . copilot-previous-completion)
               )
-  :config
-  (add-hook 'prog-mode-hook 'copilot-mode)
-  )
+  :init
+  (defun zetta-copilot-maybe-enable ()
+    "Enable `copilot-mode' only when actually editing a code buffer.
+Copilot is restricted to file-visiting buffers whose major mode derives
+from `prog-mode' (so Org, Markdown and other text modes are skipped) and
+oversized files are left alone.  This keeps Copilot from activating -- or
+tripping its `copilot-max-char' warning -- in the transient buffers that
+tools like HyRolo or consult-grep open in the background to scan files."
+    (require 'copilot)
+    (when (and buffer-file-name
+               (derived-mode-p 'prog-mode)
+               (not (bound-and-true-p copilot-mode))
+               (or (< copilot-max-char 0)
+                   (<= (buffer-size) copilot-max-char)))
+      (copilot-mode 1)))
+  (add-hook 'prog-mode-hook #'zetta-copilot-maybe-enable))
 
 ;;; ai.el ends here

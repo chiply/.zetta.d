@@ -14,6 +14,63 @@
 ;;     `org-meta-return'), is moved to {s-H}.  The Assist Key is the prefixed
 ;;     variant {C-u s-H}.  The shift-mouse Smart Keys keep their defaults.
 
+;; --- Fix HyRolo's consult-grep handoff for directory search paths ---
+;; When `hyrolo-file-list' contains a directory, the interactive grep
+;; commands (`hyrolo-grep'/`hyrolo-fgrep') read input through consult, which
+;; runs ripgrep *inside* that directory and so reports bare file names
+;; relative to it.  `hyrolo-grep-input' hands those names back, and HyRolo
+;; then re-expands them against the invocation `default-directory' (not the
+;; search dir), producing non-existent paths -- so the assembled *HyRolo*
+;; buffer shows "No matching entries" even though consult found matches.
+;; Re-root the names against `hyrolo-file-list' so only the matched files are
+;; assembled (fast) and the consult front-end is left untouched.
+
+(defun zetta-hyrolo--search-roots ()
+  "Directory roots to resolve consult-relative HyRolo file names against.
+Each entry of `hyrolo-file-list' contributes its own directory (a
+directory entry contributes itself; a file or wildcard entry contributes
+its parent directory)."
+  (delq nil
+        (mapcar (lambda (p)
+                  (let ((ep (hpath:expand p)))
+                    (if (file-directory-p ep)
+                        (file-name-as-directory ep)
+                      (file-name-directory ep))))
+                hyrolo-file-list)))
+
+(defun zetta-hyrolo--reroot (files roots)
+  "Resolve each name in FILES to an existing path under one of ROOTS.
+Absolute names are kept if they exist; search-relative names (as returned
+by `consult-grep', which runs inside the search directory) are expanded
+against ROOTS.  Unresolvable names are dropped."
+  (delq nil
+        (mapcar (lambda (f)
+                  (if (file-name-absolute-p f)
+                      (and (file-exists-p f) f)
+                    (seq-some (lambda (root)
+                                (let ((cand (expand-file-name f root)))
+                                  (and (file-exists-p cand) cand)))
+                              roots)))
+                files)))
+
+(defun zetta-hyrolo-fix-consult-handoff (result)
+  "Re-root consult-grep's relative file names in RESULT for HyRolo's assembler.
+`hyrolo-grep-input' returns (PATTERN MATCHING-FILES) when driven through
+consult.  consult runs ripgrep inside the search directory, so
+MATCHING-FILES are bare names relative to it; HyRolo would otherwise
+re-expand them against the wrong `default-directory' and find nothing.
+Resolve them against `hyrolo-file-list' so only the matched files are
+assembled, leaving the consult front-end untouched.  If nothing resolves,
+return RESULT unchanged so the assembler does not fall back to scanning
+every file."
+  (if (and (consp result) (consp (cdr result)) (cadr result))
+      (let ((rerooted (zetta-hyrolo--reroot (cadr result)
+                                            (zetta-hyrolo--search-roots))))
+        (if rerooted
+            (list (car result) rerooted)
+          result))
+    result))
+
 (use-package hyperbole
   :defer 1
   :init
@@ -42,6 +99,13 @@
   ;; supported `hkey-set-key' helper.  Assist Key = {C-u s-H}.
   (dolist (k '("M-RET" "M-<return>" "ESC RET" "ESC <return>"))
     (define-key hyperbole-mode-map (kbd k) nil))
-  (hkey-set-key (kbd "s-H") #'hkey-either))
+  (hkey-set-key (kbd "s-H") #'hkey-either)
+
+  ;; --- HyRolo: search the Logseq pages as the rolo source ---
+  (setq hyrolo-file-list '("~/logseq/pages/"))
+  ;; Make the consult-driven grep commands resolve their matched files
+  ;; correctly (see `zetta-hyrolo-fix-consult-handoff' above).
+  (advice-add 'hyrolo-grep-input :filter-return
+              #'zetta-hyrolo-fix-consult-handoff))
 
 ;;; hyperbole.el ends here

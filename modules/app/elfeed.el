@@ -605,14 +605,17 @@ Indicators refresh via the (debounced) update hooks; the db is persisted on
 the next idle, since `elfeed-update-background' does not save it itself."
   (require 'elfeed)
   ;; A healthy background pull drains well within the interval, so a non-zero
-  ;; queue at tick time means a curl sentinel never decremented the active
-  ;; counter (sleep/wake, network drop, killed process) -- once that happens
-  ;; `elfeed-update-background' silently no-ops forever (its guard skips when
-  ;; `elfeed-queue-count-total' > 0, and it logs nothing in that case), so the
-  ;; timer keeps looking healthy while updates quietly stop.  Clear the stuck
-  ;; connection pool before pulling.
+  ;; queue at tick time means the active-connection counter is stuck: either a
+  ;; curl sentinel never decremented it (stuck POSITIVE -- sleep/wake, network
+  ;; drop, killed process), or a stray/late sentinel decremented it after an
+  ;; `elfeed-unjam' reset it to 0 (stuck NEGATIVE, e.g. -2).  Either way
+  ;; `elfeed-update-background' silently no-ops forever -- its guard runs only
+  ;; when `elfeed-queue-count-total' is EXACTLY 0, so any non-zero value (of
+  ;; either sign) skips it, with no log -- and the timer keeps looking healthy
+  ;; while updates quietly stop.  Test /= 0 (not > 0) so a negative jam heals
+  ;; too; clear the stuck connection pool before pulling.
   (when (and (fboundp 'elfeed-queue-count-total)
-             (> (elfeed-queue-count-total) 0))
+             (/= (elfeed-queue-count-total) 0))
     (elfeed-log 'warn "auto-update: queue jammed (%d), unjamming"
                 (elfeed-queue-count-total))
     (when (fboundp 'elfeed-unjam) (elfeed-unjam)))
@@ -626,6 +629,29 @@ the next idle, since `elfeed-update-background' does not save it itself."
      90 nil
      (lambda () (when (fboundp 'elfeed-db-save) (ignore-errors (elfeed-db-save))))))
    (t (elfeed-update))))                 ; pre-4.0 fallback
+
+;; Belt-and-suspenders: never let the curl active-connection counter go negative.
+;; `elfeed-curl-queue-active' is decremented by each curl sentinel
+;; (`elfeed-curl--queue-wrap') and hard-reset to 0 by `elfeed-unjam'.  If a stray
+;; or late sentinel fires AFTER an unjam (sleep/wake, killed process, a double
+;; sentinel), its `decf' takes the counter past 0 and it sticks NEGATIVE -- which
+;; wedges every future update, since `elfeed-update-background' pulls only when
+;; the count is exactly 0 (and elfeed's own `elfeed-update' treats any non-zero
+;; count as "already running").  The `/=' unjam guard in `zetta-elfeed--auto-update'
+;; recovers from this on the next tick, but this stops it happening at all: each
+;; sentinel calls `elfeed-curl--run-queue' right after decrementing, so flooring
+;; the counter at 0 there caps it before the queue machinery -- or a background
+;; pull's `= 0' guard -- ever observes a negative value.  The clamp is a no-op
+;; unless the counter is already below 0, so it never perturbs a healthy queue.
+(with-eval-after-load 'elfeed-curl
+  (defun zetta-elfeed-curl--floor-active (&rest _)
+    "Clamp `elfeed-curl-queue-active' at 0.
+A stray/late curl sentinel can `decf' it below 0 after an `elfeed-unjam'
+reset, which permanently wedges background updates."
+    (when (and (boundp 'elfeed-curl-queue-active)
+               (< elfeed-curl-queue-active 0))
+      (setq elfeed-curl-queue-active 0)))
+  (advice-add 'elfeed-curl--run-queue :before #'zetta-elfeed-curl--floor-active))
 
 (unless zetta-elfeed--auto-update-timer
   (setq zetta-elfeed--auto-update-timer

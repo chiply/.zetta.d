@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.26](https://github.com/chiply/.zetta.d/compare/v0.1.25...v0.1.26) (2026-07-01)
+
+
+### Features
+
+* **hywiki-graph:** text graph view of HyWiki word links ([#81](https://github.com/chiply/.zetta.d/issues/81)) ([22b8cf6](https://github.com/chiply/.zetta.d/commit/22b8cf6ec4be5ad0e46844abd344f240f6161dde))
+
+
+### Bug Fixes
+
+* **copilot:** scope copilot-mode to real code editing ([#79](https://github.com/chiply/.zetta.d/issues/79)) ([56f4053](https://github.com/chiply/.zetta.d/commit/56f40535db7355fbccafc9fb6682dcad451468db))
+* **elfeed:** recover background updates from a negative curl queue counter ([f792e5c](https://github.com/chiply/.zetta.d/commit/f792e5c55068e6358be52a89eddbe05558ea2eaf))
+* **embark-vc:** make forge PR the default embark target so `r` opens pr-review ([88bb6f5](https://github.com/chiply/.zetta.d/commit/88bb6f5dc268cb2acfea619fd616f54ec7a234af))
+* **hyrolo:** re-root consult-grep handoff for directory search paths ([#80](https://github.com/chiply/.zetta.d/issues/80)) ([f9da21f](https://github.com/chiply/.zetta.d/commit/f9da21f8821f16ac08b3258be021b09f246c0513))
+
 ## [0.1.25](https://github.com/chiply/.zetta.d/compare/v0.1.24...v0.1.25) (2026-06-26)
 
 

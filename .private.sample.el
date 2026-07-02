@@ -55,6 +55,66 @@
 (setq github-notifier-token "YOUR_GITHUB_TOKEN")
 
 ;; ──────────────────────────────────────────────────────────────────
+;; Mail sending (mu4e / message-mode via msmtp)
+;;
+;; mu4e accounts/contexts are personal, so they are not shown here —
+;; define your own `mu4e-contexts' (per-account `user-mail-address',
+;; maildirs, etc.).  This block only covers the OUTGOING path, which
+;; hands off to the external `msmtp' binary:
+;;
+;;   1. brew install msmtp
+;;   2. create ~/.msmtprc (NOT tracked; lives in $HOME) — see example below
+;;   3. store passwords with msmtp's `passwordeval' + the `op' CLI (mode (b)),
+;;      the same source mbsync uses — no secrets in any tracked file.
+;; ──────────────────────────────────────────────────────────────────
+
+;; A static signature is just a string.  NB: if you use a FORM here (e.g.
+;; `(format ...)'), message-mode evaluates it — the format string's
+;; %-directives must match the argument count, or `message-insert-signature'
+;; dies with "Not enough arguments for format string" on every compose.
+(setq message-signature "Cheers,\nYour Name")
+
+;; Send via msmtp.  The `(or ... "abs/path")' fallback guards against a nil
+;; `sendmail-program' (→ "Wrong type argument: stringp, nil" when sending) if
+;; msmtp is not yet on `exec-path' as the daemon starts.
+(setq send-mail-function         'message-send-mail-with-sendmail
+      message-send-mail-function 'message-send-mail-with-sendmail
+      sendmail-program           (or (executable-find "msmtp")
+                                      "/opt/homebrew/bin/msmtp"))
+
+;; Pick the msmtp account from the From: header before each send.
+;; The account names must match the `account' blocks in ~/.msmtprc.
+(defun zetta/set-msmtp-account ()
+  (when (message-mail-p)
+    (save-excursion
+      (let* ((from (save-restriction
+                     (message-narrow-to-headers)
+                     (message-fetch-field "from")))
+             (account (cond
+                       ((string-match "you@example.com"   from) "example-account")
+                       ((string-match "other@example.org" from) "other-account"))))
+        (when account
+          (setq message-sendmail-extra-arguments (list "-a" account)))))))
+(add-hook 'message-send-mail-hook #'zetta/set-msmtp-account)
+
+;; Example ~/.msmtprc (one `account' block per address; passwords via `op'):
+;;
+;;   defaults
+;;   auth           on
+;;   tls            on
+;;   tls_starttls   on
+;;   tls_trust_file /opt/homebrew/etc/ca-certificates/cert.pem
+;;
+;;   account example-account
+;;   host    smtp.gmail.com
+;;   port    587
+;;   from    you@example.com
+;;   user    you@example.com
+;;   passwordeval "op read 'op://Dev/Example/app-password'"
+;;
+;;   account default : example-account
+
+;; ──────────────────────────────────────────────────────────────────
 ;; 1Password auth-source entries (only needed if using mode (b) above)
 ;; Maps (host, user, port) tuples to 1Password cache keys.
 ;; Used by forge, gptel, erc, mastodon, etc. via auth-source-search.

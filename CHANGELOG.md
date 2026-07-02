@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.27](https://github.com/chiply/.zetta.d/compare/v0.1.26...v0.1.27) (2026-07-02)
+
+
+### Features
+
+* **hywiki-alias:** derive case/space aliases for HyWikiWords ([#85](https://github.com/chiply/.zetta.d/issues/85)) ([5048459](https://github.com/chiply/.zetta.d/commit/50484597e2882f11acf68c7d739a22a9adc0a446))
+
 ## [0.1.26](https://github.com/chiply/.zetta.d/compare/v0.1.25...v0.1.26) (2026-07-01)
 
 

@@ -31,9 +31,9 @@ M-x zetta-hywiki-alias-mode
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `zetta-hywiki-alias-min-segments` | `2` | Minimum CamelCase segments to alias. `2` skips single-word pages like `Emacs` (case-insensitive matching of those lights up ordinary prose). Set `1` to include them. |
-| `zetta-hywiki-alias-min-length` | `5` | Minimum WikiWord length to alias. |
-| `zetta-hywiki-alias-deny-list` | `nil` | WikiWords that should never get a derived alias (e.g. a page named after a common phrase). |
+| `zetta-hywiki-alias-min-segments` | `1` | Minimum CamelCase segments to alias. `1` aliases every page, including single-word ones like `Emacs` (so `emacs` highlights and activates). Set `2` to skip single-word pages, whose case-insensitive match tends to light up prose. |
+| `zetta-hywiki-alias-min-length` | `1` | Minimum WikiWord length to alias. `1` imposes no real floor; raise it to drop very short, prose-prone names. |
+| `zetta-hywiki-alias-deny-list` | `nil` | WikiWords that should never get a derived alias (e.g. a page named after a common word or phrase). |
 
 ## How it works (thin, reversible layer)
 
@@ -91,13 +91,15 @@ day-to-day highlight + jump, kept entirely outside HyWiki's core.
 
 ## False positives
 
-Case-insensitive matching turns every aliased page name into a prose magnet.
-`DataModelTesting` is safe, but a page like `DesignDecisions` will highlight
-every "design decisions" in prose. Guards, in order of bluntness:
+Case-insensitive matching turns every aliased page name into a prose magnet,
+and the defaults alias **every** page — including short, single-word ones like
+`Emacs`, so ordinary "emacs" lights up throughout your notes. That is the
+intended trade-off here (single-word pages are wanted); to tighten it, in order
+of bluntness:
 
-- Single-word pages are excluded by default (`min-segments = 2`).
-- Raise `zetta-hywiki-alias-min-length`.
-- Add specific offenders to `zetta-hywiki-alias-deny-list`.
+- Add specific offenders to `zetta-hywiki-alias-deny-list` (surgical).
+- Raise `zetta-hywiki-alias-min-length` to drop short page names.
+- Set `zetta-hywiki-alias-min-segments` to `2` to skip single-word pages entirely.
 
-If the highlighting feels too eager, that's the knob set to tune — or just turn
-the mode off; it's designed to be A/B'd against plain HyWiki.
+If the highlighting feels too eager, those are the knobs — or just turn the
+mode off; it's designed to be A/B'd against plain HyWiki.

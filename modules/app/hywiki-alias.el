@@ -33,14 +33,18 @@
   "Derived case/space aliases for HyWikiWords."
   :group 'hyperbole-hywiki)
 
-(defcustom zetta-hywiki-alias-min-length 5
-  "Only HyWikiWords at least this many characters get a derived alias."
+(defcustom zetta-hywiki-alias-min-length 1
+  "Only HyWikiWords at least this many characters get a derived alias.
+The default, 1, imposes no real length floor; raise it to suppress aliases
+for very short page names, whose lowercase forms are the most prose-prone."
   :type 'integer :group 'zetta-hywiki-alias)
 
-(defcustom zetta-hywiki-alias-min-segments 2
+(defcustom zetta-hywiki-alias-min-segments 1
   "Minimum CamelCase segments a HyWikiWord needs to get a derived alias.
-The default, 2, skips single-word pages like `Emacs' -- matching those
-case-insensitively would light up ordinary prose.  Set to 1 to include them."
+The default, 1, aliases every page including single-word ones like `Emacs',
+so lowercase `emacs' is highlighted and activates.  Set to 2 to skip
+single-word pages, whose case-insensitive match tends to light up prose; use
+`zetta-hywiki-alias-deny-list' to exclude specific offenders either way."
   :type 'integer :group 'zetta-hywiki-alias)
 
 (defcustom zetta-hywiki-alias-deny-list nil

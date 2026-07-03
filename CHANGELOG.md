@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.29](https://github.com/chiply/.zetta.d/compare/v0.1.28...v0.1.29) (2026-07-03)
+
+
+### Features
+
+* **hywiki-alias:** distinguish WikiWords that are also links ([#93](https://github.com/chiply/.zetta.d/issues/93)) ([7557946](https://github.com/chiply/.zetta.d/commit/75579465902e48e2d4bc08153c58dd1ccaa920ac))
+
+
+### Bug Fixes
+
+* **hywiki-alias:** highlight the exact WikiWord form HyWiki misses ([#91](https://github.com/chiply/.zetta.d/issues/91)) ([dfbcbc5](https://github.com/chiply/.zetta.d/commit/dfbcbc5d034d2283743b43b1d5bd6f530a521ac5))
+
 ## [0.1.28](https://github.com/chiply/.zetta.d/compare/v0.1.27...v0.1.28) (2026-07-03)
 
 

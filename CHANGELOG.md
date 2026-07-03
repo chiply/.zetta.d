@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.28](https://github.com/chiply/.zetta.d/compare/v0.1.27...v0.1.28) (2026-07-03)
+
+
+### Features
+
+* **hywiki-alias:** alias single-word WikiWords by default ([#90](https://github.com/chiply/.zetta.d/issues/90)) ([b35ab73](https://github.com/chiply/.zetta.d/commit/b35ab73a98c9f25af02c7fcc643bb763ddc1de39))
+
+
+### Bug Fixes
+
+* **hywiki-alias:** highlight a new WikiWord's aliases immediately ([#88](https://github.com/chiply/.zetta.d/issues/88)) ([b601954](https://github.com/chiply/.zetta.d/commit/b601954b775edb252324c7746d565f129eff19b0))
+
 ## [0.1.27](https://github.com/chiply/.zetta.d/compare/v0.1.26...v0.1.27) (2026-07-02)
 
 

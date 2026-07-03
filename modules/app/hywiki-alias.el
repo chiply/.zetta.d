@@ -51,6 +51,10 @@ case-insensitively would light up ordinary prose.  Set to 1 to include them."
   "Hash mapping a downcased, space-stripped alias form to its canonical WikiWord.")
 (defvar zetta-hywiki-alias--regexp nil
   "Cached alternation regexp matching every derived alias form.")
+(defvar zetta-hywiki-alias--generation 0
+  "Counter bumped whenever the alias set changes.
+Part of the `post-command' refresh-guard key, so adding a HyWikiWord forces
+the next command to re-scan even when buffer text and scroll are unchanged.")
 
 (defun zetta-hywiki-alias--segments (word)
   "Split WORD at CamelCase boundaries into a list of segments.
@@ -87,9 +91,14 @@ Handles acronym runs, so \"HTMLParser\" -> (\"HTML\" \"Parser\")."
   (unless zetta-hywiki-alias--index (zetta-hywiki-alias--rebuild)))
 
 (defun zetta-hywiki-alias--invalidate (&rest _)
-  "Drop the cached index and regexp so they rebuild on next use."
+  "Drop the cached index/regexp and bump the generation counter.
+Advised onto the HyWikiWord-adding commands so a newly created word's derived
+aliases appear immediately: the bumped generation is part of the `post-command'
+change-guard key, so the next command re-scans even though creating a WikiWord
+changes neither the buffer text nor the scroll position."
   (setq zetta-hywiki-alias--index nil
-        zetta-hywiki-alias--regexp nil))
+        zetta-hywiki-alias--regexp nil)
+  (cl-incf zetta-hywiki-alias--generation))
 
 (defun zetta-hywiki-alias--hywiki-face-at (pos)
   "Return non-nil if a HyWiki highlight overlay already covers POS."
@@ -140,7 +149,8 @@ was modified or the window scrolled since the last refresh."
     (let* ((win (selected-window))
            (ws (window-start win))
            (we (window-end win t))
-           (key (list (buffer-chars-modified-tick) ws we)))
+           (key (list zetta-hywiki-alias--generation
+                      (buffer-chars-modified-tick) ws we)))
       (unless (equal key zetta-hywiki-alias--last)
         (setq zetta-hywiki-alias--last key)
         (zetta-hywiki-alias--highlight-region

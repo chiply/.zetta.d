@@ -47,7 +47,10 @@ M-x zetta-hywiki-alias-mode
   don't clear it. The exact WikiWord form is left to HyWiki where HyWiki
   highlights it, but highlighted here too in buffers HyWiki doesn't manage
   (e.g. eww, where its buffer-local highlighter never runs) — so the real word
-  is never left dark while its aliases light up.
+  is never left dark while its aliases light up. When a WikiWord is also a
+  clickable link (e.g. an eww hyperlink), the overlay keeps the WikiWord colour
+  but takes the link's own colour as its underline and layers above HyWiki's
+  overlay, so it reads as both a WikiWord (text colour) and a link (underline).
 - **Activate** — an `:around` advice on `hywiki-word-at` returns the canonical
   WikiWord when point is on an alias overlay; the entire HyWiki display chain
   (`hywiki-referent-exists-p` → `link-to-wikiword`) then works unchanged, so

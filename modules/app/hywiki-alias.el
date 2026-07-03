@@ -91,14 +91,18 @@ Handles acronym runs, so \"HTMLParser\" -> (\"HTML\" \"Parser\")."
   (unless zetta-hywiki-alias--index (zetta-hywiki-alias--rebuild)))
 
 (defun zetta-hywiki-alias--invalidate (&rest _)
-  "Drop the cached index/regexp and bump the generation counter.
+  "Rebuild-on-demand the alias set and re-highlight all visible windows.
 Advised onto the HyWikiWord-adding commands so a newly created word's derived
-aliases appear immediately: the bumped generation is part of the `post-command'
-change-guard key, so the next command re-scans even though creating a WikiWord
-changes neither the buffer text nor the scroll position."
+aliases appear immediately.  Drop the cached index/regexp, bump the generation
+counter (part of the `post-command' change-guard key, so a scroll-free,
+edit-free buffer still re-scans on its next command), and refresh every visible
+window now -- creating a WikiWord moves focus to the new page buffer, so the
+buffer holding the alias occurrences is usually no longer the selected window."
   (setq zetta-hywiki-alias--index nil
         zetta-hywiki-alias--regexp nil)
-  (cl-incf zetta-hywiki-alias--generation))
+  (cl-incf zetta-hywiki-alias--generation)
+  (when (bound-and-true-p zetta-hywiki-alias-mode)
+    (zetta-hywiki-alias--refresh-windows)))
 
 (defun zetta-hywiki-alias--hywiki-face-at (pos)
   "Return non-nil if a HyWiki highlight overlay already covers POS."
@@ -134,6 +138,12 @@ changes neither the buffer text nor the scroll position."
                 (overlay-put ov 'evaporate t)
                 (overlay-put ov 'help-echo (format "HyWiki alias -> %s" canon))))))))))
 
+(defun zetta-hywiki-alias--refresh-region (start end)
+  "Re-highlight derived aliases between START and END, expanded to whole lines."
+  (zetta-hywiki-alias--highlight-region
+   (save-excursion (goto-char start) (line-beginning-position))
+   (save-excursion (goto-char (min end (point-max))) (line-end-position))))
+
 (defvar-local zetta-hywiki-alias--last nil
   "Cache key (tick window-start window-end) of the last visible-region refresh.
 Skips redundant rescans so `post-command-hook' stays cheap and flicker-free.")
@@ -153,18 +163,29 @@ was modified or the window scrolled since the last refresh."
                       (buffer-chars-modified-tick) ws we)))
       (unless (equal key zetta-hywiki-alias--last)
         (setq zetta-hywiki-alias--last key)
-        (zetta-hywiki-alias--highlight-region
-         (save-excursion (goto-char ws) (line-beginning-position))
-         (save-excursion (goto-char (min we (point-max))) (line-end-position)))))))
+        (zetta-hywiki-alias--refresh-region ws we)))))
+
+(defun zetta-hywiki-alias--refresh-window (win)
+  "Re-highlight derived aliases in WIN's visible region.
+Highlights WIN by its own bounds rather than via the selected window, so a
+visible but unselected window -- e.g. the buffer you were editing after focus
+moved to a freshly created page -- is refreshed too."
+  (with-current-buffer (window-buffer win)
+    (when (and (fboundp 'hywiki-active-in-current-buffer-p)
+               (hywiki-active-in-current-buffer-p))
+      (let ((ws (window-start win))
+            (we (window-end win t)))
+        ;; Record the guard key so the buffer's own next `post-command' pass
+        ;; skips a redundant (flicker-inducing) rescan when it regains focus.
+        (setq zetta-hywiki-alias--last
+              (list zetta-hywiki-alias--generation
+                    (buffer-chars-modified-tick) ws we))
+        (zetta-hywiki-alias--refresh-region ws we)))))
 
 (defun zetta-hywiki-alias--refresh-windows ()
-  "Force an alias refresh in every visible window (used on mode enable)."
-  (dolist (frame (frame-list))
-    (dolist (win (window-list frame))
-      (with-selected-window win
-        (with-current-buffer (window-buffer win)
-          (setq zetta-hywiki-alias--last nil)
-          (zetta-hywiki-alias--post-command))))))
+  "Force an alias refresh in every visible window on every frame.
+Used on mode enable and whenever the alias set changes."
+  (walk-windows #'zetta-hywiki-alias--refresh-window nil t))
 
 (defun zetta-hywiki-alias--word-at-advice (orig &optional range-flag hash-sign-only-flag)
   "Make `hywiki-word-at' recognise a derived alias at point.

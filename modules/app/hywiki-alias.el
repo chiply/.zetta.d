@@ -113,6 +113,16 @@ buffer holding the alias occurrences is usually no longer the selected window."
   (seq-find (lambda (o) (eq (overlay-get o 'face) hywiki-word-face))
             (overlays-at pos)))
 
+(defun zetta-hywiki-alias--link-color-at (pos)
+  "Return a clickable link's colour at POS, or nil when POS is not a link.
+Used to underline a WikiWord that is also a link in the link's own colour, so
+it reads as both.  Recognises `shr'/eww links and `button' buttons."
+  (cond
+   ((and (get-text-property pos 'shr-url) (facep 'shr-link))
+    (face-attribute 'shr-link :foreground nil t))
+   ((and (get-text-property pos 'button) (facep 'button))
+    (face-attribute 'button :foreground nil t))))
+
 (defun zetta-hywiki-alias--highlight-region (start end)
   "Highlight derived HyWikiWord aliases between START and END."
   (zetta-hywiki-alias--ensure)
@@ -126,26 +136,36 @@ buffer holding the alias occurrences is usually no longer the selected window."
                  (me (match-end 0))
                  (text (match-string-no-properties 0))
                  (key (downcase (replace-regexp-in-string "[ \t]+" "" text)))
-                 (canon (gethash key zetta-hywiki-alias--index)))
+                 (canon (gethash key zetta-hywiki-alias--index))
+                 (link-color (zetta-hywiki-alias--link-color-at mb)))
             (when (and canon
                        ;; Skip only where HyWiki has already highlighted this
                        ;; spot (its overlay's face IS `hywiki-word-face', unlike
-                       ;; our inheriting one).  The exact WikiWord form is
-                       ;; normally left to HyWiki, but in buffers it does not
-                       ;; manage -- e.g. eww, which never gets HyWiki's
+                       ;; our inheriting one) -- UNLESS this is a link, where we
+                       ;; layer on top to add the link cue.  The exact WikiWord
+                       ;; form is normally left to HyWiki, but in buffers it does
+                       ;; not manage -- e.g. eww, which never gets HyWiki's
                        ;; buffer-local post-command highlighter -- highlight it
                        ;; too, so the real word is not left dark while its
                        ;; aliases light up.  If HyWiki later claims the spot, the
                        ;; next re-scan drops our now-redundant overlay.
-                       (not (zetta-hywiki-alias--hywiki-face-at mb)))
+                       (or link-color
+                           (not (zetta-hywiki-alias--hywiki-face-at mb))))
               (let ((ov (make-overlay mb me)))
                 (overlay-put ov 'zetta-hywiki-alias canon)
                 (overlay-put ov 'zetta-hywiki-alias-p t)
                 ;; A DISTINCT (anonymous) face -- looks identical to
                 ;; `hywiki-word-face' but is not `eq' to it, so HyWiki's own
                 ;; per-command dehighlight (which clears overlays *by* that face
-                ;; value) does not sweep our alias overlays away.
-                (overlay-put ov 'face (list :inherit hywiki-word-face))
+                ;; value) does not sweep our alias overlays away.  On a link, add
+                ;; the link's own colour as the underline and sit above HyWiki's
+                ;; overlay, so the word reads as both a WikiWord (orange text)
+                ;; and a clickable link (coloured underline).
+                (overlay-put ov 'face
+                             (if link-color
+                                 (list :inherit hywiki-word-face :underline link-color)
+                               (list :inherit hywiki-word-face)))
+                (when link-color (overlay-put ov 'priority 100))
                 (overlay-put ov 'evaporate t)
                 (overlay-put ov 'help-echo
                              (if (string= text canon)

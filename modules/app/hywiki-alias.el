@@ -128,8 +128,15 @@ buffer holding the alias occurrences is usually no longer the selected window."
                  (key (downcase (replace-regexp-in-string "[ \t]+" "" text)))
                  (canon (gethash key zetta-hywiki-alias--index)))
             (when (and canon
-                       ;; HyWiki itself owns the exact WikiWord form.
-                       (not (string= text canon))
+                       ;; Skip only where HyWiki has already highlighted this
+                       ;; spot (its overlay's face IS `hywiki-word-face', unlike
+                       ;; our inheriting one).  The exact WikiWord form is
+                       ;; normally left to HyWiki, but in buffers it does not
+                       ;; manage -- e.g. eww, which never gets HyWiki's
+                       ;; buffer-local post-command highlighter -- highlight it
+                       ;; too, so the real word is not left dark while its
+                       ;; aliases light up.  If HyWiki later claims the spot, the
+                       ;; next re-scan drops our now-redundant overlay.
                        (not (zetta-hywiki-alias--hywiki-face-at mb)))
               (let ((ov (make-overlay mb me)))
                 (overlay-put ov 'zetta-hywiki-alias canon)
@@ -140,7 +147,10 @@ buffer holding the alias occurrences is usually no longer the selected window."
                 ;; value) does not sweep our alias overlays away.
                 (overlay-put ov 'face (list :inherit hywiki-word-face))
                 (overlay-put ov 'evaporate t)
-                (overlay-put ov 'help-echo (format "HyWiki alias -> %s" canon))))))))))
+                (overlay-put ov 'help-echo
+                             (if (string= text canon)
+                                 (format "HyWikiWord: %s" canon)
+                               (format "HyWiki alias -> %s" canon)))))))))))
 
 (defun zetta-hywiki-alias--refresh-region (start end)
   "Re-highlight derived aliases between START and END, expanded to whole lines."

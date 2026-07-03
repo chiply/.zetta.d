@@ -44,7 +44,10 @@ M-x zetta-hywiki-alias-mode
   region (only when the buffer changed or scrolled, so it stays cheap) and
   applies overlays in a face that *inherits* `hywiki-word-face`: visually
   identical, but a distinct object so HyWiki's own face-based dehighlight passes
-  don't clear it. The exact WikiWord form is skipped (HyWiki owns it).
+  don't clear it. The exact WikiWord form is left to HyWiki where HyWiki
+  highlights it, but highlighted here too in buffers HyWiki doesn't manage
+  (e.g. eww, where its buffer-local highlighter never runs) — so the real word
+  is never left dark while its aliases light up.
 - **Activate** — an `:around` advice on `hywiki-word-at` returns the canonical
   WikiWord when point is on an alias overlay; the entire HyWiki display chain
   (`hywiki-referent-exists-p` → `link-to-wikiword`) then works unchanged, so
@@ -75,8 +78,9 @@ blind to them:
 - **Refresh scope** — highlighting is limited to the visible window region
   (like lazy fontification), refreshed on `post-command-hook`; aliases off-screen
   are highlighted when scrolled into view. Overlap with a real WikiWord is
-  resolved by a simple heuristic (skip the exact form, and skip a position
-  HyWiki already highlighted).
+  resolved by skipping any position HyWiki has already highlighted; the exact
+  WikiWord form is otherwise highlighted here too (e.g. in eww, where HyWiki's
+  buffer-local highlighter never runs).
 
 ### Why it can't be more without forking HyWiki
 

@@ -15,8 +15,14 @@
              '(progn
                 (set-face-attribute 'window-divider nil
                                     :background brushup-bg
-                                    :foreground brushup-bg
-                                    )))
+                                    :foreground brushup-bg)
+                ;; Also hide the built-in `vertical-border': on daemon frames
+                ;; `window-divider-mode' often isn't applied, so the unstyled
+                ;; border (a visible line) shows between side-by-side windows.
+                ;; Paint it to the background so no line shows either way.
+                (set-face-attribute 'vertical-border nil
+                                    :background brushup-bg
+                                    :foreground brushup-bg)))
 
 (defun zetta-window-divider-mode ()
   (interactive)

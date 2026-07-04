@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.31](https://github.com/chiply/.zetta.d/compare/v0.1.30...v0.1.31) (2026-07-04)
+
+
+### Features
+
+* **svg-margin:** text-renderer glyph fallback and fixed-lane commands ([#96](https://github.com/chiply/.zetta.d/issues/96)) ([d3ae6ce](https://github.com/chiply/.zetta.d/commit/d3ae6ce1428a791bcf6eeb19abfc81c3ff4fc8d0))
+
 ## [0.1.30](https://github.com/chiply/.zetta.d/compare/v0.1.29...v0.1.30) (2026-07-04)
 
 

@@ -42,6 +42,9 @@
 (defvar svg-margin-min-left-columns)
 (defvar svg-margin-min-right-columns)
 (defvar svg-margin-hover-highlight)
+(defvar svg-margin-arrangement)
+(defvar svg-margin-provider-columns)
+(defvar svg-margin-renderer)
 (defvar evil-markers-alist)
 (defvar git-gutter:diffinfos)
 (defvar flycheck-current-errors)
@@ -98,11 +101,17 @@
   "Font family used to draw Nerd-Font icon glyphs in the margin.
 Must be a Nerd Font that librsvg can resolve by this exact family name.")
 
-(defun zetta-svg-margin--glyph (name &optional collection)
-  "Return the Nerd-Font glyph NAME (via COLLECTION fn, default mdicon), or nil."
-  (and (featurep 'nerd-icons)
-       (let ((g (ignore-errors (funcall (or collection #'nerd-icons-mdicon) name))))
-         (and (stringp g) (> (length (string-trim g)) 0) (substring-no-properties g)))))
+(defun zetta-svg-margin--glyph (name char &optional collection)
+  "Glyph for NAME suited to the active `svg-margin-renderer'.
+Under the default `svg' renderer return NAME's Nerd-Font glyph (via COLLECTION
+fn, default mdicon); under the `text' renderer -- or when the icon is
+unavailable -- return CHAR, a single-cell character that lines up in the
+built-in margin (a wide Nerd-Font glyph would overflow its one-cell column)."
+  (or (and (not (eq (bound-and-true-p svg-margin-renderer) 'text))
+           (featurep 'nerd-icons)
+           (let ((g (ignore-errors (funcall (or collection #'nerd-icons-mdicon) name))))
+             (and (stringp g) (> (length (string-trim g)) 0) (substring-no-properties g))))
+      char))
 
 (defun zetta-svg-margin-todo (buffer)
   "Keyword icons for TODO/FIXME/HACK in BUFFER (checkbox / wrench / note)."
@@ -117,7 +126,8 @@ Must be a Nerd Font that librsvg can resolve by this exact family name.")
                                (pcase kw
                                  ("TODO" "nf-md-checkbox_blank_outline")
                                  ("FIXME" "nf-md-wrench")
-                                 (_ "nf-md-note_outline")))
+                                 (_ "nf-md-note_outline"))
+                               (pcase kw ("TODO" "T") ("FIXME" "F") (_ "H")))
                         :color (pcase kw
                                  ("TODO" "#c7ab74") ("FIXME" "#cf9999") (_ "#a698c9"))
                         :help kw
@@ -196,9 +206,9 @@ Must be a Nerd Font that librsvg can resolve by this exact family name.")
               (let ((l line))
                 (push (list :line l :font zetta-svg-margin-icon-font :scale 1.1
                             :text (pcase level
-                                    ('error (zetta-svg-margin--glyph "nf-cod-bug" #'nerd-icons-codicon))
-                                    ('warning (zetta-svg-margin--glyph "nf-md-alert"))
-                                    (_ (zetta-svg-margin--glyph "nf-md-information_outline")))
+                                    ('error (zetta-svg-margin--glyph "nf-cod-bug" "E" #'nerd-icons-codicon))
+                                    ('warning (zetta-svg-margin--glyph "nf-md-alert" "W"))
+                                    (_ (zetta-svg-margin--glyph "nf-md-information_outline" "I")))
                             :color (pcase level
                                      ('error "#cf9999") ('warning "#c7ab74") (_ "#8fb39a"))
                             :help (ignore-errors (flycheck-error-message err))
@@ -233,7 +243,7 @@ Must be a Nerd Font that librsvg can resolve by this exact family name.")
               (let ((bol (line-beginning-position)))
                 (push (list :pos bol :color "#bfae7e"
                             :font zetta-svg-margin-icon-font :scale 1.1
-                            :text (zetta-svg-margin--glyph "nf-md-ruler")
+                            :text (zetta-svg-margin--glyph "nf-md-ruler" ">")
                             :help (format "line exceeds %d columns" col)
                             :action-help "go to overflow"
                             :action (lambda () (interactive) (goto-char bol) (end-of-line)))
@@ -251,7 +261,7 @@ Must be a Nerd Font that librsvg can resolve by this exact family name.")
           (let ((bol (line-beginning-position)))
             (push (list :pos bol :color "#8a909a"
                         :font zetta-svg-margin-icon-font :scale 1.2
-                        :text (zetta-svg-margin--glyph "nf-md-format_pilcrow")
+                        :text (zetta-svg-margin--glyph "nf-md-format_pilcrow" "$")
                         :help "trailing whitespace"
                         :action-help "go to line"
                         :action (lambda () (interactive) (goto-char bol) (end-of-line))
@@ -282,10 +292,8 @@ heading's `org-level-N' face, while the stars stay in the buffer."
                    (n     (1+ (mod (1- level) 9)))   ; numbered circles run 1..9
                    (face  (intern (format "org-level-%d" (1+ (mod (1- level) 8)))))
                    (color (or (face-foreground face nil 'default) "#9aa0a8"))
-                   (glyph (and (featurep 'nerd-icons)
-                               (ignore-errors
-                                 (substring-no-properties
-                                  (nerd-icons-mdicon (format "nf-md-numeric_%d_circle" n))))))
+                   (glyph (zetta-svg-margin--glyph
+                           (format "nf-md-numeric_%d_circle" n) (number-to-string n)))
                    (p (line-beginning-position)))
               (when (and glyph (> (length (string-trim glyph)) 0))
                 (push (list :pos p :text glyph :color color :font font :scale 1.2
@@ -311,19 +319,17 @@ edit/execute from the menu."
     (when (derived-mode-p 'org-mode)
       (let ((font zetta-svg-margin-icon-font)
             (case-fold-search t)
-            ;; (KIND GLYPH COLOUR)
-            (specs '(("src"     "nf-md-code_tags"          "#98accb")
-                     ("quote"   "nf-md-format_quote_close" "#aeb4bb")
-                     ("example" "nf-md-console"            "#aeb4bb")
-                     ("export"  "nf-md-export"             "#aeb4bb")
-                     ("verse"   "nf-md-script_text"        "#aeb4bb")))
+            ;; (KIND GLYPH COLOUR CHAR)
+            (specs '(("src"     "nf-md-code_tags"          "#98accb" "#")
+                     ("quote"   "nf-md-format_quote_close" "#aeb4bb" ">")
+                     ("example" "nf-md-console"            "#aeb4bb" "%")
+                     ("export"  "nf-md-export"             "#aeb4bb" "^")
+                     ("verse"   "nf-md-script_text"        "#aeb4bb" "~")))
             out)
         (save-excursion
           (dolist (spec specs)
             (let* ((kind (nth 0 spec))
-                   (glyph (and (featurep 'nerd-icons)
-                               (ignore-errors
-                                 (substring-no-properties (nerd-icons-mdicon (nth 1 spec))))))
+                   (glyph (zetta-svg-margin--glyph (nth 1 spec) (nth 3 spec)))
                    (color (nth 2 spec))
                    (srcp (string= kind "src"))
                    (re (format "^[ \t]*#\\+begin_%s\\b" kind)))
@@ -377,7 +383,7 @@ edit/execute from the menu."
                   (let ((p bol) (s sym))
                     (push (list :pos p :color "#98accb"
                                 :font zetta-svg-margin-icon-font :scale 1.1
-                                :text (zetta-svg-margin--glyph "nf-cod-symbol_namespace"
+                                :text (zetta-svg-margin--glyph "nf-cod-symbol_namespace" "*"
                                                                #'nerd-icons-codicon)
                                 :help (format "occurrence of `%s'" s)
                                 :action-help "go to occurrence"
@@ -451,6 +457,72 @@ the recompute yields the same hunks we skip, breaking the cycle."
 (svg-margin-register-provider 'long-lines   #'zetta-svg-margin-long-lines   :side 'right :priority 3)
 (svg-margin-register-provider 'symbol       #'zetta-svg-margin-symbol       :side 'left  :priority 2)
 (svg-margin-register-provider 'trailing-ws  #'zetta-svg-margin-trailing-ws  :side 'right :priority 1)
+
+;; --- Fixed lanes (opt-in, for testing the `fixed' arrangement) -------------
+;; By default the gutter uses `fill' (dense, priority-ordered) packing.  The
+;; command `zetta-svg-margin-fixed' instead pins each provider to a dedicated
+;; column (0 = nearest the text) via `svg-margin-provider-columns' and switches
+;; `svg-margin-arrangement' to `fixed', so a provider always sits in the same
+;; lane -- even on lines where the others are absent.  It also reserves exactly
+;; the columns the lanes span on each side, so the gutter width is CONSTANT and
+;; the buffer text does not jitter as indicators pop in and out.  Lanes follow
+;; the registration priority above (highest priority nearest the text); left and
+;; right are numbered independently.  `zetta-svg-margin-fill' restores the
+;; default and `zetta-svg-margin-toggle-arrangement' flips between them.
+;; (Requires an svg-margin new enough to know `svg-margin-arrangement'.)
+(defconst zetta-svg-margin-fixed-lanes
+  ;; (PROVIDER SIDE COLUMN); 0 = nearest the text.  SIDE must match the
+  ;; provider's :side in the registrations above.
+  '((git-gutter   left  0)      ; VC hunks
+    (flycheck     left  1)      ; diagnostics
+    (evil-marks   left  2)      ; marks a-z
+    (org-headings left  3)      ; org rail -- headings and ...
+    (org-blocks   left  3)      ; ... block markers (never share a line)
+    (symbol       left  4)      ; symbol-at-point occurrences
+    (todo         right 0)      ; TODO/FIXME/HACK
+    (long-lines   right 1)      ; over-long lines
+    (trailing-ws  right 2))     ; trailing whitespace
+  "Fixed lane per provider as (PROVIDER SIDE COLUMN) for the `fixed' arrangement.")
+
+(defun zetta-svg-margin--fixed-span (side)
+  "Number of columns the fixed lanes span on SIDE (highest assigned column + 1)."
+  (1+ (apply #'max -1
+             (mapcar (lambda (lane) (nth 2 lane))
+                     (cl-remove-if-not (lambda (lane) (eq (nth 1 lane) side))
+                                       zetta-svg-margin-fixed-lanes)))))
+
+(defun zetta-svg-margin-fixed ()
+  "Pin each provider to a dedicated column and use the `fixed' arrangement.
+Reserves exactly the columns the lanes span on each side (see
+`zetta-svg-margin-fixed-lanes'), so the gutter width stays constant and the
+buffer text does not jitter as indicators pop in and out."
+  (interactive)
+  (setq svg-margin-provider-columns
+        (mapcar (lambda (lane) (cons (nth 0 lane) (nth 2 lane)))
+                zetta-svg-margin-fixed-lanes)
+        svg-margin-arrangement 'fixed
+        svg-margin-min-left-columns  (zetta-svg-margin--fixed-span 'left)
+        svg-margin-min-right-columns (zetta-svg-margin--fixed-span 'right))
+  (svg-margin-refresh-all)
+  (message "svg-margin: fixed lanes (%d left, %d right cols)"
+           svg-margin-min-left-columns svg-margin-min-right-columns))
+
+(defun zetta-svg-margin-fill ()
+  "Restore the default `fill' arrangement and the baseline margin widths."
+  (interactive)
+  (setq svg-margin-provider-columns nil
+        svg-margin-arrangement 'fill
+        svg-margin-min-left-columns  4    ; the fill baseline set near the top
+        svg-margin-min-right-columns 2)   ; of this file
+  (svg-margin-refresh-all)
+  (message "svg-margin: fill packing"))
+
+(defun zetta-svg-margin-toggle-arrangement ()
+  "Toggle svg-margin between fixed lanes and fill packing."
+  (interactive)
+  (if (eq (bound-and-true-p svg-margin-arrangement) 'fixed)
+      (zetta-svg-margin-fill)
+    (zetta-svg-margin-fixed)))
 
 ;; Refresh triggers, deferred until each source package loads.
 (with-eval-after-load 'evil

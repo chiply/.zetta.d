@@ -105,13 +105,14 @@ Must be a Nerd Font that librsvg can resolve by this exact family name.")
   "Glyph for NAME suited to the active `svg-margin-renderer'.
 Under the default `svg' renderer return NAME's Nerd-Font glyph (via COLLECTION
 fn, default mdicon); under the `text' renderer -- or when the icon is
-unavailable -- return CHAR, a single-cell character that lines up in the
-built-in margin (a wide Nerd-Font glyph would overflow its one-cell column)."
+unavailable -- return CHAR, a one-cell string (a character is also accepted)
+that lines up in the built-in margin (a wide Nerd-Font glyph would overflow its
+one-cell column)."
   (or (and (not (eq (bound-and-true-p svg-margin-renderer) 'text))
            (featurep 'nerd-icons)
            (let ((g (ignore-errors (funcall (or collection #'nerd-icons-mdicon) name))))
              (and (stringp g) (> (length (string-trim g)) 0) (substring-no-properties g))))
-      char))
+      (if (characterp char) (char-to-string char) char)))
 
 (defun zetta-svg-margin-todo (buffer)
   "Keyword icons for TODO/FIXME/HACK in BUFFER (checkbox / wrench / note)."

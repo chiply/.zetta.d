@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.30](https://github.com/chiply/.zetta.d/compare/v0.1.29...v0.1.30) (2026-07-04)
+
+
+### Features
+
+* **hywiki-alias:** hyphenated forms, manual aliases, and composite WikiWords ([#94](https://github.com/chiply/.zetta.d/issues/94)) ([aafc388](https://github.com/chiply/.zetta.d/commit/aafc388e448782a85cfa461d6e9239a5b5cd4b9a))
+
 ## [0.1.29](https://github.com/chiply/.zetta.d/compare/v0.1.28...v0.1.29) (2026-07-03)
 
 

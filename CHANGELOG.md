@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.32](https://github.com/chiply/.zetta.d/compare/v0.1.31...v0.1.32) (2026-07-04)
+
+
+### Bug Fixes
+
+* HyWiki empty-dir WikiWord flicker + hidden window vertical-border ([#98](https://github.com/chiply/.zetta.d/issues/98)) ([6ce06a0](https://github.com/chiply/.zetta.d/commit/6ce06a0f07edd0bad786c3f6b3df2023066106bb))
+
 ## [0.1.31](https://github.com/chiply/.zetta.d/compare/v0.1.30...v0.1.31) (2026-07-04)
 
 

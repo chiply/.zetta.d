@@ -100,8 +100,8 @@ are ignored."
       (with-temp-buffer
         (insert-file-contents file)
         (goto-char (point-min))
-        (let (aliases)
-          (when (re-search-forward "^\\*+[ \t]+[Aa]liases[ \t]*$" nil t)
+        (let ((case-fold-search t) aliases)
+          (when (re-search-forward "^\\*+[ \t]+aliases[ \t]*$" nil t)
             (forward-line 1)
             (while (and (not (eobp)) (not (looking-at-p "^\\*+[ \t]")))
               (let ((line (string-trim (buffer-substring-no-properties
@@ -140,7 +140,7 @@ manual aliases listed in a page's `Aliases' section."
             (push (zetta-hywiki-alias--add index word segs) patterns)))
         ;; Manual aliases from the page's `Aliases' section (always honoured).
         (dolist (alias (zetta-hywiki-alias--file-aliases word))
-          (push (zetta-hywiki-alias--add index word (split-string alias "[ \t]+" t))
+          (push (zetta-hywiki-alias--add index word (split-string alias "[ \t-]+" t))
                 patterns))))
     (setq patterns (delq nil patterns))
     ;; Longer phrases first so a short alias cannot pre-empt a longer one.

@@ -27,6 +27,8 @@
 (declare-function hywiki-add-referent "hywiki")
 (declare-function hywiki-add-page "hywiki")
 (defvar hywiki-word-face)
+(defvar hywiki-directory)
+(defvar hywiki-file-suffix)
 (defvar zetta-hywiki-alias-mode)
 
 (defgroup zetta-hywiki-alias nil
@@ -70,19 +72,77 @@ Handles acronym runs, so \"HTMLParser\" -> (\"HTML\" \"Parser\")."
              "\\([[:lower:][:digit:]]\\)\\([[:upper:]]\\)" "\\1\0\\2" s)))
     (split-string s "\0" t)))
 
+(defun zetta-hywiki-alias--page-file (word)
+  "Return WORD's readable HyWiki page file, or nil."
+  (when (and (boundp 'hywiki-directory) hywiki-directory)
+    (let ((f (expand-file-name
+              (concat word (if (boundp 'hywiki-file-suffix) hywiki-file-suffix ".org"))
+              hywiki-directory)))
+      (and (file-readable-p f) f))))
+
+(defun zetta-hywiki-alias--hywiki-page-file-p (file)
+  "Return non-nil if FILE is a HyWiki page file directly under `hywiki-directory'."
+  (and file (boundp 'hywiki-directory) hywiki-directory
+       (let ((f (expand-file-name file))
+             (dir (file-name-as-directory (expand-file-name hywiki-directory)))
+             (suffix (if (boundp 'hywiki-file-suffix) hywiki-file-suffix ".org")))
+         (and (string-suffix-p suffix f)
+              (equal (file-name-directory f) dir)))))
+
+(defun zetta-hywiki-alias--file-aliases (word)
+  "Return the manual alias strings declared in WORD's page `Aliases' section.
+Reads WORD's page file and collects each entry beneath a heading whose title
+is `Aliases' (any level, case-insensitive), up to the next heading.  Leading
+list bullets are stripped; blank lines and Org keyword/comment lines (`#...')
+are ignored."
+  (let ((file (zetta-hywiki-alias--page-file word)))
+    (when file
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (let ((case-fold-search t) aliases)
+          (when (re-search-forward "^\\*+[ \t]+aliases[ \t]*$" nil t)
+            (forward-line 1)
+            (while (and (not (eobp)) (not (looking-at-p "^\\*+[ \t]")))
+              (let ((line (string-trim (buffer-substring-no-properties
+                                        (line-beginning-position)
+                                        (line-end-position)))))
+                (setq line (replace-regexp-in-string
+                            "\\`\\(?:[-+*]\\|[0-9]+[.)]\\)[ \t]+" "" line))
+                (when (and (not (string-empty-p line))
+                           (not (string-prefix-p "#" line)))
+                  (push line aliases)))
+              (forward-line 1)))
+          (nreverse aliases))))))
+
+(defun zetta-hywiki-alias--add (index canon tokens)
+  "Map an alias built from TOKENS to CANON in INDEX and return its regexp.
+TOKENS is the ordered list of word pieces; in text they may be joined, or
+separated by a single space/tab or hyphen.  Returns nil for empty TOKENS."
+  (when tokens
+    (puthash (downcase (apply #'concat tokens)) canon index)
+    (mapconcat #'regexp-quote tokens "[ \t-]?")))
+
 (defun zetta-hywiki-alias--rebuild ()
-  "Rebuild the alias index and matching regexp from existing HyWikiWords."
+  "Rebuild the alias index and matching regexp from existing HyWikiWords.
+Includes both aliases derived from each WikiWord's CamelCase segments and any
+manual aliases listed in a page's `Aliases' section."
   (let ((index (make-hash-table :test 'equal))
         (patterns nil))
     (dolist (word (and (fboundp 'hywiki-get-wikiword-list)
                        (hywiki-get-wikiword-list)))
       (when (stringp word)
+        ;; Derived aliases: case/space/hyphen variants of the CamelCase segments.
         (let ((segs (zetta-hywiki-alias--segments word)))
           (when (and (>= (length segs) zetta-hywiki-alias-min-segments)
                      (>= (length word) zetta-hywiki-alias-min-length)
                      (not (member word zetta-hywiki-alias-deny-list)))
-            (puthash (downcase (apply #'concat segs)) word index)
-            (push (mapconcat #'regexp-quote segs "[ \t]?") patterns)))))
+            (push (zetta-hywiki-alias--add index word segs) patterns)))
+        ;; Manual aliases from the page's `Aliases' section (always honoured).
+        (dolist (alias (zetta-hywiki-alias--file-aliases word))
+          (push (zetta-hywiki-alias--add index word (split-string alias "[ \t-]+" t))
+                patterns))))
+    (setq patterns (delq nil patterns))
     ;; Longer phrases first so a short alias cannot pre-empt a longer one.
     (setq patterns (sort patterns (lambda (a b) (> (length a) (length b)))))
     (setq zetta-hywiki-alias--index index
@@ -123,6 +183,16 @@ it reads as both.  Recognises `shr'/eww links and `button' buttons."
    ((and (get-text-property pos 'button) (facep 'button))
     (face-attribute 'button :foreground nil t))))
 
+(defun zetta-hywiki-alias--hyphen-bounded-p (mb me)
+  "Return non-nil if [MB, ME) is joined by a hyphen to another word.
+This skips an alias that is only part of a larger hyphenated token -- e.g.
+`emacs' inside `emacs-foobar' -- while still allowing a hyphen that lies
+between the WikiWord's own segments, since that hyphen is consumed inside the
+match rather than sitting at its edge."
+  (cl-flet ((wordish (c) (and c (eq ?w (char-syntax c)))))
+    (or (and (eq (char-after me) ?-) (wordish (char-after (1+ me))))
+        (and (eq (char-before mb) ?-) (wordish (char-before (1- mb)))))))
+
 (defun zetta-hywiki-alias--highlight-region (start end)
   "Highlight derived HyWikiWord aliases between START and END."
   (zetta-hywiki-alias--ensure)
@@ -135,22 +205,32 @@ it reads as both.  Recognises `shr'/eww links and `button' buttons."
           (let* ((mb (match-beginning 0))
                  (me (match-end 0))
                  (text (match-string-no-properties 0))
-                 (key (downcase (replace-regexp-in-string "[ \t]+" "" text)))
+                 (key (downcase (replace-regexp-in-string "[ \t-]+" "" text)))
                  (canon (gethash key zetta-hywiki-alias--index))
-                 (link-color (zetta-hywiki-alias--link-color-at mb)))
+                 (link-color (zetta-hywiki-alias--link-color-at mb))
+                 (hy-ov (zetta-hywiki-alias--hywiki-face-at mb))
+                 ;; Does a HyWiki overlay already span our whole match?  If so it
+                 ;; owns the exact WikiWord and we defer.  If it covers only a
+                 ;; sub-part -- e.g. `Emacs' inside a longer `Emacs Completion'
+                 ;; whose joined form is the page `EmacsCompletion' -- we take
+                 ;; over so the longest (composite) WikiWord wins as one unit.
+                 (hy-covers-all (and hy-ov (>= (overlay-end hy-ov) me))))
             (when (and canon
-                       ;; Skip only where HyWiki has already highlighted this
-                       ;; spot (its overlay's face IS `hywiki-word-face', unlike
-                       ;; our inheriting one) -- UNLESS this is a link, where we
-                       ;; layer on top to add the link cue.  The exact WikiWord
-                       ;; form is normally left to HyWiki, but in buffers it does
-                       ;; not manage -- e.g. eww, which never gets HyWiki's
-                       ;; buffer-local post-command highlighter -- highlight it
-                       ;; too, so the real word is not left dark while its
-                       ;; aliases light up.  If HyWiki later claims the spot, the
-                       ;; next re-scan drops our now-redundant overlay.
-                       (or link-color
-                           (not (zetta-hywiki-alias--hywiki-face-at mb))))
+                       ;; Not merely part of a larger hyphenated token: catch
+                       ;; `emacs-completion' (EmacsCompletion) but not `emacs'
+                       ;; inside `emacs-foobar'.
+                       (not (zetta-hywiki-alias--hyphen-bounded-p mb me))
+                       ;; Defer only to a HyWiki overlay that already covers the
+                       ;; whole match; on a link we still layer on for the cue.
+                       ;; Elsewhere -- HyWiki idle (eww), a spot it skipped, or a
+                       ;; composite it split -- we highlight the match ourselves.
+                       (or link-color (not hy-covers-all)))
+              ;; Composite override: drop any HyWiki sub-part overlays inside our
+              ;; span so the composite shows and activates as a single WikiWord.
+              (unless hy-covers-all
+                (dolist (o (overlays-in mb me))
+                  (when (eq (overlay-get o 'face) hywiki-word-face)
+                    (delete-overlay o))))
               (let ((ov (make-overlay mb me)))
                 (overlay-put ov 'zetta-hywiki-alias canon)
                 (overlay-put ov 'zetta-hywiki-alias-p t)
@@ -235,11 +315,38 @@ When point is on an alias overlay, return its canonical WikiWord -- as a
           canon)
       (funcall orig range-flag hash-sign-only-flag))))
 
+(defun zetta-hywiki-alias--refresh-on-save ()
+  "Rebuild aliases and re-highlight after saving a HyWiki page file.
+On `after-save-hook' so edits to a page's `Aliases' section (or a new page
+saved to disk) take effect at once, without a manual refresh."
+  (when (and (bound-and-true-p zetta-hywiki-alias-mode)
+             (zetta-hywiki-alias--hywiki-page-file-p buffer-file-name))
+    (zetta-hywiki-alias--invalidate)))
+
+(defun zetta-hywiki-alias--rehighlight-hywiki ()
+  "Re-run HyWiki's own WikiWord highlighting in every visible window.
+Called on disable so toggling the mode off is a clean A/B against HyWiki's
+native behaviour -- restoring its view even where we had replaced its overlays
+\(e.g. composites in eww, which HyWiki never re-scans on its own)."
+  (when (fboundp 'hywiki-maybe-highlight-references)
+    (walk-windows
+     (lambda (win)
+       (with-current-buffer (window-buffer win)
+         (when (and (fboundp 'hywiki-active-in-current-buffer-p)
+                    (hywiki-active-in-current-buffer-p))
+           (ignore-errors (hywiki-maybe-highlight-references)))))
+     nil t)))
+
 ;;;###autoload
 (define-minor-mode zetta-hywiki-alias-mode
-  "Global mode: highlight and activate case/space variants of HyWikiWords.
-Aliases are derived from your existing HyWiki pages; see hywiki-alias.README.md
-for what this does and (deliberately) does not cover."
+  "Global mode: highlight and activate case/space/hyphen variants of HyWikiWords.
+Aliases are derived from your existing HyWiki pages, plus any listed in a page's
+`Aliases' section; see hywiki-alias.README.md for details.
+
+This is the toggle between this module and HyWiki's native behaviour: turn it on
+\(\\[zetta-hywiki-alias-mode]) for aliasing and composite handling, or off to
+fall back to plain HyWiki -- disabling restores HyWiki's own highlighting in the
+visible buffers."
   :global t
   :group 'zetta-hywiki-alias
   (if zetta-hywiki-alias-mode
@@ -253,15 +360,20 @@ for what this does and (deliberately) does not cover."
         (advice-add 'hywiki-add-referent :after #'zetta-hywiki-alias--invalidate)
         (advice-add 'hywiki-add-page :after #'zetta-hywiki-alias--invalidate)
         (add-hook 'post-command-hook #'zetta-hywiki-alias--post-command)
+        (add-hook 'after-save-hook #'zetta-hywiki-alias--refresh-on-save)
         (zetta-hywiki-alias--refresh-windows))
     (remove-hook 'post-command-hook #'zetta-hywiki-alias--post-command)
+    (remove-hook 'after-save-hook #'zetta-hywiki-alias--refresh-on-save)
     (advice-remove 'hywiki-word-at #'zetta-hywiki-alias--word-at-advice)
     (advice-remove 'hywiki-add-referent #'zetta-hywiki-alias--invalidate)
     (advice-remove 'hywiki-add-page #'zetta-hywiki-alias--invalidate)
     (dolist (buf (buffer-list))
       (with-current-buffer buf
         (remove-overlays (point-min) (point-max) 'zetta-hywiki-alias-p t)))
-    (zetta-hywiki-alias--invalidate)))
+    (zetta-hywiki-alias--invalidate)
+    ;; Restore HyWiki's native highlighting in visible buffers so toggling off
+    ;; is a clean A/B against HyWiki's own behaviour.
+    (zetta-hywiki-alias--rehighlight-hywiki)))
 
 ;; Enable automatically once HyWiki is available.  This file loads at startup,
 ;; before Hyperbole's deferred load, so the mode turns on as soon as HyWiki

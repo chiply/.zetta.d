@@ -92,7 +92,8 @@ drifted apart.  Files with content, or already open in a buffer, are untouched."
                (file-writable-p file)
                (not (get-file-buffer file))
                (or (not (file-exists-p file))
-                   (zerop (or (file-attribute-size (file-attributes file)) 0))))
+                   (let ((size (file-attribute-size (file-attributes file))))
+                     (and size (zerop size)))))
       (let ((title (file-name-sans-extension (file-name-nondirectory file))))
         (write-region (format "#+title: %s\n\n" title) nil file nil 0)))))
 

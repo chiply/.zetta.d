@@ -97,6 +97,28 @@ drifted apart.  Files with content, or already open in a buffer, are untouched."
       (let ((title (file-name-sans-extension (file-name-nondirectory file))))
         (write-region (format "#+title: %s\n\n" title) nil file nil 0)))))
 
+;; HyWiki flashes the whole frame on every keystroke of a capital-letter word
+;; when `~/hywiki/' holds NO pages.  With an empty referent hash,
+;; `hywiki-get-referent-hasht' computes an empty `hywiki--any-wikiword-regexp-list'
+;; (nil `mapcar'), so its own `(unless ... regexp-list ...)' guard never latches
+;; and it re-highlights every window in the frame -- each via `sit-for 0' -- on
+;; every WikiWord lookup, which HyWiki performs per `post-self-insert' while you
+;; type a candidate WikiWord.  Each forced redisplay repaints the SVG tab/mode/
+;; header lines: a visible whole-frame flash on every keystroke.  With zero pages
+;; there is nothing to highlight, so skip the frame-wide re-highlight pass while
+;; the referent hash is empty.  (Upstream Hyperbole bug; guarded here.)
+(defun zetta-hywiki-skip-empty-rehighlight (orig &rest args)
+  "Skip HyWiki's frame-wide WikiWord re-highlight when there are no pages.
+Around advice for `hywiki-maybe-highlight-wikiwords-in-frame'.  When the HyWiki
+referent hash is empty there are no WikiWords to highlight, yet
+`hywiki-get-referent-hasht' still triggers the re-highlight (with `sit-for') on
+every lookup -- a whole-frame flash on each keystroke of a candidate WikiWord.
+Run ORIG only when the referent hash is non-empty."
+  (unless (and (boundp 'hywiki--referent-hasht)
+               (hash-table-p hywiki--referent-hasht)
+               (zerop (hash-table-count hywiki--referent-hasht)))
+    (apply orig args)))
+
 (use-package hyperbole
   :defer 1
   :init
@@ -117,6 +139,11 @@ drifted apart.  Files with content, or already open in a buffer, are untouched."
   ;; titled with the WikiWord, even if HyWiki's referent hash and the pages on
   ;; disk have drifted apart (see `zetta-hywiki-ensure-page-file').
   (advice-add 'hywiki-display-page :before #'zetta-hywiki-ensure-page-file)
+
+  ;; Stop the whole-frame flash when typing WikiWords with an empty ~/hywiki/
+  ;; (see `zetta-hywiki-skip-empty-rehighlight').
+  (advice-add 'hywiki-maybe-highlight-wikiwords-in-frame :around
+              #'zetta-hywiki-skip-empty-rehighlight)
 
   ;;;; --- Relocate the minibuffer menu: {C-h h} -> {C-h H} ---
   ;;;; Hyperbole binds `hyperbole' to {C-h h} globally; undo that and rebind.

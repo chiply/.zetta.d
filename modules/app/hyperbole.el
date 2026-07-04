@@ -71,6 +71,32 @@ every file."
           result))
     result))
 
+;; --- HyWiki: make sure a WikiWord always has a real page file on disk ---
+;; HyWiki writes a page file when it first creates the page, but a WikiWord can
+;; end up registered in its referent hash with no file behind it -- the hash and
+;; the on-disk pages drift apart, or the file is deleted later.  Then the Action
+;; Key only opens an empty, file-less buffer that reports "no changes to save",
+;; so nothing is written and the WikiWord stops being highlighted after a
+;; restart.  Every follow/create path funnels through `hywiki-display-page', so
+;; seed a missing (or empty, not-yet-open) page file with an Org title there.
+
+(defun zetta-hywiki-ensure-page-file (&optional wikiword file-name)
+  "Ensure the HyWiki page file for WIKIWORD/FILE-NAME is a real, titled file.
+Advised onto `hywiki-display-page' as `:before'.  Writes the page file with an
+Org `#+title:' line when it is missing, or when it exists but is empty and not
+already open in a buffer -- so following a WikiWord always lands in a real,
+non-empty page, even if HyWiki's referent hash and the on-disk pages have
+drifted apart.  Files with content, or already open in a buffer, are untouched."
+  (let ((file (ignore-errors (hywiki-get-page-file (or file-name wikiword)))))
+    (when (and (stringp file)
+               (file-writable-p file)
+               (not (get-file-buffer file))
+               (or (not (file-exists-p file))
+                   (let ((size (file-attribute-size (file-attributes file))))
+                     (and size (zerop size)))))
+      (let ((title (file-name-sans-extension (file-name-nondirectory file))))
+        (write-region (format "#+title: %s\n\n" title) nil file nil 0)))))
+
 (use-package hyperbole
   :defer 1
   :init
@@ -87,19 +113,38 @@ every file."
   (require 'hywiki)
   (hywiki-mode 1)
 
-  ;; --- Relocate the minibuffer menu: {C-h h} -> {C-h H} ---
-  ;; Hyperbole binds `hyperbole' to {C-h h} globally; undo that and rebind.
-  (when (eq (lookup-key (current-global-map) (kbd "C-h h")) 'hyperbole)
-    (global-set-key (kbd "C-h h") #'view-hello-file))
-  (global-set-key (kbd "C-h H") #'hyperbole)
+  ;; Make sure following a WikiWord always lands in a real page file on disk,
+  ;; titled with the WikiWord, even if HyWiki's referent hash and the pages on
+  ;; disk have drifted apart (see `zetta-hywiki-ensure-page-file').
+  (advice-add 'hywiki-display-page :before #'zetta-hywiki-ensure-page-file)
 
-  ;; --- Relocate the keyboard Action/Assist Key: {M-RET} -> {s-H} ---
-  ;; Free the default M-RET variants from `hyperbole-mode-map' (so org-mode's
-  ;; M-RET is no longer shadowed), then bind the Action Key on s-H via the
-  ;; supported `hkey-set-key' helper.  Assist Key = {C-u s-H}.
-  (dolist (k '("M-RET" "M-<return>" "ESC RET" "ESC <return>"))
-    (define-key hyperbole-mode-map (kbd k) nil))
-  (hkey-set-key (kbd "s-H") #'hkey-either)
+  ;;;; --- Relocate the minibuffer menu: {C-h h} -> {C-h H} ---
+  ;;;; Hyperbole binds `hyperbole' to {C-h h} globally; undo that and rebind.
+  ;;(when (eq (lookup-key (current-global-map) (kbd "C-h h")) 'hyperbole)
+    ;;(global-set-key (kbd "C-h h") #'view-hello-file))
+  ;;(global-set-key (kbd "C-h H") #'hyperbole)
+;;
+  ;;;; --- Relocate the keyboard Action/Assist Key: {M-RET} -> {s-H} ---
+  ;;;; Free the default M-RET variants from `hyperbole-mode-map' (so org-mode's
+  ;;;; M-RET is no longer shadowed), then bind the Action Key on s-H via the
+  ;;;; supported `hkey-set-key' helper.  Assist Key = {C-u s-H}.
+  ;;(dolist (k '("M-RET" "M-<return>" "ESC RET" "ESC <return>"))
+    ;;(define-key hyperbole-mode-map (kbd k) nil))
+  ;;(hkey-set-key (kbd "s-H") #'hkey-either)
+
+  ;; --- Give Hyperbole the physical M-<return> in outline buffers ---
+  ;; evil-collection's outline module binds the physical key M-<return> to
+  ;; `outline-insert-heading' in the normal-state aux map of `outline-mode-map'
+  ;; (which `outline-minor-mode' inherits via `set-keymap-parent'), and evil's
+  ;; keymaps sit in `emulation-mode-map-alists', outranking `hyperbole-mode-map'.
+  ;; So in e.g. an elisp buffer (outline-minor-mode + evil normal state) the
+  ;; physical M-<return> ran the outline command while the ASCII {M-RET} still
+  ;; ran Hyperbole's Action Key.  Rebind the physical key to `hkey-either' too so
+  ;; both forms match.  This package is `:defer 1', so `evil-collection-init'
+  ;; (hence the outline setup this overrides) has already run.
+  (when (fboundp 'evil-collection-define-key)
+    (evil-collection-define-key 'normal 'outline-mode-map
+      (kbd "M-<return>") 'hkey-either))
 
   ;; --- HyRolo: search the Logseq pages as the rolo source ---
   (setq hyrolo-file-list '("~/logseq/pages/"))

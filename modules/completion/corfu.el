@@ -77,9 +77,36 @@
    "C-S-j" 'corfu-popupinfo-scroll-up
    "C-S-k" 'corfu-popupinfo-scroll-down))
 
+(defcustom zetta-corfu-icon-height 0.8
+  "Relative height for `nerd-icons-corfu' completion icons.
+Nerd-icons glyphs rasterize about 1.2x taller than the completion text.
+Corfu sizes every candidate row by `default-line-height', so the taller
+icon rows overflow and the lower rows are clipped -- barely noticeable at
+the normal size, badly at large text scales.  Capping each icon to this
+fraction of the text height keeps every row at the line height, so no
+candidate is vertically truncated.  Set to nil to disable the cap."
+  :type '(choice (const :tag "No cap" nil) number)
+  :group 'corfu)
+
 (use-package nerd-icons-corfu
   :after corfu
   :config
+  (defun zetta-corfu-cap-icon-height (icon)
+    "Cap ICON to `zetta-corfu-icon-height' of the completion text height.
+`:filter-return' advice for `nerd-icons-corfu--get-by-kind'.  Returns a copy
+of the icon glyph scaled down so Corfu -- which budgets each row at
+`default-line-height' -- never clips the lower rows (worst at large text
+scales).  Copies the string first so the shared nerd-icons glyph cache is
+left untouched; a nil `zetta-corfu-icon-height' leaves the icon unchanged."
+    (if (and (stringp icon) (> (length icon) 0) (numberp zetta-corfu-icon-height))
+        (let ((s (copy-sequence icon)))
+          (add-face-text-property 0 (length s)
+                                  (list :height zetta-corfu-icon-height) nil s)
+          s)
+      icon))
+  (advice-add 'nerd-icons-corfu--get-by-kind :filter-return
+              #'zetta-corfu-cap-icon-height)
+
   (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
 
 

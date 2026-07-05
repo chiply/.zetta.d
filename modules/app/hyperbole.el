@@ -130,6 +130,24 @@ Run ORIG only when the referent hash is non-empty."
                (zerop (hash-table-count hywiki--referent-hasht)))
     (apply orig args)))
 
+;; HyWiki completion offers a bogus `zsh#no matches found...' candidate.
+;; `hywiki-completion-at-point' lists page candidates by globbing `./PREFIX*.org'
+;; through `shell-command-to-string', and discards the glob's no-match error --
+;; but only in its POSIX form (`grep: ...: No such file or directory').  When
+;; `shell-file-name' is zsh, an unmatched glob aborts with `zsh: no matches
+;; found: ...' *before* grep runs, so that text slips past HyWiki's filter and
+;; shows up as a completion candidate.  Run the command under a POSIX shell so
+;; the no-match degrades to the error HyWiki already handles.
+(defun zetta-hywiki-completion-posix-shell (orig &rest args)
+  "Run `hywiki-completion-at-point' under a POSIX shell.
+Around advice: bind `shell-file-name'/`shell-command-switch' to a POSIX `sh'
+so HyWiki's page-name glob yields the `No such file or directory' no-match
+error it filters, instead of zsh's unfiltered `no matches found' -- which would
+otherwise appear as a bogus `zsh#...' completion candidate."
+  (let ((shell-file-name (or (executable-find "sh") "/bin/sh"))
+        (shell-command-switch "-c"))
+    (apply orig args)))
+
 (use-package hyperbole
   :defer 1
   :init
@@ -155,6 +173,11 @@ Run ORIG only when the referent hash is non-empty."
   ;; (see `zetta-hywiki-skip-empty-rehighlight').
   (advice-add 'hywiki-maybe-highlight-wikiwords-in-frame :around
               #'zetta-hywiki-skip-empty-rehighlight)
+
+  ;; Keep zsh's `no matches found' glob error out of HyWiki completion
+  ;; candidates (see `zetta-hywiki-completion-posix-shell').
+  (advice-add 'hywiki-completion-at-point :around
+              #'zetta-hywiki-completion-posix-shell)
 
   ;;;; --- Relocate the minibuffer menu: {C-h h} -> {C-h H} ---
   ;;;; Hyperbole binds `hyperbole' to {C-h h} globally; undo that and rebind.

@@ -86,9 +86,20 @@ Advised onto `hywiki-display-page' as `:before'.  Writes the page file with an
 Org `#+title:' line when it is missing, or when it exists but is empty and not
 already open in a buffer -- so following a WikiWord always lands in a real,
 non-empty page, even if HyWiki's referent hash and the on-disk pages have
-drifted apart.  Files with content, or already open in a buffer, are untouched."
-  (let ((file (ignore-errors (hywiki-get-page-file (or file-name wikiword)))))
+drifted apart.  Any #section:Lnum:Cnum suffix is stripped first so we seed the
+real page rather than a `WikiWord#Section' stub.  Files with content, or already
+open in a buffer, are untouched."
+  ;; Resolve (and seed) the *page* file: strip any #section:Lnum:Cnum suffix
+  ;; first, because `hywiki-get-page-file' otherwise appends it to the file name
+  ;; (e.g. `HyWikiWord.org#Description') and we would create that stub instead of
+  ;; the real page -- so following `WikiWord#Section' opens an empty buffer
+  ;; rather than the section.  As a final guard, never seed a name still carrying
+  ;; a `#'.
+  (let* ((reference (or file-name wikiword))
+         (page (and reference (hywiki-word-strip-suffix reference)))
+         (file (and page (ignore-errors (hywiki-get-page-file page)))))
     (when (and (stringp file)
+               (not (string-search "#" (file-name-nondirectory file)))
                (file-writable-p file)
                (not (get-file-buffer file))
                (or (not (file-exists-p file))

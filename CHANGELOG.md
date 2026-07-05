@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.33](https://github.com/chiply/.zetta.d/compare/v0.1.32...v0.1.33) (2026-07-05)
+
+
+### Bug Fixes
+
+* HyWiki navigation/completion + Corfu icon-row clipping at high text scale ([#100](https://github.com/chiply/.zetta.d/issues/100)) ([3829699](https://github.com/chiply/.zetta.d/commit/3829699d8eb285658994a0afd47bdf5a31a296dd))
+
 ## [0.1.32](https://github.com/chiply/.zetta.d/compare/v0.1.31...v0.1.32) (2026-07-04)
 
 

@@ -86,9 +86,20 @@ Advised onto `hywiki-display-page' as `:before'.  Writes the page file with an
 Org `#+title:' line when it is missing, or when it exists but is empty and not
 already open in a buffer -- so following a WikiWord always lands in a real,
 non-empty page, even if HyWiki's referent hash and the on-disk pages have
-drifted apart.  Files with content, or already open in a buffer, are untouched."
-  (let ((file (ignore-errors (hywiki-get-page-file (or file-name wikiword)))))
+drifted apart.  Any #section:Lnum:Cnum suffix is stripped first so we seed the
+real page rather than a `WikiWord#Section' stub.  Files with content, or already
+open in a buffer, are untouched."
+  ;; Resolve (and seed) the *page* file: strip any #section:Lnum:Cnum suffix
+  ;; first, because `hywiki-get-page-file' otherwise appends it to the file name
+  ;; (e.g. `HyWikiWord.org#Description') and we would create that stub instead of
+  ;; the real page -- so following `WikiWord#Section' opens an empty buffer
+  ;; rather than the section.  As a final guard, never seed a name still carrying
+  ;; a `#'.
+  (let* ((reference (or file-name wikiword))
+         (page (and reference (hywiki-word-strip-suffix reference)))
+         (file (and page (ignore-errors (hywiki-get-page-file page)))))
     (when (and (stringp file)
+               (not (string-search "#" (file-name-nondirectory file)))
                (file-writable-p file)
                (not (get-file-buffer file))
                (or (not (file-exists-p file))
@@ -119,6 +130,24 @@ Run ORIG only when the referent hash is non-empty."
                (zerop (hash-table-count hywiki--referent-hasht)))
     (apply orig args)))
 
+;; HyWiki completion offers a bogus `zsh#no matches found...' candidate.
+;; `hywiki-completion-at-point' lists page candidates by globbing `./PREFIX*.org'
+;; through `shell-command-to-string', and discards the glob's no-match error --
+;; but only in its POSIX form (`grep: ...: No such file or directory').  When
+;; `shell-file-name' is zsh, an unmatched glob aborts with `zsh: no matches
+;; found: ...' *before* grep runs, so that text slips past HyWiki's filter and
+;; shows up as a completion candidate.  Run the command under a POSIX shell so
+;; the no-match degrades to the error HyWiki already handles.
+(defun zetta-hywiki-completion-posix-shell (orig &rest args)
+  "Run `hywiki-completion-at-point' under a POSIX shell.
+Around advice: bind `shell-file-name'/`shell-command-switch' to a POSIX `sh'
+so HyWiki's page-name glob yields the `No such file or directory' no-match
+error it filters, instead of zsh's unfiltered `no matches found' -- which would
+otherwise appear as a bogus `zsh#...' completion candidate."
+  (let ((shell-file-name (or (executable-find "sh") "/bin/sh"))
+        (shell-command-switch "-c"))
+    (apply orig args)))
+
 (use-package hyperbole
   :defer 1
   :init
@@ -144,6 +173,11 @@ Run ORIG only when the referent hash is non-empty."
   ;; (see `zetta-hywiki-skip-empty-rehighlight').
   (advice-add 'hywiki-maybe-highlight-wikiwords-in-frame :around
               #'zetta-hywiki-skip-empty-rehighlight)
+
+  ;; Keep zsh's `no matches found' glob error out of HyWiki completion
+  ;; candidates (see `zetta-hywiki-completion-posix-shell').
+  (advice-add 'hywiki-completion-at-point :around
+              #'zetta-hywiki-completion-posix-shell)
 
   ;;;; --- Relocate the minibuffer menu: {C-h h} -> {C-h H} ---
   ;;;; Hyperbole binds `hyperbole' to {C-h h} globally; undo that and rebind.

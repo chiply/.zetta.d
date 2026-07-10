@@ -15,7 +15,8 @@
 (use-package irs
   :ensure nil
   :load-path "source/zettapkg/irs"
-  :commands (irs-search irs-status irs-ingest irs-ensure-server)
+  :commands (irs-search irs-search-semantic irs-status irs-ingest irs-embed
+             irs-ensure-server)
   :init
   (when (and (boundp 'launch-map)
              (not (lookup-key launch-map "/")))

@@ -160,13 +160,31 @@ identity; only spawns a new one when nothing answers."
                  (run-at-time 2 nil #'irs--poll-job job-id))
                 ("done"
                  (let ((r (alist-get 'result job)))
-                   (message "irs: ingest done — %s ingested, %s unchanged, %s deleted, %s errors"
-                            (alist-get 'files_ingested r)
-                            (alist-get 'files_unchanged r)
-                            (alist-get 'files_deleted r)
-                            (length (alist-get 'errors r)))))
+                   (if (equal (alist-get 'kind job) "embed")
+                       (message "irs: embed done — %s embedded, %s failed (model %s)"
+                                (alist-get 'embedded r)
+                                (alist-get 'failed r)
+                                (alist-get 'model r))
+                     (message "irs: ingest done — %s ingested, %s unchanged, %s deleted, %s errors"
+                              (alist-get 'files_ingested r)
+                              (alist-get 'files_unchanged r)
+                              (alist-get 'files_deleted r)
+                              (length (alist-get 'errors r))))))
                 (_
-                 (message "irs: ingest failed: %s" (alist-get 'error job)))))))
+                 (message "irs: %s failed: %s"
+                          (alist-get 'kind job) (alist-get 'error job)))))))
+
+;;;###autoload
+(defun irs-embed ()
+  "Embed all non-fresh corpus text via the backend; reports when done."
+  (interactive)
+  (irs-ensure-server
+   (lambda ()
+     (irs--post "/v1/embed" nil
+                (lambda (data)
+                  (let ((job-id (alist-get 'job_id data)))
+                    (message "irs: embed started (job %s)" job-id)
+                    (irs--poll-job job-id)))))))
 
 ;;;; Search (FTS / BM25 with hierarchy-expanded results)
 
@@ -236,19 +254,28 @@ identity; only spawns a new one when nothing answers."
         (when-let* ((result (assoc-default display cands)))
           (irs--visit result)))))))
 
-;;;###autoload
-(defun irs-search (query)
-  "Search the corpus lexically (BM25) via the irs backend."
-  (interactive (list (read-string "irs search: " nil 'irs-search-history)))
+(defun irs--run-search (endpoint query)
   (when (string-empty-p (string-trim query))
     (user-error "irs: empty query"))
   (irs-ensure-server
    (lambda ()
-     (irs--post "/v1/search/fts"
+     (irs--post endpoint
                 `((query . ,query) (limit . ,irs-search-limit))
                 (lambda (data)
                   ;; don't open the minibuffer from inside a plz callback
                   (run-at-time 0 nil #'irs--present query data))))))
+
+;;;###autoload
+(defun irs-search (query)
+  "Search the corpus lexically (BM25) via the irs backend."
+  (interactive (list (read-string "irs search: " nil 'irs-search-history)))
+  (irs--run-search "/v1/search/fts" query))
+
+;;;###autoload
+(defun irs-search-semantic (query)
+  "Search the corpus by meaning (embeddings) via the irs backend."
+  (interactive (list (read-string "irs semantic: " nil 'irs-search-history)))
+  (irs--run-search "/v1/search/semantic" query))
 
 (provide 'irs)
 ;;; irs.el ends here

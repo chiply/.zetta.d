@@ -283,5 +283,139 @@ identity; only spawns a new one when nothing answers."
   (interactive (list (read-string "irs hybrid: " nil 'irs-search-history)))
   (irs--run-search "/v1/search/hybrid" query))
 
+;;;; gptel tools (M6): each retrieval primitive as a tool the LLM coordinates
+
+(declare-function gptel-make-tool "ext:gptel")
+
+(defcustom irs-gptel-tool-limit 8
+  "Default result count for gptel tool calls."
+  :type 'natnum)
+
+(defun irs--tool-trim (result)
+  "Trim RESULT to the fields worth an LLM's tokens."
+  (let (out)
+    (dolist (key '(node_id stable_key kind title path score via line sources))
+      (let ((value (alist-get key result)))
+        (when value (push (cons key value) out))))
+    (let ((trail (append (alist-get 'heading_trail result) nil))
+          (snippet (irs--clean-snippet (or (alist-get 'snippet result) ""))))
+      (when trail
+        (push (cons 'heading_trail (string-join trail " › ")) out))
+      (unless (string-empty-p snippet)
+        (push (cons 'snippet (substring snippet 0 (min 240 (length snippet))))
+              out)))
+    (nreverse out)))
+
+(defun irs--tool-format (data)
+  "Render DATA's results as compact JSON for the model."
+  (let ((results (append (alist-get 'results data) nil)))
+    (if (null results)
+        "no results"
+      (json-encode (vconcat (mapcar #'irs--tool-trim results))))))
+
+(defun irs--tool-error (callback)
+  (lambda (err)
+    (funcall callback
+             (format "irs backend error: %s"
+                     (or (and (fboundp 'plz-error-message)
+                              (plz-error-message err))
+                         err)))))
+
+(defun irs--tool-post (callback endpoint payload &optional formatter)
+  (irs-ensure-server
+   (lambda ()
+     (irs--post endpoint payload
+                (lambda (data)
+                  (funcall callback (funcall (or formatter #'irs--tool-format)
+                                             data)))
+                (irs--tool-error callback)))))
+
+(defun irs--tool-search (endpoint)
+  "Async gptel tool function for a (query, limit) search ENDPOINT."
+  (lambda (callback query &optional limit)
+    (irs--tool-post callback endpoint
+                    `((query . ,query)
+                      (limit . ,(or limit irs-gptel-tool-limit))))))
+
+;;;###autoload
+(defun irs-setup-gptel-tools ()
+  "Register the irs retrieval tools with gptel (idempotent by tool name)."
+  (interactive)
+  (unless (fboundp 'gptel-make-tool)
+    (user-error "irs: gptel-make-tool not available — load gptel first"))
+  (let ((query-arg '(:name "query" :type string
+                     :description "search query"))
+        (limit-arg '(:name "limit" :type integer :optional t
+                     :description "max results")))
+    (gptel-make-tool
+     :name "irs_hybrid_search" :category "irs" :async t
+     :description "Search the personal corpus (notes, wiki, design docs, PDFs). Best default: fuses lexical+semantic retrieval, then reranks."
+     :args (list query-arg limit-arg)
+     :function (irs--tool-search "/v1/search/hybrid"))
+    (gptel-make-tool
+     :name "irs_fts_search" :category "irs" :async t
+     :description "Lexical BM25 search; strongest when the query words appear verbatim in notes."
+     :args (list query-arg limit-arg)
+     :function (irs--tool-search "/v1/search/fts"))
+    (gptel-make-tool
+     :name "irs_semantic_search" :category "irs" :async t
+     :description "Meaning-based search over embeddings; finds notes sharing no words with the query."
+     :args (list query-arg limit-arg)
+     :function (irs--tool-search "/v1/search/semantic"))
+    (gptel-make-tool
+     :name "irs_exact_search" :category "irs" :async t
+     :description "Literal line-based search (ripgrep) across corpus files; for identifiers, exact phrases, code."
+     :args (list query-arg
+                 '(:name "regex" :type boolean :optional t
+                   :description "treat query as a regex")
+                 limit-arg)
+     :function (lambda (callback query &optional regex limit)
+                 (irs--tool-post callback "/v1/search/exact"
+                                 `((query . ,query)
+                                   ,@(when regex '((regex . t)))
+                                   (limit . ,(or limit 20))))))
+    (gptel-make-tool
+     :name "irs_expand_context" :category "irs" :async t
+     :description "Flagship retrieval: find seeds for the query (or expand given node ids) along links, shared concepts, similarity and hierarchy edges, then rerank the whole neighbourhood. Use to gather context around a topic."
+     :args (list query-arg
+                 '(:name "seeds" :type array :items (:type integer) :optional t
+                   :description "node ids to expand from (from earlier results)")
+                 limit-arg)
+     :function (lambda (callback query &optional seeds limit)
+                 (irs--tool-post
+                  callback "/v1/context/expand"
+                  `((query . ,query)
+                    ,@(when seeds `((seeds . ,(append seeds nil))))
+                    (limit . ,(or limit 15)))
+                  (lambda (data)
+                    (concat (irs--tool-format data)
+                            "\nvia: " (json-encode (alist-get 'via data)))))))
+    (gptel-make-tool
+     :name "irs_graph_neighbors" :category "irs" :async t
+     :description "Typed graph edges around nodes: LINKS_TO, MENTIONS, SIMILAR_TO, DERIVED_FROM plus hierarchy."
+     :args '((:name "node_ids" :type array :items (:type integer)
+              :description "node ids to inspect"))
+     :function (lambda (callback node-ids)
+                 (irs--tool-post callback "/v1/graph/neighbors"
+                                 `((node_ids . ,(append node-ids nil)))
+                                 #'json-encode)))
+    (gptel-make-tool
+     :name "irs_get_node" :category "irs" :async t
+     :description "Fetch one node: full text plus ancestors and children."
+     :args '((:name "node_id" :type integer :description "node id"))
+     :function (lambda (callback node-id)
+                 (irs-ensure-server
+                  (lambda ()
+                    (irs--get (format "/v1/nodes/%s" node-id)
+                              (lambda (data)
+                                (let* ((node (alist-get 'node data))
+                                       (body (alist-get 'body node)))
+                                  (when (and body (> (length body) 2000))
+                                    (setf (alist-get 'body node)
+                                          (concat (substring body 0 2000) "…")))
+                                  (funcall callback (json-encode data))))
+                              (irs--tool-error callback)))))))
+  (message "irs: gptel tools registered (category \"irs\")"))
+
 (provide 'irs)
 ;;; irs.el ends here

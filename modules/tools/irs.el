@@ -22,6 +22,10 @@
   ;; to fts-only when vectors aren't built yet, so it's always safe to bind
   (when (and (boundp 'launch-map)
              (not (lookup-key launch-map "/")))
-    (define-key launch-map "/" #'irs-search-hybrid)))
+    (define-key launch-map "/" #'irs-search-hybrid))
+  ;; M6: the retrieval primitives as gptel tools (category "irs")
+  (with-eval-after-load 'gptel
+    (require 'irs)
+    (irs-setup-gptel-tools)))
 
 ;;; tools/irs.el ends here

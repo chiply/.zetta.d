@@ -21,6 +21,7 @@ For a page `DataModelTesting` (with `Emacs` also a page):
 | `data-model-testing`   | ✅ | `DataModelTesting` |
 | `DaTa moDel TESTING`    | ✅ | `DataModelTesting` |
 | `emacs`, `EMACS`       | ✅ | `Emacs` |
+| `data model testings`  | ✅ ([plural](#plurals)) | `DataModelTesting` |
 | `emacs-foobar`         | ❌ (part of a bigger hyphenated word) | — |
 
 There are three sources of aliases — [automatic](#automatic-aliases),
@@ -101,6 +102,91 @@ does **not** highlight the `emacs` inside `emacs-foobar` (or `foobar-emacs`). A
 hyphen that falls *between the WikiWord's own segments* is fine — it is consumed
 inside the match, not sitting at its edge.
 
+## Plurals
+
+HyWiki natively treats a plural WikiWord as its singular — a `Lisp` page also
+highlights and follows `Lisps`. But it does that **only for the capitalized
+WikiWord form**, so lowercase `lisps` in prose is matched by no one.
+
+This mode closes that gap: every derived and manual alias is also emitted in
+its **other number**, using HyWiki's own inflection rules
+(`hywiki-get-plural-wikiword` / `hywiki-get-singular-wikiword`) so the plurals
+match HyWiki's exactly — including `-es` after `s/x/z/ch/sh`:
+
+| Page | Also matches (any case/space/hyphen) → the page |
+|------|-------------------------------------------------|
+| `Lisp` | `lisps` |
+| `Class` | `classes` |
+| `Box` | `boxes` |
+| `DataModel` | `data models`, `data-models`, `datamodels` |
+| `Programs` | `program` (singular of a plural page name) |
+| `Houses` | `house` |
+
+**Both directions** are produced — the plural of a singular page name *and*
+the singular of a plural one — so it doesn't matter whether you named the page
+`Program` or `Programs`; the other number is covered either way.
+
+Irregulars follow HyWiki, not English (`Index` → `indexes`, not "indices";
+`Emacs` is left alone). One wrinkle worth knowing: HyWiki's singularizer
+strips a whole `-es` from sibilant endings, which is right for `Boxes → Box`
+but would turn `Houses` into `Hous` and leave `Pages` untouched. To cover
+those, this mode *also* offers the naive strip-one-`s` singular (`Houses →
+House`, `Pages → Page`, `Cases → Case`). The occasional bogus by-product
+(`hous`) is harmless — it never appears in prose, so it simply never matches.
+`-ss` names (`Class`) and too-short stems are skipped.
+
+Because the inflectors return nothing when HyWiki's `hywiki-allow-plurals-flag`
+is off, turning HyWiki's plurals off turns these off too. Toggle independently
+with [`zetta-hywiki-alias-derive-plurals`](#options) (default on).
+
+## Creating a page from prose (`zetta-hywiki-alias-wikify`)
+
+The inverse of aliasing: select any phrase and turn it into a PascalCase
+HyWiki page. Put point on a phrase (or select a region) and run:
+
+```
+M-x zetta-hywiki-alias-wikify
+```
+
+A page `TextEmbedding` is created and opened, but **your prose is left exactly
+as it was** — `text embedding` stays `text embedding`. It doesn't need
+rewriting: this mode immediately highlights it as an alias of the new page, so
+it lights up and activates in place the moment the page exists (the highlight
+is applied to the source buffer even though you've jumped to the new page, so
+it's there waiting when you switch back). With a prefix arg (`C-u`), the page
+is created but **not** opened, so you stay put and watch the phrase light up.
+
+The transform (`zetta-hywiki-alias-to-wikiword`, usable on its own) collapses
+the **same variety of manifestations the aliases match**, since it reuses the
+same segmenter:
+
+| You select | You get |
+|------------|---------|
+| `text embedding`, `text-embedding`, `text_embedding` | `TextEmbedding` |
+| `TEXT EMBEDDING`, `Text Embedding`, `textEmbedding` | `TextEmbedding` |
+| `data model testing` | `DataModelTesting` |
+| `HTML parser` | `HtmlParser` (acronyms are title-cased) |
+| `vector database`, punctuation/tabs/newlines between words | `VectorDatabase` |
+| `gpt 4 turbo` | `GptTurbo` (digits can't appear in a WikiWord, so they split) |
+
+A HyWikiWord must be uppercase-initial, all-alphabetic, and at least two
+letters, so text with no letters (`123`, `!!!`) or a single letter returns
+nil and the command reports it can't form a WikiWord. Because acronyms are
+title-cased and case is normalized, the page still lights up on your original
+prose — `HtmlParser` matches `HTML parser` via the case-insensitive aliases.
+Since the prose is never modified, this works the same in read-only buffers
+(eww, help, source you're just reading).
+
+It's bound to **`C-c W`** by default. Change or disable that with
+[`zetta-hywiki-alias-wikify-key`](#options) — a `keymap-set`-style string, or
+`nil` for no binding:
+
+```elisp
+;; before the module loads, or via M-x customize (which moves the binding live)
+(setq zetta-hywiki-alias-wikify-key "C-c W")   ; default
+(setq zetta-hywiki-alias-wikify-key nil)       ; unbound; use M-x instead
+```
+
 ## Composite WikiWords (precedence)
 
 When one WikiWord is composed of others — say `Emacs`, `Completion`, and
@@ -125,6 +211,26 @@ buffer, HyWiki re-highlights on edits, so it may briefly re-split `Emacs
 Completion` until the next command re-composes it — a momentary flicker on
 edits, never a wrong final state.
 
+## Ambiguous aliases (several pages, one alias)
+
+Composite precedence handles aliases of *different* lengths. When two pages
+lay claim to the **same** alias — say both `CharlieHolland` and `CharlieBaker`
+list `programmer` in their `Aliases` section — you are **asked which page to
+open** at activation time.
+
+- The alias index keeps **every** page that claims a key (not the last one
+  wins), sorted for a stable order.
+- Highlighting and hover are unchanged: the phrase lights up once, and its
+  tooltip lists all the pages it can reach —
+  `HyWiki alias -> CharlieBaker | CharlieHolland (choose on activation)`.
+- The Action Key (or mouse, or an Org `hy:` link) pops a `completing-read`
+  prompt — `Alias "programmer" -> HyWikiWord:` — defaulting to the first page;
+  pick one and it jumps there. An unambiguous alias never prompts.
+
+This is handled at the single navigation chokepoint (`hywiki-find-referent`)
+that every activation path funnels through, so detection, highlighting and
+idle passes never prompt — only a real jump does.
+
 ## Options
 
 | Variable | Default | Meaning |
@@ -132,6 +238,8 @@ edits, never a wrong final state.
 | `zetta-hywiki-alias-min-segments` | `1` | Minimum CamelCase segments a page needs for a derived alias. `1` aliases every page, including single-word ones like `Emacs`. Set `2` to skip single-word pages, whose case-insensitive match tends to light up prose. (Manual aliases ignore this.) |
 | `zetta-hywiki-alias-min-length` | `1` | Minimum WikiWord length for a derived alias. `1` imposes no real floor; raise it to drop short, prose-prone names. (Manual aliases ignore this.) |
 | `zetta-hywiki-alias-deny-list` | `nil` | WikiWords that should never get a *derived* alias (e.g. a page named after a common word). |
+| `zetta-hywiki-alias-derive-plurals` | `t` | Also alias each page's plural/singular inflection (see [Plurals](#plurals)), so a `Lisp` page follows `lisps`. Defers to HyWiki's `hywiki-allow-plurals-flag`; set `nil` to match only the page's own number. |
+| `zetta-hywiki-alias-wikify-key` | `"C-c W"` | Global key for [`zetta-hywiki-alias-wikify`](#creating-a-page-from-prose-zetta-hywiki-alias-wikify) (a `keymap-set`-style string). Customizing it moves the binding; `nil` installs none. |
 
 ## How it works (thin, reversible layer)
 

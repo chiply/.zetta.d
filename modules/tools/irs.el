@@ -15,11 +15,13 @@
 (use-package irs
   :ensure nil
   :load-path "source/zettapkg/irs"
-  :commands (irs-search irs-search-semantic irs-status irs-ingest irs-embed
-             irs-ensure-server)
+  :commands (irs-search irs-search-semantic irs-search-hybrid irs-status
+             irs-ingest irs-embed irs-ensure-server)
   :init
+  ;; hybrid is the flagship: fuses fts + semantic, then reranks; it degrades
+  ;; to fts-only when vectors aren't built yet, so it's always safe to bind
   (when (and (boundp 'launch-map)
              (not (lookup-key launch-map "/")))
-    (define-key launch-map "/" #'irs-search)))
+    (define-key launch-map "/" #'irs-search-hybrid)))
 
 ;;; tools/irs.el ends here

@@ -277,5 +277,11 @@ identity; only spawns a new one when nothing answers."
   (interactive (list (read-string "irs semantic: " nil 'irs-search-history)))
   (irs--run-search "/v1/search/semantic" query))
 
+;;;###autoload
+(defun irs-search-hybrid (query)
+  "Search the corpus with RRF fusion + rerank — the flagship retriever."
+  (interactive (list (read-string "irs hybrid: " nil 'irs-search-history)))
+  (irs--run-search "/v1/search/hybrid" query))
+
 (provide 'irs)
 ;;; irs.el ends here

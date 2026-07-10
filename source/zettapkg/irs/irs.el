@@ -47,8 +47,8 @@
   "Maximum results to request per search."
   :type 'natnum)
 
-(defvar irs--server-process nil
-  "Server process spawned by this Emacs, if any (an adopted server is not ours).")
+(defvar irs--live-last-input nil
+  "Most recent input the live dynamic source queried with.")
 
 ;;;; HTTP plumbing (async only)
 
@@ -99,13 +99,15 @@ identity; only spawns a new one when nothing answers."
               (irs--spawn-server callback))))
 
 (defun irs--spawn-server (callback)
-  (unless (process-live-p irs--server-process)
-    (let ((default-directory (expand-file-name irs-backend-directory)))
-      (setq irs--server-process
-            (make-process :name "irs-server"
-                          :buffer " *irs-server*"
-                          :command '("uv" "run" "irs" "serve")
-                          :noquery t))))
+  ;; detach via a transient shell so the server survives the Emacs that
+  ;; started it and is shared across Emacsen (design doc, Operational);
+  ;; the backend's PID-file lock makes a racing second spawn a no-op
+  (let ((default-directory (expand-file-name irs-backend-directory)))
+    (make-process :name "irs-server-launcher"
+                  :buffer nil
+                  :command (list shell-file-name shell-command-switch
+                                 "nohup uv run irs serve >/dev/null 2>&1 &")
+                  :noquery t))
   (irs--poll-health 20 callback))
 
 (defun irs--poll-health (retries callback)
@@ -252,7 +254,20 @@ identity; only spawns a new one when nothing answers."
                                  :category 'irs-result)
                 (completing-read prompt (mapcar #'car cands) nil t))))
         (when-let* ((result (assoc-default display cands)))
+          (irs--report-selection query result)
           (irs--visit result)))))))
+
+(defun irs--report-selection (query result)
+  "Fire-and-forget: tell the backend which RESULT was picked for QUERY.
+Selections are a noise-free relevance signal (design doc: usage-feedback
+boosting); errors are silently ignored."
+  (ignore-errors
+    (irs--post "/v1/feedback/selection"
+               `((query . ,query)
+                 (node_id . ,(alist-get 'node_id result))
+                 (stable_key . ,(alist-get 'stable_key result))
+                 (retriever . ,(alist-get 'retriever result)))
+               #'ignore #'ignore)))
 
 (defun irs--run-search (endpoint query)
   (when (string-empty-p (string-trim query))
@@ -282,6 +297,60 @@ identity; only spawns a new one when nothing answers."
   "Search the corpus with RRF fusion + rerank — the flagship retriever."
   (interactive (list (read-string "irs hybrid: " nil 'irs-search-history)))
   (irs--run-search "/v1/search/hybrid" query))
+
+;;;; As-you-type dynamic source (consult 3.x)
+;;
+;; The contract (consult--async-dynamic): the compute function runs inside
+;; while-no-input and its callback MUST fire before it returns.  So: start
+;; the async plz request, pump accept-process-output until the response
+;; lands (a keystroke aborts the pump), and unwind-protect kills the curl
+;; process so an abandoned request never leaks.
+
+(declare-function consult--dynamic-collection "ext:consult")
+(declare-function consult--lookup-member "ext:consult")
+
+(defun irs--live-compute (endpoint)
+  "Interruptible compute function for `consult--dynamic-collection'."
+  (lambda (input callback)
+    (setq irs--live-last-input input)
+    (let* ((done nil) (response nil)
+           (proc (irs--post endpoint
+                            `((query . ,input) (limit . ,irs-search-limit))
+                            (lambda (data) (setq response data done t))
+                            (lambda (_err) (setq done t)))))
+      (unwind-protect
+          (while (not done)
+            (accept-process-output nil 0.05))
+        (when (and (processp proc) (process-live-p proc))
+          (delete-process proc)))
+      (when response
+        (funcall callback
+                 (mapcar (lambda (pair)
+                           (propertize (car pair) 'irs-result (cdr pair)))
+                         (irs--candidates (alist-get 'results response))))))))
+
+;;;###autoload
+(defun irs-search-live ()
+  "As-you-type hybrid search over the corpus (dynamic consult source)."
+  (interactive)
+  (unless (fboundp 'consult--read)
+    (user-error "irs: the live source needs consult"))
+  (irs-ensure-server (lambda () (run-at-time 0 nil #'irs--live-read))))
+
+(defun irs--live-read ()
+  (let ((selected
+         (consult--read
+          (consult--dynamic-collection (irs--live-compute "/v1/search/hybrid")
+            :min-input 2 :throttle 0.3 :debounce 0.2)
+          :prompt "irs live: "
+          :require-match t
+          :sort nil
+          :category 'irs-result
+          :lookup #'consult--lookup-member)))
+    (when-let* ((result (and selected
+                             (get-text-property 0 'irs-result selected))))
+      (irs--report-selection (or irs--live-last-input "") result)
+      (irs--visit result))))
 
 ;;;; gptel tools (M6): each retrieval primitive as a tool the LLM coordinates
 

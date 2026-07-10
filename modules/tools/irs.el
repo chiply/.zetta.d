@@ -15,8 +15,8 @@
 (use-package irs
   :ensure nil
   :load-path "source/zettapkg/irs"
-  :commands (irs-search irs-search-semantic irs-search-hybrid irs-status
-             irs-ingest irs-embed irs-ensure-server)
+  :commands (irs-search irs-search-semantic irs-search-hybrid irs-search-live
+             irs-status irs-ingest irs-embed irs-ensure-server)
   :init
   ;; hybrid is the flagship: fuses fts + semantic, then reranks; it degrades
   ;; to fts-only when vectors aren't built yet, so it's always safe to bind

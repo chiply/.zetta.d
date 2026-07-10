@@ -1,85 +1,54 @@
 # hywiki-graph.el
 
-A plain-text (and SVG) **graph view for GNU Hyperbole's HyWiki**, in the spirit
-of Logseq's local graph.
+A plain-text **graph view for GNU Hyperbole's HyWiki**, in the spirit of
+Logseq's local graph — drawn entirely in Emacs Lisp, no external programs.
 
 - **Nodes** are WikiWords (HyWiki pages).
-- An **edge** joins two WikiWords when one page's text mentions the other
-  (undirected).
+- A **directed edge** `A → B` exists when page A's text mentions B.
 - `M-x hywiki-graph` (bound to `, G` on `launch-map`) prompts for a WikiWord and
   draws its neighbourhood. The numeric prefix sets how many link hops out to
   include — `C-u 3 M-x hywiki-graph` shows three degrees; default one.
 
-The same neighbourhood can be rendered as any of **eight views**, plus optional
-hub-pruning and a second class of HyRolo-sourced nodes.
+The neighbourhood renders as a **git-log style rail diagram** (`dag`): every
+node on its own row, its label indented one level per hop from the centre, and
+each edge a vertical rail in a colour-coded lane. An arrowhead marks the page
+each link points to — `<`/`>` where a rail turns into a node, `^`/`v` where it
+rides a lane past a crossing. Hub-pruning and an optional second class of
+HyRolo-sourced nodes round it out.
 
 ## Keys (in the `*HyWiki Graph*` buffer)
 
 | Key | Action |
 |-----|--------|
 | `1`–`9` | re-render at that many degrees from the centre |
-| `v` | cycle the text view style |
-| `V` | jump to any view by name (completion) |
-| `s` / `S` | open the graph-fa2 / dagviz SVG view (own buffer) |
 | `h` | toggle hub pruning |
 | `[` / `]` | lower / raise the hub-degree threshold |
 | `r` | toggle HyRolo-sourced nodes |
 | `RET` / `mouse-1` | recentre on the node at point |
 | `o` | open the WikiWord page at point |
-| `c` | show this view's underlying graph code (DOT, spec, helper input...); the header view label is also a button for it |
 | `g` | rebuild the link graph from disk and re-render |
-| `?` | view catalog (what each view is + its backend) |
 | `q` | quit |
 
-## Views and their dependencies
+## The rail diagram
 
-| View | Key | What it is | Backend | Dependency |
-|------|-----|-----------|---------|------------|
-| **tree** | `v` | BFS spanning tree (indentation = hops) + inline cross-links | built-in | **none** |
-| **matrix** | `v` | Adjacency matrix, centre first; never tangles | built-in | **none** |
-| **dag** | `v` | git-log style rail diagram, per-lane colours | built-in | **none** |
-| **graph** | `v` | Node-and-line box diagram | [graph-easy] | `graph-easy` (Perl) on `PATH` |
-| **layered** | `v` | Sugiyama flowchart (ASCII boxes/arrows) | [dag-draw.el] | `dag-draw` (elpaca) + `dash`, `ht` |
-| **asciidag** | `v` | Sugiyama boxes, optional ANSI edge colours | [ascii-dag] (Rust) | `cargo` build of `ascii-dag-cli/` |
-| **svg** | `s` | Force-directed inline SVG image (animated) | [graph-fa2] | `graph-fa2` (elpaca) |
-| **dagviz** | `S` | git-log style as an inline SVG image | [dagviz] (Python) | `python3` venv in `dagviz-cli/` |
-
-The three built-in views and the **tree** fallback always work. Each optional
-backend is **soft-required**: if it is not installed, that view is omitted from
-the `v` cycle / `V` picker, and `?` flags it as unavailable. Views that draw
-boxes (`graph`, `layered`, `asciidag`) fall back to the **tree** past an edge
-cap, since dense neighbourhoods tangle.
-
-[graph-easy]: https://metacpan.org/pod/Graph::Easy
-[dag-draw.el]: https://codeberg.org/Trevoke/dag-draw.el
-[ascii-dag]: https://github.com/AshutoshMahala/ascii-dag
-[graph-fa2]: https://github.com/elij/graph-fa2
-[dagviz]: https://wimyedema.github.io/dagviz/
-
-### Installing the optional backends
-
-```sh
-# graph-easy (Perl) — for the `graph` view
-brew install cpanminus && cpanm --local-lib=~/perl5 Graph::Easy
-
-# ascii-dag (Rust) — for the `asciidag` view
-cd ascii-dag-cli && cargo build --release
-
-# dagviz (Python) — for the `dagviz` view
-cd dagviz-cli && python3 -m venv .venv && .venv/bin/pip install dagviz networkx
-```
-
-`dag-draw` and `graph-fa2` install via elpaca (recipes are in the module
-`modules/app/hywiki-graph.el`). The Rust `target/` and Python `.venv/` are
-git-ignored, so they are rebuilt per machine.
+- **Labels on the left, rails on the right** (`hywiki-graph-dag-labels-left`, the
+  default), so a hub with many edges spills rails off the right rather than
+  shoving its name off the page. Set to nil for the classic rails-left,
+  labels-right arrangement.
+- **Indentation = hop-distance** from the centre (`hywiki-graph-dag-indent`), so
+  the diagram doubles as a depth outline.
+- **Per-lane colours** (`hywiki-graph-dag-lane-colors`) keep crossing rails
+  distinct.
+- **Directional arrowheads** (`hywiki-graph-dag-arrows`, on by default) point at
+  the page each link targets; mutual links get one at each end. To keep
+  crossings legible, an arrowhead is only ever drawn on a clean cell.
 
 ## HyRolo-sourced nodes (`r`)
 
 Pressing `r` adds a **second class of nodes**: each file in `hyrolo-file-list`
 that mentions WikiWords becomes a (non-WikiWord) node linked to those WikiWords
 — the same mention relationship, a new node set. Rolo nodes render in a
-distinct italic face and the header shows `+rolo`. This affects the text views;
-the SVG views stay WikiWord-only.
+distinct italic face and the header shows `+rolo`.
 
 ## Performance
 

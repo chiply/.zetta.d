@@ -26,6 +26,12 @@
 (declare-function hywiki-maybe-highlight-references "hywiki")
 (declare-function hywiki-add-referent "hywiki")
 (declare-function hywiki-add-page "hywiki")
+(declare-function hywiki-find-referent "hywiki")
+(declare-function hywiki-word-strip-suffix "hywiki")
+(declare-function hywiki-word-create-and-display "hywiki")
+(declare-function hywiki-get-plural-wikiword "hywiki")
+(declare-function hywiki-get-singular-wikiword "hywiki")
+(defvar hywiki-allow-plurals-flag)
 (defvar hywiki-word-face)
 (defvar hywiki-directory)
 (defvar hywiki-file-suffix)
@@ -53,8 +59,42 @@ single-word pages, whose case-insensitive match tends to light up prose; use
   "HyWikiWords that should never get a derived alias (e.g. common phrases)."
   :type '(repeat string) :group 'zetta-hywiki-alias)
 
+(defcustom zetta-hywiki-alias-derive-plurals t
+  "Non-nil means also alias the plural/singular inflections of each page.
+When set, a `Lisp' page also highlights and activates `lisps', a `Class' page
+`classes', and so on, using HyWiki's own inflection rules
+\(`hywiki-get-plural-wikiword' / `hywiki-get-singular-wikiword').  Both the
+derived CamelCase aliases and manual `Aliases' entries are inflected, in both
+directions (the plural of a singular name and the singular of a plural one).
+
+This mirrors -- and defers to -- HyWiki's native `hywiki-allow-plurals-flag',
+which HyWiki applies only to the capitalized WikiWord form (so it highlights
+`Lisps' but never lowercase `lisps'); enabling this extends the same plurals
+to the lowercase/spaced/hyphenated alias forms.  Because the underlying
+HyWiki functions return nil when `hywiki-allow-plurals-flag' is nil, turning
+HyWiki's plurals off turns these off too.  Set to nil to match an alias only
+in the exact number the page name uses."
+  :type 'boolean :group 'zetta-hywiki-alias)
+
+(defcustom zetta-hywiki-alias-wikify-key "C-c W"
+  "Key globally bound to `zetta-hywiki-alias-wikify', or nil for no binding.
+A `keymap-set'-style string such as \"C-c W\".  Set it through Customize (which
+moves the binding for you) or `setq' it before this module loads; the module
+installs the binding once at load time.  Set to nil to leave the command
+reachable only via \\[execute-extended-command]."
+  :type '(choice (const :tag "No binding" nil) (string :tag "Key"))
+  :set (lambda (sym val)
+         (when (and (boundp sym) (symbol-value sym))
+           (ignore-errors (keymap-global-unset (symbol-value sym) t)))
+         (set-default sym val)
+         (when val (keymap-global-set val #'zetta-hywiki-alias-wikify)))
+  :group 'zetta-hywiki-alias)
+
 (defvar zetta-hywiki-alias--index nil
-  "Hash mapping a downcased, space-stripped alias form to its canonical WikiWord.")
+  "Hash mapping a downcased, space-stripped alias form to its WikiWord(s).
+The value is the LIST of canonical WikiWords that share the alias, sorted for
+a stable representative; more than one entry means the alias is ambiguous and
+the choice between pages is made at activation time.")
 (defvar zetta-hywiki-alias--regexp nil
   "Cached alternation regexp matching every derived alias form.")
 (defvar zetta-hywiki-alias--generation 0
@@ -116,12 +156,58 @@ are ignored."
           (nreverse aliases))))))
 
 (defun zetta-hywiki-alias--add (index canon tokens)
-  "Map an alias built from TOKENS to CANON in INDEX and return its regexp.
+  "Add an alias built from TOKENS -> CANON to INDEX and return its regexp.
 TOKENS is the ordered list of word pieces; in text they may be joined, or
-separated by a single space/tab or hyphen.  Returns nil for empty TOKENS."
+separated by a single space/tab or hyphen.  INDEX maps each alias key to the
+LIST of canonical WikiWords that claim it, so when several pages share an
+alias (e.g. two people both aliased `programmer') every page is kept and
+offered at activation time instead of one silently clobbering the other.
+CANON is appended when not already present.  Returns nil for empty TOKENS."
   (when tokens
-    (puthash (downcase (apply #'concat tokens)) canon index)
+    (let* ((key (downcase (apply #'concat tokens)))
+           (existing (gethash key index)))
+      (unless (member canon existing)
+        (puthash key (append existing (list canon)) index)))
     (mapconcat #'regexp-quote tokens "[ \t-]?")))
+
+(defun zetta-hywiki-alias--number-variants (s)
+  "Return plural/singular inflections of S that differ from it, else nil.
+Reuses HyWiki's own inflection rules so a lowercase or spaced alias
+pluralizes exactly as HyWiki pluralizes the WikiWord itself -- e.g. a `Lisp'
+page also lights up `lisps', and a `Class' page `classes'.  Both directions
+are produced (plural of a singular name, singular of a plural name), matching
+HyWiki's bidirectional plural handling.
+
+HyWiki's singularizer strips a whole `-es' from sibilant endings, which is
+right for `Boxes'->`Box' but wrong for the many plurals whose stem ends in a
+silent `e' (`Houses'->`Hous', `Pages' left unchanged).  So when S looks
+plural we ALSO offer the naive strip-one-trailing-s singular, which recovers
+`House'/`Page'/`Case'; any bogus extra (`hous') is inert since it never
+occurs in prose.
+
+Honoured only when `zetta-hywiki-alias-derive-plurals' is non-nil; the HyWiki
+functions additionally return their input unchanged unless
+`hywiki-allow-plurals-flag' is set, so this quietly follows HyWiki's own
+plural setting."
+  (when zetta-hywiki-alias-derive-plurals
+    (let (variants)
+      (cl-flet ((add (v)
+                  (when (and (stringp v) (not (string-empty-p v))
+                             (not (equal v s)) (not (member v variants)))
+                    (push v variants))))
+        ;; HyWiki's own inflectors, in both directions.
+        (dolist (fn '(hywiki-get-plural-wikiword hywiki-get-singular-wikiword))
+          (when (fboundp fn) (add (funcall fn s))))
+        ;; Naive singular for plural-looking names, to cover the `-se' plurals
+        ;; HyWiki's `-es' rule mishandles.  Skip `-ss' endings (`Class') and
+        ;; `emacs', and require a non-trivial stem.
+        (let ((low (downcase s)))
+          (when (and (> (length s) 3)
+                     (string-suffix-p "s" low)
+                     (not (string-suffix-p "ss" low))
+                     (not (equal low "emacs")))
+            (add (substring s 0 -1)))))
+      (nreverse variants))))
 
 (defun zetta-hywiki-alias--rebuild ()
   "Rebuild the alias index and matching regexp from existing HyWikiWords.
@@ -137,14 +223,28 @@ manual aliases listed in a page's `Aliases' section."
           (when (and (>= (length segs) zetta-hywiki-alias-min-segments)
                      (>= (length word) zetta-hywiki-alias-min-length)
                      (not (member word zetta-hywiki-alias-deny-list)))
-            (push (zetta-hywiki-alias--add index word segs) patterns)))
-        ;; Manual aliases from the page's `Aliases' section (always honoured).
+            (push (zetta-hywiki-alias--add index word segs) patterns)
+            ;; ...and the same variants for its plural/singular inflections.
+            (dolist (variant (zetta-hywiki-alias--number-variants word))
+              (push (zetta-hywiki-alias--add
+                     index word (zetta-hywiki-alias--segments variant))
+                    patterns))))
+        ;; Manual aliases from the page's `Aliases' section (always honoured),
+        ;; each inflected the same way.
         (dolist (alias (zetta-hywiki-alias--file-aliases word))
           (push (zetta-hywiki-alias--add index word (split-string alias "[ \t-]+" t))
-                patterns))))
-    (setq patterns (delq nil patterns))
+                patterns)
+          (dolist (variant (zetta-hywiki-alias--number-variants alias))
+            (push (zetta-hywiki-alias--add
+                   index word (split-string variant "[ \t-]+" t))
+                  patterns)))))
+    ;; Collision-shared aliases push identical patterns; keep the regexp tidy.
+    (setq patterns (delete-dups (delq nil patterns)))
     ;; Longer phrases first so a short alias cannot pre-empt a longer one.
     (setq patterns (sort patterns (lambda (a b) (> (length a) (length b)))))
+    ;; Sort each key's candidate list so the representative (and the activation
+    ;; prompt's default) is stable rather than hash-iteration order.
+    (maphash (lambda (k v) (puthash k (sort v #'string<) index)) index)
     (setq zetta-hywiki-alias--index index
           zetta-hywiki-alias--regexp
           (and patterns
@@ -206,7 +306,8 @@ match rather than sitting at its edge."
                  (me (match-end 0))
                  (text (match-string-no-properties 0))
                  (key (downcase (replace-regexp-in-string "[ \t-]+" "" text)))
-                 (canon (gethash key zetta-hywiki-alias--index))
+                 (cands (gethash key zetta-hywiki-alias--index))
+                 (canon (car cands))
                  (link-color (zetta-hywiki-alias--link-color-at mb))
                  (hy-ov (zetta-hywiki-alias--hywiki-face-at mb))
                  ;; Does a HyWiki overlay already span our whole match?  If so it
@@ -233,6 +334,7 @@ match rather than sitting at its edge."
                     (delete-overlay o))))
               (let ((ov (make-overlay mb me)))
                 (overlay-put ov 'zetta-hywiki-alias canon)
+                (overlay-put ov 'zetta-hywiki-alias-candidates cands)
                 (overlay-put ov 'zetta-hywiki-alias-p t)
                 ;; A DISTINCT (anonymous) face -- looks identical to
                 ;; `hywiki-word-face' but is not `eq' to it, so HyWiki's own
@@ -248,9 +350,14 @@ match rather than sitting at its edge."
                 (when link-color (overlay-put ov 'priority 100))
                 (overlay-put ov 'evaporate t)
                 (overlay-put ov 'help-echo
-                             (if (string= text canon)
-                                 (format "HyWikiWord: %s" canon)
-                               (format "HyWiki alias -> %s" canon)))))))))))
+                             (cond
+                              ((cdr cands)
+                               (format "HyWiki alias -> %s (choose on activation)"
+                                       (mapconcat #'identity cands " | ")))
+                              ((string= text canon)
+                               (format "HyWikiWord: %s" canon))
+                              (t
+                               (format "HyWiki alias -> %s" canon))))))))))))
 
 (defun zetta-hywiki-alias--refresh-region (start end)
   "Re-highlight derived aliases between START and END, expanded to whole lines."
@@ -315,6 +422,38 @@ When point is on an alias overlay, return its canonical WikiWord -- as a
           canon)
       (funcall orig range-flag hash-sign-only-flag))))
 
+(defun zetta-hywiki-alias--find-referent-advice (orig &optional wikiword prompt-flag)
+  "Disambiguate when the alias at point maps to several HyWiki pages.
+`hywiki-find-referent' is the single navigation chokepoint every activation
+path funnels through -- both the `hywiki-word' and `hywiki-existing-word'
+implicit buttons and the Org `hy:' link -- and unlike `hywiki-word-at' it is
+not called during highlighting, range detection or idle passes, so it is the
+one safe place to prompt.
+
+When point sits on an alias overlay whose candidate list holds more than one
+canonical WikiWord -- e.g. `programmer' declared by both CharlieHolland and
+CharlieBaker -- and ORIG is about to visit the silently chosen representative
+\(WIKIWORD), ask which page to open and route ORIG there instead.  Every
+other call -- a real WikiWord, a single-candidate alias, or an unrelated
+navigation while point happens to rest on an alias -- passes straight
+through, guarded by matching WIKIWORD against the overlay's representative."
+  (let* ((ov (and (bound-and-true-p zetta-hywiki-alias-mode)
+                  (stringp wikiword)
+                  (seq-find (lambda (o) (overlay-get o 'zetta-hywiki-alias-candidates))
+                            (overlays-at (point)))))
+         (cands (and ov (overlay-get ov 'zetta-hywiki-alias-candidates))))
+    (if (and cands (cdr cands)
+             (fboundp 'hywiki-word-strip-suffix)
+             (equal (hywiki-word-strip-suffix wikiword)
+                    (overlay-get ov 'zetta-hywiki-alias)))
+        (let ((choice (completing-read
+                       (format "Alias \"%s\" -> HyWikiWord: "
+                               (buffer-substring-no-properties
+                                (overlay-start ov) (overlay-end ov)))
+                       cands nil t nil nil (car cands))))
+          (funcall orig choice prompt-flag))
+      (funcall orig wikiword prompt-flag))))
+
 (defun zetta-hywiki-alias--refresh-on-save ()
   "Rebuild aliases and re-highlight after saving a HyWiki page file.
 On `after-save-hook' so edits to a page's `Aliases' section (or a new page
@@ -337,6 +476,88 @@ native behaviour -- restoring its view even where we had replaced its overlays
            (ignore-errors (hywiki-maybe-highlight-references)))))
      nil t)))
 
+;;; ------------------------------------------------------------------------
+;;; Creating a HyWikiWord from arbitrary text (the inverse of aliasing)
+;;; ------------------------------------------------------------------------
+
+(defun zetta-hywiki-alias-to-wikiword (text)
+  "Convert TEXT into a PascalCase HyWikiWord string, or nil if impossible.
+This is the inverse of the aliasing this mode performs: it collapses any of
+the manifestations the aliases would match back into one canonical WikiWord.
+
+Every run of non-alphabetic characters -- spaces, tabs, newlines, hyphens,
+underscores, digits, punctuation -- separates words, and existing CamelCase
+inside a run of letters is split too (reusing `zetta-hywiki-alias--segments',
+the very splitter the aliases are built from).  So `text embedding',
+`text-embedding', `text_embedding', `TEXT EMBEDDING' and `textEmbedding' all
+yield `TextEmbedding'.  Each segment is then capitalized -- first letter
+upper, rest lower -- so acronyms are title-cased (`HTML parser' ->
+`HtmlParser'); that still round-trips because the aliases match
+case-insensitively.
+
+Returns nil when TEXT has no letters, or yields only a single letter, since a
+HyWikiWord must be an uppercase-initial, all-alphabetic word of at least two
+characters.  Digits cannot appear in a HyWikiWord, so they act purely as
+separators (`gpt 4 turbo' -> `GptTurbo')."
+  (when (stringp text)
+    (let* ((words (split-string text "[^[:alpha:]]+" t))
+           (segs (mapcan #'zetta-hywiki-alias--segments words))
+           (word (mapconcat
+                  (lambda (w) (concat (upcase (substring w 0 1))
+                                      (downcase (substring w 1))))
+                  segs "")))
+      (and (string-match-p "\\`[[:upper:]][[:alpha:]]+\\'" word) word))))
+
+;;;###autoload
+(defun zetta-hywiki-alias-wikify (beg end &optional stay)
+  "Create a HyWikiWord page from the region BEG..END, display it, keep the text.
+Interactively, act on the active region; with none, use the symbol at point.
+The text is converted to a PascalCase WikiWord via
+`zetta-hywiki-alias-to-wikiword', its page is created and shown, but the prose
+is left UNCHANGED: this mode immediately highlights it as an alias of the new
+page, so `text embedding' lights up and activates in place -- without being
+rewritten to the literal `TextEmbedding'.
+
+With a prefix arg STAY, create the page without leaving the current buffer.
+Signals a `user-error' if the text cannot form a valid WikiWord or if HyWiki
+is unavailable.  Returns the WikiWord."
+  (interactive
+   (append (cond ((use-region-p) (list (region-beginning) (region-end)))
+                 ((bounds-of-thing-at-point 'symbol)
+                  (let ((b (bounds-of-thing-at-point 'symbol)))
+                    (list (car b) (cdr b))))
+                 (t (user-error "No region or symbol at point to wikify")))
+           (list current-prefix-arg)))
+  (unless (require 'hywiki nil t)
+    (user-error "Load GNU Hyperbole/HyWiki before using %s"
+                'zetta-hywiki-alias-wikify))
+  (let* ((text (buffer-substring-no-properties beg end))
+         (word (zetta-hywiki-alias-to-wikiword text))
+         (src (current-buffer)))
+    (unless word
+      (user-error "Cannot form a HyWikiWord from %S" text))
+    ;; Create the page -- and by default open it -- but leave the prose alone.
+    (if stay
+        (hywiki-add-page word)
+      (hywiki-word-create-and-display word))
+    ;; Make the new page's aliases live and light up the source phrase now.
+    ;; `hywiki-add-page' invalidates the alias set via advice, but
+    ;; `hywiki-word-create-and-display' can reach the page by another route, so
+    ;; invalidate explicitly -- rebuilding the index to include the new page --
+    ;; then re-highlight the source region, which may no longer be in a visible
+    ;; window now that the page is displayed (so the generic refresh misses it).
+    (when (bound-and-true-p zetta-hywiki-alias-mode)
+      (zetta-hywiki-alias--invalidate)
+      (when (buffer-live-p src)
+        (with-current-buffer src
+          (when (and (fboundp 'hywiki-active-in-current-buffer-p)
+                     (hywiki-active-in-current-buffer-p))
+            (zetta-hywiki-alias--refresh-region beg end)))))
+    (when (called-interactively-p 'interactive)
+      (message "HyWikiWord %s: page created%s, source text left in place"
+               word (if stay "" " and opened")))
+    word))
+
 ;;;###autoload
 (define-minor-mode zetta-hywiki-alias-mode
   "Global mode: highlight and activate case/space/hyphen variants of HyWikiWords.
@@ -357,6 +578,8 @@ visible buffers."
                         'zetta-hywiki-alias-mode))
         (zetta-hywiki-alias--rebuild)
         (advice-add 'hywiki-word-at :around #'zetta-hywiki-alias--word-at-advice)
+        (advice-add 'hywiki-find-referent :around
+                    #'zetta-hywiki-alias--find-referent-advice)
         (advice-add 'hywiki-add-referent :after #'zetta-hywiki-alias--invalidate)
         (advice-add 'hywiki-add-page :after #'zetta-hywiki-alias--invalidate)
         (add-hook 'post-command-hook #'zetta-hywiki-alias--post-command)
@@ -365,6 +588,7 @@ visible buffers."
     (remove-hook 'post-command-hook #'zetta-hywiki-alias--post-command)
     (remove-hook 'after-save-hook #'zetta-hywiki-alias--refresh-on-save)
     (advice-remove 'hywiki-word-at #'zetta-hywiki-alias--word-at-advice)
+    (advice-remove 'hywiki-find-referent #'zetta-hywiki-alias--find-referent-advice)
     (advice-remove 'hywiki-add-referent #'zetta-hywiki-alias--invalidate)
     (advice-remove 'hywiki-add-page #'zetta-hywiki-alias--invalidate)
     (dolist (buf (buffer-list))

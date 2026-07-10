@@ -179,6 +179,30 @@ otherwise appear as a bogus `zsh#...' completion candidate."
   (advice-add 'hywiki-completion-at-point :around
               #'zetta-hywiki-completion-posix-shell)
 
+  ;; --- HyWiki: allow single-letter WikiWords (e.g. C, R, D) ---
+  ;; `hywiki-word-regexp' matches a capital followed by one-or-more letters
+  ;; (`[[:upper:]][[:alpha:]]+'), so a lone capital like `C' is never recognized
+  ;; as a WikiWord.  Relax the `+' to `*' so a single capital qualifies.  Since
+  ;; `hywiki-word-regexp' is a `defconst' that the suffix/exact/buttonize regexps
+  ;; are `concat'-ed from at load time, rebuild those from the new base value, and
+  ;; drop the cached `hywiki--any-wikiword-regexp-list' so it regenerates.
+  ;; Tradeoff: every standalone capital (I, A, ...) becomes a WikiWord *candidate*
+  ;; for the Action Key and buttonize-as-you-type; persistent highlighting still
+  ;; only fires for capitals that have a real page in `hywiki-directory'.
+  (setq hywiki-word-regexp
+        (format "\\<\\([[:upper:]][[:alpha:]]*\\)\\>\\(?:%s\\)?"
+                (regexp-quote hywiki-file-suffix))
+        hywiki-word-with-optional-suffix-regexp
+        (concat hywiki-word-regexp hywiki-word-section-regexp "??"
+                hywiki-word-line-and-column-numbers-regexp "?")
+        hywiki-word-with-optional-suffix-exact-regexp
+        (concat "\\`" hywiki-word-regexp "\\(#[^][#\n\r\f]+\\)??"
+                hywiki-word-line-and-column-numbers-regexp "?\\'")
+        hywiki--word-and-buttonize-character-regexp
+        (concat "\\(" hywiki-word-with-optional-suffix-regexp "\\)"
+                hywiki--buttonize-character-regexp)
+        hywiki--any-wikiword-regexp-list nil)
+
   ;;;; --- Relocate the minibuffer menu: {C-h h} -> {C-h H} ---
   ;;;; Hyperbole binds `hyperbole' to {C-h h} globally; undo that and rebind.
   ;;(when (eq (lookup-key (current-global-map) (kbd "C-h h")) 'hyperbole)

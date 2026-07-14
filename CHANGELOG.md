@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.34](https://github.com/chiply/.zetta.d/compare/v0.1.33...v0.1.34) (2026-07-14)
+
+
+### Features
+
+* HyWiki alias disambiguation/plurals/wikify, dag arrows & cleanup, single-letter WikiWords ([#103](https://github.com/chiply/.zetta.d/issues/103)) ([d91d8db](https://github.com/chiply/.zetta.d/commit/d91d8db7e36ee12507eaf348a63f8875da7e7f90))
+* irs client — corpus search via the irs backend ([#102](https://github.com/chiply/.zetta.d/issues/102)) ([56695ee](https://github.com/chiply/.zetta.d/commit/56695eebd5d99c89e54b78946b481b2990d2e36d))
+* pdfnote — sync native PDF annotations into Logseq notes ([#105](https://github.com/chiply/.zetta.d/issues/105)) ([d823aa4](https://github.com/chiply/.zetta.d/commit/d823aa4992565c137573b44eeff969936eed5b09))
+
 ## [0.1.33](https://github.com/chiply/.zetta.d/compare/v0.1.32...v0.1.33) (2026-07-05)
 
 

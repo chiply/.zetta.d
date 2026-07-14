@@ -47,6 +47,13 @@
   "Maximum results to request per search."
   :type 'natnum)
 
+(defcustom irs-pid-file "~/.local/share/irs/irs.pid"
+  "PID file written by `irs serve', used by `irs-restart-server' to stop it.
+This mirrors the backend's own data_dir rather than being told by it, so
+it goes stale if the backend runs under $IRS_DATA_DIR or a config.toml
+data_dir override — point it at that directory's irs.pid if so."
+  :type 'file)
+
 (defvar irs--live-last-input nil
   "Most recent input the live dynamic source queried with.")
 
@@ -122,6 +129,62 @@ identity; only spawns a new one when nothing answers."
                   (run-at-time 0.5 nil #'irs--poll-health (1- retries) callback)
                 (message "irs: server did not come up; see buffer %s"
                          " *irs-server*")))))
+
+;;;; Restart: stop the process named by the PID file, then spawn
+
+;; `ps' here is a local, millisecond call — the no-synchronous-calls rule
+;; this client follows is about HTTP, which is what blocks meaningfully.
+
+(defun irs--pid-live-p (pid)
+  (zerop (call-process "ps" nil nil nil "-p" (number-to-string pid))))
+
+(defun irs--pid-is-irs-p (pid)
+  "Non-nil if PID's command line looks like the irs backend.
+A PID file outlives its process whenever the server dies without running
+its atexit hook, and the number is then free to be recycled by something
+unrelated; without this check a restart could signal an innocent
+process."
+  (with-temp-buffer
+    (and (zerop (call-process "ps" nil t nil "-p" (number-to-string pid)
+                              "-o" "command="))
+         (string-match-p "\\birs\\b" (buffer-string)))))
+
+(defun irs--server-pid ()
+  "PID of the running backend per `irs-pid-file', or nil if none is trustworthy."
+  (let ((file (expand-file-name irs-pid-file)))
+    (when (file-readable-p file)
+      (let* ((text (with-temp-buffer
+                     (insert-file-contents file)
+                     (string-trim (buffer-string))))
+             (pid (and (string-match-p "\\`[0-9]+\\'" text)
+                       (string-to-number text))))
+        (when (and pid (irs--pid-live-p pid) (irs--pid-is-irs-p pid))
+          pid)))))
+
+(defun irs--await-stop (pid retries)
+  (cond
+   ((not (irs--pid-live-p pid))
+    (message "irs: stopped — starting…")
+    (irs--spawn-server nil))
+   ((> retries 0)
+    (run-at-time 0.25 nil #'irs--await-stop pid (1- retries)))
+   (t
+    (message "irs: pid %s did not exit — not starting a second server" pid))))
+
+;;;###autoload
+(defun irs-restart-server ()
+  "Restart the irs backend, starting one if none is running.
+The service reads its config.toml once at startup, so a server that is
+already up keeps serving the corpus roots it booted with — edit the
+config, then run this, or an ingest will silently use the old roots."
+  (interactive)
+  (let ((pid (irs--server-pid)))
+    (if (not pid)
+        (progn (message "irs: no server to stop — starting…")
+               (irs--spawn-server nil))
+      (message "irs: stopping pid %s…" pid)
+      (signal-process pid 'TERM)
+      (irs--await-stop pid 40))))
 
 ;;;; Status and ingest
 

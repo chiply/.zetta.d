@@ -142,17 +142,56 @@ identity; only spawns a new one when nothing answers."
                                  :json-false)
                              "no" "yes"))))))
 
-;;;###autoload
-(defun irs-ingest ()
-  "Trigger a corpus ingest job and report progress until it finishes."
-  (interactive)
+(defun irs--start-job (label endpoint)
+  "Start the backend job at ENDPOINT, then poll it to completion.
+LABEL names the job in the start message; the finish message is
+formatted by `irs--job-done-message' from the kind the server reports."
   (irs-ensure-server
    (lambda ()
-     (irs--post "/v1/ingest" nil
+     (irs--post endpoint nil
                 (lambda (data)
                   (let ((job-id (alist-get 'job_id data)))
-                    (message "irs: ingest started (job %s)" job-id)
+                    (message "irs: %s started (job %s)" label job-id)
                     (irs--poll-job job-id)))))))
+
+(defun irs--job-done-message (job)
+  "Report the result of finished JOB, formatted for its kind.
+Each job kind returns a disjoint result shape, so the kinds cannot share
+a formatter; an unknown kind prints its raw result rather than
+misreporting it under another kind's keys."
+  (let ((r (alist-get 'result job)))
+    (pcase (alist-get 'kind job)
+      ("ingest"
+       (message "irs: ingest done — %s ingested, %s unchanged, %s deleted, %s errors"
+                (alist-get 'files_ingested r)
+                (alist-get 'files_unchanged r)
+                (alist-get 'files_deleted r)
+                (length (alist-get 'errors r))))
+      ("embed"
+       (message "irs: embed done — %s embedded, %s failed (model %s)"
+                (alist-get 'embedded r)
+                (alist-get 'failed r)
+                (alist-get 'model r)))
+      ("graph"
+       ;; Links that resolve to no file are the norm, not an error: they
+       ;; upsert a concept node and LINKS_TO points there.  Report both
+       ;; numbers so a low resolved-count doesn't read as a failure.
+       (message "irs: graph done — %s edges, %s concepts (epoch %s); %s/%s links resolved to files"
+                (alist-get 'edges r)
+                (alist-get 'concepts r)
+                (alist-get 'epoch r)
+                (alist-get 'resolved r)
+                (alist-get 'links_seen r)))
+      ("knn"
+       (let ((note (alist-get 'note r)))
+         (if note
+             (message "irs: knn — %s" note)
+           (message "irs: knn done — %s SIMILAR_TO edges over %s vectors (epoch %s, model %s)"
+                    (alist-get 'edges r)
+                    (alist-get 'vectors r)
+                    (alist-get 'epoch r)
+                    (alist-get 'model r)))))
+      (kind (message "irs: %s done — %S" kind r)))))
 
 (defun irs--poll-job (job-id)
   (irs--get (format "/v1/jobs/%s" job-id)
@@ -161,32 +200,42 @@ identity; only spawns a new one when nothing answers."
                 ("running"
                  (run-at-time 2 nil #'irs--poll-job job-id))
                 ("done"
-                 (let ((r (alist-get 'result job)))
-                   (if (equal (alist-get 'kind job) "embed")
-                       (message "irs: embed done — %s embedded, %s failed (model %s)"
-                                (alist-get 'embedded r)
-                                (alist-get 'failed r)
-                                (alist-get 'model r))
-                     (message "irs: ingest done — %s ingested, %s unchanged, %s deleted, %s errors"
-                              (alist-get 'files_ingested r)
-                              (alist-get 'files_unchanged r)
-                              (alist-get 'files_deleted r)
-                              (length (alist-get 'errors r))))))
+                 (irs--job-done-message job))
                 (_
                  (message "irs: %s failed: %s"
                           (alist-get 'kind job) (alist-get 'error job)))))))
+
+;;;; Pipeline commands: ingest -> embed -> graph -> knn
+
+;;;###autoload
+(defun irs-ingest ()
+  "Trigger a corpus ingest job and report progress until it finishes."
+  (interactive)
+  (irs--start-job "ingest" "/v1/ingest"))
 
 ;;;###autoload
 (defun irs-embed ()
   "Embed all non-fresh corpus text via the backend; reports when done."
   (interactive)
-  (irs-ensure-server
-   (lambda ()
-     (irs--post "/v1/embed" nil
-                (lambda (data)
-                  (let ((job-id (alist-get 'job_id data)))
-                    (message "irs: embed started (job %s)" job-id)
-                    (irs--poll-job job-id)))))))
+  (irs--start-job "embed" "/v1/embed"))
+
+;;;###autoload
+(defun irs-graph ()
+  "Rebuild the typed edge graph (LINKS_TO, MENTIONS, DERIVED_FROM).
+This is a full rebuild by design, not an incremental pass: link
+resolution is global, so a newly ingested page can resolve targets that
+dangled before.  Run it after `irs-ingest'."
+  (interactive)
+  (irs--start-job "graph" "/v1/graph/build"))
+
+;;;###autoload
+(defun irs-knn ()
+  "Rebuild the k-NN SIMILAR_TO edges from the stored embeddings.
+An epoch-stamped batch artifact: it depends on `irs-embed' having run,
+and re-runs wholesale rather than incrementally, because one node's new
+embedding can change an unrelated node's neighbour list."
+  (interactive)
+  (irs--start-job "knn" "/v1/graph/knn"))
 
 ;;;; Search (FTS / BM25 with hierarchy-expanded results)
 

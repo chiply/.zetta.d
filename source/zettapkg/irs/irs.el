@@ -24,6 +24,7 @@
 
 ;;; Code:
 
+(require 'autorevert)                   ; `irs-show-log' tails the server log
 (require 'json)
 (require 'plz)
 (require 'subr-x)
@@ -52,6 +53,15 @@
 This mirrors the backend's own data_dir rather than being told by it, so
 it goes stale if the backend runs under $IRS_DATA_DIR or a config.toml
 data_dir override — point it at that directory's irs.pid if so."
+  :type 'file)
+
+(defcustom irs-log-file "~/.local/share/irs/irs.log"
+  "File the server's output is appended to when Emacs spawns it.
+The backend is deliberately detached — it outlives the Emacs that
+started it and is shared across Emacsen — so it is not an Emacs
+subprocess and never appears in `list-processes'.  This file is the only
+view of its output; see `irs-show-log'.  A server started by hand
+outside Emacs logs wherever that shell pointed it, not here."
   :type 'file)
 
 (defvar irs--live-last-input nil
@@ -108,12 +118,17 @@ identity; only spawns a new one when nothing answers."
 (defun irs--spawn-server (callback)
   ;; detach via a transient shell so the server survives the Emacs that
   ;; started it and is shared across Emacsen (design doc, Operational);
-  ;; the backend's PID-file lock makes a racing second spawn a no-op
-  (let ((default-directory (expand-file-name irs-backend-directory)))
+  ;; the backend's PID-file lock makes a racing second spawn a no-op.
+  ;; Being detached, it is nobody's subprocess -- output would otherwise
+  ;; go nowhere, so append it to `irs-log-file' (`irs-show-log' reads it).
+  (let* ((default-directory (expand-file-name irs-backend-directory))
+         (log (expand-file-name irs-log-file)))
+    (make-directory (file-name-directory log) t)
     (make-process :name "irs-server-launcher"
                   :buffer nil
                   :command (list shell-file-name shell-command-switch
-                                 "nohup uv run irs serve >/dev/null 2>&1 &")
+                                 (format "nohup uv run irs serve >>%s 2>&1 &"
+                                         (shell-quote-argument log)))
                   :noquery t))
   (irs--poll-health 20 callback))
 
@@ -127,8 +142,20 @@ identity; only spawns a new one when nothing answers."
             (lambda (_err)
               (if (> retries 0)
                   (run-at-time 0.5 nil #'irs--poll-health (1- retries) callback)
-                (message "irs: server did not come up; see buffer %s"
-                         " *irs-server*")))))
+                (message "irs: server did not come up — see %s (M-x irs-show-log)"
+                         (abbreviate-file-name (expand-file-name irs-log-file)))))))
+
+;;;###autoload
+(defun irs-show-log ()
+  "Tail the backend's log in a buffer, following new output as it arrives."
+  (interactive)
+  (let ((log (expand-file-name irs-log-file)))
+    (if (not (file-exists-p log))
+        (message "irs: no log at %s yet — it is written when Emacs spawns the server"
+                 (abbreviate-file-name log))
+      (find-file-other-window log)
+      (goto-char (point-max))
+      (auto-revert-tail-mode 1))))
 
 ;;;; Restart: stop the process named by the PID file, then spawn
 
@@ -205,17 +232,18 @@ config, then run this, or an ingest will silently use the old roots."
                                  :json-false)
                              "no" "yes"))))))
 
-(defun irs--start-job (label endpoint)
+(defun irs--start-job (label endpoint &optional on-done on-fail)
   "Start the backend job at ENDPOINT, then poll it to completion.
 LABEL names the job in the start message; the finish message is
-formatted by `irs--job-done-message' from the kind the server reports."
+formatted by `irs--job-done-message' from the kind the server reports.
+ON-DONE and ON-FAIL are passed to `irs--poll-job'."
   (irs-ensure-server
    (lambda ()
      (irs--post endpoint nil
                 (lambda (data)
                   (let ((job-id (alist-get 'job_id data)))
                     (message "irs: %s started (job %s)" label job-id)
-                    (irs--poll-job job-id)))))))
+                    (irs--poll-job job-id on-done on-fail)))))))
 
 (defun irs--job-done-message (job)
   "Report the result of finished JOB, formatted for its kind.
@@ -256,17 +284,23 @@ misreporting it under another kind's keys."
                     (alist-get 'model r)))))
       (kind (message "irs: %s done — %S" kind r)))))
 
-(defun irs--poll-job (job-id)
+(defun irs--poll-job (job-id &optional on-done on-fail)
+  "Poll JOB-ID to completion and report its result.
+ON-DONE is called with the finished job only when it succeeded — a
+chained caller must not advance on a stage that failed — and ON-FAIL
+with no arguments when it did not."
   (irs--get (format "/v1/jobs/%s" job-id)
             (lambda (job)
               (pcase (alist-get 'state job)
                 ("running"
-                 (run-at-time 2 nil #'irs--poll-job job-id))
+                 (run-at-time 2 nil #'irs--poll-job job-id on-done on-fail))
                 ("done"
-                 (irs--job-done-message job))
+                 (irs--job-done-message job)
+                 (when on-done (funcall on-done job)))
                 (_
                  (message "irs: %s failed: %s"
-                          (alist-get 'kind job) (alist-get 'error job)))))))
+                          (alist-get 'kind job) (alist-get 'error job))
+                 (when on-fail (funcall on-fail)))))))
 
 ;;;; Pipeline commands: ingest -> embed -> graph -> knn
 
@@ -299,6 +333,41 @@ and re-runs wholesale rather than incrementally, because one node's new
 embedding can change an unrelated node's neighbour list."
   (interactive)
   (irs--start-job "knn" "/v1/graph/knn"))
+
+(defconst irs--pipeline-stages
+  '(("ingest" . "/v1/ingest")
+    ("embed"  . "/v1/embed")
+    ("graph"  . "/v1/graph/build")
+    ("knn"    . "/v1/graph/knn"))
+  "The pipeline in dependency order (design doc, Pipeline).
+Nodes must exist before they can be embedded and embeddings before k-NN
+can find neighbours; graph build resolves links over whatever ingest
+produced.  Each stage is a whole-corpus job, so they cannot overlap.")
+
+(defun irs--run-pipeline (stages n total)
+  (if (null stages)
+      (message "irs: pipeline done — %s/%s stages finished" total total)
+    (let ((label (caar stages))
+          (endpoint (cdar stages)))
+      (message "irs: pipeline %s/%s — %s…" n total label)
+      (irs--start-job
+       label endpoint
+       (lambda (_job) (irs--run-pipeline (cdr stages) (1+ n) total))
+       (lambda () (message "irs: pipeline aborted at %s (%s/%s) — later stages skipped"
+                           label n total))))))
+
+;;;###autoload
+(defun irs-pipeline ()
+  "Run the whole backend pipeline: ingest, then embed, graph and knn.
+Each stage starts only once the previous one has finished, and a failed
+stage aborts the rest rather than building later artifacts on a
+half-finished index.  Everything is async; the echo area reports each
+stage as it starts and finishes.
+
+Long: `irs-embed' downloads the model on first run and re-embeds every
+changed node.  Nothing here blocks Emacs."
+  (interactive)
+  (irs--run-pipeline irs--pipeline-stages 1 (length irs--pipeline-stages)))
 
 ;;;; Search (FTS / BM25 with hierarchy-expanded results)
 

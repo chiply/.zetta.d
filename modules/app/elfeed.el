@@ -271,8 +271,33 @@ minibuffer with something like `exit-minibuffer'."
   ;; at this point since `(elfeed-org)' has not run yet -- guarantees the advice
   ;; is in place first.  See also `:after elfeed org elfeed-protocol' above.
   (when (fboundp 'elfeed-protocol-enable) (elfeed-protocol-enable))
-  (elfeed-org)
-  (message "loaded elfeed-org")
+  ;; `(elfeed-org)' lazily first-touches the db (`elfeed-db-get-feed' ->
+  ;; `elfeed-db-ensure' -> `elfeed-db-load').  During elpaca's async startup
+  ;; that read of the ~30MB single-line index intermittently misfires and
+  ;; `elfeed-db-load' signals a bogus "Elfeed database format is outdated" --
+  ;; the on-disk index is valid v4 (it loads cleanly in `emacs -Q' and
+  ;; self-heals on any later load, e.g. the first `M-x elfeed').  That error
+  ;; aborts the rest of this :config, so the org feed tags never get applied
+  ;; that session.  It is a startup read-timing issue, NOT stale data: it
+  ;; reproduces on a freshly Miniflux-resynced v4 db.  Self-heal: on the error
+  ;; force a clean reload and retry; if startup is still churning, defer one
+  ;; final attempt to idle so the tags always land.
+  (condition-case nil
+      (progn (elfeed-org) (message "loaded elfeed-org"))
+    (error
+     (setq elfeed-db nil)
+     (require 'elfeed-db)
+     (condition-case nil
+         (progn (elfeed-db-load) (elfeed-org)
+                (message "loaded elfeed-org (after db reload)"))
+       (error
+        (run-with-idle-timer
+         1 nil
+         (lambda ()
+           (setq elfeed-db nil)
+           (ignore-errors (elfeed-db-load))
+           (ignore-errors (elfeed-org))
+           (message "loaded elfeed-org (deferred)")))))))
   )
 
 (use-package elfeed-score

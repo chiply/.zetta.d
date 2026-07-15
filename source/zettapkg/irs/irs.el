@@ -282,6 +282,14 @@ misreporting it under another kind's keys."
                     (alist-get 'vectors r)
                     (alist-get 'epoch r)
                     (alist-get 'model r)))))
+      ("clip"
+       ;; Candidates are raster only: SVG is excluded upstream, since its
+       ;; labels are already exact text by the time CLIP could guess at them.
+       (message "irs: image embed done — %s embedded, %s failed of %s raster candidates (model %s)"
+                (alist-get 'embedded r)
+                (alist-get 'failed r)
+                (alist-get 'candidates r)
+                (alist-get 'model r)))
       (kind (message "irs: %s done — %S" kind r)))))
 
 (defun irs--poll-job (job-id &optional on-done on-fail)
@@ -334,15 +342,32 @@ embedding can change an unrelated node's neighbour list."
   (interactive)
   (irs--start-job "knn" "/v1/graph/knn"))
 
+;;;###autoload
+(defun irs-embed-images ()
+  "CLIP-embed corpus images, so `irs-search-images' can find them.
+A second, independent vector space from `irs-embed': that one reads an
+image's extracted text (SVG labels, OCR) and cannot see a picture
+carrying no text at all, which is what this one is for.  Downloads
+~600MB on first run and loads it only when there is work to do."
+  (interactive)
+  (irs--start-job "embed-images" "/v1/embed/images"))
+
 (defconst irs--pipeline-stages
-  '(("ingest" . "/v1/ingest")
-    ("embed"  . "/v1/embed")
-    ("graph"  . "/v1/graph/build")
-    ("knn"    . "/v1/graph/knn"))
+  '(("ingest"       . "/v1/ingest")
+    ("embed"        . "/v1/embed")
+    ("embed-images" . "/v1/embed/images")
+    ("graph"        . "/v1/graph/build")
+    ("knn"          . "/v1/graph/knn"))
   "The pipeline in dependency order (design doc, Pipeline).
 Nodes must exist before they can be embedded and embeddings before k-NN
 can find neighbours; graph build resolves links over whatever ingest
-produced.  Each stage is a whole-corpus job, so they cannot overlap.")
+produced.  Each stage is a whole-corpus job, so they cannot overlap.
+
+Image embedding sits after `embed' and before the graph stages, which do
+not read its vectors — k-NN builds SIMILAR_TO from the text model only,
+CLIP living in a space of its own.  It is in the pipeline because image
+search otherwise rots silently as pictures are added, and it is cheap to
+include: with nothing to embed the backend loads no model at all.")
 
 (defun irs--run-pipeline (stages n total)
   (if (null stages)
@@ -377,24 +402,34 @@ changed node.  Nothing here blocks Emacs."
                (replace-regexp-in-string "[ \t]+" " ")
                (string-trim)))
 
+(defun irs--uniquify (pairs)
+  "Suffix duplicate display strings in PAIRS, preserving order.
+Completion collapses candidates that are `equal', so two results
+rendering identically would leave one of them permanently unreachable."
+  (let ((seen (make-hash-table :test #'equal)))
+    (mapcar (lambda (pair)
+              (let* ((display (car pair))
+                     (n (gethash display seen 0)))
+                (puthash display (1+ n) seen)
+                (if (> n 0)
+                    (cons (format "%s (%d)" display (1+ n)) (cdr pair))
+                  pair)))
+            pairs)))
+
 (defun irs--candidates (results)
   "Build an alist of (display-string . result-alist), deduping displays."
-  (let ((seen (make-hash-table :test #'equal))
-        cands)
-    (dolist (result (append results nil))
-      (let* ((trail (append (alist-get 'heading_trail result) nil))
-             (head (if trail (string-join trail " › ")
-                     (file-name-nondirectory (or (alist-get 'path result) "?"))))
-             (snippet (irs--clean-snippet (alist-get 'snippet result)))
-             (display (concat (propertize head 'face 'bold)
-                              (and (not (string-empty-p snippet)) "  ")
-                              snippet))
-             (n (gethash display seen 0)))
-        (puthash display (1+ n) seen)
-        (when (> n 0)
-          (setq display (format "%s (%d)" display (1+ n))))
-        (push (cons display result) cands)))
-    (nreverse cands)))
+  (irs--uniquify
+   (mapcar (lambda (result)
+             (let* ((trail (append (alist-get 'heading_trail result) nil))
+                    (head (if trail (string-join trail " › ")
+                            (file-name-nondirectory
+                             (or (alist-get 'path result) "?"))))
+                    (snippet (irs--clean-snippet (alist-get 'snippet result))))
+               (cons (concat (propertize head 'face 'bold)
+                             (and (not (string-empty-p snippet)) "  ")
+                             snippet)
+                     result)))
+           (append results nil))))
 
 (defun irs--visit (result)
   "Open RESULT's file and move point near the hit, best effort."
@@ -450,7 +485,10 @@ boosting); errors are silently ignored."
                  (retriever . ,(alist-get 'retriever result)))
                #'ignore #'ignore)))
 
-(defun irs--run-search (endpoint query)
+(defun irs--run-search (endpoint query &optional present)
+  "Search ENDPOINT for QUERY and hand the response to PRESENT.
+PRESENT defaults to `irs--present'; it is called with QUERY and the
+decoded response."
   (when (string-empty-p (string-trim query))
     (user-error "irs: empty query"))
   (irs-ensure-server
@@ -459,7 +497,7 @@ boosting); errors are silently ignored."
                 `((query . ,query) (limit . ,irs-search-limit))
                 (lambda (data)
                   ;; don't open the minibuffer from inside a plz callback
-                  (run-at-time 0 nil #'irs--present query data))))))
+                  (run-at-time 0 nil (or present #'irs--present) query data))))))
 
 ;;;###autoload
 (defun irs-search (query)
@@ -478,6 +516,157 @@ boosting); errors are silently ignored."
   "Search the corpus with RRF fusion + rerank — the flagship retriever."
   (interactive (list (read-string "irs hybrid: " nil 'irs-search-history)))
   (irs--run-search "/v1/search/hybrid" query))
+
+;;;; Image search (M7c: CLIP, text -> pixels)
+;;
+;; This retriever has no relevance floor and cannot be given one: cosine ranks
+;; rather than filters, so a query with no answer in the corpus still returns
+;; `irs-search-limit' pictures in confident order.  CLIP scores are compressed
+;; too — a strong match is ~0.33, not ~0.9.  So the score is not decoration
+;; here, it is most of the answer, and the backend reports it raw precisely so
+;; the caller can show it.  Hence: scores lead every line, and the preview lets
+;; the eye settle what the number only hints at.
+
+(defcustom irs-image-strong-score 0.28
+  "Cosine at which a CLIP image hit starts to look like a real match.
+A display hint for `irs-search-images': at or above this a score is
+highlighted, below it dimmed.  Measured on this corpus, ~0.33 meant
+\"found it\" and ~0.24 meant \"no such picture exists — you are reading
+the top of the noise\".  The backend imposes no floor of its own."
+  :type 'number)
+
+(defcustom irs-image-preview t
+  "Whether `irs-search-images' previews the image under point."
+  :type 'boolean)
+
+(defconst irs--image-preview-buffer " *irs-image*")
+
+(defun irs--image-candidates (results)
+  "Build an alist of (display-string . result-alist) for image RESULTS."
+  (irs--uniquify
+   (mapcar
+    (lambda (result)
+      (let* ((score (or (alist-get 'score result) 0))
+             (title (or (alist-get 'title result)
+                        (file-name-nondirectory
+                         (or (alist-get 'path result) "?"))))
+             (text (irs--clean-snippet (alist-get 'snippet result)))
+             ;; a text-free image has no body, and the backend falls back to
+             ;; the title for its snippet — don't render the same string twice
+             (text (if (string= text title) "" text)))
+        (cons (concat (propertize (format "%5.2f  " score)
+                                  'face (if (>= score irs-image-strong-score)
+                                            'success
+                                          'shadow))
+                      (propertize title 'face 'bold)
+                      (unless (string-empty-p text)
+                        (concat "  " (propertize text 'face 'shadow))))
+              result)))
+    (append results nil))))
+
+(defun irs--image-preview-show (path)
+  "Display the image at PATH in a side window, scaled to fit."
+  (let ((buffer (get-buffer-create irs--image-preview-buffer)))
+    (with-current-buffer buffer
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (condition-case err
+            (insert-image
+             (create-image path nil nil
+                           :max-width (round (* 0.5 (frame-pixel-width)))
+                           :max-height (round (* 0.8 (frame-pixel-height)))))
+          ;; say so rather than showing an empty window: this Emacs may lack
+          ;; the library for the type (webp, or librsvg for svg)
+          (error (insert (format "irs: cannot display %s\n\n%s"
+                                 (file-name-nondirectory path)
+                                 (error-message-string err)))))))
+    (display-buffer buffer '(display-buffer-in-side-window
+                             (side . right)
+                             (window-width . 0.5)
+                             (dedicated . t)))))
+
+(defun irs--image-preview-hide ()
+  (when-let* ((buffer (get-buffer irs--image-preview-buffer)))
+    (when-let* ((window (get-buffer-window buffer)))
+      (ignore-errors (delete-window window)))
+    (kill-buffer buffer)))
+
+(defun irs--image-state (cands)
+  "Return a consult state function previewing the image for CANDS."
+  (lambda (action candidate)
+    (pcase action
+      ('preview
+       (let ((path (alist-get 'path (assoc-default candidate cands))))
+         (if (and path (file-readable-p path))
+             (irs--image-preview-show path)
+           (irs--image-preview-hide))))
+      ('exit (irs--image-preview-hide)))))
+
+(defun irs--diagnose-images (query)
+  "Explain an empty image result for QUERY.
+Cosine never filters, so a working search returns pictures however poor
+the match: empty means there were no vectors to rank at all.  That is a
+readiness problem, and reporting it as \"no results\" would read as a
+statement about the corpus instead of about the index."
+  (irs--get
+   "/v1/status"
+   (lambda (data)
+     (let* ((clip (alist-get 'clip data))
+            (images (or (alist-get 'images clip) 0))
+            (vectors (or (alist-get 'vectors clip) 0))
+            (load-error (alist-get 'load_error clip)))
+       (message
+        "%s"
+        (cond
+         (load-error (format "irs: CLIP failed to load — %s" load-error))
+         ((eq (alist-get 'available clip) :json-false)
+          "irs: CLIP unavailable — the backend needs pillow and sentence-transformers")
+         ((zerop images)
+          "irs: no images ingested — add an image root to config.toml, then M-x irs-ingest")
+         ((zerop vectors)
+          (format "irs: %s images, no CLIP vectors — run M-x irs-embed-images"
+                  images))
+         (t (format "irs: no image results for %S" query))))))))
+
+(defun irs--present-images (query data)
+  "Complete over DATA's image results for QUERY and open the selection."
+  (let ((cands (irs--image-candidates (alist-get 'results data))))
+    (if (null cands)
+        (irs--diagnose-images query)
+      (let ((selected
+             (unwind-protect
+                 (if (fboundp 'consult--read)
+                     (consult--read
+                      (mapcar #'car cands)
+                      :prompt (format "irs image %s(%d): " query (length cands))
+                      :require-match t
+                      :sort nil
+                      :category 'irs-image
+                      :state (and irs-image-preview (irs--image-state cands)))
+                   (completing-read (format "irs image %s: " query)
+                                    (mapcar #'car cands) nil t))
+               ;; consult's 'exit already tears the preview down; this also
+               ;; covers the consult-less path and a throw from anywhere
+               (irs--image-preview-hide))))
+        (when-let* ((result (assoc-default selected cands)))
+          (irs--report-selection query result)
+          ;; the file IS the hit — no line to jump to, so just open it
+          (find-file (alist-get 'path result)))))))
+
+;;;###autoload
+(defun irs-search-images (query)
+  "Find corpus images that depict QUERY, via CLIP.
+Not filename, caption or OCR matching: the query and the pixels are
+encoded into one shared space, so \"a photo of a cat\" can find an
+untitled, untagged, text-free photograph.
+
+Read the scores.  There is no relevance floor — cosine ranks rather than
+filters, so a query with no answer still returns confidently ordered
+pictures.  See `irs-image-strong-score'.
+
+Needs `irs-embed-images' to have run."
+  (interactive (list (read-string "irs image: " nil 'irs-search-history)))
+  (irs--run-search "/v1/search/images" query #'irs--present-images))
 
 ;;;; As-you-type dynamic source (consult 3.x)
 ;;

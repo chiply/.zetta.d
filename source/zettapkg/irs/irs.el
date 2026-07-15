@@ -2,7 +2,7 @@
 
 ;; Author: Charlie Holland
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "28.1") (plz "0.9"))
+;; Package-Requires: ((emacs "28.1") (plz "0.9") (consult "3.0"))
 ;; Keywords: tools, matching
 
 ;;; Commentary:
@@ -11,16 +11,23 @@
 ;; ~/source_code/information-retrieval-service (design doc:
 ;; text-search.org at the .zetta.d root).
 ;;
-;; M2 scope: server lifecycle (probe -> adopt -> spawn), status, ingest,
-;; and `irs-search' — FTS/BM25 with hierarchy-expanded results presented
-;; through `consult--read' when consult is loaded (plain
-;; `completing-read' otherwise).
+;; Two surfaces over the same endpoints:
+;;
+;; - `irs-search' (M8) — one `consult--multi' over every retriever at once.
+;;   Narrow to pick one: `l' literal (ripgrep), `f' inverted index (BM25),
+;;   `s' semantic, `h' hybrid (RRF + rerank), `i' images (CLIP, hidden by
+;;   default).  Scope with flags in the input — `--root=blog --type=org' —
+;;   which are passed to the backend rather than filtered here.  Marginalia
+;;   shows each hit's root and file type; embark expands the graph around it.
+;;
+;; - `irs-setup-gptel-tools' (M6) — the same primitives as LLM tools.
+;;
+;; Plus lifecycle (probe -> adopt -> spawn) and the pipeline commands.
 ;;
 ;; Every request is an async `plz' call; nothing here blocks the command
-;; loop.  The as-you-type dynamic consult source (custom async stage per
-;; the design doc) is deliberately deferred to a later milestone — this
-;; command reads the query first, fetches once, then completes over the
-;; returned candidates.
+;; loop.  The consult sources use a custom async stage rather than
+;; `consult--dynamic-collection', which forbids the late callbacks an HTTP
+;; response necessarily is — see "The async stage" below.
 
 ;;; Code:
 
@@ -28,6 +35,12 @@
 (require 'json)
 (require 'plz)
 (require 'subr-x)
+
+;; `marginalia--fields' / `marginalia--field' are macros, so they must be
+;; available when this file is compiled -- but they expand completely, so
+;; marginalia stays a compile-time dependency only.  Nothing here loads it:
+;; the annotator below is called by marginalia or not at all.
+(eval-when-compile (require 'marginalia nil t))
 
 (declare-function consult--read "ext:consult")
 
@@ -64,8 +77,10 @@ view of its output; see `irs-show-log'.  A server started by hand
 outside Emacs logs wherever that shell pointed it, not here."
   :type 'file)
 
-(defvar irs--live-last-input nil
-  "Most recent input the live dynamic source queried with.")
+(defvar irs--status nil
+  "Last verified /v1/status response, cached by `irs-ensure-server'.
+Holds the corpus roots (for resolving a result's root) and per-retriever
+readiness (which gates the search sources).")
 
 ;;;; HTTP plumbing (async only)
 
@@ -99,12 +114,17 @@ outside Emacs logs wherever that shell pointed it, not here."
 (defun irs-ensure-server (&optional callback)
   "Make sure an irs backend answers at `irs-base-url', then call CALLBACK.
 Adopts an already-running server after verifying the /v1/status service
-identity; only spawns a new one when nothing answers."
+identity; only spawns a new one when nothing answers.
+
+The verified response is cached in `irs--status' — every command already
+pays for this probe, so the corpus roots and retriever readiness the
+search sources need cost no second request."
   (interactive)
   (irs--get "/v1/status"
             (lambda (data)
               (if (equal (alist-get 'service data) "irs")
                   (progn
+                    (setq irs--status data)
                     (when (called-interactively-p 'interactive)
                       (message "irs: server up"))
                     (when callback (funcall callback)))
@@ -344,7 +364,7 @@ embedding can change an unrelated node's neighbour list."
 
 ;;;###autoload
 (defun irs-embed-images ()
-  "CLIP-embed corpus images, so `irs-search-images' can find them.
+  "CLIP-embed corpus images, so `irs-search' can find them under `i'.
 A second, independent vector space from `irs-embed': that one reads an
 image's extracted text (SVG labels, OCR) and cannot see a picture
 carrying no text at all, which is what this one is for.  Downloads
@@ -394,7 +414,146 @@ changed node.  Nothing here blocks Emacs."
   (interactive)
   (irs--run-pipeline irs--pipeline-stages 1 (length irs--pipeline-stages)))
 
-;;;; Search (FTS / BM25 with hierarchy-expanded results)
+;;;; Search: one consult--multi over every retriever (M8)
+;;
+;; One command, one source per retriever, narrowing to pick among them.  The
+;; per-retriever commands are gone: they were five ways to ask the same
+;; question, and the point is to ask once and see who answers.
+;;
+;; Every source is HTTP.  Exact retrieval is the one the design doc pinned as
+;; frontend-local, and M8 revised that on measurement: `rg' is 282ms of the
+;; 284ms round trip, and doing it locally would need one `rg' per root (they
+;; have different include/formats globs) plus a reimplementation of the
+;; backend's `file_selected' glob engine -- which the backend needs because
+;; rg's gitignore semantics are not the corpus glob contract.  A second glob
+;; matcher, hand-synced forever, to save 2ms.  See text-search.org, M8.
+
+(declare-function consult--multi "ext:consult")
+(declare-function consult--command-split "ext:consult")
+(declare-function consult--async-pipeline "ext:consult")
+(declare-function consult--async-min-input "ext:consult")
+(declare-function consult--async-throttle "ext:consult")
+(declare-function consult--temporary-files "ext:consult")
+(declare-function consult--jump-state "ext:consult")
+(declare-function consult--file-action "ext:consult")
+;; `marginalia--fields' expands into this; reachable only from the annotator,
+;; which only marginalia itself calls
+(declare-function marginalia--truncate "ext:marginalia")
+
+(defcustom irs-search-sources '(literal fts semantic hybrid images)
+  "Retrievers offered by `irs-search', in display order.
+Every entry gets a narrowing key whether or not it is visible by
+default; see `irs-search-hidden-sources'."
+  :type '(repeat (choice (const literal) (const fts) (const semantic)
+                         (const hybrid) (const images))))
+
+(defcustom irs-search-hidden-sources '(images)
+  "Sources hidden until narrowed to.
+A hidden source costs nothing at all: `consult--multi' puts a
+visibility predicate ahead of each source's async stage, so a source
+that is not shown never receives the input and never fires a request.
+
+`images' is hidden for a property of CLIP rather than a preference.
+Cosine ranks rather than filters, so `/search/images' has no relevance
+floor and cannot be given one -- a query with no answer still returns
+`irs-search-limit' confidently-ordered pictures.  Visible, it would
+inject that many junk images into every text search forever.  It is one
+`i' away."
+  :type '(repeat symbol))
+
+;;; Corpus metadata, from the /v1/status probe every command already pays for
+
+(defun irs--corpus ()
+  (alist-get 'corpus irs--status))
+
+(defun irs--roots ()
+  "Corpus roots as a list of (ALIAS . ABSOLUTE-PATH), longest path first.
+Longest first because roots can nest: the server prefix-matches paths to
+resolve a root, so a shorter root that prefixes a longer one would claim
+its results."
+  (sort (mapcar (lambda (r) (cons (alist-get 'alias r) (alist-get 'path r)))
+                (append (alist-get 'roots (irs--corpus)) nil))
+        (lambda (a b) (> (length (cdr a)) (length (cdr b))))))
+
+(defun irs--root-aliases ()
+  (mapcar #'car (irs--roots)))
+
+(defun irs--known-types ()
+  "Every value `--type=' accepts: adapter formats plus file extensions."
+  (append (append (alist-get 'formats (irs--corpus)) nil)
+          (append (alist-get 'extensions (irs--corpus)) nil)))
+
+(defun irs--retriever-ready-p (name)
+  "Non-nil when the backend reports retriever NAME usable.
+Gates each source's :enabled, so a source whose retriever is not ready
+simply does not appear -- better than offering a search that 503s."
+  (let ((r (alist-get (intern name) (alist-get 'retrievers irs--status))))
+    ;; absent = an older backend that predates the readiness block; assume
+    ;; usable rather than hiding a working retriever
+    (or (null r) (not (eq (alist-get 'ready r) :json-false)))))
+
+(defun irs--root-of (path)
+  "Alias of the corpus root containing PATH, or nil."
+  (when path
+    (car (seq-find (lambda (root)
+                     (string-prefix-p (file-name-as-directory (cdr root)) path))
+                   (irs--roots)))))
+
+;;; Input: query plus --root= / --type= facets
+;;
+;; Parsed with `consult--command-split' -- consult's own parser, the one
+;; consult-ripgrep/grep/find already use, so the muscle memory transfers and
+;; there is no bespoke parser to maintain.  Measured: spot's " -- " separator
+;; does NOT work here; consult reads `--' as "options end" and folds the rest
+;; back into the query.  Bare `--root=blog', options start at the first
+;; space-dash.
+
+(defconst irs--facet-regexp
+  "\\`--?\\(?:root\\|r\\)=\\(.*\\)\\'\\|\\`--?\\(?:type\\|t\\)=\\(.*\\)\\'")
+
+(defun irs--parse-input (input)
+  "Split INPUT into a plist of :query, :roots, :formats and :valid.
+
+:valid is nil when a facet names something the backend does not know.
+The source then declines to search at all, rather than firing a request
+per keystroke that 400s while `--root=b', `--root=bl', `--root=blo' are
+typed on the way to `--root=blog'."
+  (pcase-let* ((`(,query . ,opts) (consult--command-split input))
+               (roots nil) (formats nil) (valid t))
+    (dolist (opt opts)
+      (save-match-data
+        (if (not (string-match irs--facet-regexp opt))
+            (setq valid nil)          ; an unknown flag is not a query word
+          ;; Bind both groups BEFORE splitting: `split-string' matches
+          ;; internally and clobbers the match data, so reading group 1 after
+          ;; it returns nil -- which filed `--root=a,b' under formats, made
+          ;; the facet invalid, and searched nothing. Silently, and only for
+          ;; the comma form.
+          (let* ((root-val (match-string 1 opt))
+                 (type-val (match-string 2 opt))
+                 (values (split-string (or root-val type-val) "," t "[ \t]+")))
+            (if root-val
+                (setq roots (append roots values))
+              (setq formats (append formats values)))))))
+    (when (or (seq-difference roots (irs--root-aliases))
+              (seq-difference formats (irs--known-types)))
+      (setq valid nil))
+    (list :query (string-trim query) :roots roots :formats formats
+          :valid valid)))
+
+(defun irs--request-payload (parsed)
+  "Backend request body for PARSED input.
+The facets travel to the server rather than filtering here, because a
+flag filters BEFORE `limit' and a client-side filter after it: ask for
+20 hits, narrow to Org, get 3.  That is a wrong result, not a slow one."
+  (let ((roots (plist-get parsed :roots))
+        (formats (plist-get parsed :formats)))
+    `((query . ,(plist-get parsed :query))
+      (limit . ,irs-search-limit)
+      ,@(when roots `((roots . ,(vconcat roots))))
+      ,@(when formats `((formats . ,(vconcat formats)))))))
+
+;;; Rendering
 
 (defun irs--clean-snippet (snippet)
   (thread-last (or snippet "")
@@ -402,167 +561,204 @@ changed node.  Nothing here blocks Emacs."
                (replace-regexp-in-string "[ \t]+" " ")
                (string-trim)))
 
-(defun irs--uniquify (pairs)
-  "Suffix duplicate display strings in PAIRS, preserving order.
+(defun irs--uniquify (cands)
+  "Suffix duplicate display strings in CANDS, preserving order.
 Completion collapses candidates that are `equal', so two results
 rendering identically would leave one of them permanently unreachable."
   (let ((seen (make-hash-table :test #'equal)))
-    (mapcar (lambda (pair)
-              (let* ((display (car pair))
-                     (n (gethash display seen 0)))
-                (puthash display (1+ n) seen)
+    (mapcar (lambda (cand)
+              (let ((n (gethash (substring-no-properties cand) seen 0)))
+                (puthash (substring-no-properties cand) (1+ n) seen)
                 (if (> n 0)
-                    (cons (format "%s (%d)" display (1+ n)) (cdr pair))
-                  pair)))
-            pairs)))
+                    (concat cand (propertize (format " (%d)" (1+ n))
+                                             'face 'shadow))
+                  cand)))
+            cands)))
 
-(defun irs--candidates (results)
-  "Build an alist of (display-string . result-alist), deduping displays."
-  (irs--uniquify
-   (mapcar (lambda (result)
-             (let* ((trail (append (alist-get 'heading_trail result) nil))
-                    (head (if trail (string-join trail " › ")
-                            (file-name-nondirectory
-                             (or (alist-get 'path result) "?"))))
-                    (snippet (irs--clean-snippet (alist-get 'snippet result))))
-               (cons (concat (propertize head 'face 'bold)
-                             (and (not (string-empty-p snippet)) "  ")
-                             snippet)
-                     result)))
-           (append results nil))))
-
-(defun irs--visit (result)
-  "Open RESULT's file and move point near the hit, best effort."
-  (find-file (alist-get 'path result))
-  (goto-char (point-min))
-  (let ((trail (append (alist-get 'heading_trail result) nil))
-        (snippet (or (alist-get 'snippet result) "")))
-    ;; trail is document -> ... -> parent; the document title isn't in the
-    ;; buffer text, so search for the innermost heading only.
-    (when (> (length trail) 1)
-      (let ((heading (car (last trail))))
-        (when (and (stringp heading) (not (string-empty-p heading)))
-          (search-forward heading nil t))))
-    ;; then the first FTS-highlighted term, if any
-    (when (string-match "«\\([^»]+\\)»" snippet)
-      (search-forward (match-string 1 snippet) nil t))
-    (when (fboundp 'org-fold-show-context)
-      (ignore-errors (org-fold-show-context)))))
-
-(defun irs--present (query data)
-  "Complete over DATA's results for QUERY and jump to the selection."
-  (let* ((results (alist-get 'results data))
-         (mode (alist-get 'match_mode data))
-         (cands (irs--candidates results)))
+(defun irs--result-label (result)
+  "Headline for RESULT: its heading trail, else its file name."
+  (let ((trail (append (alist-get 'heading_trail result) nil)))
     (cond
-     ((null cands)
-      (message "irs: no results for %S" query))
-     (t
-      (when (equal mode "or")
-        (message "irs: no strict match — showing any-term results"))
-      (let* ((prompt (format "irs %s(%d): " query (length cands)))
-             (display
-              (if (fboundp 'consult--read)
-                  (consult--read (mapcar #'car cands)
-                                 :prompt prompt
-                                 :require-match t
-                                 :sort nil
-                                 :category 'irs-result)
-                (completing-read prompt (mapcar #'car cands) nil t))))
-        (when-let* ((result (assoc-default display cands)))
-          (irs--report-selection query result)
-          (irs--visit result)))))))
+     (trail (string-join trail " › "))
+     ((not (string-empty-p (or (alist-get 'title result) ""))) (alist-get 'title result))
+     (t (file-name-nondirectory (or (alist-get 'path result) "?"))))))
 
-(defun irs--report-selection (query result)
-  "Fire-and-forget: tell the backend which RESULT was picked for QUERY.
-Selections are a noise-free relevance signal (design doc: usage-feedback
-boosting); errors are silently ignored."
-  (ignore-errors
-    (irs--post "/v1/feedback/selection"
-               `((query . ,query)
-                 (node_id . ,(alist-get 'node_id result))
-                 (stable_key . ,(alist-get 'stable_key result))
-                 (retriever . ,(alist-get 'retriever result)))
-               #'ignore #'ignore)))
+(defun irs--candidate (result)
+  "One propertized candidate string for RESULT.
 
-(defun irs--run-search (endpoint query &optional present)
-  "Search ENDPOINT for QUERY and hand the response to PRESENT.
-PRESENT defaults to `irs--present'; it is called with QUERY and the
-decoded response."
-  (when (string-empty-p (string-trim query))
-    (user-error "irs: empty query"))
-  (irs-ensure-server
-   (lambda ()
-     (irs--post endpoint
-                `((query . ,query) (limit . ,irs-search-limit))
-                (lambda (data)
-                  ;; don't open the minibuffer from inside a plz callback
-                  (run-at-time 0 nil (or present #'irs--present) query data))))))
+A propertized string, not a (display . data) pair: `consult--multi'
+passes the pair's cdr through as the candidate datum, and embark needs a
+string for its target.  Spot's pattern, and the reason it works."
+  (let* ((label (irs--result-label result))
+         (line (alist-get 'line result))
+         (snippet (irs--clean-snippet (alist-get 'snippet result)))
+         ;; a text-free image has no body and the backend falls back to the
+         ;; title for its snippet -- don't render the same string twice
+         (snippet (if (string= snippet label) "" snippet)))
+    (propertize
+     (concat (propertize label 'face 'bold)
+             (when line (propertize (format ":%d" line) 'face 'shadow))
+             (unless (string-empty-p snippet) (concat "  " snippet)))
+     'irs-result result)))
 
-;;;###autoload
-(defun irs-search (query)
-  "Search the corpus lexically (BM25) via the irs backend."
-  (interactive (list (read-string "irs search: " nil 'irs-search-history)))
-  (irs--run-search "/v1/search/fts" query))
+(defun irs--candidates (data)
+  (irs--uniquify (mapcar #'irs--candidate (append (alist-get 'results data) nil))))
 
-;;;###autoload
-(defun irs-search-semantic (query)
-  "Search the corpus by meaning (embeddings) via the irs backend."
-  (interactive (list (read-string "irs semantic: " nil 'irs-search-history)))
-  (irs--run-search "/v1/search/semantic" query))
-
-;;;###autoload
-(defun irs-search-hybrid (query)
-  "Search the corpus with RRF fusion + rerank — the flagship retriever."
-  (interactive (list (read-string "irs hybrid: " nil 'irs-search-history)))
-  (irs--run-search "/v1/search/hybrid" query))
-
-;;;; Image search (M7c: CLIP, text -> pixels)
+;;; Image candidates: the score leads, because it IS most of the answer
 ;;
-;; This retriever has no relevance floor and cannot be given one: cosine ranks
-;; rather than filters, so a query with no answer in the corpus still returns
-;; `irs-search-limit' pictures in confident order.  CLIP scores are compressed
-;; too — a strong match is ~0.33, not ~0.9.  So the score is not decoration
-;; here, it is most of the answer, and the backend reports it raw precisely so
-;; the caller can show it.  Hence: scores lead every line, and the preview lets
-;; the eye settle what the number only hints at.
+;; CLIP has no relevance floor and its scores are compressed (a strong match is
+;; ~0.33, not ~0.9), so the number is not decoration here -- it is how you tell
+;; "found it" from "you are reading the top of the noise".
 
 (defcustom irs-image-strong-score 0.28
   "Cosine at which a CLIP image hit starts to look like a real match.
-A display hint for `irs-search-images': at or above this a score is
-highlighted, below it dimmed.  Measured on this corpus, ~0.33 meant
-\"found it\" and ~0.24 meant \"no such picture exists — you are reading
-the top of the noise\".  The backend imposes no floor of its own."
+A display hint: at or above this a score is highlighted, below it
+dimmed.  Measured on this corpus, ~0.33 meant \"found it\" and ~0.24
+meant \"no such picture exists\".  The backend imposes no floor of its
+own."
   :type 'number)
 
+(defun irs--image-candidate (result)
+  (let* ((score (or (alist-get 'score result) 0))
+         (title (or (alist-get 'title result)
+                    (file-name-nondirectory (or (alist-get 'path result) "?"))))
+         (text (irs--clean-snippet (alist-get 'snippet result)))
+         (text (if (string= text title) "" text)))
+    (propertize
+     (concat (propertize (format "%5.2f  " score)
+                         'face (if (>= score irs-image-strong-score)
+                                   'success 'shadow))
+             (propertize title 'face 'bold)
+             (unless (string-empty-p text)
+               (concat "  " (propertize text 'face 'shadow))))
+     'irs-result result)))
+
+(defun irs--image-candidates (data)
+  (irs--uniquify (mapcar #'irs--image-candidate
+                         (append (alist-get 'results data) nil))))
+
+;;; The async stage
+;;
+;; `consult--async-dynamic' runs its compute function inside `while-no-input'
+;; and errors if the callback fires after it returns ("Callback called too
+;; late", consult.el).  The M7-era live source worked around that by pumping
+;; `accept-process-output' until the response landed -- tolerable for one
+;; source, wrong for five: each keystroke would serialise four blocking pumps,
+;; the slowest being hybrid's cross-encoder.
+;;
+;; So bypass it and implement the async protocol directly.  The sink itself has
+;; no late-callback rule; only `consult--async-dynamic' does.  Modelled on
+;; `consult--async-process', including its deferred flush.
+
+(defun irs--async-kill (proc)
+  "Kill an in-flight plz PROC, so an abandoned request leaks no curl."
+  (when (and (processp proc) (process-live-p proc))
+    (delete-process proc)))
+
+(defun irs--async-search (endpoint format-fn)
+  "Async function querying ENDPOINT as the input changes.
+FORMAT-FN renders a decoded response into candidate strings."
+  (lambda (sink)
+    (let (proc last-input)
+      (lambda (action)
+        (pcase action
+          ((pred stringp)
+           (funcall sink action)
+           (unless (equal action last-input)
+             (setq last-input action)
+             (irs--async-kill proc)
+             (setq proc nil)
+             (let ((parsed (irs--parse-input action)))
+               (if (or (not (plist-get parsed :valid))
+                       (string-empty-p (plist-get parsed :query)))
+                   ;; nothing answerable: clear rather than leave stale hits
+                   (progn (funcall sink 'flush)
+                          (funcall sink [indicator finished]))
+                 ;; Deferred flush, as in `consult--async-process': hold the
+                 ;; old candidates until the new ones land, so the list does
+                 ;; not blink to empty on every keystroke.
+                 (let ((flush t) (input action))
+                   (funcall sink [indicator running])
+                   (setq proc
+                         (irs--post
+                          endpoint (irs--request-payload parsed)
+                          (lambda (data)
+                            ;; Stale guard.  Five sources answer at wildly
+                            ;; different latencies (1ms fts vs 190ms hybrid),
+                            ;; so a slower earlier request outliving a newer
+                            ;; one is the normal case, not the edge case.
+                            (when (equal input last-input)
+                              (when flush (setq flush nil) (funcall sink 'flush))
+                              (funcall sink (funcall format-fn data))
+                              (funcall sink [indicator finished])))
+                          (lambda (_err)
+                            (when (equal input last-input)
+                              (when flush (setq flush nil) (funcall sink 'flush))
+                              (funcall sink [indicator failed])))))))))
+           nil)
+          ((or 'cancel 'destroy)
+           (irs--async-kill proc)
+           (setq proc nil last-input nil)
+           (funcall sink action))
+          (_ (funcall sink action)))))))
+
+(defun irs--source-async (endpoint &optional format-fn)
+  (consult--async-pipeline
+   (consult--async-min-input 2)
+   (consult--async-throttle 0.3 0.2)
+   (irs--async-search endpoint (or format-fn #'irs--candidates))))
+
+;;; Preview and visiting
+
+(defun irs--seek (result)
+  "Move point to RESULT's hit in the current buffer, best effort."
+  (goto-char (point-min))
+  (let ((line (alist-get 'line result))
+        (trail (append (alist-get 'heading_trail result) nil))
+        (snippet (or (alist-get 'snippet result) "")))
+    (cond
+     ;; only /search/exact carries a line, and it is exact
+     (line (forward-line (1- line)))
+     (t
+      ;; trail is document -> ... -> parent; the document title is not in the
+      ;; buffer text, so seek the innermost heading only
+      (when (> (length trail) 1)
+        (let ((heading (car (last trail))))
+          (when (and (stringp heading) (not (string-empty-p heading)))
+            (search-forward heading nil t))))
+      ;; then the first FTS-highlighted term, if any
+      (when (string-match "«\\([^»]+\\)»" snippet)
+        (search-forward (match-string 1 snippet) nil t))))))
+
+(defun irs--position (cand &optional find-file)
+  "Marker for CAND's hit, opening its file with FIND-FILE."
+  (when-let* ((result (get-text-property 0 'irs-result cand))
+              (path (alist-get 'path result))
+              ((file-readable-p path))
+              (buffer (funcall (or find-file #'consult--file-action) path))
+              ((buffer-live-p buffer)))
+    (with-current-buffer buffer
+      (save-excursion
+        (without-restriction
+          (ignore-errors (irs--seek result))
+          (point-marker))))))
+
+(defun irs--state ()
+  "Consult state previewing the file under point."
+  (let ((open (consult--temporary-files))
+        (jump (consult--jump-state)))
+    (lambda (action cand)
+      (unless cand (funcall open))      ; release the preview buffers
+      (funcall jump action
+               (irs--position cand (and (not (eq action 'return)) open))))))
+
+;;; Image preview: a side window, because the eye settles what the score hints
+
 (defcustom irs-image-preview t
-  "Whether `irs-search-images' previews the image under point."
+  "Whether the images source previews the picture under point."
   :type 'boolean)
 
 (defconst irs--image-preview-buffer " *irs-image*")
-
-(defun irs--image-candidates (results)
-  "Build an alist of (display-string . result-alist) for image RESULTS."
-  (irs--uniquify
-   (mapcar
-    (lambda (result)
-      (let* ((score (or (alist-get 'score result) 0))
-             (title (or (alist-get 'title result)
-                        (file-name-nondirectory
-                         (or (alist-get 'path result) "?"))))
-             (text (irs--clean-snippet (alist-get 'snippet result)))
-             ;; a text-free image has no body, and the backend falls back to
-             ;; the title for its snippet — don't render the same string twice
-             (text (if (string= text title) "" text)))
-        (cons (concat (propertize (format "%5.2f  " score)
-                                  'face (if (>= score irs-image-strong-score)
-                                            'success
-                                          'shadow))
-                      (propertize title 'face 'bold)
-                      (unless (string-empty-p text)
-                        (concat "  " (propertize text 'face 'shadow))))
-              result)))
-    (append results nil))))
 
 (defun irs--image-preview-show (path)
   "Display the image at PATH in a side window, scaled to fit."
@@ -581,8 +777,7 @@ the top of the noise\".  The backend imposes no floor of its own."
                                  (file-name-nondirectory path)
                                  (error-message-string err)))))))
     (display-buffer buffer '(display-buffer-in-side-window
-                             (side . right)
-                             (window-width . 0.5)
+                             (side . right) (window-width . 0.5)
                              (dedicated . t)))))
 
 (defun irs--image-preview-hide ()
@@ -591,136 +786,359 @@ the top of the noise\".  The backend imposes no floor of its own."
       (ignore-errors (delete-window window)))
     (kill-buffer buffer)))
 
-(defun irs--image-state (cands)
-  "Return a consult state function previewing the image for CANDS."
-  (lambda (action candidate)
+(defun irs--image-state ()
+  (lambda (action cand)
     (pcase action
       ('preview
-       (let ((path (alist-get 'path (assoc-default candidate cands))))
-         (if (and path (file-readable-p path))
+       (let ((path (and cand (alist-get 'path (get-text-property
+                                               0 'irs-result cand)))))
+         (if (and path irs-image-preview (file-readable-p path))
              (irs--image-preview-show path)
            (irs--image-preview-hide))))
-      ('exit (irs--image-preview-hide)))))
+      ((or 'exit 'return) (irs--image-preview-hide)))))
 
-(defun irs--diagnose-images (query)
-  "Explain an empty image result for QUERY.
-Cosine never filters, so a working search returns pictures however poor
-the match: empty means there were no vectors to rank at all.  That is a
-readiness problem, and reporting it as \"no results\" would read as a
-statement about the corpus instead of about the index."
-  (irs--get
-   "/v1/status"
-   (lambda (data)
-     (let* ((clip (alist-get 'clip data))
-            (images (or (alist-get 'images clip) 0))
-            (vectors (or (alist-get 'vectors clip) 0))
-            (load-error (alist-get 'load_error clip)))
-       (message
-        "%s"
-        (cond
-         (load-error (format "irs: CLIP failed to load — %s" load-error))
-         ((eq (alist-get 'available clip) :json-false)
-          "irs: CLIP unavailable — the backend needs pillow and sentence-transformers")
-         ((zerop images)
-          "irs: no images ingested — add an image root to config.toml, then M-x irs-ingest")
-         ((zerop vectors)
-          (format "irs: %s images, no CLIP vectors — run M-x irs-embed-images"
-                  images))
-         (t (format "irs: no image results for %S" query))))))))
+;;; Sources
 
-(defun irs--present-images (query data)
-  "Complete over DATA's image results for QUERY and open the selection."
-  (let ((cands (irs--image-candidates (alist-get 'results data))))
-    (if (null cands)
-        (irs--diagnose-images query)
-      (let ((selected
-             (unwind-protect
-                 (if (fboundp 'consult--read)
-                     (consult--read
-                      (mapcar #'car cands)
-                      :prompt (format "irs image %s(%d): " query (length cands))
-                      :require-match t
-                      :sort nil
-                      :category 'irs-image
-                      :state (and irs-image-preview (irs--image-state cands)))
-                   (completing-read (format "irs image %s: " query)
-                                    (mapcar #'car cands) nil t))
-               ;; consult's 'exit already tears the preview down; this also
-               ;; covers the consult-less path and a throw from anywhere
-               (irs--image-preview-hide))))
-        (when-let* ((result (assoc-default selected cands)))
-          (irs--report-selection query result)
-          ;; the file IS the hit — no line to jump to, so just open it
-          (find-file (alist-get 'path result)))))))
+(defvar irs--history-literal nil)
+(defvar irs--history-fts nil)
+(defvar irs--history-semantic nil)
+(defvar irs--history-hybrid nil)
+(defvar irs--history-images nil)
 
-;;;###autoload
-(defun irs-search-images (query)
-  "Find corpus images that depict QUERY, via CLIP.
-Not filename, caption or OCR matching: the query and the pixels are
-encoded into one shared space, so \"a photo of a cat\" can find an
-untitled, untagged, text-free photograph.
+(defun irs--source (key)
+  "Build the consult source plist for KEY."
+  (pcase-let ((`(,name ,narrow ,endpoint ,retriever ,history ,format-fn ,state)
+               (pcase key
+                 ('literal  (list "Literal (rg)" ?l "/v1/search/exact" "exact"
+                                  'irs--history-literal nil #'irs--state))
+                 ('fts      (list "Index (BM25)" ?f "/v1/search/fts" "fts"
+                                  'irs--history-fts nil #'irs--state))
+                 ('semantic (list "Semantic" ?s "/v1/search/semantic" "semantic"
+                                  'irs--history-semantic nil #'irs--state))
+                 ('hybrid   (list "Hybrid (RRF+rerank)" ?h "/v1/search/hybrid"
+                                  "hybrid" 'irs--history-hybrid nil #'irs--state))
+                 ('images   (list "Images (CLIP)" ?i "/v1/search/images" "images"
+                                  'irs--history-images #'irs--image-candidates
+                                  #'irs--image-state)))))
+    `(:name ,name
+      :narrow ,narrow
+      :category irs-result
+      :history ,history
+      :async ,(irs--source-async endpoint format-fn)
+      :state ,state
+      :hidden ,(and (memq key irs-search-hidden-sources) t)
+      :enabled ,(lambda () (irs--retriever-ready-p retriever))
+      ;; not a consult field; read back by `irs--report-selection'
+      :irs-retriever ,retriever)))
 
-Read the scores.  There is no relevance floor — cosine ranks rather than
-filters, so a query with no answer still returns confidently ordered
-pictures.  See `irs-image-strong-score'.
+;;; Feedback
 
-Needs `irs-embed-images' to have run."
-  (interactive (list (read-string "irs image: " nil 'irs-search-history)))
-  (irs--run-search "/v1/search/images" query #'irs--present-images))
+(defun irs--report-selection (query result retriever)
+  "Fire-and-forget: tell the backend which RESULT was picked for QUERY.
+Selections are a noise-free relevance signal (design doc: usage-feedback
+boosting); errors are silently ignored."
+  (when (alist-get 'node_id result)
+    (ignore-errors
+      (irs--post "/v1/feedback/selection"
+                 `((query . ,query)
+                   (node_id . ,(alist-get 'node_id result))
+                   (stable_key . ,(alist-get 'stable_key result))
+                   (retriever . ,(or (alist-get 'retriever result) retriever)))
+                 #'ignore #'ignore))))
 
-;;;; As-you-type dynamic source (consult 3.x)
-;;
-;; The contract (consult--async-dynamic): the compute function runs inside
-;; while-no-input and its callback MUST fire before it returns.  So: start
-;; the async plz request, pump accept-process-output until the response
-;; lands (a keystroke aborts the pump), and unwind-protect kills the curl
-;; process so an abandoned request never leaks.
+;;; The command
 
-(declare-function consult--dynamic-collection "ext:consult")
-(declare-function consult--lookup-member "ext:consult")
-
-(defun irs--live-compute (endpoint)
-  "Interruptible compute function for `consult--dynamic-collection'."
-  (lambda (input callback)
-    (setq irs--live-last-input input)
-    (let* ((done nil) (response nil)
-           (proc (irs--post endpoint
-                            `((query . ,input) (limit . ,irs-search-limit))
-                            (lambda (data) (setq response data done t))
-                            (lambda (_err) (setq done t)))))
-      (unwind-protect
-          (while (not done)
-            (accept-process-output nil 0.05))
-        (when (and (processp proc) (process-live-p proc))
-          (delete-process proc)))
-      (when response
-        (funcall callback
-                 (mapcar (lambda (pair)
-                           (propertize (car pair) 'irs-result (cdr pair)))
-                         (irs--candidates (alist-get 'results response))))))))
+(defvar irs--search-history nil)
 
 ;;;###autoload
-(defun irs-search-live ()
-  "As-you-type hybrid search over the corpus (dynamic consult source)."
+(defun irs-search (&optional initial)
+  "Search the corpus through every retriever at once.
+
+Narrow to pick one: \\<consult-narrow-map>`l' literal (ripgrep), `f'
+inverted index (BM25), `s' semantic (embeddings), `h' hybrid (RRF +
+cross-encoder rerank), `i' images (CLIP).  Narrowing is not just a view
+filter -- a source that is not shown never fires its request.
+
+Scope with flags in the input, which are passed to the backend:
+
+  svg rendering --root=blog --type=org
+  kubernetes deploy --root=logseq,zetta
+
+`--root=' takes a corpus root alias, `--type=' an adapter format (org,
+md, pdf, code, image...) or a file extension (svg, webp, el).  Both are
+validated against the backend, so a typo searches nothing rather than
+quietly returning nothing.  Repeat or comma-separate to widen.
+
+INITIAL is the starting input."
   (interactive)
-  (unless (fboundp 'consult--read)
-    (user-error "irs: the live source needs consult"))
-  (irs-ensure-server (lambda () (run-at-time 0 nil #'irs--live-read))))
+  (unless (fboundp 'consult--multi)
+    (user-error "irs: irs-search needs consult"))
+  (irs-ensure-server
+   (lambda ()
+     ;; never open the minibuffer from inside a plz callback
+     (run-at-time 0 nil #'irs--search-read initial))))
 
-(defun irs--live-read ()
-  (let ((selected
-         (consult--read
-          (consult--dynamic-collection (irs--live-compute "/v1/search/hybrid")
-            :min-input 2 :throttle 0.3 :debounce 0.2)
-          :prompt "irs live: "
-          :require-match t
-          :sort nil
-          :category 'irs-result
-          :lookup #'consult--lookup-member)))
-    (when-let* ((result (and selected
-                             (get-text-property 0 'irs-result selected))))
-      (irs--report-selection (or irs--live-last-input "") result)
-      (irs--visit result))))
+(defun irs--search-read (initial)
+  (pcase-let ((`(,cand . ,src)
+               (consult--multi (mapcar #'irs--source irs-search-sources)
+                               :prompt "irs: "
+                               :require-match t
+                               :sort nil
+                               :initial initial
+                               :history '(:input irs--search-history))))
+    (when-let* (((plist-get src :match))
+                (result (get-text-property 0 'irs-result cand))
+                (query (plist-get (irs--parse-input (or (car irs--search-history) ""))
+                                  :query)))
+      (irs--report-selection query result (plist-get src :irs-retriever))
+      (when-let* ((path (alist-get 'path result)))
+        (if (eq (alist-get 'kind result) 'image)
+            (find-file path)          ; the file IS the hit; no line to seek
+          (find-file path)
+          (irs--seek result)
+          (when (fboundp 'org-fold-show-context)
+            (ignore-errors (org-fold-show-context))))))))
+
+;;; Marginalia: which root, which type
+;;
+;; Neither facet is on the search response as such: `format' is (M8 added it),
+;; but the root is not stored anywhere -- it is resolved by prefix-matching the
+;; path against the corpus roots, which also works for the concept/source nodes
+;; that have no root at all.
+;;
+;; Registered against the `irs-result' category and reached THROUGH
+;; consult--multi by `marginalia-annotate-multi-category', which dispatches on
+;; the multi-category text property to the inner category's annotator.
+
+(defvar marginalia-annotators)
+
+(defface irs-marginalia-root '((t :inherit marginalia-type))
+  "Face for the corpus root field.")
+
+(defface irs-marginalia-type '((t :inherit marginalia-value))
+  "Face for the file-type field.")
+
+(defface irs-marginalia-kind '((t :inherit marginalia-modified))
+  "Face for the node-kind field.")
+
+(defface irs-marginalia-score '((t :inherit marginalia-number))
+  "Face for the score field.")
+
+(defun irs--annotate-result (cand)
+  "Annotate CAND with its root, file type, node kind and score."
+  (when-let* ((result (get-text-property 0 'irs-result cand)))
+    (let* ((path (alist-get 'path result))
+           (score (alist-get 'score result)))
+      (marginalia--fields
+       ((or (irs--root-of path)
+            ;; concept/source nodes are synthesised at graph-build time and
+            ;; belong to no root and no file
+            (if (memq (alist-get 'kind result) '(concept source)) "—" "?"))
+        :truncate 10 :face 'irs-marginalia-root)
+       ((or (alist-get 'format result)
+            (and path (file-name-extension path))
+            "—")
+        :truncate 10 :face 'irs-marginalia-type)
+       ((format "%s" (or (alist-get 'kind result) "—"))
+        :truncate 10 :face 'irs-marginalia-kind)
+       ;; /search/exact has no retriever-native score; scales are not
+       ;; comparable across retrievers anyway, so this reads within a group
+       ((if score (format "%.2f" score) "")
+        :truncate 6 :face 'irs-marginalia-score)))))
+
+(defconst irs--marginalia-annotators
+  '((irs-result irs--annotate-result builtin none)))
+
+(with-eval-after-load 'marginalia
+  (dolist (entry irs--marginalia-annotators)
+    (add-to-list 'marginalia-annotators entry)))
+
+;;; Embark: the graph is an action, not a source
+;;
+;; Retrieval finds the seed; the graph answers "now that I found something
+;; relevant, what else should come with it?" (design doc, Guiding principle).
+;; That is an action ON a result, not another list to search -- so the
+;; structural layer lives here rather than as a sixth consult source.
+
+(defvar embark-keymap-alist)
+(defvar embark-general-map)
+
+(defun irs--target (item)
+  (or (get-text-property 0 'irs-result item)
+      (user-error "irs: no result data on this candidate")))
+
+(defun irs--node-id (item)
+  (or (alist-get 'node_id (irs--target item))
+      ;; /search/exact resolves nodes best-effort by path containment, so a
+      ;; file the index has never seen still matches literally and carries no
+      ;; node at all.  Every graph action needs one.
+      (user-error "irs: this hit resolves to no indexed node — nothing to expand")))
+
+(defun irs--present (buffer-name lines)
+  (let ((buffer (get-buffer-create buffer-name)))
+    (with-current-buffer buffer
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (string-join lines "\n"))
+        (goto-char (point-min))
+        (special-mode)))
+    (display-buffer buffer)))
+
+(defun irs--brief (node)
+  "One line for NODE, from any of the endpoint shapes."
+  (format "  %-9s %s%s"
+          (or (alist-get 'kind node) "?")
+          (or (let ((title (alist-get 'title node)))
+                (and title (not (string-empty-p title)) title))
+              (when-let* ((p (alist-get 'path node)))
+                (file-name-nondirectory p))
+              "—")
+          (let ((path (alist-get 'path node)))
+            (if-let* ((root (irs--root-of path)))
+                (format "   [%s]" root) ""))))
+
+(defun irs-action-show-data (item)
+  "Display ITEM's raw result alist."
+  (interactive "s")
+  (irs--present "*irs-result*" (list (pp-to-string (irs--target item)))))
+
+(defun irs-action-open (item)
+  "Open ITEM's file."
+  (interactive "s")
+  (let ((result (irs--target item)))
+    (if-let* ((path (alist-get 'path result)))
+        (progn (find-file path) (irs--seek result))
+      (user-error "irs: this node has no file"))))
+
+(defun irs--neighbor-rows (data id)
+  "Group DATA's edges around node ID into an alist of (KIND . LINES).
+
+The response is an adjacency map plus a flat edge list —
+{nodes: {\"<id>\": node}, edges: [{from_id, to_id, kind, …}]} — not
+grouped by kind, and `nodes' is keyed by the id as a STRING, so
+`json-read' turns it into symbols.
+
+Hierarchy edges arrive with `virtual: t': they are computed from
+parent_id/ordinal at read time and never stored, because two copies of
+one fact diverge on re-chunk (design doc, Part 2)."
+  (let ((nodes (alist-get 'nodes data))
+        (seen (make-hash-table :test #'equal))
+        (groups nil))
+    (dolist (edge (append (alist-get 'edges data) nil))
+      (let* ((from (alist-get 'from_id edge))
+             (to (alist-get 'to_id edge))
+             (outp (equal from id))
+             (other (if outp to from))
+             (kind (format "%s" (alist-get 'kind edge)))
+             (key (cons kind other)))
+        ;; k-NN writes SIMILAR_TO reciprocally (A->B and B->A both exist), so
+        ;; without this every semantic neighbour is listed twice
+        (unless (gethash key seen)
+          (puthash key t seen)
+          (when-let* ((node (alist-get (intern (number-to-string other)) nodes)))
+            (let ((row (concat (if outp "→" "←")
+                               (irs--brief node)
+                               (when-let* ((w (alist-get 'weight edge)))
+                                 (propertize (format "  %.2f" w) 'face 'shadow))
+                               (when (eq (alist-get 'virtual edge) t)
+                                 (propertize "  (hierarchy)" 'face 'shadow)))))
+              (if-let* ((group (assoc kind groups)))
+                  (setcdr group (cons row (cdr group)))
+                (push (cons kind (list row)) groups)))))))
+    (mapcar (lambda (g) (cons (car g) (nreverse (cdr g))))
+            (nreverse groups))))
+
+(defun irs-action-neighbors (item)
+  "Show ITEM's typed graph edges: LINKS_TO, MENTIONS, SIMILAR_TO, …"
+  (interactive "s")
+  (let ((id (irs--node-id item)))
+    (irs--post
+     "/v1/graph/neighbors" `((node_ids . ,(vector id)))
+     (lambda (data)
+       (let ((groups (irs--neighbor-rows data id)))
+         (if (null groups)
+             (message "irs: no graph edges on node %s — has irs-graph run?" id)
+           (irs--present
+            "*irs-neighbors*"
+            (mapcan (lambda (group)
+                      (append (list (propertize (car group) 'face 'bold))
+                              (cdr group) (list "")))
+                    groups))))))))
+
+(defun irs-action-expand (item)
+  "Expand context around ITEM — the flagship: seeds → graph → rerank."
+  (interactive "s")
+  (let* ((id (irs--node-id item))
+         (query (read-string "irs expand (query for reranking): "
+                            (irs--result-label (irs--target item)))))
+    (message "irs: expanding around node %s…" id)
+    (irs--post
+     "/v1/context/expand"
+     `((query . ,query) (seeds . ,(vector id)))
+     (lambda (data)
+       ;; NOTE: /context/expand returns `id', not `node_id', and carries no
+       ;; snippet, heading_trail, retriever or line.  It is the one endpoint
+       ;; whose shape differs, so it gets its own formatter rather than
+       ;; silently rendering blank rows through the search one.
+       (let ((results (append (alist-get 'results data) nil)))
+         (if (null results)
+             (message "irs: nothing to expand to from node %s" id)
+           (irs--present
+            "*irs-context*"
+            (append
+             (list (format "context around: %s" query)
+                   (format "seeds: %s   candidates: %s   reranked: %s"
+                           (alist-get 'seeds data)
+                           (alist-get 'candidates data)
+                           (if (eq (alist-get 'reranked data) :json-false)
+                               "no" "yes"))
+                   "")
+             (mapcar (lambda (r)
+                       (concat (irs--brief r)
+                               (when-let* ((via (alist-get 'via r)))
+                                 (propertize (format "   via %s" via)
+                                             'face 'shadow))))
+                     results)))))))))
+
+(defun irs-action-node (item)
+  "Show ITEM's node with its ancestors and children."
+  (interactive "s")
+  (let ((id (irs--node-id item)))
+    (irs--get
+     (format "/v1/nodes/%s" id)
+     (lambda (data)
+       (let* ((node (alist-get 'node data))
+              (body (or (alist-get 'body node) "")))
+         (irs--present
+          "*irs-node*"
+          (append
+           (list (format "%s  [%s]" (or (alist-get 'title node) "—")
+                         (or (alist-get 'kind node) "?"))
+                 (format "%s" (or (alist-get 'path node) "—"))
+                 "")
+           (when-let* ((parents (append (alist-get 'parents data) nil)))
+             (append '("ancestors:") (mapcar #'irs--brief parents) '("")))
+           (when-let* ((children (append (alist-get 'children data) nil)))
+             (append '("children:") (mapcar #'irs--brief children) '("")))
+           (list "body:" body))))))))
+
+;; Defined inside the eval-after-load, not beside it: `:parent' EVALUATES
+;; `embark-general-map' at load time, and this file is autoloaded by command,
+;; so it can be loaded before embark is.  Defining it at top level makes
+;; `M-x irs-search' a void-variable error in that order.
+(defvar irs-embark-result-map)
+
+(with-eval-after-load 'embark
+  (defvar-keymap irs-embark-result-map
+    :parent embark-general-map
+    :doc "Embark actions on an irs search result."
+    "n" #'irs-action-neighbors
+    "e" #'irs-action-expand
+    "d" #'irs-action-node
+    "o" #'irs-action-open
+    "s" #'irs-action-show-data)
+  (add-to-list 'embark-keymap-alist '(irs-result . irs-embark-result-map)))
+
 
 ;;;; gptel tools (M6): each retrieval primitive as a tool the LLM coordinates
 

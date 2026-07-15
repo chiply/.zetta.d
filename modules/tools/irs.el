@@ -15,16 +15,16 @@
 (use-package irs
   :ensure nil
   :load-path "source/zettapkg/irs"
-  :commands (irs-search irs-search-semantic irs-search-hybrid irs-search-live
-             irs-search-images
+  :commands (irs-search
              irs-status irs-ingest irs-embed irs-embed-images irs-graph irs-knn
              irs-pipeline irs-ensure-server irs-restart-server irs-show-log)
   :init
-  ;; hybrid is the flagship: fuses fts + semantic, then reranks; it degrades
-  ;; to fts-only when vectors aren't built yet, so it's always safe to bind
+  ;; M8: one command over every retriever — narrow with l/f/s/h/i, scope with
+  ;; `--root=blog --type=org'. The per-retriever commands are gone; they were
+  ;; five ways to ask the same question.
   (when (and (boundp 'launch-map)
              (not (lookup-key launch-map "/")))
-    (define-key launch-map "/" #'irs-search-hybrid))
+    (define-key launch-map "/" #'irs-search))
   ;; M6: the retrieval primitives as gptel tools (category "irs")
   (with-eval-after-load 'gptel
     (require 'irs)

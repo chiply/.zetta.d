@@ -1260,12 +1260,300 @@ and the graph onto a schema that already anticipates their staleness.
 | M7a   | /Images, free tiers:/ caption un-strip (#1) + SVG labels (#2) + =image= nodes + =ILLUSTRATES= (#8) | org adapter fix + image/svg adapters + =media= class |
 | M7b   | /Images, OCR (#3):/ tesseract → =nodes.body= (FTS + text embedding)            | image adapter OCR stage + =derivation_version=       |
 | M7c   | /Images, CLIP (#4):/ =clip-ViT-B-32= vectors + =/search/images=                | =/embed/images= + CLIP provider + consult source     |
+| M8    | /Emacs frontend:/ one =consult--multi= interface over every retriever          | custom async stage + sources + marginalia + embark   |
 | —     | /Post-MVP, paid:/ term/entity (#4), cluster (#6), LLM-inferred (#7); contextual retrieval; VLM captioning for text-free images; ablation harness | graph-enrichment passes     |
 
 Hierarchy (#1) lands in M0 because it's a free byproduct of parsing and the
 highest-leverage graph — it shouldn't sit behind the expensive layers. k-NN
 (#5) is separate from M5 because it depends on M3 and is a global batch
 artifact with its own staleness story (see Freshness & invalidation, Part 2).
+
+** The Emacs frontend: one unified consult interface (M8)
+
+Every retriever behind *one command* — =irs-search= — as a =consult--multi= with
+one source per retriever. The per-retriever commands (=irs-search-semantic=,
+=irs-search-hybrid=, =irs-search-images=, =irs-search-live=) are *deleted*, not
+kept as wrappers: they were five ways to ask the same question, and the whole
+point is to ask once and see who answers. Each becomes a narrowing key.
+
+Modelled on =spot= (=~/source_code/spot=, =spot-consult.el=), which reached the
+same shape without =consult-omni=. This does too — =consult-omni= is not a
+dependency. But *spot's central mechanism is deliberately not copied*; see
+"Why no cache or mutex" below.
+
+*** The sources
+
+| Key | Source              | Backed by             | Default  |
+|-----+---------------------+-----------------------+----------|
+| =l= | Literal (ripgrep)   | =/v1/search/exact=    | visible  |
+| =f= | Index (BM25)        | =/v1/search/fts=      | visible  |
+| =s= | Semantic            | =/v1/search/semantic= | visible  |
+| =h= | Hybrid (RRF+rerank) | =/v1/search/hybrid=   | visible  |
+| =i= | Images (CLIP)       | =/v1/search/images=   | *hidden* |
+
+Four text retrievers visible at once is the *feature*, not the cost: the same
+document appearing under =Index=, =Semantic= and =Hybrid= is the comparison
+this interface exists to make visible while the retrieval stack is still being
+built. Measured backend cost of one unnarrowed keystroke: fts 1ms + semantic
+53ms + hybrid 190ms (fts+semantic+fuse+rerank internally, so its legs are
+computed twice — real, and irrelevant at this scale).
+
+*Images are =:hidden= for a reason that is a property of CLIP, not a
+preference.* =/search/images= has no relevance floor and cannot be given one —
+cosine *ranks rather than filters*, so a query with no answer still returns
+=limit= confidently-ordered pictures (M7, tier 4). A visible image source would
+therefore inject ~20 junk images into *every* text search, forever. It is one
+=i= away, and narrowing is what makes that free (below).
+
+Each source's =:enabled= gates on the matching =retrievers.<name>.ready= field
+of =/v1/status= (fetched once per command, cached) — the semantic source simply
+does not appear when no embedder is configured, rather than offering a search
+that 503s.
+
+*** Narrowing gates the request — this is the cost model
+
+=consult--multi-async= puts =consult--async-predicate= *before* each source's
+async stage (=consult.el:3126=), and that predicate is
+=consult--multi-visible-p=. A narrowed-away source *never receives the input
+string*, so it never fires its request. Consequences, and they are the whole
+budget:
+
+- Narrow to =s= → exactly one HTTP request per keystroke.
+- =:hidden= sources cost *nothing at all* until narrowed to — which is what
+  makes the CLIP source's presence free.
+- Unnarrowed → four concurrent requests per debounce. Bounded by
+  =consult-async-min-input= + throttle/debounce, not by cleverness.
+
+*** Why no cache or mutex (the one place spot does not transfer)
+
+Spot's seven sources share *one* Spotify endpoint (=?type=album,artist,…=), so
+without =spot--cache= + =spot--mutex= each keystroke would fire seven
+*identical* requests; the cache means the first source pays and the other six
+read its result. That machinery exists to dedupe *duplicate* requests.
+
+Here the sources hit *different endpoints* — there are no duplicate requests to
+dedupe, so the cache and mutex have nothing to do. Emacs threads are not
+involved either (=plz= callbacks land on the command loop). Cost is controlled
+by narrowing, and staleness by the guard in the async stage. *Do not port
+=spot--search-cached-and-locked=.*
+
+*** Root and file-type: arguments, not narrowing keys
+
+Pinned: *the retriever is the narrowing axis; root and type ride in the input
+as flags* and are passed down to the backend.
+
+#+begin_example
+svg rendering --root=blog --type=org
+kubernetes deploy --root=logseq,zetta
+a photo of a cat --root=blogimg          (narrowed to i)
+#+end_example
+
+Three reasons, in order of force:
+
+1. *A flag filters before =limit=; a UI filter filters after.* =roots= (and
+   =formats=, once added) are backend request fields — the server applies them
+   inside the query and still returns =limit= rows. Filtering client-side, or
+   via a consult narrowing predicate, discards rows the server already spent
+   its limit on: ask for 20 hits, narrow to Org, get 3. That is a silently
+   wrong result, not a slow one.
+2. *Consult's narrow key is one character on one axis, and =consult--multi=
+   already owns that axis for sources.* Root × type × retriever is three
+   orthogonal facets you want to combine ("semantic, blog only, org only").
+   One key cannot carry three.
+3. *Roots are config-driven and open-ended.* Seven today; the planned photo
+   library adds an eighth with no code change. Narrow keys are a fixed
+   compile-time vocabulary; =config.toml= is not.
+
+*Syntax is =consult--command-split= (=consult.el:667=)* — consult's own parser,
+the one =consult-ripgrep= / =consult-grep= / =consult-find= already use, so the
+muscle memory transfers and there is no bespoke parser to maintain.
+
+/Measured (=emacs -Q -batch=, consult 3.4) — spot's separator does NOT work
+here:/
+
+#+begin_example
+"svg rendering --root=blog"        => ("svg rendering" "--root=blog")     ✓
+"svg rendering --root=blog --type=org"
+                                   => ("svg rendering" "--root=blog" "--type=org")  ✓
+"a-hyphenated-query"               => ("a-hyphenated-query")              ✓ safe
+"svg rendering -- --root=blog"     => ("svg rendering --root=blog")       ✗ !
+#+end_example
+
+The last line is the trap: spot hand-rolls its own =" -- "= separator
+(=spot--find-args-separator=), but =consult--command-split= treats =--= as
+"options end here" and *folds the rest back into the query*. Use bare
+=--root=…=; options begin at the first space-dash. A query needing a literal
+leading dash escapes it (=\-=), exactly as in =consult-ripgrep=.
+
+*** The literal source goes through the backend (revising Architecture)
+
+Architecture pins exact retrieval as *frontend-local* — =rg= over the working
+files is already perfect in Emacs and gains nothing from a service round trip.
+*M8 revises that, on measurement.* The literal source calls
+=/v1/search/exact=. Three findings, in order of force:
+
+1. *The round trip is ~2ms of ~284ms.* Measured on this corpus: =rg= itself
+   takes 282ms and the localhost HTTP adds 2. The thing being optimised away
+   is 0.7% of the latency. "Gains nothing from a round trip" was true; what
+   was missed is that it also /loses/ nothing.
+2. *=rg= cannot express per-root globs in one invocation,* and this corpus
+   needs them: =zetta= is =include = ["*.org"]= — and =*= does not cross =/=,
+   so *only root-level* =.org= — while =blog= is =include = ["post-*.org"]=.
+   One =rg= over all roots applies one glob set to all of them. Measured: it
+   would search *25 =.org= under =~/.zetta.d= where 4 are indexed*, and *75
+   blog =.org= where 52 are*. The literal source would surface 44 files the
+   other four sources structurally cannot, unmarked.
+3. *=rg='s globs are not the corpus contract anyway.* The backend already
+   knows this — its own note: /"rg globs only over-approximate the corpus;
+   every match is post-filtered with =ingest.file_selected= — the same
+   predicate the ingest walk uses — so the exact and indexed corpora cannot
+   diverge."/ Gitignore glob semantics differ from the =wcmatch= semantics
+   =config.toml= is written in.
+
+So an exact local =rg= needs one process *per root* /and/ a reimplementation
+of =file_selected='s glob engine in Elisp — a second glob matcher, hand-synced
+to the backend's forever, which is exactly the duplication Contracts warns
+about — to save 2ms. The backend does both already.
+
+The consequence is a simplification: *all five sources are HTTP*, so the one
+custom async stage below serves every one of them, and =--root=/=--type= mean
+the same thing everywhere by construction rather than by discipline.
+
+/=/v1/status= still publishes the corpus walk contract (=corpus.exclude=,
+per-root =formats=/=include=)./ It is no longer load-bearing for =rg=, but the
+root list is what marginalia resolves a result's root against, and publishing
+the rest keeps the option open — a frontend without a backend on localhost
+(a browser UI) may yet want it.
+
+*** The custom async stage (the thickest client piece, as budgeted)
+
+Architecture predicted this and it held: =consult--async-dynamic= runs its
+compute function inside =while-no-input= and *errors* if the callback fires
+after it returns (="Callback called too late"=, =consult.el:2262=). The M7-era
+=irs--live-compute= worked around that by pumping =accept-process-output= until
+the response landed — tolerable for one source, *quadratically wrong for five*:
+each keystroke would serialise four blocking pumps, the slowest being hybrid's
+reranker.
+
+So the HTTP sources bypass =consult--async-dynamic= and implement the async
+protocol directly — =(lambda (sink) (lambda (action) …))=. The sink itself
+imposes *no* late-callback rule; only =consult--async-dynamic= does. Therefore:
+
+- =plz= =:then= calls =(funcall sink 'flush)= → =(funcall sink cands)= →
+  =(funcall sink 'refresh)= *from the process filter*, arbitrarily late.
+- =[indicator running|finished|failed]= drives the spinner
+  (=consult--async-merge-sink= folds the five sources' indicators into one).
+- =cancel= / =destroy= kill the =plz= process object — an abandoned request
+  must never leak a =curl=.
+- A *stale-response guard* drops any response whose input is no longer the
+  current input. Five sources answering at different latencies (1ms fts vs
+  190ms hybrid) makes out-of-order arrival the normal case, not the edge case.
+
+Pipeline per source: =min-input= → =throttle= → this stage → =transform=.
+
+*** Marginalia: which root, which type
+
+Both facets the eye wants are *absent from the search response*, so:
+
+- *root* — prefix-match the result's absolute =path= against the cached
+  =corpus.roots[]= from =/v1/status=. Preferred over parsing the alias out of
+  =stable_key= (=doc:blog/…=, =chk:sec:blog/…#0=, =img:blogimg/…=): the alias
+  sits at a different depth per kind, and the literal source has *only* a path.
+  =concept= / =source= nodes have no root and no path — annotate them as such
+  rather than guessing.
+- *type* — M8 returns =format= on search results (the column exists on every
+  node; only =/v1/nodes/{id}= exposes it today). Until then, the extension off
+  =path=.
+
+Rendered with =marginalia--fields= for aligned columns, registered against
+category =irs-result=. This works *through* =consult--multi= because marginalia
+ships =marginalia-annotate-multi-category= (=marginalia.el:470=), which
+dispatches on the =multi-category= text property to the inner category's
+annotator — the same mechanism spot relies on.
+
+*** Embark: the graph is an action, not a source
+
+Retrieval finds the seed; the graph answers "what else should come with it?"
+(Guiding principle). That is an *action on a result*, not another list to
+search — so the structural layer lives in an embark keymap on =irs-result=:
+
+| Key | Action           | Endpoint                                       |
+|-----+------------------+------------------------------------------------|
+| =n= | Typed neighbours | =/v1/graph/neighbors= (LINKS_TO, MENTIONS, SIMILAR_TO, DERIVED_FROM, ILLUSTRATES + hierarchy) |
+| =e= | Expand context   | =/v1/context/expand= with =seeds=[node_id]= — the flagship |
+| =d= | Node + hierarchy | =/v1/nodes/{id}= (parents, children, body)      |
+| =o= | Open file        | —                                              |
+
+Results re-present in a fresh consult interface, so expansion composes.
+
+*Three response-shape traps, all measured — a single formatter cannot serve
+these:*
+
+1. =/v1/context/expand= returns *=id=, not =node_id=*, and carries no
+   =snippet=, =heading_trail=, =retriever= or =line=. It needs its own
+   formatter; reusing the search formatter yields blank rows.
+2. Neither =/v1/context/expand= nor =/v1/graph/neighbors= accepts =roots= —
+   so *embark actions cannot inherit =--root=* scoping*. Either thread the
+   filter into those endpoints later or accept that expansion escapes the
+   scope; do not pretend it is applied.
+3. =/v1/search/exact= has =score= *always null* and =heading_trail= always
+   =[]=, and its node-identity fields are null whenever path resolution misses
+   (it resolves only =kind='document'= by path containment). It is the one
+   source carrying a real =line=.
+
+*** What M8 needs from the backend
+
+Small, and mostly already there:
+
+- =roots= — *already exists* on fts/semantic/hybrid/exact/images. No work.
+- =formats= — *new*: mirror =roots= on the same five request models. Threads
+  into =fts.py= (*both* the strict-AND query and the OR recall fallback — miss
+  the fallback and it leaks unfiltered rows), =semantic.py=/=clip.py= (see the
+  ranking trap below), =hybrid.py= (both legs), and =exact.py= (on
+  =file_selected='s return, /not/ an =rg --glob=: rg ORs its positive globs
+  with =root.include=, so a type glob could only widen the walk).
+- =/v1/status= — expose =corpus.exclude= and per-root =formats=/=include= (for
+  the local =rg= builder), and return =format= on search results (for
+  marginalia).
+
+*=--type== takes a format OR an extension, because =format= collapses.*
+=nodes.format= is the /adapter/ format — all six image extensions land on
+=image=, =.el= and =.py= both land on =code= — and the extension is stored
+nowhere, being derivable only from =path=. That collapse is right for ingest
+(one adapter per format) and wrong for query: "only SVGs", "only elisp" are
+precisely the questions it cannot ask. So one flag accepts both vocabularies —
+a known format name matches =format=, a known extension matches the path
+suffix. They overlap only on org/md/txt/pdf, where the format reading is
+chosen and is equal-or-better (=md= catches =.markdown= too). Anything else is
+a *400, never an empty result*: a typo that matched nothing would read as an
+answer about the corpus rather than about the query.
+
+/Note =--type=svg= is useless on the =i= source and useful on =f=/=s=:/ SVG has
+no CLIP vectors at all (pillow cannot open it — M7 tier 4), so image search
+cannot see it. Its Mermaid labels are indexed text, so it is found lexically:
+=service mesh istio --type=svg= → =cloud-native-k8s.svg= (verified).
+
+*** The ranking trap the facets walk into (fixed, worth not re-introducing)
+
+Cosine ranks the /whole/ corpus and neither facet is expressible in the matrix
+product, so the tempting shape for semantic and images is: take the top
+=limit * K=, then drop what does not match. *That silently under-returns* — the
+narrower the scope, the fewer results, and asking for more makes more appear.
+Measured on the real corpus before the fix, =--type=webp= over 127 CLIP
+vectors: *0 hits at =limit=3=, 10 at =limit=20=, 16 at =limit=60=*. A result
+count that depends on =limit= is not a ranking; it is a bug wearing a sparse
+corpus as a disguise — and the frontend, which shows scores and trusts server
+order, has no way to tell.
+
+The fix is to resolve the allowed set *exactly and up front* — one indexed
+query for the matching node ids, =np.isin= to a mask, =-inf= the rest, /then/
+top-k. No over-fetch heuristic, microseconds at personal scale. This was a
+latent bug in the *pre-existing =roots= filter*, not something =formats=
+introduced; adding a second facet is what made it visible.
+
+/Remaining sharp edge, inherited:/ the =roots= filter prefix-matches the
+absolute path, so two roots where one path prefixes the other cross-match.
+Not triggered by the current seven.
 
 ** Agentic tool surface (M6)
 Expose each retrieval primitive as a gptel tool so the LLM coordinates them —

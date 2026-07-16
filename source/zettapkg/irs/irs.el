@@ -599,6 +599,29 @@ rendering identically would leave one of them permanently unreachable."
                   cand)))
             cands)))
 
+(defcustom irs-search-label-width 44
+  "Max display width of a result's heading/title on the candidate line.
+The candidate is `label  snippet'; marginalia's columns (root, type,
+kind, score) are right-aligned AFTER it, so an unbounded candidate fills
+the line and pushes the annotation off the right edge — which is exactly
+what a logseq readwise title like
+\"(highlights eww) github.com/namilus/completions-overlay-annotations\"
+does.  Bounding both parts reserves room for the annotation."
+  :type 'natnum)
+
+(defcustom irs-search-snippet-width 68
+  "Max display width of a result's snippet on the candidate line.
+See `irs-search-label-width' for why the candidate is bounded at all."
+  :type 'natnum)
+
+(defun irs--truncate (string width)
+  "STRING truncated to WIDTH display columns, ellipsised when cut.
+Counts columns, not characters, so wide glyphs and the `›' separator are
+measured as displayed; text properties (faces) are preserved."
+  (if (> (string-width string) width)
+      (truncate-string-to-width string width nil nil t)
+    string))
+
 (defun irs--result-label (result)
   "Headline for RESULT: its heading trail, else its file name."
   (let ((trail (append (alist-get 'heading_trail result) nil)))
@@ -612,17 +635,23 @@ rendering identically would leave one of them permanently unreachable."
 
 A propertized string, not a (display . data) pair: `consult--multi'
 passes the pair's cdr through as the candidate datum, and embark needs a
-string for its target.  Spot's pattern, and the reason it works."
+string for its target.  Spot's pattern, and the reason it works.
+
+Label and snippet are each bounded (`irs-search-label-width',
+`irs-search-snippet-width') so the line leaves room for the marginalia
+columns; the snippet is kept — it is the matching text — just capped."
   (let* ((label (irs--result-label result))
          (line (alist-get 'line result))
          (snippet (irs--clean-snippet (alist-get 'snippet result)))
          ;; a text-free image has no body and the backend falls back to the
-         ;; title for its snippet -- don't render the same string twice
+         ;; title for its snippet -- don't render the same string twice.
+         ;; Compare against the FULL label, before truncation.
          (snippet (if (string= snippet label) "" snippet)))
     (propertize
-     (concat (propertize label 'face 'bold)
+     (concat (propertize (irs--truncate label irs-search-label-width) 'face 'bold)
              (when line (propertize (format ":%d" line) 'face 'shadow))
-             (unless (string-empty-p snippet) (concat "  " snippet)))
+             (unless (string-empty-p snippet)
+               (concat "  " (irs--truncate snippet irs-search-snippet-width))))
      'irs-result result)))
 
 (defun irs--candidates (data)
@@ -655,9 +684,10 @@ own."
          ;; title for its snippet -- don't render the same string twice
          (text (if (string= text title) "" text)))
     (propertize
-     (concat (propertize title 'face 'bold)
+     (concat (propertize (irs--truncate title irs-search-label-width) 'face 'bold)
              (unless (string-empty-p text)
-               (concat "  " (propertize text 'face 'shadow))))
+               (concat "  " (propertize (irs--truncate text irs-search-snippet-width)
+                                        'face 'shadow))))
      'irs-result result)))
 
 (defun irs--image-candidates (data)

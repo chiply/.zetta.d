@@ -628,11 +628,16 @@ string for its target.  Spot's pattern, and the reason it works."
 (defun irs--candidates (data)
   (irs--uniquify (mapcar #'irs--candidate (append (alist-get 'results data) nil))))
 
-;;; Image candidates: the score leads, because it IS most of the answer
+;;; Image candidates
 ;;
-;; CLIP has no relevance floor and its scores are compressed (a strong match is
-;; ~0.33, not ~0.9), so the number is not decoration here -- it is how you tell
-;; "found it" from "you are reading the top of the noise".
+;; The score is NOT rendered into the line here, unlike the M7-era
+;; `irs-search-images' it replaces.  It is in the marginalia column with every
+;; other retriever's, labelled and colour-coded -- one score per result, in one
+;; place, on a scale the label names.  The M7 reasoning is unchanged and is why
+;; that column colours CLIP against `irs-image-strong-score': cosine has no
+;; relevance floor and its scores are compressed (~0.33 found, ~0.24 the top of
+;; the noise), so for this one source the number needs interpreting rather than
+;; just reading.  See `irs--score-face'.
 
 (defcustom irs-image-strong-score 0.28
   "Cosine at which a CLIP image hit starts to look like a real match.
@@ -643,16 +648,14 @@ own."
   :type 'number)
 
 (defun irs--image-candidate (result)
-  (let* ((score (or (alist-get 'score result) 0))
-         (title (or (alist-get 'title result)
+  (let* ((title (or (alist-get 'title result)
                     (file-name-nondirectory (or (alist-get 'path result) "?"))))
          (text (irs--clean-snippet (alist-get 'snippet result)))
+         ;; a text-free image has no body and the backend falls back to the
+         ;; title for its snippet -- don't render the same string twice
          (text (if (string= text title) "" text)))
     (propertize
-     (concat (propertize (format "%5.2f  " score)
-                         'face (if (>= score irs-image-strong-score)
-                                   'success 'shadow))
-             (propertize title 'face 'bold)
+     (concat (propertize title 'face 'bold)
              (unless (string-empty-p text)
                (concat "  " (propertize text 'face 'shadow))))
      'irs-result result)))
@@ -933,9 +936,11 @@ INITIAL is the starting input."
                                   :query)))
       (irs--report-selection query result (plist-get src :irs-retriever))
       (when-let* ((path (alist-get 'path result)))
-        (if (eq (alist-get 'kind result) 'image)
-            (find-file path)          ; the file IS the hit; no line to seek
-          (find-file path)
+        (find-file path)
+        ;; An image IS the hit — there is no position inside it to seek to.
+        ;; `equal', not `eq': json-read decodes JSON strings to Elisp strings,
+        ;; so (eq kind 'image) is nil for every result there has ever been.
+        (unless (equal (alist-get 'kind result) "image")
           (irs--seek result)
           (when (fboundp 'org-fold-show-context)
             (ignore-errors (org-fold-show-context))))))))
@@ -965,16 +970,56 @@ INITIAL is the starting input."
 (defface irs-marginalia-score '((t :inherit marginalia-number))
   "Face for the score field.")
 
+(defun irs--score-field (result)
+  "RESULT's score, labelled with the scale it is on.
+
+Five retrievers, five meanings for one number — measured on one query:
+bm25 26.6, cosine 0.797, cross-encoder logit 6.48, CLIP cosine 0.284,
+and exact has none at all.  Rendered bare they invite the one comparison
+that is never valid: 26.60 sitting above 0.80 reads as the better hit
+and is not (design doc, Contracts: score is retriever-native, scales are
+NOT comparable across retrievers — sort within one, or trust server
+order).  The label is what makes the column honest, and it is why the
+number is worth showing at all: within a group it ranks, across groups
+it only identifies."
+  (let ((score (alist-get 'score result))
+        (retriever (alist-get 'retriever result)))
+    (cond
+     ;; /search/exact is literal matching — it has no ranking to report
+     ((null score) "")
+     ((member retriever '("semantic" "image")) (format "cos %.2f" score))
+     ((equal retriever "fts") (format "bm25 %.1f" score))
+     ((equal retriever "hybrid")
+      (if (alist-get 'rerank_score result)
+          (format "ce %.2f" score)      ; cross-encoder logit, unbounded
+        (format "rrf %.3f" score)))     ; fusion only: reranker off/unavailable
+     (t (format "%.2f" score)))))
+
+(defun irs--score-face (result)
+  "Face for RESULT's score field.
+
+CLIP is the one retriever whose number needs interpreting rather than
+just reading: it has no relevance floor, so a query with no answer still
+returns confidently-ordered pictures, and its scores are compressed —
+measured on this corpus, ~0.33 meant \"found it\" and ~0.24 meant \"no
+such picture exists\" (M7, tier 4).  So colour it against
+`irs-image-strong-score'.  Every other retriever ranks within its own
+group, where the ordering already carries that information."
+  (if (equal (alist-get 'retriever result) "image")
+      (if (>= (or (alist-get 'score result) 0) irs-image-strong-score)
+          'success 'shadow)
+    'irs-marginalia-score))
+
 (defun irs--annotate-result (cand)
   "Annotate CAND with its root, file type, node kind and score."
   (when-let* ((result (get-text-property 0 'irs-result cand)))
-    (let* ((path (alist-get 'path result))
-           (score (alist-get 'score result)))
+    (let ((path (alist-get 'path result)))
       (marginalia--fields
        ((or (irs--root-of path)
             ;; concept/source nodes are synthesised at graph-build time and
-            ;; belong to no root and no file
-            (if (memq (alist-get 'kind result) '(concept source)) "—" "?"))
+            ;; belong to no root and no file.  `member', not `memq': json-read
+            ;; gives strings, so the symbol test never once matched.
+            (if (member (alist-get 'kind result) '("concept" "source")) "—" "?"))
         :truncate 10 :face 'irs-marginalia-root)
        ((or (alist-get 'format result)
             (and path (file-name-extension path))
@@ -982,10 +1027,10 @@ INITIAL is the starting input."
         :truncate 10 :face 'irs-marginalia-type)
        ((format "%s" (or (alist-get 'kind result) "—"))
         :truncate 10 :face 'irs-marginalia-kind)
-       ;; /search/exact has no retriever-native score; scales are not
-       ;; comparable across retrievers anyway, so this reads within a group
-       ((if score (format "%.2f" score) "")
-        :truncate 6 :face 'irs-marginalia-score)))))
+       ;; :face takes an expression -- marginalia--field splices it into a
+       ;; runtime `propertize', so it can vary per result
+       ((irs--score-field result)
+        :truncate 11 :face (irs--score-face result))))))
 
 (defconst irs--marginalia-annotators
   '((irs-result irs--annotate-result builtin none)))

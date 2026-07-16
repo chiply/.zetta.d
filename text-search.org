@@ -1477,11 +1477,55 @@ Both facets the eye wants are *absent from the search response*, so:
   node; only =/v1/nodes/{id}= exposes it today). Until then, the extension off
   =path=.
 
+- *score* — present on every retriever but *five different quantities*, which
+  is the whole problem (see below).
+
 Rendered with =marginalia--fields= for aligned columns, registered against
 category =irs-result=. This works *through* =consult--multi= because marginalia
 ships =marginalia-annotate-multi-category= (=marginalia.el:470=), which
 dispatches on the =multi-category= text property to the inner category's
 annotator — the same mechanism spot relies on.
+
+*** The score column must name its scale
+
+Contracts already pins that =score= is retriever-native and *not comparable
+across retrievers*. The interface makes that abstract rule concrete and
+unavoidable: five sources sit in one list, and =score= means five things.
+Measured on one query (=svg line rendering=):
+
+| Source   | =score= | What the number is                        |
+|----------+---------+-------------------------------------------|
+| fts      |    26.6 | bm25, unbounded                           |
+| semantic |   0.797 | cosine, 0..1                              |
+| hybrid   |    6.48 | cross-encoder logit, unbounded (or RRF ~0.03 unreranked) |
+| images   |   0.284 | CLIP cosine — /compressed/: 0.33 is strong |
+| exact    |   =null= | literal matching has no ranking            |
+
+Rendered bare, =26.60= sits above =0.80= and reads as the better hit. So the
+column is *labelled with its scale* — =bm25 26.6=, =cos 0.80=, =ce 6.48=,
+=rrf 0.031=, blank — which is what makes it honest: /within/ a group the
+number ranks, /across/ groups it only identifies. This is also why nothing
+sorts across sources; see below.
+
+*CLIP's number is the exception that needs colour, not just a label.* Alone
+among the five it has no relevance floor and a compressed range, so the score
+is most of the answer rather than a footnote (M7, tier 4). It is coloured
+against =irs-image-strong-score= inside the shared column
+(=marginalia--field='s =:face= takes a runtime expression), which retires
+M7-era =irs-search-images='s score-leads-every-line rendering: one score per
+result, in one place, on a scale the label names.
+
+*** Sorting: server order, and nothing else
+
+=consult--multi= is called with =:sort nil=, and =consult--split-perl=
+(=consult.el:2019=) sends the *whole* input to the backend unless it starts
+with punctuation — so there is no local filter re-ranking anything. The list
+is exactly what each server returned: *descending score within each source
+group*, groups in source order.
+
+That is the only sort that means anything. Sorting the merged list by =score=
+would interleave a bm25 26.6 above a cosine 0.797 and call it more relevant.
+Retrievers rank; they do not measure.
 
 *** Embark: the graph is an action, not a source
 

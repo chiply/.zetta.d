@@ -18,13 +18,18 @@
   :commands (irs-search
              irs-status irs-ingest irs-embed irs-embed-images irs-graph irs-knn
              irs-pipeline irs-ensure-server irs-restart-server irs-show-log)
-  :init
   ;; M8: one command over every retriever — narrow with l/f/s/h/i, scope with
   ;; `--root=blog --type=org'. The per-retriever commands are gone; they were
   ;; five ways to ask the same question.
-  (when (and (boundp 'launch-map)
-             (not (lookup-key launch-map "/")))
-    (define-key launch-map "/" #'irs-search))
+  ;;
+  ;; `r' for retrieval, not `i': `, l i' is chiply-isr-semantic-read, and
+  ;; irs/isr are one transposition apart already.
+  :general
+  (
+   :keymaps 'menu-lookup-map
+   "r" 'irs-search
+   )
+  :init
   ;; M6: the retrieval primitives as gptel tools (category "irs")
   (with-eval-after-load 'gptel
     (require 'irs)

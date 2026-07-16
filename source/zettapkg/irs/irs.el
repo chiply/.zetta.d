@@ -731,8 +731,17 @@ FORMAT-FN renders a decoded response into candidate strings."
         (search-forward (match-string 1 snippet) nil t))))))
 
 (defun irs--position (cand &optional find-file)
-  "Marker for CAND's hit, opening its file with FIND-FILE."
-  (when-let* ((result (get-text-property 0 'irs-result cand))
+  "Marker for CAND's hit, opening its file with FIND-FILE.
+
+CAND is nil more often than it looks: consult passes nil on `setup' and
+`exit', and `consult--multi' passes it to the PREVIOUS source's state
+whenever the cursor crosses into another source's group.  Guard it
+first — `get-text-property' on nil throws args-out-of-range rather than
+returning nil, and an error here aborts consult's setup, which leaves
+`consult--async-indicator' without its overlay and turns the next
+[indicator running] into a baffling (wrong-type-argument overlayp nil)."
+  (when-let* ((cand)
+              (result (get-text-property 0 'irs-result cand))
               (path (alist-get 'path result))
               ((file-readable-p path))
               (buffer (funcall (or find-file #'consult--file-action) path))

@@ -57,8 +57,20 @@
   "Checkout of the backend repo; `irs-ensure-server' runs `uv run irs serve' here."
   :type 'directory)
 
+(defconst irs--limit-max 200
+  "Server-side ceiling on `limit' for fts/semantic/hybrid/images.
+`/search/exact' allows more, but a uniform cap keeps one source from
+quietly returning a different number of hits than its neighbours.")
+
 (defcustom irs-search-limit 20
-  "Maximum results to request per search."
+  "Maximum results to request per search, per source.
+
+`irs-search' shows up to this many hits under EACH visible source, so
+the unnarrowed list can be several times this long.
+
+Values above `irs--limit-max' are clamped rather than sent: the backend
+rejects them with a 422, which would blank fts/semantic/hybrid/images
+while the literal source — whose ceiling is higher — kept working."
   :type 'natnum)
 
 (defcustom irs-pid-file "~/.local/share/irs/irs.pid"
@@ -549,7 +561,7 @@ flag filters BEFORE `limit' and a client-side filter after it: ask for
   (let ((roots (plist-get parsed :roots))
         (formats (plist-get parsed :formats)))
     `((query . ,(plist-get parsed :query))
-      (limit . ,irs-search-limit)
+      (limit . ,(max 1 (min irs-search-limit irs--limit-max)))
       ,@(when roots `((roots . ,(vconcat roots))))
       ,@(when formats `((formats . ,(vconcat formats)))))))
 

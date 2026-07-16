@@ -1339,14 +1339,26 @@ by narrowing, and staleness by the guard in the async stage. *Do not port
 
 *** Root and file-type: arguments, not narrowing keys
 
-Pinned: *the retriever is the narrowing axis; root and type ride in the input
-as flags* and are passed down to the backend.
+Pinned: *the retriever is the narrowing axis; everything else rides in the
+input as flags* and is passed down to the backend.
 
 #+begin_example
 svg rendering --root=blog --type=org
 kubernetes deploy --root=logseq,zetta
+emacs --type=pdf --limit=50
 a photo of a cat --root=blogimg          (narrowed to i)
 #+end_example
+
+Three flags, each with a one-letter form (=-r= / =-t= / =-l=): =--root== takes
+a root alias, =--type== a format or extension, =--limit== overrides
+=irs-search-limit= for one query. Values are validated against =/v1/status=
+*before anything is sent*, so a typo searches nothing rather than answering a
+different question, and typing toward =--root=blog= does not fire a request
+per keystroke. =--limit== and the defcustom share one clamp to the server's
+ceiling (200): the backend 422s above it, and since a failed request only
+shows in the indicator, an unclamped value would blank fts/semantic/hybrid/
+images while the literal source — ceiling 1000 — kept working, which reads as
+a corpus problem rather than a config one.
 
 Three reasons, in order of force:
 

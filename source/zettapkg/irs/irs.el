@@ -511,7 +511,7 @@ simply does not appear -- better than offering a search that 503s."
                      (string-prefix-p (file-name-as-directory (cdr root)) path))
                    (irs--roots)))))
 
-;;; Input: query plus --root= / --type= facets
+;;; Input: query plus --root= / --type= / --limit= flags
 ;;
 ;; Parsed with `consult--command-split' -- consult's own parser, the one
 ;; consult-ripgrep/grep/find already use, so the muscle memory transfers and
@@ -520,38 +520,47 @@ simply does not appear -- better than offering a search that 503s."
 ;; back into the query.  Bare `--root=blog', options start at the first
 ;; space-dash.
 
-(defconst irs--facet-regexp
-  "\\`--?\\(?:root\\|r\\)=\\(.*\\)\\'\\|\\`--?\\(?:type\\|t\\)=\\(.*\\)\\'")
+(defconst irs--flag-regexp "\\`--?\\([a-z]+\\)=\\(.*\\)\\'"
+  "One `--key=value' flag.  Matched generically and dispatched on the key,
+rather than one alternation per flag: three capture groups for three
+flags is where that regexp stops being readable.")
 
 (defun irs--parse-input (input)
-  "Split INPUT into a plist of :query, :roots, :formats and :valid.
+  "Split INPUT into a plist of :query, :roots, :formats, :limit and :valid.
 
-:valid is nil when a facet names something the backend does not know.
-The source then declines to search at all, rather than firing a request
-per keystroke that 400s while `--root=b', `--root=bl', `--root=blo' are
-typed on the way to `--root=blog'."
+:valid is nil when a flag is unknown or names something the backend does
+not know.  The source then declines to search at all, rather than firing
+a request per keystroke that 400s while `--root=b', `--root=bl',
+`--root=blo' are typed on the way to `--root=blog'."
   (pcase-let* ((`(,query . ,opts) (consult--command-split input))
-               (roots nil) (formats nil) (valid t))
+               (roots nil) (formats nil) (limit nil) (valid t))
     (dolist (opt opts)
       (save-match-data
-        (if (not (string-match irs--facet-regexp opt))
+        (if (not (string-match irs--flag-regexp opt))
             (setq valid nil)          ; an unknown flag is not a query word
-          ;; Bind both groups BEFORE splitting: `split-string' matches
-          ;; internally and clobbers the match data, so reading group 1 after
-          ;; it returns nil -- which filed `--root=a,b' under formats, made
-          ;; the facet invalid, and searched nothing. Silently, and only for
-          ;; the comma form.
-          (let* ((root-val (match-string 1 opt))
-                 (type-val (match-string 2 opt))
-                 (values (split-string (or root-val type-val) "," t "[ \t]+")))
-            (if root-val
-                (setq roots (append roots values))
-              (setq formats (append formats values)))))))
+          ;; Bind the groups BEFORE any further matching: `split-string' and
+          ;; `string-match-p' clobber the match data, and reading a group
+          ;; afterwards returns nil -- which once filed `--root=a,b' under
+          ;; formats and silently searched nothing.
+          (let ((key (match-string 1 opt))
+                (val (match-string 2 opt)))
+            (pcase key
+              ((or "root" "r")
+               (setq roots (append roots (split-string val "," t "[ \t]+"))))
+              ((or "type" "t")
+               (setq formats (append formats (split-string val "," t "[ \t]+"))))
+              ((or "limit" "l")
+               ;; a half-typed `--limit=' or `--limit=1x' must not search with
+               ;; the default and look like it honoured the flag
+               (if (string-match-p "\\`[0-9]+\\'" val)
+                   (setq limit (string-to-number val))
+                 (setq valid nil)))
+              (_ (setq valid nil)))))))
     (when (or (seq-difference roots (irs--root-aliases))
               (seq-difference formats (irs--known-types)))
       (setq valid nil))
     (list :query (string-trim query) :roots roots :formats formats
-          :valid valid)))
+          :limit limit :valid valid)))
 
 (defun irs--request-payload (parsed)
   "Backend request body for PARSED input.
@@ -561,7 +570,10 @@ flag filters BEFORE `limit' and a client-side filter after it: ask for
   (let ((roots (plist-get parsed :roots))
         (formats (plist-get parsed :formats)))
     `((query . ,(plist-get parsed :query))
-      (limit . ,(max 1 (min irs-search-limit irs--limit-max)))
+      ;; `--limit=' overrides the default for this query only; both go through
+      ;; the same clamp, so neither route can send a value the backend 422s on
+      (limit . ,(max 1 (min (or (plist-get parsed :limit) irs-search-limit)
+                            irs--limit-max)))
       ,@(when roots `((roots . ,(vconcat roots))))
       ,@(when formats `((formats . ,(vconcat formats)))))))
 
@@ -884,11 +896,19 @@ Scope with flags in the input, which are passed to the backend:
 
   svg rendering --root=blog --type=org
   kubernetes deploy --root=logseq,zetta
+  emacs --type=pdf --limit=50
 
-`--root=' takes a corpus root alias, `--type=' an adapter format (org,
-md, pdf, code, image...) or a file extension (svg, webp, el).  Both are
-validated against the backend, so a typo searches nothing rather than
-quietly returning nothing.  Repeat or comma-separate to widen.
+`--root=' (`-r=') takes a corpus root alias.  `--type=' (`-t=') takes an
+adapter format (org, md, pdf, code, image, txt, transcript) or a file
+extension (svg, webp, el, py...) — the extension spelling exists because
+the format collapses, so `--type=image' is every picture and
+`--type=svg' is only the SVGs.  Repeat either flag or comma-separate to
+widen.  `--limit=' (`-l=') overrides `irs-search-limit' for one query.
+
+Flag values are validated against the backend before anything is sent,
+so a typo searches nothing rather than quietly answering the wrong
+question — and typing toward `--root=blog' does not fire a request per
+keystroke.
 
 INITIAL is the starting input."
   (interactive)

@@ -473,6 +473,23 @@ inject that many junk images into every text search forever.  It is one
 `i' away."
   :type '(repeat symbol))
 
+(defcustom irs-search-preview-key 'any
+  "Preview key(s) for `irs-search', as consult's `:preview-key'.
+The default `any' previews the candidate under point as you move — the
+same as `consult-preview-key'.  Set it to a key, e.g. \"C-=\", for
+opt-in preview: matches are then shown only when you press that key on
+one, never automatically.
+
+Applied per source rather than to the command: `irs-search' opens its
+`consult--multi' from a timer (the server probe is async), so by then
+`this-command' is no longer `irs-search' and `consult-customize' would
+key on the wrong command.  `consult--multi' reads each source's
+`:preview-key', which is where this lands."
+  :type '(choice (const :tag "Preview as you move" any)
+                 (const :tag "No preview" nil)
+                 (key :tag "Manual preview key")
+                 (repeat key)))
+
 ;;; Corpus metadata, from the /v1/status probe every command already pays for
 
 (defun irs--corpus ()
@@ -892,6 +909,9 @@ returning nil, and an error here aborts consult's setup, which leaves
       :history ,history
       :async ,(irs--source-async endpoint format-fn)
       :state ,state
+      ;; per-source, because consult--multi-preview-key reads it here and
+      ;; falls back to consult-preview-key otherwise -- see the defcustom
+      :preview-key ,irs-search-preview-key
       :hidden ,(and (memq key irs-search-hidden-sources) t)
       :enabled ,(lambda () (irs--retriever-ready-p retriever))
       ;; not a consult field; read back by `irs--report-selection'

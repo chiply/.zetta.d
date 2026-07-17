@@ -29,6 +29,11 @@
    :keymaps 'menu-lookup-map
    "r" 'irs-search
    )
+  ;; Opt-in preview, matching every other consult surface in this distro
+  ;; (consult-ripgrep, elfeed, consult-gh/mu/omni all use "C-="): matches do
+  ;; not display until C-= is pressed on one.  Global `consult-preview-key' is
+  ;; `any' here, so this per-command override is what makes irs quiet.
+  :custom (irs-search-preview-key "C-=")
   :init
   ;; M6: the retrieval primitives as gptel tools (category "irs")
   (with-eval-after-load 'gptel

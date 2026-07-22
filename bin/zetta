@@ -447,11 +447,23 @@ ZETTA_CI_WATCHDOG="(progn
              (message \"WATCHDOG-STALL: waiting set frozen for %d minutes:\"
                       zetta--wd-stall)
              (dolist (entry (elpaca--queued))
-               (let ((s (elpaca--status (cdr entry))))
-                 (unless (memq s '(finished failed))
-                   (let ((info (car (last (elpaca<-log (cdr entry))))))
-                     (message \"  STUCK: %s [%s] %s\" (car entry) s
-                              (if info (nth 2 info) \"\")))))))
+               (let* ((e (cdr entry)) (s (elpaca--status e)))
+                 ;; Failed orders are terminal but they are USUALLY the
+                 ;; reason others sit blocked -- without them the dump
+                 ;; names victims and hides the culprit (measured: three
+                 ;; elfeed dependents frozen [blocked], the failed elfeed
+                 ;; order that caused it invisible).
+                 (cond
+                  ((eq s 'failed)
+                   (dolist (info (last (elpaca<-log e) 3))
+                     (message \"  FAILED: %s | %s\" (car entry)
+                              (nth 2 info))))
+                  ((eq s 'finished) nil)
+                  (t
+                   (let ((info (car (last (elpaca<-log e)))))
+                     (message \"  STUCK: %s [%s] blockers=%S %s\"
+                              (car entry) s (elpaca<-blockers e)
+                              (if info (nth 2 info) \"\"))))))))
            (when (and waiting (>= zetta--wd-stall 20))
              (kill-emacs 70))))))))"
 

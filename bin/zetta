@@ -61,7 +61,7 @@ cmd_install() {
         --eval "(defvar zetta--install-stall-since nil)" \
         --eval "(let* ((start (float-time))
                        (timeout 600)
-                       (stall-limit 120))
+                       (stall-limit 600))
                   (setq zetta--install-timer
                         (run-with-timer 10 10
                          (lambda ()
@@ -410,7 +410,7 @@ cmd_test() {
 # state, a dump of every stuck order with its last elpaca log line, then
 # exit 70 so the step fails fast and named instead of silently timing out.
 ZETTA_CI_WATCHDOG="(progn
-  (defvar zetta--wd-last-done -1)
+  (defvar zetta--wd-prev \"\")
   (defvar zetta--wd-stall 0)
   (run-with-timer 60 60
    (lambda ()
@@ -422,23 +422,30 @@ ZETTA_CI_WATCHDOG="(progn
              (if (memq s '(finished failed blocked))
                  (setq done (1+ done))
                (push (format \"%s[%s]\" (car entry) s) waiting))))
-         (message \"watchdog: %d/%d terminal%s\" done total
-                  (if waiting (concat \" -- waiting: \"
-                                      (mapconcat #'identity waiting \" \"))
-                    \"\"))
-         (if (> done zetta--wd-last-done)
-             (progn (setq zetta--wd-last-done done)
-                    (setq zetta--wd-stall 0))
-           (setq zetta--wd-stall (1+ zetta--wd-stall)))
-         (when (and waiting (>= zetta--wd-stall 5))
-           (message \"WATCHDOG-STALL: no elpaca progress in ~5 minutes; stuck orders:\")
-           (dolist (entry (elpaca--queued))
-             (let ((s (elpaca--status (cdr entry))))
-               (unless (memq s '(finished failed blocked))
-                 (let ((info (car (last (elpaca<-log (cdr entry))))))
-                   (message \"  STUCK: %s [%s] %s\" (car entry) s
-                            (if info (nth 2 info) \"\"))))))
-           (kill-emacs 70)))))))"
+         (let ((wstr (mapconcat #'identity (sort waiting #'string<) \" \")))
+           (message \"watchdog: %d/%d terminal%s\" done total
+                    (if waiting (concat \" -- waiting: \" wstr) \"\"))
+           ;; A stall is the waiting SET frozen -- same orders in the same
+           ;; states -- not merely a quiet minute: 30 parallel clones can
+           ;; legitimately produce zero newly-terminal orders for a while
+           ;; (measured: the first flat-progress criterion killed a healthy
+           ;; run mid-clone of the app category, run 29933654049/30.2).
+           (if (and waiting (equal wstr zetta--wd-prev))
+               (setq zetta--wd-stall (1+ zetta--wd-stall))
+             (setq zetta--wd-stall 0))
+           (setq zetta--wd-prev wstr)
+           (when (and waiting (>= zetta--wd-stall 10)
+                      (= 0 (mod zetta--wd-stall 10)))
+             (message \"WATCHDOG-STALL: waiting set frozen for %d minutes:\"
+                      zetta--wd-stall)
+             (dolist (entry (elpaca--queued))
+               (let ((s (elpaca--status (cdr entry))))
+                 (unless (memq s '(finished failed blocked))
+                   (let ((info (car (last (elpaca<-log (cdr entry))))))
+                     (message \"  STUCK: %s [%s] %s\" (car entry) s
+                              (if info (nth 2 info) \"\")))))))
+           (when (and waiting (>= zetta--wd-stall 20))
+             (kill-emacs 70))))))))"
 
 cmd_ci_sync() {
     _info "Syncing packages (stale cache detected)…"
@@ -456,8 +463,8 @@ cmd_ci_sync() {
         --eval "(defvar zetta--sync-prev-done 0)" \
         --eval "(defvar zetta--sync-stall-since nil)" \
         --eval "(let* ((start (float-time))
-                       (timeout 480)
-                       (stall-limit 120))
+                       (timeout 900)
+                       (stall-limit 600))
                   (setq zetta--sync-timer
                         (run-with-timer 5 10
                          (lambda ()
@@ -525,7 +532,7 @@ cmd_ci_test() {
         -l "$ZETTA_DIR/init.el" \
         --eval "(defvar zetta--ci-timer nil)" \
         --eval "(let* ((start (float-time))
-                       (timeout 480))
+                       (timeout 900))
                   (setq zetta--ci-timer
                         (run-with-timer 10 10
                          (lambda ()

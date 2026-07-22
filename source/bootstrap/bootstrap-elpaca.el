@@ -4,8 +4,17 @@
 (defvar elpaca-directory (expand-file-name "elpaca/" user-emacs-directory))
 (defvar elpaca-builds-directory (expand-file-name "builds/" elpaca-directory))
 (defvar elpaca-sources-directory (expand-file-name "sources/" elpaca-directory))
+;; elpaca is the one package the lockfile cannot pin -- this installer
+;; clones it before any lockfile is read -- so it MUST be pinned here.
+;; With :ref nil every fresh install got that day's master, whose internal
+;; API had drifted from everything written against it (measured 2026-07-22:
+;; master had dropped `elpaca--status', and cold installs hung in the
+;; tools-category elpaca-wait on CI and on a reader's machine alike, while
+;; warm checkouts kept working from their old builds).  Bump this SHA
+;; deliberately, together with `zetta freeze', never implicitly.
 (defvar elpaca-order '(elpaca :repo "https://github.com/progfolio/elpaca.git"
-                              :ref nil :depth 1 :inherit ignore
+                              :ref "1508298c1ed19c81fa4ebc5d22d945322e9e4c52"
+                              :depth nil :inherit ignore
                               :files (:defaults "elpaca-test.el" (:exclude "extensions"))
                               :build (:not elpaca--activate-package)))
 (let* ((repo  (expand-file-name "elpaca/" elpaca-sources-directory))

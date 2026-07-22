@@ -73,6 +73,21 @@
 (require 'elpaca-use-package)
 (elpaca-use-package-mode)
 
+;; Elpaca-manage compat and track-changes explicitly, before any module can
+;; resolve them as "satisfied by builtin".  Emacs 30.x is the middle-child
+;; trap: new enough to carry builtin equivalents (track-changes 1.2;
+;; compat-as-builtin 30.2.x), old enough that they sit below what current
+;; packages require (elfeed 4.0.1 wants compat>=31, copilot wants
+;; track-changes>=1.4) -- and once a first dependent accepts the builtin,
+;; a later, stricter dependent hard-fails instead of fetching (measured:
+;; run 29961031175/30.2, elfeed and copilot both failed
+;; elpaca--check-version while 29.4 -- no builtins, fresh fetch -- and
+;; Emacs 31 -- new-enough builtins -- both passed).  Explicit early orders
+;; make the ELPA versions the installed truth on every Emacs.
+(elpaca compat)
+(elpaca track-changes)
+(elpaca-wait)
+
 ;; Fix elpaca bug: when a package is re-declared after being queued as a
 ;; transitive dependency, elpaca--enqueue returns the `warn' string instead of
 ;; the existing elpaca struct, causing elpaca--expand-declaration to crash

@@ -1,0 +1,1807 @@
+#+title: Text Search Facilities for Emacs — Notes & Implementation Plan
+#+author: Charlie Holland
+#+startup: overview
+
+# Working notes distilled from a design conversation about adding a layered set of
+# text-search facilities over a corpus of Emacs files (Org notes, blog .org,
+# source, and referenced sources like PDFs/podcasts). Goal: search the text and
+# build the supporting artifacts — indexes, embeddings, and graphs.
+#
+# Architecture: a Python FastAPI backend owns every derived artifact (indexes,
+# embeddings, graphs, rerankers); Emacs and any later frontends (browser, other
+# editors, MCP clients) are thin HTTP clients. See "Architecture" in Part 3.
+#
+# Images are in scope as of M7 ("Image & media retrieval", Part 2) — retrieved
+# by the text around and inside them (caption, SVG label, OCR) and, for pictures
+# that carry no text at all, by CLIP cross-modal search.
+
+
+* Part 1 — The retrieval stack (the core mental model)
+
+The key reframe: there isn't one "search." There is a *layered stack of retrieval
+mechanisms*, plus an orchestration layer on top. Each layer wins at different
+things; the goal is to build them all and combine them.
+
+#+begin_example
+1. Exact retrieval      ── you know the literal string
+2. Lexical retrieval    ── which docs contain these words (ranked)
+3. Semantic retrieval   ── meaning overlap, not word overlap
+4. Structural retrieval ── "what else should come with this?"  (graphs)
+   ── Hybrid retrieval  ── fuse lexical + semantic (beats either alone)
+5. Agentic reasoning    ── an LLM coordinating all of the above
+#+end_example
+
+** 1. Exact retrieval
+- *What:* literal / regex matching. =grep=, =ripgrep=, regex, Orderless-style filtering.
+- *Wins at:* known exact terms — symbols, filenames, IDs, code, =api-v3-migration=, =TODO.*vector=.
+- *Note:* embeddings are /worse/ here. For =kubernetes_deployment_service.py= you
+  want exact matching, not semantic similarity.
+
+** 2. Lexical retrieval
+- *What:* inverted index + ranked word matching. *BM25*, Lucene, *SQLite FTS5*.
+- *Asks:* not "does this string match?" but "which documents contain these words,
+  ranked by term frequency / rarity?"
+- *Wins at:* strong general-purpose search; often /outperforms embeddings/ for many
+  real queries. Underrated.
+
+** 3. Semantic retrieval
+- *What:* embed text into high-dimensional vectors so similar /meaning/ lands
+  nearby; retrieve by *cosine similarity* / nearest-neighbour.
+- *Wins at:* meaning overlap with no shared words — =interactive narrowing
+  interfaces= → an article titled /Incremental Completion/.
+- *Vector stores named:* Qdrant, Weaviate, Pinecone, pgvector (at this system's
+  scale, brute-force cosine in the backend suffices — see Part 3).
+
+#+begin_quote
+*What an embedding actually is:* a model maps each chunk of text to a list of N
+numbers (e.g. 768–1536 dims). Individual coordinates are meaningless; the
+/geometry/ (relative position) carries the meaning. "Embedding a corpus" = chunk
+documents → run each chunk through an embedding model → store vectors alongside
+the original text. The embeddings are not the knowledge — they're an /index/ that
+retrieves the right knowledge.
+#+end_quote
+
+** 4. Structural retrieval (the piece most systems skip)
+- *What:* a *graph* over the corpus. After you find something relevant, expand
+  along edges: parent section, neighbouring chunks, backlinks, same tag, same
+  source, semantically-near nodes.
+- *Turns retrieval into* =semantic + structure= instead of =semantic only= —
+  closer to how humans actually associate.
+- This is the layer with the most leverage and the most artifacts to build →
+  *Part 2* is dedicated to it.
+
+** Hybrid retrieval (sits across 2 + 3)
+- In practice *BM25 + embeddings beats either alone.* Lexical catches the exact
+  words; semantic catches the meaning. Fuse the scores (e.g.
+  =0.5*lexical + 0.5*semantic=, or Reciprocal Rank Fusion) and quality jumps.
+
+** 5. Agentic reasoning / RAG
+- *RAG = retrieval + LLM.* Nothing more. It is /not/ a sibling search technology
+  alongside embeddings/graphs — it is the /process of using those retrieval
+  primitives to give an LLM context/.
+- Classic RAG: =question → retrieve N chunks → stuff into prompt → answer=.
+- Agentic RAG: =question → search → read → follow links → search again → reason →
+  answer=. If the LLM has tools (=semantic_search()=, =fts_search()=,
+  =graph_neighbors()=), it's already doing RAG — just more flexibly.
+- *Insight:* the richer the retrieval layer, the /thinner and less interesting/ RAG
+  becomes — it collapses into a thin orchestration layer over powerful retrieval
+  primitives. The LLM isn't a database; it's a research assistant sitting on top
+  of several retrieval systems.
+
+** The flagship query pattern
+#+begin_example
+query
+  → semantic search finds ~5 seed chunks
+  → graph expansion pulls: parent sections, neighbouring chunks,
+                           linked notes, shared concepts, source pages
+  → rerank the whole candidate neighbourhood
+  → answer / present from the best context
+#+end_example
+
+Much stronger than plain vector search. Semantic finds the /seeds/; the graph
+provides the /context/; hybrid + rerank orders it; the LLM (optionally) synthesises.
+
+* Part 2 — Structural retrieval: the artifacts to build
+
+Structural search is mostly: *find seed nodes → expand along useful edges → rank
+the expanded neighbourhood.* That needs two artifacts: a *node table* and a
+*typed edge table*.
+
+** The schema
+
+Four tables: =nodes= (one row per retrievable unit), =node_vectors= (embeddings,
+keyed by node /and/ model), =edges= (typed relationships), and =meta= (schema
+version + settings).
+
+#+begin_src text
+nodes
+  id              -- opaque integer PK; identity lives in stable_key
+  stable_key      -- UNIQUE; survives re-ingest (see Identity, upserts & deletion)
+  node_class      -- text_unit | container | concept | media — FIXED from kind:
+                  --  container: document | section | pdf_page | source
+                  --    (pdf_page text is chunked into child chunk nodes)
+                  --  text_unit: chunk | highlight | podcast_snippet
+                  --    (embedded + FTS-indexed)
+                  --  concept:   concept | entity (graph-only)
+                  --  media:     image (M7 — FTS-indexed on derived text;
+                  --    embedded by BOTH the text model, when it has derived
+                  --    text, and CLIP, always)
+  kind            -- document | section | chunk | highlight
+                  --  | pdf_page | podcast_snippet | concept | entity | source
+                  --  | image
+  title
+  body            -- image rows: FILE-DERIVED text only (SVG labels ∥ OCR) —
+                  --  never the caption, which lives in the referencing
+                  --  section and on the ILLUSTRATES edge (M7, freshness trap).
+                  --  Empty for a picture with no text anywhere — legitimate,
+                  --  and exactly the CLIP-only case (see M7)
+  path
+  source_id       -- self-FK → nodes.id (sources are nodes; see Identity)
+  parent_id       -- fast hierarchy without hitting the edge table
+  ordinal         -- order among siblings (chunk N of a section)
+  content_hash    -- SHA-256 of NFC(title + "\0" + body); gates re-chunk/re-embed
+                  --  IMAGE ROWS DIFFER: hashed over the file bytes + the
+                  --  derivation version, never over the derived text — see
+                  --  "Freshness" in M7 for why the uniform rule breaks here
+  file_hash       -- document AND image rows: whole-file byte hash
+                  --  (change-detection short-circuit + rename matching)
+  token_count     -- budgets the LLM context window, enforces chunk-size rules
+  format          -- org | md | code | txt | pdf | transcript
+  language
+  last_embed_error -- nullable; set on embed failure, cleared on success
+  created_at
+  updated_at
+  metadata_json   -- strictly format-idiosyncratic, non-queried fields
+                  --  (speaker, raw timestamp, org_heading_level)
+
+node_vectors
+  node_id              -- FK → nodes.id, ON DELETE CASCADE
+  model                -- embedding model that produced this vector
+  dim
+  vector BLOB
+  source_content_hash  -- vector is fresh iff = nodes.content_hash
+  created_at
+  PRIMARY KEY (node_id, model)
+
+edges
+  id
+  from_id
+  to_id
+  kind                 -- edge type (see catalog below)
+  weight               -- e.g. cosine score for SIMILAR_TO
+  confidence           -- manual link 1.0, embedding sim 0.82, LLM-inferred 0.61
+  evidence             -- what justified the edge
+  generated_by         -- manual | org_link_parser | term_extractor
+                       --  | embedding_knn | llm_extractor | pdf_parser
+  source_content_hash  -- hash of the source node when the edge was built
+  index_epoch          -- for epoch-rebuilt edge sets (kNN, cluster, LLM-inferred)
+  created_at
+  metadata_json
+
+meta
+  key, value           -- schema_version + numbered migrations, so the schema
+                       --  can evolve without discarding (paid) embeddings
+#+end_src
+
+*Design principles:*
+- *Don't build one graph — build many typed edge sets over one node table.*
+- *Hierarchy lives in columns only.* =parent_id= + =ordinal= is the single
+  source of truth; =CONTAINS=/=PART_OF=/=NEXT_CHUNK= are read-time views
+  computed from those columns, never materialised as physical edges — two
+  copies of one fact diverge on re-chunk. The physical =edges= table is
+  reserved for relationships that /aren't/ expressible as columns (links,
+  similarity, source, LLM-inferred).
+- *Vectors live in their own table, not a column on =nodes=.* A nullable
+  =embedding= column conflates "not embedded yet", "never embedded"
+  (concept/entity nodes), and "stale"; bloats the brute-force scan path; and
+  blocks holding two models side-by-side during a migration. With
+  =node_vectors=, freshness is exact (=nodes.content_hash =
+  node_vectors.source_content_hash AND model = active_model=) and vectors
+  survive =nodes= migrations.
+- *=node_class= is the coarse axis queries filter on; =kind= is the fine one.*
+  =text_unit= and =media= nodes are embedded; =container= nodes are traversed;
+  =concept= nodes are graph-only. FTS indexes /every/ row's title (containers
+  are title-only rows; text_units and media add their body) — document titles
+  are the strongest lexical signal, and hiding them from FTS measurably gutted
+  recall (schema v2, eval-driven: MRR 0.179 → 0.738). Without the coarse axis,
+  every query hard-codes include/exclude lists of kinds.
+- *=media= is a class, not just a kind, because "text or pictures?" is a
+  coarse filter.* Faceted filtering (Query-side intelligence, #5) wants
+  "search only images" / "exclude images" without enumerating kinds, and the
+  media class is what =/search/images= filters on. Reusing =text_unit= for
+  pictures was the cheaper option — the embed job would have picked them up
+  with no change — but it would make =node_class= mean "is retrievable",
+  which =container= already contradicts, and it would leave no coarse axis for
+  the one distinction users actually ask for. The cost is one predicate:
+  the text embed job selects =node_class IN ('text_unit','media')=.
+- *Anything load-bearing is a real column* (=content_hash=, =token_count=,
+  =format=, =language=). =metadata_json= holds only format-idiosyncratic,
+  non-queried fields — otherwise it becomes a dumping ground where two adapters
+  spell =page= vs =page_number= differently. Cluster membership is likewise
+  edges (=MEMBER_OF_CLUSTER=, epoch-stamped), not a =cluster_id= column:
+  multi-level cluster trees (RAPTOR-style) don't fit one column.
+- *=confidence= + =generated_by= from day one:* trust manual links more than
+  embedding-inferred ones, and key edge invalidation on the generator (next
+  section).
+
+** Identity, upserts & deletion
+
+*Node identity.* =id= is an opaque integer PK (compact FKs); identity across
+re-ingests lives in =stable_key=, a unique text key derived per kind:
+
+#+begin_src text
+document          doc:<root>/<relpath>                  -- <root> = alias from config.toml
+section           sec:<root>/<relpath>#<heading-trail>  -- dup siblings suffixed [n]
+chunk             chk:<parent-stable_key>#<ordinal>     -- position-keyed (see below)
+pdf_page          pag:<root>/<relpath>#<page-number>
+highlight         hl:<parent-stable_key>#<ordinal>
+podcast_snippet   seg:<root>/<relpath>#<ordinal>
+concept/entity    con:<normalized-term>
+source            src:<normalized-identifier>           -- DOI, feed GUID, ISBN, URL…
+image             img:<root>/<relpath>                  -- keyed by FILE, not by
+                                                        --  link site: one picture
+                                                        --  used by three posts is
+                                                        --  ONE node with three
+                                                        --  inbound ILLUSTRATES
+                                                        --  edges (see M7)
+#+end_src
+
+Every path-derived key embeds its root's config =alias= — two roots can
+otherwise produce identical relpaths and silently merge two files into one
+node.
+
+Upsert = match on =stable_key=, update body/hash when changed. Chunks are
+*position-keyed*: re-chunking updates chunk rows in place by ordinal and
+deletes trailing ordinals, rather than orphaning the whole set; the freshness
+machinery (hash mismatch → re-embed, =generated_by= sweep → rebuild edges)
+absorbs content shifting across chunk boundaries. Consequence: *manual/curated
+edges must target documents or concepts only* — not chunks (position identity
+drifts under heavy edits), and not sections either: renaming a heading re-keys
+the section /and all its descendants/. For generated artifacts that's an
+accepted cost (re-embed + edge rebuild; section-granularity move-detection is
+a possible later optimisation), but it would silently orphan a manual edge.
+
+*Deletion.* A file absent from the corpus walk (or newly matching an exclude)
+deletes its document node and all descendants in one transaction: the nodes,
+their =node_vectors= (=ON DELETE CASCADE=), their =nodes_fts= rows, and every
+edge touching a deleted id. Deletion counts are reported in the ingest job
+output — never silent.
+
+*Renames.* A rename looks like delete + create. Before executing deletes, the
+ingest run matches candidate deletions against candidate creations by
+=file_hash= (whole-file bytes — document =content_hash= won't do: document-node
+bodies are often empty or keyword-only, so their hashes collide). An
+unambiguous match is treated as a *move* — update =path= (and the =stable_key=
+prefix of descendants) in place, keeping ids, vectors, and edges. Ties
+(several candidates sharing a hash) fall back on basename similarity, else
+plain delete + create.
+
+*Sources are nodes — there is no =sources= table.* =source_id= is a self-FK
+pointing at the node this one derives from: for corpus files, the file's own
+=document= node; for external material (a podcast episode, a book, a cited
+paper), a =container=-class node of =kind source= created from metadata (bibtex
+entry, feed metadata). Graph #3's =DERIVED_FROM=/=PAGE_IN=/=EPISODE_IN= edges
+point at these nodes, so citation expansion is ordinary graph traversal.
+
+** Freshness & invalidation
+
+=content_hash= gates node-local work exactly: a node is re-chunked/re-embedded
+only when its hash changes, and a vector is fresh iff its =source_content_hash=
+matches. The node-local gate does *not* cover the global artifacts — each has
+its own sync story, or the index silently drifts:
+
+- *FTS index* — synced in the same transaction as the node upsert (FTS5
+  triggers or explicit upsert), never gated by hash.
+- *k-NN =SIMILAR_TO= edges* — global: when node A's embedding changes, A may
+  become (or stop being) a top-k neighbour of an /unrelated/ node B whose own
+  content didn't change; a node-local gate never revisits B, and B's edge list
+  silently rots. k-NN is therefore a *batch artifact*: track a dirty set of
+  re-embedded nodes, recompute their neighbours, and re-evaluate inbound edges
+  (full recompute past a dirty-fraction threshold).
+- *Cluster/summary (#6) and LLM-inferred (#7) edges* — expensive global passes,
+  explicitly *epoch-rebuilt* (manual/scheduled) and versioned by the
+  =index_epoch= stamped on every such edge. Never incrementally maintained.
+- *Edge invalidation is keyed on =generated_by=.* Re-chunking shifts content
+  across position-keyed chunk ids and deletes trailing ones, staling or
+  dangling =SIMILAR_TO=/=MENTIONS= edges built against the old content. On
+  re-index of a node: =DELETE FROM edges WHERE (from_id=? OR to_id=?) AND
+  generated_by IN (…)= then rebuild; =source_content_hash= on each edge makes
+  staleness detectable. Dangling edges silently corrupt graph expansion — the
+  worst failure mode because it still looks like it works.
+  
+** Image & media retrieval (M7)
+
+Images are retrieved by *four independent signals*, three of which are text and
+therefore need no new machinery at all. The order below is cheapest-first and is
+the build order; each tier stands alone, so shipping stops wherever the value
+does.
+
+*** The corpus decides the design (measured, 2026-07-15)
+
+Every claim here was measured on the real corpus — tesseract 5.5.2 over all 80
+raster images in =chiply.dev/static/images/=, not estimated:
+
+| Outcome                 | Images    | Retrieved by                        |
+|-------------------------+-----------+-------------------------------------|
+| Rich OCR text (≥15 words) | 29 (36%)  | OCR → FTS/embeddings                |
+| Thin OCR text (1–14 words) | 14 (17%)  | caption + filename carry it         |
+| *No text whatsoever*    | *37 (46%)* | *CLIP only — nothing else can*      |
+
+The two halves are *nearly disjoint, not competing*: the 37 text-free images
+are DALL-E-generated post banners (=brushup-banner.jpeg=,
+=covid-tracker-banner.jpeg=, …) plus photographs (=charlie_and_d.png=), and the
+29 rich ones are Emacs screenshots and annotated figures where OCR yields
+150–378 real words. OCR returns *exactly zero* characters on the photographs
+and CLIP is near-useless on a screenshot of a text buffer. Each tier owns the
+half the other cannot see.
+
+/An earlier draft of this section claimed the corpus was "almost entirely"
+screenshots and that CLIP was the wrong tool. That was generalised from
+filenames without measuring, and the measurement refuted it: 46% of the images
+are exactly CLIP's case./
+
+*** Tier 1 — captions (free; recovers signal currently discarded)
+
+The blog carries *79 =#+CAPTION:= lines against 75 image links* — effectively
+every image is described, in the author's own words:
+
+#+begin_quote
+"Terminus at 12px in Emacs. Every edge is a hard black-to-background
+transition; there are no intermediate gray pixels anywhere on screen."
+#+end_quote
+
+*None of it is indexed today.* The Org adapter's =KEYWORD_LINE_RE= strips every
+=#+…= line — right for =#+title:=/=#+startup:=, but it takes =#+CAPTION:= with
+it. Verified against the live index: =Terminus at 12px= → 0 nodes, =DALL-E= → 0
+nodes, =confusables= → 0 nodes.
+
+/=#+CAPTION:= only — NOT =#+NAME:=./ An earlier draft exempted both. Measured:
+all 11 =#+NAME:= uses are =fig-terminus=-style anchors, so un-stripping them
+would inject identifier noise into bodies for no recall. =#+NAME:= keeps being
+stripped; only the caption is prose.
+
+/A caption is not always an image caption./ Measured over the 79: 63 are
+followed by an image link within two lines (50 immediately, 13 with an
+intervening =#+NAME:=/=#+ATTR_HTML:= line), and *16 caption something else* —
+=#+begin_export html= video embeds, tables, source blocks. So the
+caption→image association is: from the =#+CAPTION:= line, skip any =#+NAME:=/
+=#+ATTR_*:= lines, and look at the next content line; bind only if it is an
+image link. The other 16 captions are still indexed as prose — they just build
+no =ILLUSTRATES= edge. Binding by proximity alone would mis-caption a video
+with the text meant for it.
+
+For screenshots and diagrams a human caption beats anything CLIP would infer,
+and it is already written. Fix: exempt =#+CAPTION:= (and =#+NAME:=) from the
+keyword strip so the text stays in the *section's* body, and carry it as the
+=ILLUSTRATES= edge's =evidence=.
+
+Note this tier pays off *with no image nodes at all* — un-stripping the caption
+makes 79 descriptions searchable on their own, whether or not M7a ever builds
+an =image= row. It is the one change worth making even if the rest of M7 is
+dropped. The caption does /not/ get copied onto the image node; see "How the
+tiers land in the schema" for why that is a freshness trap rather than an
+oversight.
+
+*** Tier 2 — SVG label extraction (free, exact, no OCR)
+
+The 11 SVG diagrams are *Mermaid flowcharts*: their labels live in
+=<foreignObject>= HTML, *not* in =<text>= elements — a =<text>= selector finds
+zero, which is the trap. Strip the markup and the labels come out perfect and
+free: /"Users CDN Ingress Controller Service Mesh/Istio Auth Pod User Service
+Pod Order Service Pod ConfigMap Secrets…"/. No model, no rasterisation, no
+error. Never rasterise an SVG to OCR it — the text is right there.
+
+*** Tier 3 — OCR (local, $0, noisy but real)
+
+=tesseract= over raster images, into =nodes.body= for the image node.
+Covers the 36%. Quality is *real but noisy*, and the doc should not pretend
+otherwise — measured on =svg-line-annotated.png=:
+
+- *Recovered:* =svg-line-demo.el=, "wrapping tab-line", "Mode-line",
+  "src emacs-lisp", "Custom segment is just a zero-argument f"
+- *Garbage:* =—@amssseenelme!=, =erontpi ey org=, =Bebooin=
+- *Confusions:* =char1ieholland= (l→1), =post-svg-1line.org=, =2086-82-87= for
+  a date
+- *Chrome:* the Emacs mode-line is indexed too, so =J Dilla * Donuts * shuffle=
+  becomes "content"
+
+Consequence, pinned: OCR text is *good for BM25* (junk terms simply never
+match) and *weaker for embeddings* (noise dilutes the vector); *exact
+identifier search over OCR text is unreliable* because of l→1. Keep OCR text in
+FTS unconditionally; it is embedded only as part of the image node's derived
+body.
+
+Excluded from OCR: =ltximg/= (21 files) — rendered LaTeX fragments with hash
+filenames; OCR yields noise and the equations are already in the org source.
+
+/Shipped 2026-07-15, measured on the real corpus:/ of 137 image nodes, *75 got
+OCR text*, 10 SVG labels, 4 fell below =ocr_min_chars=, and *48 have no text at
+all* — the CLIP-only set, close to the 46% predicted from the sample. Image
+bodies went 10 → 85. The payoff is the queries only OCR can answer:
+=backward-delete-char= now returns =ask-emacs-which-key-top.webp=, a string
+that exists nowhere but inside those pixels. Note prose still outranks OCR when
+both match (=windmove-right= puts post text above the screenshot) — correct,
+and the reason OCR text is additive rather than a competing retriever.
+
+/Cost, measured:/ a full-corpus =--force= re-ingest with OCR over 127 raster
+images takes ~2 minutes. Incremental runs pay nothing: the =content_hash= gate
+means OCR runs only on images whose bytes changed.
+
+=tesseract= is a *system binary, not a pip dependency*, so it can simply be
+missing. Ingest probes once and reports
+=files_skipped["ocr-unavailable:tesseract-not-found"]= rather than failing or,
+worse, silently indexing every picture as title-only — which would look exactly
+like a corpus of text-free images.
+
+*** Tier 4 — CLIP (local, $0, the only thing that sees a photograph)
+
+=clip-ViT-B-32= via =sentence-transformers= — the *same dependency the text
+embedder already uses*, so the only genuinely new package is =pillow=. It
+encodes text and pixels into *one shared 512-d space*, which is what makes
+"type =dog=, get photographs of dogs" work: the query goes through the text
+encoder, images through the image encoder, cosine between them. Zero-shot — no
+labels, no tagging, no filename matching. A photo named =IMG_4823.jpg= in a
+folder called =stuff/= still matches =dog=.
+
+/Why this is worth building despite the banners being 1:1 with posts you can
+already find by text:/ a *photo library is planned but not yet located*
+(2026-07-15). Photographs are the corpus CLIP was built for and the one corpus
+where every other tier returns nothing — OCR measured 0 characters on both
+photographs already present. Tier 4 is the forward-looking one; tiers 1–3 are
+the ones that pay today. Until the library exists, CLIP's only subjects are the
+37 text-free banners, so *M7c is explicitly the last thing to build* and is
+fine to defer indefinitely.
+
+Prior art: =org-db-v3= does exactly this and nothing else — pure CLIP, and its
+=ocr_text= column is *declared but never populated or read*, so it is not
+evidence for tier 3. Its benchmark is worth stealing though: exact numpy cosine
+beat ANN at 1,126 images (0.34s vs 4.36s), independently confirming the
+brute-force choice in "Storage".
+
+/Shipped 2026-07-15. Measured on the real corpus (127 raster images; SVG is
+excluded — see below):/
+
+| Query                           | Top hit                      | Score | Verdict                    |
+|---------------------------------+------------------------------+-------+----------------------------|
+| =a screenshot of a text editor= | =hywiki-fig2-directory.webp= | 0.330 | correct — it is one        |
+| =a photo of a cat=              | =charlie_and_d.png=          | 0.241 | found the only photographs |
+| =a photo of a dog=              | =sierpinski-chaos-0.jpeg=    | 0.237 | *wrong — there is no dog*  |
+
+*The gap is the signal, and it is the thing to internalise about this tier.*
+0.33 means found; 0.24 means nothing matched and you are reading the top of
+noise. There is no relevance floor because *cosine ranks rather than filters* —
+a query with no answer still returns =limit= pictures, confidently ordered.
+CLIP scores are also compressed (a strong match is ~0.3, not ~0.9), so no
+threshold is imposed server-side: the caller sees the numbers and decides.
+
+*SVG is excluded from CLIP.* Pillow cannot open it (measured:
+=UnidentifiedImageError= on all 10), and rasterising a flowchart to ask CLIP
+what it depicts would be strictly worse than tier 2, which already has the
+exact labels for free. A diagram is text; CLIP is for pictures.
+
+Verdict on this corpus, honestly: CLIP earns its place on *screenshots* (0.33,
+where tier 3's OCR is noisy) and is the *only* thing that sees the two
+photographs — but with no photo library yet, that is most of its value. It is
+built and ready for the corpus it was made for.
+
+*** How the tiers land in the schema
+
+Tiers 1–3 all produce *plain text*, so they flow through the existing FTS and
+text-embedding path with no second vector space and no new query surface. Only
+tier 4 needs new machinery — and less than expected, because =node_vectors= is
+already keyed =(node_id, model)= precisely so two models can coexist:
+
+#+begin_src text
+image node (kind=image, node_class=media)         -- FILE-DERIVED ONLY
+  title  := humanised filename                    -- "dm-bounded-contexts" →
+                                                  --  "dm bounded contexts"
+  body   := SVG labels ∥ OCR text                 (may be empty — the M7 46%)
+  → nodes_fts                                     tiers 2+3, free
+  → node_vectors(model='BAAI/bge-small-en-v1.5', dim=384)   iff body non-empty
+  → node_vectors(model='clip-ViT-B-32',          dim=512)   ALWAYS  tier 4
+
+caption  -- NOT on the image node. Lives in the referencing section's body
+         --  (tier 1) and on the ILLUSTRATES edge's `evidence`.
+#+end_src
+
+*The caption deliberately does not live on the image node,* though it is the
+best description of it — three constraints make that impossible to reconcile:
+the caption lives in the /org/ file, the image node is walked from the /image/
+root, and (below) its =content_hash= is over the /file bytes/. Put the caption
+in the body and a caption edit would change the body while the hash — which
+never saw it — stays put, so the vector silently rots. Worse, one picture used
+by three posts has three captions and no principled merge.
+
+So the caption stays where it was written: in the section body, where tier 1
+makes it searchable, and on the =ILLUSTRATES= edge as =evidence=. "Find the
+image whose caption mentions X" therefore resolves as /find the section, expand
+one hop/ — ordinary graph traversal, which is what =/context/expand= is for —
+rather than as a direct FTS hit on the image row. The filename carries more
+than it looks like it should: =healthcare-deserts-banner=, =ask-emacs-mx=,
+=dm-bounded-contexts= are all real lexical signal once de-slugged into the
+title.
+
+*Freshness — the uniform rule breaks here, deliberately.* Elsewhere a vector is
+fresh iff =node_vectors.source_content_hash = nodes.content_hash=, where
+=content_hash= is over =title + "\0" + body=. For an image that rule is wrong
+in both directions: re-running a newer tesseract changes the body and would
+force a pointless CLIP re-embed, while editing the *pixels* without changing
+the OCR text would leave the CLIP vector stale — the silent-corruption
+direction. So *image =content_hash= is taken over the file bytes plus a
+derivation-version string*, never over the derived text. This is exactly why
+the body must stay file-derived: =content_hash= is then a pure function of what
+the body is computed from, both vectors key off it uniformly, and bumping
+=derivation_version= is an explicit epoch-style rebuild, like graphs #6/#7.
+
+*Query.* =/search/images= is CLIP-only (text→image). CLIP scores are *not*
+comparable with bge scores — different spaces — so they can never be summed
+into =/search/hybrid='s fusion. They /can/ be fused by *RRF, which ranks rather
+than scores*, and that is the sanctioned route if images are ever folded into
+hybrid. Images with derived text already surface in =/search/fts= and
+=/search/semantic= for free, so =/search/images= is the extra reach, not the
+whole story.
+
+*Where images come from.* Image nodes are walked from a root like any other
+file — not conjured from link sites — so one picture used by three posts is one
+node with three inbound =ILLUSTRATES= edges. Gotcha, measured: blog posts link
+images as =[[file:../images/x.webp]]= but *=chiply.dev/images/= does not exist*
+— those paths are authored for the published output, and the files live in
+=static/images/=. Link→node resolution therefore needs a per-root publish-path
+rewrite; plain filesystem resolution finds nothing and would silently produce
+zero edges.
+
+** The graph catalog
+
+The same node table supports all of these as different edge =kind=s:
+
+| # | Graph                   | Edge meaning                   | How created                         | Edge kinds                                                          |
+|---+-------------------------+--------------------------------+-------------------------------------+---------------------------------------------------------------------|
+| 1 | Hierarchy               | parent contains child          | file → heading → paragraph → chunk  | =CONTAINS=, =PART_OF=, =NEXT_CHUNK=                                 |
+| 2 | Explicit link           | A links to B                   | Org links, blog links, backlinks    | =LINKS_TO=, =BACKLINKS_TO=                                          |
+| 3 | Source / citation       | note comes from source         | PDF / podcast / book / article meta | =DERIVED_FROM=, =SOURCE_OF=, =PAGE_IN=, =EPISODE_IN=, =SAME_SOURCE= |
+| 4 | Term / entity           | A & B name the same concept    | tags, glossary, entity extraction   | =MENTIONS=, =SAME_ENTITY_AS=, =SAME_TERM_AS=, =CO_MENTIONS=         |
+| 5 | Embedding similarity    | A is semantically near B       | k-NN over embeddings                | =SIMILAR_TO= (cosine in =weight=)                                   |
+| 6 | Cluster / summary       | chunk in a generated cluster   | clustering + summaries              | =MEMBER_OF_CLUSTER=, =SUMMARIZED_BY=                                |
+| 7 | LLM-inferred relations  | semantic relationships         | LLM extraction                      | =ELABORATES=, =CONTRADICTS=, =UPDATES=, =CAUSES=, =SUPPORTS=        |
+| 8 | Illustration (M7)       | section shows this image       | image links in Org/Markdown         | =ILLUSTRATES=, =ILLUSTRATED_BY= (caption in =evidence=)              |
+| + | Temporal                | A came before/after B          | created/modified/published dates    | =NEXT_IN_TIME=                                                      |
+| + | Tag                     | A shares tags with B           | Org tags / frontmatter              | (via =SAME_TERM_AS= on tag nodes)                                   |
+| + | Contradiction / tension | A disagrees with B             | LLM-assisted                        | =CONTRADICTS=                                                       |
+| + | Development             | A refines/updates/depends on B | LLM-assisted or manual              | =ELABORATES=, =UPDATES=                                             |
+
+Row #1's edge kinds are /virtual/ — read-time views computed from
+=parent_id=/=ordinal= (see design principles), never physical rows. Every other
+row is physical =edges= rows.
+
+** Build priority (recommended order)
+#+begin_example
+1. Hierarchy        ← underrated; solves the "tiny chunk, no context" RAG problem
+2. Explicit links
+3. Source graph
+4. Term / entity
+5. Embedding similarity (k-NN)
+6. Cluster / summary
+7. LLM-inferred relations
+#+end_example
+
+The *hierarchy graph is the sleeper*: retrieve a paragraph, then climb to its
+heading → article → PDF/episode for context.
+
+** Yes — embeddings can /manufacture/ graph structure
+#+begin_example
+for every node:
+    find top-k nearest neighbours
+    create SIMILAR_TO edges (weight = cosine)
+#+end_example
+
+Make these edges *weighted and somewhat disposable* — embeddings produce "false
+friends." They're great for /maybe related/, not always /meaningfully related/.
+
+** Prior art to steal from (don't reinvent, don't over-engineer)
+- *Microsoft GraphRAG* — extracts structured data from unstructured text, builds a
+  knowledge graph, derives /community hierarchies/, summarises communities, uses
+  those structures for RAG.
+- *LightRAG* — lighter graph-RAG; combines graph structure with vectors, low-level
+  (entities/relationships) + high-level (topics) retrieval.
+- *RAPTOR* — recursively embeds → clusters → summarises → builds a /tree/ so
+  retrieval can happen at multiple abstraction levels.
+
+Steal ideas from all three; start minimal.
+
+* Part 3 — Implementation plan
+
+Concrete adaptation: searching across *sets of Emacs files* and building the
+indexes/embeddings/graphs above. Emacs is the first frontend, but every derived
+artifact lives behind a service so the system isn't Emacs-bound.
+
+** Architecture: thin frontends over a FastAPI backend
+
+The system splits into a *Python FastAPI backend* that owns every backend
+artifact, and *thin frontends* that only render results and capture input.
+
+#+begin_example
+Emacs (consult UI · gptel agent) ──┐
+Browser UI (later)                 ├── HTTP/JSON ──► FastAPI backend
+Other editors / MCP clients ───────┘                  ├─ ingest: adapters → nodes/edges
+                                                      ├─ SQLite: nodes · edges · FTS5 · vectors
+                                                      ├─ embeddings (sentence-transformers / API)
+                                                      ├─ k-NN batch + graph build/expansion
+                                                      └─ hybrid fusion + cross-encoder rerank
+
+(exact search stays frontend-local: ripgrep from Emacs)
+#+end_example
+
+- *The backend owns anything that touches a backend artifact* — the SQLite
+  database, FTS index, embeddings, k-NN, graph construction and traversal,
+  fusion, reranking, and the whole ingest pipeline. Frontends never open the db.
+- *Exact retrieval is the deliberate exception:* it's regex over the working
+  files, already perfect in Emacs (=consult-ripgrep=), millisecond-fast, and
+  gains nothing from a service round-trip. It stays frontend-local. The backend
+  still exposes =/search/exact= — a thin ripgrep wrapper — so non-Emacs
+  frontends and the agentic layer get the full retrieval stack. Result caching
+  for it is /not/ worth it at personal scale: ripgrep is faster than cache
+  invalidation is safe. (The backend does keep a small LRU of /query
+  embeddings/ — repeated semantic queries skip the embed call.)
+- *Why this split:*
+  - Emacs is single-threaded; every heavy operation (embedding runs, k-NN
+    rebuilds, reranking) is out-of-process by construction — the client only
+    makes async HTTP calls.
+  - Frontend-agnostic: a browser UI, another editor, or an MCP client reuses
+    the same API instead of reimplementing retrieval.
+  - Deployable later: =localhost= first; the same service can move to a home
+    server or cloud box behind auth with zero frontend redesign.
+  - Python dissolves the two hard in-Emacs problems (both verified on Emacs
+    31): the bundled SQLite's =sqlite-load-extension= enforces a hardcoded
+    allowlist, so =sqlite-vec= can never load (=emacsql= shares the limit); and
+    brute-force cosine in interpreted Elisp is slow. In the backend, =numpy=
+    does the dot-products and =sqlite-vec= loads fine if ever needed.
+
+*API surface* (v1 sketch, versioned under =/v1=):
+#+begin_src text
+POST /ingest              -- walk corpus roots, upsert changed files → job id
+POST /ingest/nodes        -- push pre-parsed nodes (the org-element escape hatch)
+POST /embed               -- embed all non-fresh text_units → job id
+                          --  (the pipeline's embed stage, run as its own job so
+                          --   ingest never needs the model in memory)
+POST /graph/build         -- rebuild typed edges from stored raw_links → job id
+                          --  (full rebuild by design: link resolution is global —
+                          --   a new page can resolve targets that dangled before)
+POST /graph/knn           -- rebuild SIMILAR_TO edges (epoch-stamped batch) → job id
+GET  /jobs/{id}           -- progress of an ingest/embed job
+GET  /status              -- service identity ("service": "irs"), corpus
+                          --  stats, index freshness, embedder readiness
+                          --  (model on disk? loaded?) — distinct from "server up"
+POST /search/exact        -- ripgrep wrapper (non-Emacs frontends, agent parity;
+                          --  hardened — see Contracts)
+POST /search/fts          -- BM25 over nodes_fts
+POST /search/semantic     -- embed query → cosine over node_vectors
+POST /search/hybrid       -- RRF fusion + cross-encoder rerank
+POST /search/images       -- M7: CLIP text→image cosine over the 512-d vectors.
+                          --  Separate endpoint, not a hybrid leg: CLIP scores
+                          --  are not comparable with bge scores. RRF (rank-
+                          --  based) is the only sanctioned way to fuse them.
+POST /embed/images        -- M7: CLIP-embed image nodes → job id (own job so a
+                          --  CLIP run never needs the text model resident, and
+                          --  vice versa)
+GET  /nodes/{id}          -- node + hierarchy view (parents, children, siblings)
+POST /graph/neighbors     -- typed, budgeted expansion from seed ids; `depth`
+                          --  (default 1) walks N hops breadth-first, each edge
+                          --  tagged with its hop + the node it reached
+POST /context/expand      -- seeds → expand → dedup/MMR → rerank  (the flagship);
+                          --  `depth` (default 2 = the tuned base) reaches 1 hop
+                          --  or, above 2, walks the frontier further before rerank
+POST /feedback/selection  -- frontend reports the result the user picked
+#+end_src
+
+*The Emacs client* is one small package: async HTTP only (=plz= or
+=url-retrieve= with callbacks — never a synchronous call on the command loop),
+consult sources per search endpoint, gptel tools wrapping the same endpoints,
+and lifecycle helpers (start/adopt the =uvicorn= process, health-check on first
+use). The consult async sources are the thickest part of the "thin" client:
+consult 3.x dynamic collection forbids late callbacks, so the client needs one
+custom async stage — =plz= =:then= feeding the sink, cancellation by killing
+the plz process object, and a stale-response guard — modelled on
+=consult-omni='s dynamic-candidate update. Budget it as real work, and do
+/not/ call plz synchronously inside =consult--dynamic-collection= (it leaks
+curl processes under =while-no-input=).
+
+** Project layout & tooling
+- *Naming:* repo =information-retrieval-service=; everywhere else the short
+  name *=irs=* — Python package, CLI, config/data dirs, =/status= service
+  identity. (This doc keeps its =text-search= filename.)
+- *Backend:* repo =~/source_code/information-retrieval-service= (the same
+  pattern as =brushup= / =svg-line=). Python package =irs=, managed with *uv*,
+  *Python pinned to 3.12* (verified end-to-end on this machine; torch 2.13 now
+  ships cp314 arm64 wheels too, so the pin is convenience, not necessity).
+  =pytest= for tests including the eval harness; entry point =irs serve= —
+  uvicorn, *single process, =workers=1=*: the in-memory job registry,
+  query-embedding LRU, and writer queue all assume it. =--reload= is dev-only
+  and kills running jobs.
+- *Emacs client:* =source/zettapkg/irs/irs.el= in =.zetta.d= (thin:
+  =plz=-based async calls, consult sources, gptel tools, service lifecycle),
+  wired in via =modules/tools/irs.el=. =.zetta.d= changes go through the usual
+  PR flow.
+- *Config & data (XDG, no Emacs coupling):* config at
+  =~/.config/irs/config.toml=; data dir =~/.local/share/irs/= (db, model
+  cache). Both overridable via env var / CLI flag, which is all future
+  deployment needs.
+
+** Corpus
+Define the corpus as a set of roots/globs spanning *multiple file types* — Org
+notes, *Markdown*, blog =.org=/=.md=, =.el= and other source, plain text, plus
+referenced PDFs/podcast transcripts. Each file → one or more *nodes* (file →
+heading → paragraph/chunk). Record =path=, =parent_id=, =ordinal=,
+=content_hash=, =updated_at=, and the source =format= (see adapters below).
+
+Concretely, for this machine (=~/.config/irs/config.toml=):
+
+#+begin_src toml
+[corpus]
+# Each root declares an alias — it prefixes every path-derived stable_key.
+roots = [
+  { alias = "logseq",   path = "~/logseq/pages",    formats = ["org", "md"] },  # ~1170 pages; 96% org, 4 md
+  { alias = "journals", path = "~/logseq/journals", formats = ["org", "md"] },  # wikilink date targets
+  { alias = "assets",   path = "~/logseq/assets",   formats = ["pdf"] },        # ~50 PDFs linked from pages
+  { alias = "hywiki",   path = "~/hywiki",          formats = ["org"] },
+  { alias = "zetta",    path = "~/.zetta.d",        include = ["*.org"] },      # design docs at repo root
+  { alias = "blog",     path = "~/source_code/chiply.dev/org", formats = ["org"], include = ["post-*.org"] },  # 52 published posts
+  # M7 image root. static/ is NOT where the posts say the images are: they
+  # link ../images/, which does not exist — see "Where images come from".
+  { alias = "blogimg",  path = "~/source_code/chiply.dev/static/images", formats = ["image"] },  # 80 raster + 11 svg
+]
+# A photo library is planned but has no location yet (2026-07-15); when it
+# lands it is one more root with formats = ["image"] and nothing else changes —
+# that is the case tier 4 (CLIP) exists for.
+# Roots to add once their locations are pinned: the citar PDF library
+# (zetta-literature-dir is currently unset in ~/.zetta.el).
+#
+# chiply.dev/wiki/ is deliberately NOT a root: it is the canonical source that
+# GENERATES ~/hywiki (wiki/generate_hywiki_edition.py), so indexing both would
+# store the same wiki twice in two spellings.
+#
+# Glob contract: gitignore/wcmatch semantics, matched against the ROOT-RELATIVE
+# path. `*` does not cross `/`; `**` recurses. `include` filters paths,
+# `formats` selects adapters by extension; on one root they combine as AND.
+exclude = [".git/**", "**/elpaca/**", "**/var/**", "**/node_modules/**", "**/*.min.*",
+           "**/ltximg/**"]   # M7: rendered LaTeX fragments — OCR noise, hash filenames
+
+[chunking]
+chunk_size    = 400   # target tokens
+chunk_overlap = 50
+
+[images]                       # M7
+ocr             = true         # tesseract; local, $0. Skipped for .svg
+ocr_min_chars   = 12           # below this the OCR is noise, not signal — drop it
+clip_model      = "clip-ViT-B-32"   # 512-d, shared text+image space
+derivation_version = 1         # bump to force re-OCR/re-CLIP (epoch-style rebuild)
+# Publish-path rewrites, per root: posts link ../images/x.webp but the file
+# lives in static/images/x.webp. Without this, link resolution silently yields
+# zero ILLUSTRATES edges.
+[[images.link_rewrite]]
+root = "blog"
+from = "../images/"
+to   = "blogimg:"
+
+[embedding]
+provider = "sentence-transformers"
+model    = "BAAI/bge-small-en-v1.5"  # start small (fast, ~130 MB); bge-m3
+                                     # (2.27 GB) is the quality upgrade — a
+                                     # config change + re-embed, nothing else
+
+[server]
+host = "127.0.0.1"
+port = 8878   # deliberately NOT 8765 — org-db-v3's vendored server squats it here
+#+end_src
+
+The trick to supporting many formats cheaply: *only the adapter is
+format-specific.* Everything downstream — =nodes=/=edges=, FTS, embeddings, the
+graph, and query — operates on the common schema and never needs to know whether
+a node came from Org, Markdown, or a PDF.
+
+** Source-format adapters
+An *adapter* is a small function per format — living in the backend — that
+turns a file into nodes (and any natively-available raw edges, e.g. links →
+=LINKS_TO=). All adapters emit the same =nodes=/=edges= shape, so adding a
+format = adding one adapter, nothing else.
+
+| Format      | Extensions         | Parser (backend, Python)                     | Hierarchy from       | Links from                          |
+|-------------+--------------------+----------------------------------------------+----------------------+-------------------------------------|
+| Org         | =.org=             | =orgparse= (raw accessors + own link regex)  | headings + list/para | org + md-style links, =key::= props |
+| Markdown    | =.md=, =.markdown= | =markdown-it-py= (+ custom wikilink rule)    | ATX/Setext headings  | =[text](url)=, =[[wikilinks]]=, refs |
+| Source code | =.el=, =.py=, …    | =tree-sitter-language-pack=                  | defun/class/section  | =require=/=import=, symbol refs     |
+| Plain text  | =.txt=             | paragraph/blank-line split                   | synthetic (file→chunks) | bare URLs                        |
+| PDF         | =.pdf=             | =pypdf= (text + outline, verified)           | pages (+ outline)    | annotations / citations             |
+| Transcripts | =.vtt=, =.srt=, …  | timestamp-segment split (=webvtt-py=/=srt=)  | synthetic (file→segments) | source/episode metadata        |
+| Image       | =.png=, =.jpg=, =.jpeg=, =.webp=, =.gif= | =pillow= + =tesseract= (OCR) + =clip-ViT-B-32= | none (leaf node) | inbound =ILLUSTRATES= from link sites |
+| Image (SVG) | =.svg=             | markup strip (=<foreignObject>=, not =<text>=) | none (leaf node)  | inbound =ILLUSTRATES=; no OCR, no raster |
+
+Adapter contract — one entry point that dispatches on =format= (derived from
+extension, with an override map):
+
+#+begin_src python
+def parse_file(path: str, fmt: str) -> list[NodeDraft]:
+    # pre-order list; each NodeDraft: kind, title, body, ordinal, raw_links,
+    #   metadata, parent_index  (index of the parent draft in this list,
+    #                            None for the document root)
+    ...
+#+end_src
+
+Front-matter (YAML / Org keywords / Logseq =key::= lines) is captured into
+=metadata_json= uniformly, so tag/temporal graphs work across formats. Markdown
+wikilinks and Org links both normalise to =LINKS_TO= edges by resolving the
+target to a node id during the edge-build pass. *Unresolved targets are the
+common case, not an error* — measured on the real corpus, only 5 of 1,278
+unique wikilink targets resolve to a page file. A target with no document node
+upserts a =concept=-class node (=con:<normalized-term>=) and =LINKS_TO= points
+at that. Journal-date targets (="Jan 6th, 2025"=) resolve into the =journals=
+root via the Logseq date mapper (↔ =2025_01_06.*=). High-degree hub concepts
+(=Readwise= ×808) are exactly what the per-edge-type expansion caps exist for.
+
+/Org adapter contract (verified against the real corpus — 1,189 files parse
+cleanly, but):/
+- =orgparse='s default accessors *silently strip link markup*
+  (=[[url][desc]]= → =desc=) and it has *no* link API. The adapter must read
+  =get_heading(format='raw')= / =get_body(format='raw')= for bodies, hashes,
+  and link extraction, and ship its own link regex covering org links,
+  =[text](url)= (Logseq bodies are markdown-in-org), and bare URLs. Image and
+  asset URLs are excluded from FTS/embedding text — the /URL/ only. As of M7
+  the link is no longer merely dropped: it becomes an =ILLUSTRATES= edge to the
+  image node keyed =img:<root>/<relpath>=.
+- *=#+CAPTION:= must survive the keyword strip (M7, tier 1).* =KEYWORD_LINE_RE=
+  (=^\s*#\+\S.*$=) removes every =#+…= line, which is right for
+  =#+title:=/=#+startup:= and wrong for captions: it silently discarded 79
+  human-written image descriptions in the blog alone (verified: =Terminus at
+  12px= → 0 indexed nodes). Keep the caption's /text/ (drop the =#+CAPTION:=
+  marker itself) in the section body, and carry it as the =ILLUSTRATES= edge's
+  =evidence=. =#+NAME:= stays stripped — all 11 uses are =fig-*= anchors, not
+  prose. Captions already contribute their links (=#+CAPTION: … [[url][DALL-E
+  4o]]=) because =extract_links= runs on raw text /before/ the strip; only the
+  prose was being lost.
+- *Logseq title codec:* only 24/1,189 files carry =#+title:=. Title =
+  =#+title= → file-top =:PROPERTIES:= drawer → percent-decoded filename
+  (=%XX= unescaped, =___= → =/=). The same codec plus case-insensitive compare
+  resolves wikilink targets to files. Strip =#+keyword= lines and the property
+  drawer from the root body before hashing/indexing.
+- *=key:: value= property lines* (Logseq metadata — not YAML, not Org
+  keywords) parse into =metadata_json= (=tags::=/=category::= → tag graph,
+  dates → temporal) and are stripped from the indexed body. Wikilinks /inside
+  property lines/ become =MENTIONS= edges to concept nodes
+  (=generated_by = property_parser=), *not* prose =LINKS_TO= — they are
+  400–800-degree hubs with no prose context.
+- A pre-pass tracks =#+begin_…/#+end_…= block state and escapes in-block
+  =*=-prefixed lines — orgparse otherwise promotes them to real headings.
+- *HyWiki root:* pages link via bare WikiWords, not org links; the adapter
+  runs a WikiWord pass (CamelCase words matching existing page names) for that
+  root's =LINKS_TO= edges.
+
+/Source-code note:/ =tree-sitter-languages= is abandoned and broken on modern
+Python — pin =tree-sitter-language-pack= (grammar name =elisp=, verified on
+3.12 arm64). Only =defun=-style forms surface as =function_definition=; the
+elisp adapter must also treat top-level =list= forms (=use-package=, =defvar=,
+=general-def=, …) as sections via head symbol + name atom, or most config
+files yield near-empty hierarchies.
+
+/Markdown note:/ nearly idle on this corpus (4 of ~1,170 logseq files are
+=.md=, and the main one uses org-style =***= headings — content-sniff it to
+the Org adapter). No parser or plugin ships =[[wikilink]]= support; it's a
+small custom inline rule or post-pass regex.
+
+/Escape hatch unchanged:/ an Emacs-side =org-element= adapter can push
+pre-parsed nodes via =POST /ingest/nodes= with nothing downstream changing.
+
+** Files with no markup structure
+Hierarchy must work even when a file has /no headings at all/ — a flat =.txt=, or
+an =.org=/=.md= that's just prose with no sections. The hierarchy graph still
+needs a tree to climb, so every adapter falls back to a *synthetic hierarchy*
+rather than emitting a single giant node:
+
+#+begin_example
+file (root node, kind=document)
+ └─ chunk 0  (kind=chunk, ordinal=0)
+ └─ chunk 1  (kind=chunk, ordinal=1)
+ └─ chunk 2  ...
+#+end_example
+
+Chunking rules, in priority order — an adapter uses the finest structure present
+and degrades gracefully:
+1. *Real structure if any* — headings/sections (Org, Markdown, code) when present.
+2. *Paragraph / blank-line split* — group consecutive paragraphs into chunks up to
+   a target size (e.g. ~200–500 tokens) with a small overlap.
+3. *No paragraphs either* (one long wall of text) — *sliding-window split* by token
+   count with overlap, so the embedding/FTS units stay reasonably sized.
+
+Key points:
+- The *file node is always created* (kind =document=) and is every chunk's
+  =parent_id= — so =chunk → file= climb works regardless of markup. A partially
+  structured file mixes real section nodes and fallback chunks under the same root;
+  the hierarchy graph doesn't care.
+- =ordinal= preserves reading order, powering =NEXT_CHUNK= edges (neighbour
+  expansion) even with zero headings.
+- This is a *property of every adapter*, not a separate "plain text" path: a
+  heading-less =.org=/=.md= goes through the same fallback as a =.txt=. The "Plain
+  text" row above is just the case where the fallback is /all/ you get.
+- Chunk size/overlap live in the backend config (=chunk_size=, =chunk_overlap=)
+  so structure-less files don't produce nodes that are too big to embed or too
+  small to be meaningful.
+
+** Storage: one SQLite database, owned by the backend
+One db (default =~/.local/share/irs/index.db= — see Project layout),
+opened *only* by the FastAPI service — single writer; frontends always go
+through the API:
+- =nodes=, =edges=, =node_vectors=, =meta= (Part 2 schema)
+- =nodes_fts= — an *external-content FTS5* table over =(title, body)= (BM25
+  for free; FTS5 is compiled into Python's SQLite), synced by the three
+  canonical INSERT/UPDATE/DELETE triggers from the SQLite docs. Every row is
+  indexed — containers as title-only rows (schema v2) — with an 8× bm25 title
+  weight. External-content tables corrupt /silently/ if rows change without
+  the paired FTS operations — the triggers are not optional.
+- vector search: *brute-force cosine in numpy* — load the =node_vectors= blobs
+  into one float32 matrix, one matrix–vector product per query. Fast well past
+  tens of thousands of chunks with *no ANN index* (current corpus measures
+  ~2.85M tokens / ~7.1K chunks — comfortable). If it ever outgrows this,
+  =sqlite-vec= loads without ceremony in Python — the Emacs
+  extension-allowlist problem (see Architecture) is gone by construction.
+
+*Write policy (pinned — "single writer" is a discipline, not a default):*
+=sqlite3= connections are thread-affine, so FastAPI's sync-endpoint threadpool
+and the background ingest job necessarily hold /different/ connections — real
+writer-writer contention exists and was measured (an embed batch inside a
+write transaction stalls a concurrent write 1.7s+, or throws =database is
+locked=). The rules:
+- =PRAGMA journal_mode=WAL= + =PRAGMA busy_timeout= (several seconds) on
+  *every* connection. WAL helps readers; it does /not/ arbitrate two writers.
+- Every write transaction opens with =BEGIN IMMEDIATE= — a deferred
+  read→write upgrade returns =SQLITE_BUSY= immediately and *ignores*
+  =busy_timeout=.
+- Writes serialise through one dedicated writer thread + queue; endpoints
+  (e.g. =/feedback/selection=) enqueue rather than write directly.
+- Embedding / k-NN compute happens *outside* any write transaction: compute
+  the batch first, then open a milliseconds-long transaction to insert the
+  finished vectors. Never hold the write lock across model inference.
+
+** Contracts & conventions
+Small decisions pinned now so they don't drift during implementation:
+
+- *=content_hash=* — SHA-256 over the UTF-8 of NFC-normalized
+  =title + "\0" + body=, post-extraction and pre-augmentation
+  (contextual-retrieval prefixes are /not/ part of the hash). File-level change
+  detection short-circuits on (mtime, size) first, then whole-file hash, before
+  any parsing.
+- *=token_count=* — counted with the active embedding model's own tokenizer
+  (sentence-transformers exposes it); before an embedding model is configured
+  (M0–M2), approximate as =ceil(chars / 4)=. Either way it's an approximation
+  when budgeting Claude context — close enough for windowing.
+- *FTS5 tokenizer* — =unicode61 remove_diacritics 2=, no stemming. unicode61
+  already splits =snake_case= (underscore is a separator), which is what
+  mixed note+code search wants; porter stemming hurts code and exact terms.
+  Add a stemmed shadow index later only if recall demands it.
+- *FTS5 query escaping* — raw user text is NOT valid =MATCH= syntax
+  (=api-v3-migration= throws a syntax error). The backend tokenizes the query
+  and quote-wraps each token (="api" "v3" "migration"=); a =raw: true= flag
+  passes native FTS5 syntax (AND/OR/NEAR/prefix=*=) through unmodified.
+  When strict implicit-AND finds nothing, the backend retries with OR (any
+  token; bm25 still ranks multi-token hits first) and reports which happened
+  via a =match_mode= field (="and" | "or" | "raw"=) in the response.
+- *=/search/exact= hardening* — the query is passed via =rg -e -- <query>=
+  (never positionally), fixed-strings =-F= by default with an explicit
+  =regex= flag, corpus roots as positional path args, =--no-config
+  --no-ignore= plus the /same/ exclude globs as the ingest walk (else exact
+  and indexed corpora silently diverge), and =--max-count= + a timeout to
+  bound runaway patterns.
+- *Job state is ephemeral.* The job registry lives in memory; =GET /jobs/{id}=
+  after a service restart returns 404. Safe because resumability derives from
+  /node/ state, not job state: re-=POST /ingest= and it continues from wherever
+  the last run committed.
+- *One result envelope for every search endpoint*, so consult (and any other
+  frontend) renders all retrievers uniformly:
+  #+begin_src text
+  { "results": [ { "node_id": …, "stable_key": …, "score": …,
+                   "retriever": "exact|fts|semantic|hybrid",
+                   "snippet": …,              -- FTS5 snippet() or leading text
+                   "title": …, "path": …, "heading_trail": [ … ],
+                   "kind": …, "node_class": …, "ordinal": …, "line": … } ],
+    "timings_ms": { … }, "total": … }
+  #+end_src
+  =score= is retriever-native, normalised to *higher-is-better* at the API
+  boundary (bm25 is negated — FTS5 returns negative-is-better); scales are
+  NOT comparable across retrievers, so frontends sort within one retriever or
+  trust server order. For =/search/exact= the node-identity fields are
+  nullable, =line= carries the match location, and node resolution is
+  best-effort by path containment.
+- *Errors* — FastAPI's default JSON error shape (=detail=) + plain HTTP status
+  codes; no custom error scheme in v1.
+
+** Leverage what already exists
+/Dependency check: everything the Emacs frontend needs — =consult=, =gptel= —
+is already installed. =org-roam= and =llm.el=, flagged as new dependencies in
+earlier drafts, are not needed at all: parsing and embeddings live in the
+backend, which brings its own Python dependencies./
+
+Emacs (frontend):
+- *consult* — UI surface for every search source (=consult--multi=), each
+  source backed by one endpoint. Already in heavy use here (=consult-omni= /
+  =consult-gh= / =consult-dir=), so the M2–M4 consult sources fit cleanly.
+- *gptel* — installed; LLM client with real *tool-use* (=gptel-make-tool=,
+  verified present but not autoloaded — =require= gptel before registering
+  tools) across Anthropic/OpenAI/Ollama/Gemini. The agentic layer (#5 / M6) =
+  gptel tools wrapping backend endpoints. (gptel's lack of an embeddings API
+  no longer matters — embedding is a backend concern.)
+- *plz* (or =url-retrieve=) — async HTTP for the thin client package. Present
+  today only as a transitive dependency — declare it explicitly. The consult
+  async stage built on it is the thickest client piece (see Architecture).
+- *org-roam* — not installed, not needed: hierarchy and links come from the
+  backend's Org adapter. If ever adopted, it's just another link source.
+
+Backend (Python):
+- *FastAPI + uvicorn + pydantic* — the service; pydantic models double as the
+  wire schema.
+- *sqlite3* (stdlib) — storage; FTS5 included.
+- *numpy* — brute-force cosine.
+- *sentence-transformers* — local embeddings /and/ local cross-encoder
+  reranking (=bge-m3=, =bge-reranker=) in one dependency; Voyage/OpenAI/Ollama
+  via =httpx= behind the same provider seam.
+- Parsing: =orgparse=, =markdown-it-py=, =tree-sitter-language-pack=,
+  =pypdf=, =webvtt-py=/=srt= — all behind the adapter layer.
+  (Text-layer PDFs only; scanned PDFs need OCR — see M7, which brings tesseract
+  in anyway, so scanned PDFs become a cheap follow-on rather than a new
+  dependency.)
+- *M7 images:* =pillow= is the only genuinely new package — =tesseract= is a
+  system binary (5.5.2, already installed here) driven by =subprocess=, and
+  =clip-ViT-B-32= loads through the =sentence-transformers= dependency that
+  the text embedder already pulls in. SVG needs nothing.
+- *khoj* — proof this exact architecture works (Python server +
+  sentence-transformers + thin Emacs client). Too monolithic to adopt; right to
+  study for chunking/embedding choices.
+
+** Prior art — study, don't adopt
+The SQLite + FTS5 + embeddings + hybrid + rerank stack has been built inside
+Emacs before. With the backend split, none of them is an adoption target — but
+each has parts worth stealing:
+
+- *=org-db-v3= (jkitchin)* — SQLite with ~22 tables, FTS5 + snippets,
+  sentence-transformer embeddings, scoped search, queue-based non-blocking
+  indexing, PDF/DOCX indexing. In-Emacs, so not a base — but its table design
+  and indexing-queue behaviour are the best reference for M0–M3 semantics.
+- *=emacs-rag-libsql= (jkitchin)* — hybrid search + *two-stage cross-encoder
+  reranking* on LibSQL. Its reranker pipeline is the model for M4.
+- *ELISA (s-kostyaev)* — the reference RAG-over-Emacs design; useful for how an
+  agentic loop consumes retrieval primitives (M6).
+- *khoj* — the same client/server shape as this design (see above); the closest
+  structural prior art, minus the typed multi-graph layer.
+
+The genuinely novel part of /this/ design remains the *typed multi-graph edge
+model + bounded graph-expansion traversal (M5)* — none of the above provide it;
+that's where net-new effort belongs.
+
+** Embedding & generation models
+- *Embeddings* (need a dedicated embedding model — Anthropic/Claude offers /none/
+  and officially points to Voyage AI). All embedding happens in the backend
+  behind a single provider seam (an =Embedder= protocol; the model is recorded
+  on every =node_vectors= row so re-embeds and migrations stay comparable):
+  - Local (default): *sentence-transformers* in-process — =bge-m3= (1024-d,
+    multilingual), =nomic-embed-text= (768-d), =mxbai-embed-large= (1024-d) —
+    no extra daemon needed; or *Ollama* over HTTP if it's already running.
+    /Reality check:/ =bge-m3= is a 2.27 GB fp32 pickle-only download needing
+    ~2.3 GB RAM at inference — fine on this machine, but the first-run pull
+    must surface as a visible job, and clients gate semantic/hybrid on the
+    embedder-readiness field of =/status=, never on a bare health check.
+    /v1 therefore defaults to =BAAI/bge-small-en-v1.5= (384-d, ~130 MB,
+    English)/ — the per-model =node_vectors= rows make upgrading to =bge-m3=
+    a config change plus one =irs embed= run, with both models comparable
+    side-by-side in the eval harness.
+  - API: *Voyage* =voyage-3.5= (~$0.06/1M tokens, large free tier) or
+    =voyage-3.5-lite=; OpenAI =text-embedding-3-small= (~$0.02/1M, $0.01 via
+    Batch), called via =httpx=. (The older =voyage-3= is superseded by
+    =voyage-3.5= at the same price.)
+- *Generation / orchestration* (the agentic layer): *Claude via gptel* in the
+  Emacs frontend, with tools that call the backend. Keep the model swappable.
+
+** Cost: where money is spent (and how to spend none)
+Be honest about the bill. *Most of this system is free local compute.* Cost
+appears in exactly two places, both optional:
+
+| Layer                          | Runs where      | Cost                                                              |
+|--------------------------------+-----------------+------------------------------------------------------------------|
+| Exact (ripgrep)                | local           | *free*                                                           |
+| Lexical / BM25 (SQLite FTS5)   | local           | *free*                                                           |
+| Structural graph #1–5 (SQLite) | local           | *free* (parse-time + embedding-kNN; no LLM)                      |
+| Brute-force cosine search      | local (backend numpy) | *free* (no API fees; uses local CPU/RAM)                   |
+| Image tiers 1–2 (caption, SVG) | local           | *free* (markup parsing; no model at all)                          |
+| Image tier 3 (OCR)             | local           | *free* (tesseract; CPU only)                                      |
+| Image tier 4 (CLIP)            | local           | *free* (=clip-ViT-B-32=, ~600 MB, same sentence-transformers dep)  |
+| *Embedding generation*         | local /or/ API  | free locally; small per-token fee via API (one-time + incremental) |
+| *Graph enrichment #6/#7*       | API /or/ local  | *paid* — LLM bulk pass over the corpus (cluster summaries, relation extraction) |
+| *Agentic synthesis (the LLM)*  | API /or/ local  | per-token (Claude) or free locally; the main recurring cost      |
+
+So exact, lexical, semantic /search/, and the *parse-time + similarity* graphs
+(#1–5) never cost a cent. Money enters in *three* places: (a) *generating*
+embeddings via a paid API instead of locally; (b) the *graph-enrichment* passes
+(#6 cluster/summary, #7 LLM-inferred relations) — these are LLM calls over the
+/whole corpus/, the same expensive indexing step GraphRAG is known for, and they
+are *not* free despite living in the "structural" layer; and (c) the agentic layer
+on a frontier model. Caveat: "free local" means *$0 in API fees* — local
+embeddings/LLMs still cost CPU/RAM/power and (for a usable local LLM) real hardware.
+
+*** Embeddings — paid vs free
+- *Paid API* (Voyage =voyage-3.5= ~$0.06/1M tokens with a large free tier, OpenAI
+  =text-embedding-3-small= ~$0.02/1M): a small per-token charge, paid *once* per node
+  and again only when a node changes (the =content_hash= gate keeps re-embeds
+  minimal). A 5–20M-token personal corpus is well under $1 — genuinely
+  pennies-to-a-few-dollars, not recurring. /Exception:/ switching embedding models
+  (or a provider deprecating one) forces a *full re-embed* of the corpus — the one
+  scenario that breaks the "paid once" framing, which is why the model is recorded
+  per vector.
+- *Free / local* (sentence-transformers in the backend, or Ollama:
+  =nomic-embed-text=, =bge-m3=, =mxbai-embed-large=): *$0*, runs on your machine.
+  - /Trade-off:/ slower, uses RAM/CPU, and quality is a notch below the best API
+    models (usually fine for personal semantic search). Embeddings are commodity
+    enough that local is the sensible default; reach for an API only if recall
+    disappoints.
+
+*** Agentic layer (M6) — paid vs free
+This is the only *recurring* cost, and only when you actually invoke it. Per the
+=claude-api= reference (current pricing, USD per 1M tokens):
+
+| Model            | Input | Output |
+|------------------+-------+--------|
+| Claude Opus 4.8  | $5    | $25    |
+| Claude Sonnet 4.6| $3    | $15    |
+| Claude Haiku 4.5 | $1    | $5     |
+
+- *Free / local* alternative: a local LLM via Ollama/gptel (Llama, Qwen, etc.) —
+  *$0*. /Trade-off:/ weaker reasoning and tool-use orchestration than Claude; for a
+  retrieval coordinator this is often acceptable since the retrieval primitives do
+  the heavy lifting.
+- *Cost controls when using Claude:*
+  - *Prompt caching* — cache the stable corpus/system prefix; cached input bills at
+    ~0.1× (up to ~90% off) on repeat queries.
+  - *Batch API* — 50% off for non-interactive bulk jobs (e.g. one-off
+    summary/cluster generation over the whole corpus).
+  - *Tier down* — Sonnet or Haiku for routine queries; reserve Opus for hard
+    synthesis. Keep the model swappable (gptel makes this a one-liner).
+  - *The architecture itself is the biggest lever:* the richer the free retrieval
+    layer, the less you lean on the LLM. Layers 1–5 answer most queries with no
+    token spend; the LLM is a thin coordinator on top, not the workhorse.
+
+*Bottom line:* the system can run *fully free of API fees* (Ollama embeddings +
+local LLM, or no LLM at all — just consult sources over exact/FTS/parse-time graph).
+The optional paid pieces are the graph-enrichment passes (#6/#7) and frontier-model
+agentic synthesis — both worth it on the queries that need them, neither required
+for a useful system.
+
+** Pipeline
+The whole pipeline runs inside the backend; =POST /ingest= (or a file-watcher)
+triggers it and =GET /jobs/{id}= reports progress.
+
+#+begin_example
+ingest (walk corpus) → adapter parses by format (org/md/code/pdf/…) → upsert nodes
+   → FTS index (nodes_fts, same transaction)
+   → embed changed nodes (content_hash gate)  → store vectors
+   → build edges:  explicit links (adapter raw links → resolved node ids)
+                   source (file/PDF/episode metadata)
+                   term/entity (extraction)
+                   embedding k-NN (SIMILAR_TO, epoch-rebuilt)
+   (hierarchy needs no edge build — it's the parent_id/ordinal columns)
+   → query: exact | fts | semantic | hybrid(RRF) → graph-expand(bounded)
+            → dedup/MMR → rerank → answer
+#+end_example
+
+*Incremental rebuild:* the =content_hash= gate re-chunks/re-embeds only nodes
+whose source changed. Log what was skipped — never silently truncate coverage.
+The gate is node-local — FTS, k-NN edges, and the enrichment graphs follow the
+sync/epoch rules in "Freshness & invalidation" (Part 2).
+
+*The freshness gate keys on the FILE, not on the adapter that reads it* — so
+an *adapter change is invisible to it*. Teach the Org adapter to keep
+=#+CAPTION:= or to emit image links, and every already-ingested file still
+matches its stored =(mtime, size)= and =file_hash=: the new parser never runs
+and the index quietly serves the old parse forever. Nothing about the file
+changed; everything about its meaning did. =POST /ingest {"force": true}= /
+=irs ingest --force= re-parses regardless — the parse-side twin of the epoch
+rebuilds graphs #6/#7 use. *Run it after any adapter change*; M7a needed it and
+the symptom (64 → 0 =ILLUSTRATES= edges, captions still unindexed) looked
+exactly like a broken feature.
+
+** Operational concerns
+These surface on day one of real use; the architecture absorbs some by
+construction, the rest are designed in:
+
+- *Never block Emacs.* Solved structurally: every heavy operation (embedding
+  runs, chunking, k-NN rebuilds, reranking) lives in the backend process. Two
+  disciplines keep it solved: the Emacs client makes only async HTTP calls
+  (=plz= / =url-retrieve= with callbacks — one stray synchronous request
+  re-creates the problem), and the backend keeps ingest off the request path —
+  =POST /ingest= enqueues a job and returns its id immediately;
+  =GET /jobs/{id}= reports progress. (Consistent with the project rule against
+  blocking the editor.)
+- *Resumable, transactional ingest.* A 1000-chunk embed run /will/ die partway
+  (network blip, model OOM, laptop sleep). Each node's embed status is derived
+  from the freshness check (=pending | fresh | failed=, with failures recorded
+  in =nodes.last_embed_error=); resume = "embed all non-fresh" (idempotent).
+  Commit every K vectors so a crash loses at most K, not the whole run.
+- *Bound graph expansion — enforced server-side.* The flagship =seeds → expand
+  → rerank= flow is a fan-out bomb without limits: one =SAME_SOURCE= hop into a
+  400-page PDF, or a high-degree concept / =SIMILAR_TO= hub, pulls in hundreds
+  of nodes. =/graph/neighbors= and =/context/expand= take per-edge-type hop
+  limits and budgets (so one hub type can't dominate) and apply a global
+  candidate cap before rerank; defaults live in the service, so no client can
+  accidentally blow itself up. Treat high-degree nodes as
+  expand-/through/-with-caps, not expand-/all/. Reach (degrees of separation) is
+  the one client-tunable dimension — a =depth= request param (neighbours default
+  1, expand default 2) — but it is itself ceiling-bounded server-side (=le=5/6=)
+  and still runs inside the per-kind budgets and the global cap, so a deeper walk
+  widens the pool without escaping the enforced bound. Distinct from =knn_k=,
+  which sets how many =SIMILAR_TO= edges are /materialised/ per chunk at build
+  time (=config.toml=, read by =irs knn=) — build-time fan-out, not query reach.
+- *Dedup before rerank and before the LLM.* Overlap chunking + expanding a chunk
+  /and/ its parent /and/ a sliding-window sibling guarantees near-duplicate
+  text. =/context/expand= collapses parent/child/overlap duplicates (span
+  containment or cosine ≥ threshold) and applies MMR for diversity — feeding
+  five paraphrases to the reranker wastes its budget and biases the LLM.
+- *Service lifecycle & trust boundary.* SQLite gets exactly one writer thread
+  (see Storage: write policy). v1 binds to =localhost=, no auth. Launch-on-
+  demand is a protocol, not a spawn call: the client probes =GET /status=
+  first and verifies the =service: "irs"= identity field (the default
+  port is deliberately not 8765 — org-db-v3's vendored server already squats
+  it on this machine); it spawns only when absent and treats address-in-use as
+  "already running — adopt". =irs serve= takes a PID-file lock in
+  =~/.local/share/irs/= (second launcher no-ops; stale PID files
+  reaped on start) and runs detached, so it survives the Emacs that started
+  it and is shared across Emacsen. Clients gate semantic/hybrid queries on
+  the embedder-readiness field of =/status=. Deploying beyond the machine
+  later means a bearer token + TLS — a config change, not a redesign.
+
+** Phased milestones
+*The MVP is M0 + M2* — lexical search returning hierarchy-expanded results over
+the service, with *zero embeddings, zero API cost, zero graph table*. Ship
+that, prove the adapter seam and the client/server split, then layer embeddings
+and the graph onto a schema that already anticipates their staleness.
+
+| Phase | Deliverable                                                                   | Build artifact                                       |
+|-------+---------------------------------------------------------------------------------+------------------------------------------------------|
+| M0    | FastAPI scaffold + ingest: adapters → =nodes= with =parent_id=/=ordinal= hierarchy | service + =nodes= + adapters + =/ingest=, =/status= |
+| M1    | Exact search baseline                                                          | /(already have =consult-ripgrep=)/ + =/search/exact= |
+| M2    | Lexical/BM25 via FTS5 + *hierarchy-expand*; gold query set + Recall@k script   | =nodes_fts= + =/search/fts= + consult source + eval v0 |
+| M3    | Semantic: embed nodes, brute-force cosine                                      | =node_vectors= + =/search/semantic=                  |
+| M4    | Hybrid: RRF fusion + *cross-encoder rerank*                                    | =/search/hybrid= (fusion + reranker)                 |
+| M5    | Parse-time graphs (#2 links, #3 source) + bounded =graph-expand= traversal     | =edges= + =/graph/neighbors=, =/context/expand=      |
+| M5b   | Embedding-kNN =SIMILAR_TO= edges (#5) — /epoch-rebuilt/, separate from M5      | k-NN edge builder                                    |
+| M6    | Agentic layer: gptel tools over the API (+ optional MCP mount)                 | tool definitions                                     |
+| M7a   | /Images, free tiers:/ caption un-strip (#1) + SVG labels (#2) + =image= nodes + =ILLUSTRATES= (#8) | org adapter fix + image/svg adapters + =media= class |
+| M7b   | /Images, OCR (#3):/ tesseract → =nodes.body= (FTS + text embedding)            | image adapter OCR stage + =derivation_version=       |
+| M7c   | /Images, CLIP (#4):/ =clip-ViT-B-32= vectors + =/search/images=                | =/embed/images= + CLIP provider + consult source     |
+| M8    | /Emacs frontend:/ one =consult--multi= interface over every retriever          | custom async stage + sources + marginalia + embark   |
+| —     | /Post-MVP, paid:/ term/entity (#4), cluster (#6), LLM-inferred (#7); contextual retrieval; VLM captioning for text-free images; ablation harness | graph-enrichment passes     |
+
+Hierarchy (#1) lands in M0 because it's a free byproduct of parsing and the
+highest-leverage graph — it shouldn't sit behind the expensive layers. k-NN
+(#5) is separate from M5 because it depends on M3 and is a global batch
+artifact with its own staleness story (see Freshness & invalidation, Part 2).
+
+** The Emacs frontend: one unified consult interface (M8)
+
+Every retriever behind *one command* — =irs-search= — as a =consult--multi= with
+one source per retriever. The per-retriever commands (=irs-search-semantic=,
+=irs-search-hybrid=, =irs-search-images=, =irs-search-live=) are *deleted*, not
+kept as wrappers: they were five ways to ask the same question, and the whole
+point is to ask once and see who answers. Each becomes a narrowing key.
+
+Modelled on =spot= (=~/source_code/spot=, =spot-consult.el=), which reached the
+same shape without =consult-omni=. This does too — =consult-omni= is not a
+dependency. But *spot's central mechanism is deliberately not copied*; see
+"Why no cache or mutex" below.
+
+*** The sources
+
+| Key | Source              | Backed by             | Default  |
+|-----+---------------------+-----------------------+----------|
+| =l= | Literal (ripgrep)   | =/v1/search/exact=    | visible  |
+| =f= | Index (BM25)        | =/v1/search/fts=      | visible  |
+| =s= | Semantic            | =/v1/search/semantic= | visible  |
+| =h= | Hybrid (RRF+rerank) | =/v1/search/hybrid=   | visible  |
+| =i= | Images (CLIP)       | =/v1/search/images=   | *hidden* |
+
+Four text retrievers visible at once is the *feature*, not the cost: the same
+document appearing under =Index=, =Semantic= and =Hybrid= is the comparison
+this interface exists to make visible while the retrieval stack is still being
+built. Measured backend cost of one unnarrowed keystroke: fts 1ms + semantic
+53ms + hybrid 190ms (fts+semantic+fuse+rerank internally, so its legs are
+computed twice — real, and irrelevant at this scale).
+
+*Images are =:hidden= for a reason that is a property of CLIP, not a
+preference.* =/search/images= has no relevance floor and cannot be given one —
+cosine *ranks rather than filters*, so a query with no answer still returns
+=limit= confidently-ordered pictures (M7, tier 4). A visible image source would
+therefore inject ~20 junk images into *every* text search, forever. It is one
+=i= away, and narrowing is what makes that free (below).
+
+Each source's =:enabled= gates on the matching =retrievers.<name>.ready= field
+of =/v1/status= (fetched once per command, cached) — the semantic source simply
+does not appear when no embedder is configured, rather than offering a search
+that 503s.
+
+*** Narrowing gates the request — this is the cost model
+
+=consult--multi-async= puts =consult--async-predicate= *before* each source's
+async stage (=consult.el:3126=), and that predicate is
+=consult--multi-visible-p=. A narrowed-away source *never receives the input
+string*, so it never fires its request. Consequences, and they are the whole
+budget:
+
+- Narrow to =s= → exactly one HTTP request per keystroke.
+- =:hidden= sources cost *nothing at all* until narrowed to — which is what
+  makes the CLIP source's presence free.
+- Unnarrowed → four concurrent requests per debounce. Bounded by
+  =consult-async-min-input= + throttle/debounce, not by cleverness.
+
+*** Why no cache or mutex (the one place spot does not transfer)
+
+Spot's seven sources share *one* Spotify endpoint (=?type=album,artist,…=), so
+without =spot--cache= + =spot--mutex= each keystroke would fire seven
+*identical* requests; the cache means the first source pays and the other six
+read its result. That machinery exists to dedupe *duplicate* requests.
+
+Here the sources hit *different endpoints* — there are no duplicate requests to
+dedupe, so the cache and mutex have nothing to do. Emacs threads are not
+involved either (=plz= callbacks land on the command loop). Cost is controlled
+by narrowing, and staleness by the guard in the async stage. *Do not port
+=spot--search-cached-and-locked=.*
+
+*** Root and file-type: arguments, not narrowing keys
+
+Pinned: *the retriever is the narrowing axis; everything else rides in the
+input as flags* and is passed down to the backend.
+
+#+begin_example
+svg rendering --root=blog --type=org
+kubernetes deploy --root=logseq+zetta
+emacs --type=pdf --limit=50
+a photo of a cat --root=blogimg          (narrowed to i)
+#+end_example
+
+Three flags, each with a one-letter form (=-r= / =-t= / =-l=): =--root== takes
+one or more root aliases (=+=-separated, or repeat the flag), =--type== one or
+more formats or extensions (same list syntax), =--limit== overrides
+=irs-search-limit= for one query. Values are validated against =/v1/status=
+*before anything is sent*, so a typo searches nothing rather than answering a
+different question, and typing toward =--root=blog= does not fire a request
+per keystroke. =--limit== and the defcustom share one clamp to the server's
+ceiling (200): the backend 422s above it, and since a failed request only
+shows in the indicator, an unclamped value would blank fts/semantic/hybrid/
+images while the literal source — ceiling 1000 — kept working, which reads as
+a corpus problem rather than a config one.
+
+Three reasons, in order of force:
+
+1. *A flag filters before =limit=; a UI filter filters after.* =roots= (and
+   =formats=, once added) are backend request fields — the server applies them
+   inside the query and still returns =limit= rows. Filtering client-side, or
+   via a consult narrowing predicate, discards rows the server already spent
+   its limit on: ask for 20 hits, narrow to Org, get 3. That is a silently
+   wrong result, not a slow one.
+2. *Consult's narrow key is one character on one axis, and =consult--multi=
+   already owns that axis for sources.* Root × type × retriever is three
+   orthogonal facets you want to combine ("semantic, blog only, org only").
+   One key cannot carry three.
+3. *Roots are config-driven and open-ended.* Seven today; the planned photo
+   library adds an eighth with no code change. Narrow keys are a fixed
+   compile-time vocabulary; =config.toml= is not.
+
+*Syntax is =consult--command-split= (=consult.el:667=)* — consult's own parser,
+the one =consult-ripgrep= / =consult-grep= / =consult-find= already use, so the
+muscle memory transfers and there is no bespoke parser to maintain.
+
+/Measured (=emacs -Q -batch=, consult 3.4) — spot's separator does NOT work
+here:/
+
+#+begin_example
+"svg rendering --root=blog"        => ("svg rendering" "--root=blog")     ✓
+"svg rendering --root=blog --type=org"
+                                   => ("svg rendering" "--root=blog" "--type=org")  ✓
+"a-hyphenated-query"               => ("a-hyphenated-query")              ✓ safe
+"svg rendering -- --root=blog"     => ("svg rendering --root=blog")       ✗ !
+#+end_example
+
+The last line is the trap: spot hand-rolls its own =" -- "= separator
+(=spot--find-args-separator=), but =consult--command-split= treats =--= as
+"options end here" and *folds the rest back into the query*. Use bare
+=--root=…=; options begin at the first space-dash. A query needing a literal
+leading dash escapes it (=\-=), exactly as in =consult-ripgrep=.
+
+/Also measured — a comma never survives the minibuffer:/ =consult--read= wraps
+every async source with =consult--async-split= (=consult--async-wrap=,
+=consult.el:2138=) — the split stage is added *around* the source's own
+pipeline, whether or not the source asked for it — and this config sets
+=consult-async-split-style= to =comma=, so everything after the first comma is
+client-side filter input (orderless, whose component separator is also =,=),
+never backend input. =--root=logseq,zetta= therefore searches =logseq= alone
+and lexically filters the hits on "zetta" — a deceptively plausible but wrong
+result set. Hence =+= as the in-flag list separator (=--root=logseq+zetta=),
+or repeat the flag (=--root=logseq --root=zetta=). The parser still accepts
+comma for input that bypasses the minibuffer — the gptel tools path calls it
+with plain strings.
+
+*Worked examples — the full input grammar.* Composition order: consult's
+async split takes everything before the /first/ comma as backend input and
+hands the rest to client-side completion filtering; the backend part then
+parses as =QUERY [FLAGS...] [-- LITERAL-QUERY-TEXT]=. Since
+=orderless-component-separator= is also =,= in this config, the first comma
+belongs to consult and every later comma belongs to orderless — one
+character, two layers, no conflict.
+
+#+begin_example
+server --root=logseq --type=org --limit=50   three backend facets on one query
+server -r=logseq -r=zetta                    repeated short flags union roots
+tree -- -sitter                              -- ends options: query is "tree -sitter"
+server --root=logseq -- -v                   flags AND a literal dash: query
+                                             "server -v", scoped to logseq
+server --root=logseq,proxy,section           comma 1 ends backend input ("server",
+                                             scoped); "proxy" and "section" are
+                                             orderless components narrowing the
+                                             returned rows client-side
+tree -- -sitter,elisp                        everything at once: literal "-sitter"
+                                             in the query, "elisp" filtering rows
+#+end_example
+
+Two spellings search a literal dash, not interchangeably. =--= ends options,
+so everything after it is query text, dashes included — the clean one. =\-=
+escapes a single dashed token, but /measured: the backslash travels with the
+query/ — ="self \-hosted"= parses to query ="self \-hosted"=, backslash
+intact. The literal source never notices (rg reads the regexp =\-= as =-=,
+which is exactly why the habit is invisible in =consult-ripgrep=), but
+fts/semantic receive the backslash as query text for the tokenizer to shrug
+at. Prefer =--= here.
+
+*** The literal source goes through the backend (revising Architecture)
+
+Architecture pins exact retrieval as *frontend-local* — =rg= over the working
+files is already perfect in Emacs and gains nothing from a service round trip.
+*M8 revises that, on measurement.* The literal source calls
+=/v1/search/exact=. Three findings, in order of force:
+
+1. *The round trip is ~2ms of ~284ms.* Measured on this corpus: =rg= itself
+   takes 282ms and the localhost HTTP adds 2. The thing being optimised away
+   is 0.7% of the latency. "Gains nothing from a round trip" was true; what
+   was missed is that it also /loses/ nothing.
+2. *=rg= cannot express per-root globs in one invocation,* and this corpus
+   needs them: =zetta= is =include = ["*.org"]= — and =*= does not cross =/=,
+   so *only root-level* =.org= — while =blog= is =include = ["post-*.org"]=.
+   One =rg= over all roots applies one glob set to all of them. Measured: it
+   would search *25 =.org= under =~/.zetta.d= where 4 are indexed*, and *75
+   blog =.org= where 52 are*. The literal source would surface 44 files the
+   other four sources structurally cannot, unmarked.
+3. *=rg='s globs are not the corpus contract anyway.* The backend already
+   knows this — its own note: /"rg globs only over-approximate the corpus;
+   every match is post-filtered with =ingest.file_selected= — the same
+   predicate the ingest walk uses — so the exact and indexed corpora cannot
+   diverge."/ Gitignore glob semantics differ from the =wcmatch= semantics
+   =config.toml= is written in.
+
+So an exact local =rg= needs one process *per root* /and/ a reimplementation
+of =file_selected='s glob engine in Elisp — a second glob matcher, hand-synced
+to the backend's forever, which is exactly the duplication Contracts warns
+about — to save 2ms. The backend does both already.
+
+The consequence is a simplification: *all five sources are HTTP*, so the one
+custom async stage below serves every one of them, and =--root=/=--type= mean
+the same thing everywhere by construction rather than by discipline.
+
+/=/v1/status= still publishes the corpus walk contract (=corpus.exclude=,
+per-root =formats=/=include=)./ It is no longer load-bearing for =rg=, but the
+root list is what marginalia resolves a result's root against, and publishing
+the rest keeps the option open — a frontend without a backend on localhost
+(a browser UI) may yet want it.
+
+*** The custom async stage (the thickest client piece, as budgeted)
+
+Architecture predicted this and it held: =consult--async-dynamic= runs its
+compute function inside =while-no-input= and *errors* if the callback fires
+after it returns (="Callback called too late"=, =consult.el:2262=). The M7-era
+=irs--live-compute= worked around that by pumping =accept-process-output= until
+the response landed — tolerable for one source, *quadratically wrong for five*:
+each keystroke would serialise four blocking pumps, the slowest being hybrid's
+reranker.
+
+So the HTTP sources bypass =consult--async-dynamic= and implement the async
+protocol directly — =(lambda (sink) (lambda (action) …))=. The sink itself
+imposes *no* late-callback rule; only =consult--async-dynamic= does. Therefore:
+
+- =plz= =:then= calls =(funcall sink 'flush)= → =(funcall sink cands)= →
+  =(funcall sink 'refresh)= *from the process filter*, arbitrarily late.
+- =[indicator running|finished|failed]= drives the spinner
+  (=consult--async-merge-sink= folds the five sources' indicators into one).
+- =cancel= / =destroy= kill the =plz= process object — an abandoned request
+  must never leak a =curl=.
+- A *stale-response guard* drops any response whose input is no longer the
+  current input. Five sources answering at different latencies (1ms fts vs
+  190ms hybrid) makes out-of-order arrival the normal case, not the edge case.
+
+Pipeline per source: =min-input= → =throttle= → this stage → =transform=.
+
+*** Marginalia: which root, which type
+
+Both facets the eye wants are *absent from the search response*, so:
+
+- *root* — prefix-match the result's absolute =path= against the cached
+  =corpus.roots[]= from =/v1/status=. Preferred over parsing the alias out of
+  =stable_key= (=doc:blog/…=, =chk:sec:blog/…#0=, =img:blogimg/…=): the alias
+  sits at a different depth per kind, and the literal source has *only* a path.
+  =concept= / =source= nodes have no root and no path — annotate them as such
+  rather than guessing.
+- *type* — M8 returns =format= on search results (the column exists on every
+  node; only =/v1/nodes/{id}= exposes it today). Until then, the extension off
+  =path=.
+
+- *score* — present on every retriever but *five different quantities*, which
+  is the whole problem (see below).
+
+Rendered with =marginalia--fields= for aligned columns, registered against
+category =irs-result=. This works *through* =consult--multi= because marginalia
+ships =marginalia-annotate-multi-category= (=marginalia.el:470=), which
+dispatches on the =multi-category= text property to the inner category's
+annotator — the same mechanism spot relies on.
+
+*** The score column must name its scale
+
+Contracts already pins that =score= is retriever-native and *not comparable
+across retrievers*. The interface makes that abstract rule concrete and
+unavoidable: five sources sit in one list, and =score= means five things.
+Measured on one query (=svg line rendering=):
+
+| Source   | =score= | What the number is                        |
+|----------+---------+-------------------------------------------|
+| fts      |    26.6 | bm25, unbounded                           |
+| semantic |   0.797 | cosine, 0..1                              |
+| hybrid   |    6.48 | cross-encoder logit, unbounded (or RRF ~0.03 unreranked) |
+| images   |   0.284 | CLIP cosine — /compressed/: 0.33 is strong |
+| exact    |   =null= | literal matching has no ranking            |
+
+Rendered bare, =26.60= sits above =0.80= and reads as the better hit. So the
+column is *labelled with its scale* — =bm25 26.6=, =cos 0.80=, =ce 6.48=,
+=rrf 0.031=, blank — which is what makes it honest: /within/ a group the
+number ranks, /across/ groups it only identifies. This is also why nothing
+sorts across sources; see below.
+
+*CLIP's number is the exception that needs colour, not just a label.* Alone
+among the five it has no relevance floor and a compressed range, so the score
+is most of the answer rather than a footnote (M7, tier 4). It is coloured
+against =irs-image-strong-score= inside the shared column
+(=marginalia--field='s =:face= takes a runtime expression), which retires
+M7-era =irs-search-images='s score-leads-every-line rendering: one score per
+result, in one place, on a scale the label names.
+
+*** Sorting: server order, and nothing else
+
+=consult--multi= is called with =:sort nil=, and =consult--split-perl=
+(=consult.el:2019=) sends the *whole* input to the backend unless it starts
+with punctuation — so there is no local filter re-ranking anything. The list
+is exactly what each server returned: *descending score within each source
+group*, groups in source order.
+
+That is the only sort that means anything. Sorting the merged list by =score=
+would interleave a bm25 26.6 above a cosine 0.797 and call it more relevant.
+Retrievers rank; they do not measure.
+
+*** Embark: the graph is an action, not a source
+
+Retrieval finds the seed; the graph answers "what else should come with it?"
+(Guiding principle). That is an *action on a result*, not another list to
+search — so the structural layer lives in an embark keymap on =irs-result=:
+
+| Key | Action           | Endpoint                                       |
+|-----+------------------+------------------------------------------------|
+| =n= | Typed neighbours | =/v1/graph/neighbors= (LINKS_TO, MENTIONS, SIMILAR_TO, DERIVED_FROM, ILLUSTRATES + hierarchy) — prompts degrees of separation (default 1) |
+| =e= | Expand context   | =/v1/context/expand= with =seeds=[node_id]= — the flagship; prompts degrees of separation (default 2, the tuned base) |
+| =d= | Node + hierarchy | =/v1/nodes/{id}= (parents, children, body)      |
+| =o= | Open file        | —                                              |
+| =s= | Raw result alist | — (debug)                                      |
+
+Neighbours and expand *re-present in a fresh =consult--read=* over the same
+=irs-result= candidates the search uses — preview on =C-==, marginalia, and
+the same embark keymap — so a neighbour can be visited, or acted on again to
+walk another hop. The read is deferred through =run-at-time= because it is
+reached from a plz callback (a process filter); opening the minibuffer there
+wedges the command loop. (=irs-search= itself has no such deferral: it opens
+its minibuffer synchronously, like =consult-ripgrep=, and refreshes
+=irs--status= concurrently — gating the prompt on the async =/v1/status=
+probe cost a visible 50–700ms per invocation, and when the probe's
+callbacks were delayed the prompt surfaced at a random later moment. A dead
+backend now reports how to start it rather than being auto-spawned.)
+
+*Four traps, all measured:*
+
+1. *Embark strips text properties on command actions.* For a =(commandp)=
+   action embark injects the target =substring-no-properties= into a
+   minibuffer, discarding the =irs-result= property every action reads — the
+   symptom was =irs: no result data on this candidate=. The actions are
+   therefore *plain functions, not =(interactive)= commands*: embark's other
+   dispatch path funcalls them with the propertized target intact. (Spot's
+   actions are plain functions for the same reason.)
+2. *Two graph shapes, one shared renderer — by normalisation, not a second
+   formatter.* =/v1/context/expand= returns *=id=, not =node_id=*, a =via=, and
+   a rerank =score=; =/v1/graph/neighbors= keys nodes by id. =irs--graph-result=
+   folds both onto the =irs-result= shape (=id→node_id= so re-acting resolves;
+   the edge stored under =relation=), so the existing =irs--candidate=, preview
+   and embark code render them unchanged. The marginalia gains a *leading
+   relation column* (=→ SIMILAR_TO 0.86=, =← LINKS_TO=, =⇡= for hierarchy)
+   *only* when that key is present, so initial search keeps its four columns.
+   *For this to render as content rather than a bare pointer, the node must
+   carry =heading_trail= + =snippet=* — see below.
+5. *A bare graph node is unrenderable and unseekable.* The summaries first
+   returned only id/kind/title/path — so a chunk neighbour showed as just its
+   filename (title-less chunks all collapsing to =post-vompeccc.org (2)(3)=),
+   and previewing one landed on the *document top* because =irs--seek= had no
+   =line=, =heading_trail= or =snippet= to aim at. Fixed in the backend
+   (=_rich_summary=): =/graph/neighbors= and =/context/expand= now attach the
+   two fields the retrievers already carry — =heading_trail= (ancestor titles,
+   *plus the node's own title for a container* so a section reads "doc >
+   section" instead of inheriting the document's) and a body =snippet=. The
+   node is then rendered by the *same* =irs--candidate= as search (distinct per
+   section, chunk text shown) and =irs--seek= jumps to the section. No =line=
+   column exists, so seek is heading-level — the same fidelity as a semantic
+   hit. It is additive, so the MCP/gptel tools get the richer nodes too.
+3. Neither =/v1/context/expand= nor =/v1/graph/neighbors= accepts =roots= —
+   so *embark actions cannot inherit =--root=* scoping*. Either thread the
+   filter into those endpoints later or accept that expansion escapes the
+   scope; do not pretend it is applied.
+4. =/v1/search/exact= has =score= *always null* and =heading_trail= always
+   =[]=, and its node-identity fields are null whenever path resolution misses
+   (it resolves only =kind='document'= by path containment). It is the one
+   source carrying a real =line=.
+
+*** Container seeds reach nothing semantic — descend to chunks (=descend_containers=)
+
+The cross-document graph is the point of the structural layer, and a
+container hit misses it entirely. FTS and hybrid hierarchy-roll-up to
+*document/section* nodes, and the k-NN =SIMILAR_TO= edges are written on
+*text_units*, never on containers (design doc, Part 2). So expanding a
+document traverses one hop of its own =CONTAINS= children and stops: measured,
+expanding document 1087 gave *2 results in 1 file*; the chunk beneath it has
+*17 =SIMILAR_TO= neighbours across 13 documents*.
+
+The fix is an opt-in =descend_containers= flag on =/v1/graph/neighbors= and
+=/v1/context/expand= (both actions send it; =irs-graph-descend-containers=,
+default on). When set, the backend resolves each *container* seed to its
+=text_unit= descendants (one recursive CTE) before traversing; chunk seeds pass
+through, and a container never split into chunks keeps itself so the seed set
+is never emptied. Bounded to =_DESCEND_MAX_LEAVES= (12) per container in id
+order, so a large document cannot flood =context_expand='s pre-rerank =cap=
+with its own chunks before a neighbour is reached. With it on, expanding 1087
+returns *8 results across 7 files* (6 =SIMILAR_TO= + 1 =LINKS_TO=, all
+cross-document). Default is *off server-side* — the pinned neighbours/expand
+contract and the gold eval are unchanged unless a caller opts in.
+
+Belongs in the backend, not the client: the same gap hits the MCP/gptel tools
+(=expand_context=, =graph_neighbors=) an LLM calls, and the descent is one CTE
+in-process versus a multi-round-trip tree walk from Emacs; and with the query
+in hand the backend can bound/select chunks under the cap, which a blind client
+prefix cannot.
+
+*** What M8 needs from the backend
+
+Small, and mostly already there:
+
+- =roots= — *already exists* on fts/semantic/hybrid/exact/images. No work.
+- =formats= — *new*: mirror =roots= on the same five request models. Threads
+  into =fts.py= (*both* the strict-AND query and the OR recall fallback — miss
+  the fallback and it leaks unfiltered rows), =semantic.py=/=clip.py= (see the
+  ranking trap below), =hybrid.py= (both legs), and =exact.py= (on
+  =file_selected='s return, /not/ an =rg --glob=: rg ORs its positive globs
+  with =root.include=, so a type glob could only widen the walk).
+- =/v1/status= — expose =corpus.exclude= and per-root =formats=/=include= (for
+  the local =rg= builder), and return =format= on search results (for
+  marginalia).
+
+*=--type== takes a format OR an extension, because =format= collapses.*
+=nodes.format= is the /adapter/ format — all six image extensions land on
+=image=, =.el= and =.py= both land on =code= — and the extension is stored
+nowhere, being derivable only from =path=. That collapse is right for ingest
+(one adapter per format) and wrong for query: "only SVGs", "only elisp" are
+precisely the questions it cannot ask. So one flag accepts both vocabularies —
+a known format name matches =format=, a known extension matches the path
+suffix. They overlap only on org/md/txt/pdf, where the format reading is
+chosen and is equal-or-better (=md= catches =.markdown= too). Anything else is
+a *400, never an empty result*: a typo that matched nothing would read as an
+answer about the corpus rather than about the query.
+
+/Note =--type=svg= is useless on the =i= source and useful on =f=/=s=:/ SVG has
+no CLIP vectors at all (pillow cannot open it — M7 tier 4), so image search
+cannot see it. Its Mermaid labels are indexed text, so it is found lexically:
+=service mesh istio --type=svg= → =cloud-native-k8s.svg= (verified).
+
+*** The ranking trap the facets walk into (fixed, worth not re-introducing)
+
+Cosine ranks the /whole/ corpus and neither facet is expressible in the matrix
+product, so the tempting shape for semantic and images is: take the top
+=limit * K=, then drop what does not match. *That silently under-returns* — the
+narrower the scope, the fewer results, and asking for more makes more appear.
+Measured on the real corpus before the fix, =--type=webp= over 127 CLIP
+vectors: *0 hits at =limit=3=, 10 at =limit=20=, 16 at =limit=60=*. A result
+count that depends on =limit= is not a ranking; it is a bug wearing a sparse
+corpus as a disguise — and the frontend, which shows scores and trusts server
+order, has no way to tell.
+
+The fix is to resolve the allowed set *exactly and up front* — one indexed
+query for the matching node ids, =np.isin= to a mask, =-inf= the rest, /then/
+top-k. No over-fetch heuristic, microseconds at personal scale. This was a
+latent bug in the *pre-existing =roots= filter*, not something =formats=
+introduced; adding a second facet is what made it visible.
+
+/Remaining sharp edge, inherited:/ the =roots= filter prefix-matches the
+absolute path, so two roots where one path prefixes the other cross-match.
+Not triggered by the current seven.
+
+** Agentic tool surface (M6)
+Expose each retrieval primitive as a gptel tool so the LLM coordinates them —
+each tool a thin wrapper over one backend endpoint: =exact_search= (local
+ripgrep, or =/search/exact=) · =fts_search= · =semantic_search= ·
+=graph_neighbors= · =get_node= · =expand_context=. Because the surface is
+already HTTP, the backend can also mount the same tools as an *MCP server* —
+Claude Code or any MCP client then gets the full retrieval stack with no Emacs
+in the loop. Reranking is *not* deferred: RRF fuses the rank lists at M4, but a
+*cross-encoder rerank* is what actually orders the graph-expanded candidate set
+(RRF can't — it only fuses lists). See "Query-side intelligence & reranking"
+below.
+
+** Query-side intelligence & reranking
+Query-side transformation and reranking are where modern IR earns most of its
+lift. All of it runs server-side, invisible to frontends. Ranked by value for
+this personal-scale corpus:
+
+1. *Contextual Retrieval* — at index time, prepend an LLM-generated sentence
+   situating each chunk in its document ("from a 2024 note on X, discussing Y")
+   before embedding/FTS-indexing it. Attacks the "tiny chunk, no context" problem at
+   /index/ time (stacks with the hierarchy graph rather than competing); reported
+   ~35–50% retrieval-failure reduction. One Haiku call per chunk, Batch API,
+   =content_hash=-gated — fits the cost model. (A graph-enrichment cost, per the Cost
+   section.)
+2. *Cross-encoder reranker* — a small local model (=bge-reranker=, =mxbai-rerank=)
+   scoring (query, chunk) jointly. *RRF cannot order a freshly graph-expanded
+   candidate set* (it only fuses rank lists), so something must rank the expanded
+   neighbourhood — this is it. Local = $0. (=emacs-rag-libsql= already ships one.)
+3. *HyDE* — have the LLM draft a hypothetical answer, embed /that/, search with it.
+   Closes the short-query/long-doc embedding mismatch. One LLM call + one embed.
+4. *Query routing / rewriting / decomposition* — a cheap heuristic router (looks like
+   a path/symbol/regex? → boost lexical) beats the static =0.5/0.5= fusion weight;
+   decompose multi-hop questions ("how did my thinking on X evolve") into sub-queries
+   feeding the temporal/UPDATES edges.
+5. *MMR for diversity* + *parent-document retrieval* (retrieve the precise child
+   chunk, /serve/ the parent section — the real payoff of the hierarchy graph) +
+   *recency/temporal decay* + *faceted filtering* (search only this project / only
+   Org, not PDFs) + *usage-feedback boosting* (your own consult selections are a
+   noise-free relevance signal — a single-user superpower; frontends report picks
+   via =POST /feedback/selection=). All near-free, all using data already stored
+   (=parent_id=, timestamps, =metadata_json=).
+
+Also cheap and worth it: *pseudo-relevance feedback* (free BM25 recall boost),
+*spelling/fuzzy fallback* when FTS returns near-nothing (FTS5 has no fuzzy match —
+degrade to trigram / =spellfix1=), *doc2query* expansion (index predicted questions
+into FTS), and graph-native *Personalized PageRank* / *community-detection summaries*
+(the principled generalisation of 1-hop expansion, and GraphRAG's global-query
+mechanism — graph #6 done over the /graph/, not just embeddings).
+
+Heavier, likely overkill at personal scale: learned-sparse (SPLADE),
+late-interaction multi-vector (ColBERT/PLAID), node2vec graph embeddings. Revisit
+only if recall plateaus.
+
+** Evaluation (don't fly blind)
+With this many tunable layers (fusion weights, chunk size, k, decay half-life) there
+is currently /no way to tell whether any change helps/. Add a feedback loop early —
+unusually cheap here because you own the corpus and the ground truth:
+
+- *Gold query set* — hand-build 30–50 (query → known-relevant-node) pairs; measure
+  each retriever and the fusion with *Recall@k / MRR / nDCG*. An afternoon of work;
+  the only way to tune fusion weights, chunk size, and decay non-blindly. /Lands
+  with M2:/ it needs no LLM and it's what tunes FTS + hierarchy-expand before
+  embeddings even exist.
+- *Ablation harness* — a script to toggle layers on/off and compare, so you can
+  justify (or drop) the LLM token spend: does the agentic layer actually beat plain
+  hybrid? Optionally *LLM-as-judge* for end-to-end answer quality.
+- Both live in the backend repo as plain Python (pytest) hitting the API — no
+  Emacs in the eval loop.
+
+** Guiding principle
+The structural layer *does not replace search*. It answers: /"Now that I found
+something relevant, what else should come with it?"/ — context expansion,
+traversal, discovery, association. Build the retrieval primitives well; let the
+LLM be a thin coordinator on top.

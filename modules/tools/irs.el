@@ -15,14 +15,26 @@
 (use-package irs
   :ensure nil
   :load-path "source/zettapkg/irs"
-  :commands (irs-search irs-search-semantic irs-search-hybrid irs-search-live
-             irs-status irs-ingest irs-embed irs-ensure-server)
+  :commands (irs-search
+             irs-status irs-ingest irs-embed irs-embed-images irs-graph irs-knn
+             irs-pipeline irs-ensure-server irs-restart-server irs-show-log)
+  ;; M8: one command over every retriever — narrow with l/f/s/h/i, scope with
+  ;; `--root=blog --type=org'. The per-retriever commands are gone; they were
+  ;; five ways to ask the same question.
+  ;;
+  ;; `r' for retrieval, not `i': `, l i' is chiply-isr-semantic-read, and
+  ;; irs/isr are one transposition apart already.
+  :general
+  (
+   :keymaps 'menu-lookup-map
+   "r" 'irs-search
+   )
+  ;; Opt-in preview, matching every other consult surface in this distro
+  ;; (consult-ripgrep, elfeed, consult-gh/mu/omni all use "C-="): matches do
+  ;; not display until C-= is pressed on one.  Global `consult-preview-key' is
+  ;; `any' here, so this per-command override is what makes irs quiet.
+  :custom (irs-search-preview-key "C-=")
   :init
-  ;; hybrid is the flagship: fuses fts + semantic, then reranks; it degrades
-  ;; to fts-only when vectors aren't built yet, so it's always safe to bind
-  (when (and (boundp 'launch-map)
-             (not (lookup-key launch-map "/")))
-    (define-key launch-map "/" #'irs-search-hybrid))
   ;; M6: the retrieval primitives as gptel tools (category "irs")
   (with-eval-after-load 'gptel
     (require 'irs)

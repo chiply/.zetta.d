@@ -15,36 +15,6 @@
     (interactive)
     (elfeed-search-toggle-all mytag)))
 
-(use-package elfeed-protocol
-  ;; Pinned to 1.0.0: first release supporting elfeed 4.0; feeds move from
-  ;; `elfeed-protocol-feeds' to `elfeed-feeds' (see ~/.private.el), and it
-  ;; integrates with elfeed-org automatically (saves/re-appends protocol
-  ;; feeds, tags org feeds `:no-update').
-  :ensure (elfeed-protocol :host github :repo "fasheng/elfeed-protocol" :ref "1.0.0")
-  :after elfeed
-  :demand t
-  :config
-
-  ;; UNREAD-ONLY is required for reader.miniflux.app: the hosted
-  ;; miniflux's entry ids auto-increment across ALL tenants, so fever's
-  ;; default incremental strategy -- request the next maxsize ids after
-  ;; the last-seen id -- almost never hits OUR entries (verified: update
-  ;; requested ids ...572-...771 after mark ...571 and parsed 0, while
-  ;; new posts sat unread on the server).  With unread-only, each update
-  ;; fetches the server's actual unread_item_ids list instead.
-  (setq elfeed-protocol-fever-update-unread-only t)
-  (setq elfeed-protocol-fever-fetch-category-as-tag t)
-  ;; Do NOT raise this: reader.miniflux.app caps fever responses at 50
-  ;; items per request (verified: 60 ids requested -> 50 returned), so a
-  ;; bigger batch silently DROPS the rest.
-  (setq elfeed-protocol-fever-maxsize 50)
-  ;; elfeed-protocol-feeds set in ~/.private.el
-
-  (setq elfeed-protocol-enabled-protocols '(fever))
-  (elfeed-protocol-enable)
-  (message "loaded elfeed protocol")
-  )
-
 (use-package elfeed
   :after embark
   :commands elfeed
@@ -241,6 +211,44 @@ minibuffer with something like `exit-minibuffer'."
                                   (evil-scroll-line-down 1)))
             (evil-local-set-key 'normal "tR" #'elfeed-search-tag-all-unread))
           90)
+
+;; Declared AFTER elfeed on purpose: queue order is declaration order, and
+;; with elfeed-protocol first, elpaca queues elfeed as an implicit
+;; DEPENDENCY and then hits the explicit `(use-package elfeed ...)' as a
+;; duplicate declaration -- the path the bootstrap's fix-duplicate-return
+;; advice exists for, and whose dependent-unblock signal is racy: on cold
+;; 30.2 CI runs elfeed-protocol sat [blocked] "Package queued" forever
+;; (run 29951544889, named by the watchdog).  With elfeed's explicit order
+;; queued first, the dependent blocks on a real order and unblocks normally.
+(use-package elfeed-protocol
+  ;; Pinned to 1.0.0: first release supporting elfeed 4.0; feeds move from
+  ;; `elfeed-protocol-feeds' to `elfeed-feeds' (see ~/.private.el), and it
+  ;; integrates with elfeed-org automatically (saves/re-appends protocol
+  ;; feeds, tags org feeds `:no-update').
+  :ensure (elfeed-protocol :host github :repo "fasheng/elfeed-protocol" :ref "1.0.0")
+  :after elfeed
+  :demand t
+  :config
+
+  ;; UNREAD-ONLY is required for reader.miniflux.app: the hosted
+  ;; miniflux's entry ids auto-increment across ALL tenants, so fever's
+  ;; default incremental strategy -- request the next maxsize ids after
+  ;; the last-seen id -- almost never hits OUR entries (verified: update
+  ;; requested ids ...572-...771 after mark ...571 and parsed 0, while
+  ;; new posts sat unread on the server).  With unread-only, each update
+  ;; fetches the server's actual unread_item_ids list instead.
+  (setq elfeed-protocol-fever-update-unread-only t)
+  (setq elfeed-protocol-fever-fetch-category-as-tag t)
+  ;; Do NOT raise this: reader.miniflux.app caps fever responses at 50
+  ;; items per request (verified: 60 ids requested -> 50 returned), so a
+  ;; bigger batch silently DROPS the rest.
+  (setq elfeed-protocol-fever-maxsize 50)
+  ;; elfeed-protocol-feeds set in ~/.private.el
+
+  (setq elfeed-protocol-enabled-protocols '(fever))
+  (elfeed-protocol-enable)
+  (message "loaded elfeed protocol")
+  )
 
 (use-package elfeed-org
   :demand t

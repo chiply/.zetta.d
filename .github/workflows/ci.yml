@@ -29,10 +29,12 @@ env:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
-    # A fully cold elpaca sync alone measures ~25 minutes; leave room for
-    # the watchdog's stall window in both the sync and test steps rather
-    # than letting the job timeout preempt the diagnostic dump.
-    timeout-minutes: 45
+    # A fully cold elpaca build measures ~25 minutes, and when the sync
+    # step crashes early (tolerated by design) ci-test must do all of it
+    # inside its own elpaca window (2400s in bin/zetta).  Leave room for
+    # that plus the watchdog's stall window rather than letting the job
+    # timeout preempt the diagnostic dump.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

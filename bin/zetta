@@ -419,7 +419,15 @@ ZETTA_CI_WATCHDOG="(progn
          (dolist (entry (elpaca--queued))
            (setq total (1+ total))
            (let ((s (elpaca--status (cdr entry))))
-             (if (memq s '(finished failed blocked))
+             ;; 'blocked is NOT terminal here: elpaca-wait keeps waiting
+             ;; on blocked orders, so one blocked forever (dep of a failed
+             ;; package, monorepo partner) spins the wait while an
+             ;; all-terminal watchdog stays silent to the job ceiling
+             ;; (measured: run 29946929141/30.2 sat 7+ min at
+             ;; \"300/300 terminal\" before the 60-minute cancel).  In the
+             ;; waiting set, a frozen blocked order is dumped and killed
+             ;; like any other wedge.
+             (if (memq s '(finished failed))
                  (setq done (1+ done))
                (push (format \"%s[%s]\" (car entry) s) waiting))))
          (let ((wstr (mapconcat #'identity (sort waiting #'string<) \" \")))
@@ -440,7 +448,7 @@ ZETTA_CI_WATCHDOG="(progn
                       zetta--wd-stall)
              (dolist (entry (elpaca--queued))
                (let ((s (elpaca--status (cdr entry))))
-                 (unless (memq s '(finished failed blocked))
+                 (unless (memq s '(finished failed))
                    (let ((info (car (last (elpaca<-log (cdr entry))))))
                      (message \"  STUCK: %s [%s] %s\" (car entry) s
                               (if info (nth 2 info) \"\")))))))

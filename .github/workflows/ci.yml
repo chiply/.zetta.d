@@ -18,6 +18,14 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # A moved or private repo makes git prompt for credentials; in batch CI
+  # the prompt is never answered, so the clone hangs silently until the
+  # 30-minute job timeout with no package name in the log (measured: the
+  # tools-category elpaca-wait hung 15 minutes past its last message).
+  # Disabling the prompt turns that hang into an immediate, named failure.
+  GIT_TERMINAL_PROMPT: "0"
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}

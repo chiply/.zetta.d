@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.35](https://github.com/chiply/.zetta.d/compare/v0.1.34...v0.1.35) (2026-07-22)
+
+
+### Features
+
+* **irs:** pipeline, server lifecycle and image search from Emacs ([#106](https://github.com/chiply/.zetta.d/issues/106)) ([0c2724a](https://github.com/chiply/.zetta.d/commit/0c2724addb4746f74f412dc9d5a31363414c9d1e))
+
 ## [0.1.34](https://github.com/chiply/.zetta.d/compare/v0.1.33...v0.1.34) (2026-07-14)
 
 

@@ -3,7 +3,16 @@
 (defvar elpaca-installer-version 0.12)
 (defvar elpaca-directory (expand-file-name "elpaca/" user-emacs-directory))
 (defvar elpaca-builds-directory (expand-file-name "builds/" elpaca-directory))
-(defvar elpaca-sources-directory (expand-file-name "sources/" elpaca-directory))
+;; The bootstrap clone MUST land in elpaca-repos-directory/elpaca -- the
+;; location elpaca itself reads (elpaca.el `elpaca-repos-directory'): the
+;; self-order reuses a repo found there, and every package build's
+;; autoload subprocess loads repos/elpaca/elpaca.el.  The previous
+;; config-invented "sources/" directory was invisible to elpaca, so the
+;; self-order re-cloned the repo asynchronously and every early cold
+;; build raced that clone (measured 2026-07-22: compile-angel's autoload
+;; step died file-missing on repos/elpaca/elpaca.el, and
+;; elpaca-use-package sat "waiting on monorepo" forever).
+(defvar elpaca-repos-directory (expand-file-name "repos/" elpaca-directory))
 ;; elpaca is the one package the lockfile cannot pin -- this installer
 ;; clones it before any lockfile is read -- so it MUST be pinned here.
 ;; With :ref nil every fresh install got that day's master, whose internal
@@ -17,7 +26,7 @@
                               :depth nil :inherit ignore
                               :files (:defaults "elpaca-test.el" (:exclude "extensions"))
                               :build (:not elpaca--activate-package)))
-(let* ((repo  (expand-file-name "elpaca/" elpaca-sources-directory))
+(let* ((repo  (expand-file-name "elpaca/" elpaca-repos-directory))
        (build (expand-file-name "elpaca/" elpaca-builds-directory))
        (order (cdr elpaca-order))
        (default-directory repo))
@@ -48,11 +57,21 @@
 (add-hook 'elpaca-after-init-hook #'elpaca-process-queues)
 (elpaca `(,@elpaca-order))
 
-;; Install use-package support
-;; Use :wait to ensure elpaca-use-package-mode is active before subsequent use-package calls
-(elpaca elpaca-use-package
-  (elpaca-use-package-mode))
-(elpaca-wait)  ;; Block until elpaca-use-package is ready
+;; Install use-package support -- activated directly from the bootstrap
+;; clone, NOT as an `(elpaca elpaca-use-package ...)' order.  That order is
+;; a monorepo partner of the `elpaca' order itself, and with a pinned :ref
+;; its dependency scan reads repos/elpaca/extensions/elpaca-use-package.el
+;; before the pinned checkout materialises it (measured cold, 2026-07-22:
+;; the order fails file-missing, elpaca-wait returns, use-package silently
+;; falls back to package.el -- which cannot parse elpaca recipes, so
+;; `general' never installs and the first `general-define-key' crashes
+;; init).  The installer has already cloned AND byte-compiled the extension
+;; at the pinned ref; requiring it from there is the same file with no
+;; network and no monorepo coordination.
+(add-to-list 'load-path (expand-file-name "elpaca/extensions"
+                                          elpaca-repos-directory))
+(require 'elpaca-use-package)
+(elpaca-use-package-mode)
 
 ;; Fix elpaca bug: when a package is re-declared after being queued as a
 ;; transitive dependency, elpaca--enqueue returns the `warn' string instead of

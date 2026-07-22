@@ -1861,7 +1861,7 @@
                         "test/hy-test-*.el"))
                       :source "MELPA" :id hyperbole :type git
                       :protocol https :inherit t :depth treeless :ref
-                      "bf67e5ecd785f4d077da091f1933d7b7462de0b0"))
+                      "f076ff8c5997e9e9401d02da5034c1c10ba070f4"))
  (iedit :source "elpaca-menu-lock-file" :recipe
         (:package "iedit" :repo "victorhge/iedit" :fetcher github
                   :files
@@ -3264,7 +3264,7 @@
              (:source nil :package "space-tree" :id space-tree :host
                       github :repo "chiply/space-tree" :type git
                       :protocol https :inherit t :depth treeless :ref
-                      "4d7c1a53f50e76a63a838deecae605c252b1ecb7"))
+                      "ce075d23879c1527c2a39be8fa8743073b1be087"))
  (speed-type :source "elpaca-menu-lock-file" :recipe
              (:package "speed-type" :fetcher github :repo
                        "dakra/speed-type" :files

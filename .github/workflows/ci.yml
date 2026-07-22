@@ -57,9 +57,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: elpaca
-          key: elpaca-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**', 'elpaca-lock.el') }}
+          # v2 epoch: v1 caches for 30.2 were saved mid-wedge during the
+          # cold-install repair (run 29951544889 and after) and restoring
+          # that half-built state kept poisoning subsequent runs.  Bumping
+          # the epoch orphans every v1 cache so each version rebuilds from
+          # a verified-clean cold state once, then stays warm.
+          key: elpaca-v2-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**', 'elpaca-lock.el') }}
           restore-keys: |
-            elpaca-${{ matrix.emacs-version }}-
+            elpaca-v2-${{ matrix.emacs-version }}-
 
       - name: Create stub files
         run: |

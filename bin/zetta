@@ -453,14 +453,18 @@ ZETTA_CI_WATCHDOG="(progn
                  ;; names victims and hides the culprit (measured: three
                  ;; elfeed dependents frozen [blocked], the failed elfeed
                  ;; order that caused it invisible).
+                 ;; elpaca pushes log entries, so the log is stored
+                 ;; NEWEST-FIRST: seq-take from the front for the failure
+                 ;; reason (taking from the tail dumps \"Package queued\" -- the
+                 ;; three oldest, least informative lines).
                  (cond
                   ((eq s 'failed)
-                   (dolist (info (last (elpaca<-log e) 3))
+                   (dolist (info (reverse (seq-take (elpaca<-log e) 4)))
                      (message \"  FAILED: %s | %s\" (car entry)
                               (nth 2 info))))
                   ((eq s 'finished) nil)
                   (t
-                   (let ((info (car (last (elpaca<-log e)))))
+                   (let ((info (car (elpaca<-log e))))
                      (message \"  STUCK: %s [%s] blockers=%S %s\"
                               (car entry) s (elpaca<-blockers e)
                               (if info (nth 2 info) \"\"))))))))

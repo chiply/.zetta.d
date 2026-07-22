@@ -57,10 +57,33 @@
   "Checkout of the backend repo; `irs-ensure-server' runs `uv run irs serve' here."
   :type 'directory)
 
+(defconst irs--limit-ceilings
+  '(("/v1/search/exact"    . 10000)
+    ("/v1/search/fts"      . 10000)
+    ("/v1/search/images"   . 10000)
+    ("/v1/search/semantic" . 200)
+    ("/v1/search/hybrid"   . 200))
+  "Server-side `limit' ceiling per search endpoint (api.py request models).
+
+Two tiers, split by what a big request costs the backend: exact, fts and
+images only fetch more rows, so they take a huge ceiling — `--limit=' a
+very large number to ask for everything.  semantic pays hierarchy-expand
+per hit and hybrid feeds the cross-encoder, so those two stay at 200.
+The clamp exists because the backend rejects an over-ceiling value with
+a 422, which would blank that source's results entirely.")
+
 (defconst irs--limit-max 200
-  "Server-side ceiling on `limit' for fts/semantic/hybrid/images.
-`/search/exact' allows more, but a uniform cap keeps one source from
-quietly returning a different number of hits than its neighbours.")
+  "Fallback `limit' ceiling for an endpoint not in `irs--limit-ceilings'.
+The conservative tier, so an unlisted endpoint can never be sent a value
+its request model might 422 on.")
+
+(defconst irs--neighbors-limit-max 200
+  "Server ceiling on `/v1/graph/neighbors' `limit' (NeighborsRequest.limit).
+The graph actions clamp their prompted max to this rather than send a value
+the backend would reject with a 422.")
+
+(defconst irs--expand-limit-max 100
+  "Server ceiling on `/v1/context/expand' `limit' (ContextExpandRequest.limit).")
 
 (defcustom irs-search-limit 20
   "Maximum results to request per search, per source.
@@ -68,9 +91,11 @@ quietly returning a different number of hits than its neighbours.")
 `irs-search' shows up to this many hits under EACH visible source, so
 the unnarrowed list can be several times this long.
 
-Values above `irs--limit-max' are clamped rather than sent: the backend
-rejects them with a 422, which would blank fts/semantic/hybrid/images
-while the literal source — whose ceiling is higher — kept working."
+Values above an endpoint's ceiling (`irs--limit-ceilings') are clamped
+rather than sent: the backend rejects them with a 422, which would blank
+that source while its cheaper neighbours — whose ceilings are higher —
+kept working.  So `--limit=10000' returns up to 10000 literal/fts/image
+hits but caps semantic and hybrid at their 200."
   :type 'natnum)
 
 (defcustom irs-pid-file "~/.local/share/irs/irs.pid"
@@ -121,6 +146,98 @@ readiness (which gates the search sources).")
     :then then
     :else (or else #'irs--error)))
 
+;;;; Result cache — memoised per request, dropped on any build
+;;
+;; The one thing the client did not cache was retrieval itself: every keystroke
+;; and every graph pull re-hit the backend, even for an identical request.  The
+;; cache below keys on the full request identity (endpoint + payload — and the
+;; payload already carries every param that changes a result: query, limit,
+;; facets, depth, descend), so a hit is always a correct hit.
+;;
+;; Validity is "until a build".  `irs-ensure-server' refreshes `irs--status' at
+;; the head of every command, so a signature drawn from it costs no request and
+;; moves whenever ANY pipeline stage (ingest/embed/graph/knn) touches the index
+;; — including builds run outside this Emacs.  When it moves, the whole table is
+;; dropped: a stale result is never served across a rebuild.  In-memory only, so
+;; a restart starts empty; single-threaded async, so no lock is needed.
+
+(defcustom irs-cache-enabled t
+  "Whether retrieval responses are memoised between identical requests.
+The cache is dropped whenever a build (ingest/embed/graph/knn) changes the
+index, so it never serves results from before a rebuild.  Set nil to always
+hit the backend."
+  :type 'boolean)
+
+(defvar irs--result-cache (make-hash-table :test #'equal)
+  "Decoded retrieval responses keyed by `irs--cache-key'.
+Only valid for `irs--result-cache-signature'; a build invalidates it.")
+
+(defvar irs--result-cache-signature nil
+  "The `irs--corpus-signature' the cache currently holds results for.")
+
+(defun irs--corpus-signature ()
+  "A value that changes when any build stage alters the index.
+Read from the already-fetched `irs--status', so it costs no request: a
+result cached under one signature is refetched once the signature moves."
+  (let ((c (alist-get 'corpus irs--status))
+        (g (alist-get 'graph irs--status)))
+    (list (alist-get 'last_ingest (alist-get 'index irs--status))
+          (alist-get 'nodes_total c)
+          (alist-get 'epoch g)
+          (alist-get 'knn_epoch g)
+          (alist-get 'vectors (alist-get 'embedder irs--status))
+          (alist-get 'vectors (alist-get 'clip irs--status)))))
+
+(defun irs--cache-key (endpoint payload)
+  "Stable cache key for the request ENDPOINT + PAYLOAD.
+The json encoding is the request identity: same key iff same request."
+  (cons endpoint (json-encode payload)))
+
+(defun irs--cache-refresh ()
+  "Drop the whole cache when a build has moved the corpus signature.
+Both `irs--cache-get' and `irs--cache-put' call this first, so the table is
+never left holding entries from before a rebuild — and a `put' anchors the
+signature just as a `get' does, so the two do not depend on call order."
+  (let ((sig (irs--corpus-signature)))
+    (unless (equal sig irs--result-cache-signature)
+      (clrhash irs--result-cache)
+      (setq irs--result-cache-signature sig))))
+
+(defun irs--cache-get (key)
+  "Cached response for KEY, or nil, honouring `irs-cache-enabled'."
+  (when irs-cache-enabled
+    (irs--cache-refresh)
+    (gethash key irs--result-cache)))
+
+(defun irs--cache-put (key value)
+  "Store VALUE under KEY and return it, honouring `irs-cache-enabled'."
+  (when irs-cache-enabled
+    (irs--cache-refresh)
+    (puthash key value irs--result-cache))
+  value)
+
+;;;###autoload
+(defun irs-cache-clear ()
+  "Drop every cached retrieval result, forcing the next request to the backend."
+  (interactive)
+  (clrhash irs--result-cache)
+  (setq irs--result-cache-signature nil)
+  (when (called-interactively-p 'interactive)
+    (message "irs: result cache cleared")))
+
+(defun irs--post-cached (path payload then &optional else)
+  "Like `irs--post', but serve a fresh cached response body when one exists.
+Caches the decoded response keyed on PATH+PAYLOAD; a build drops it.  On a
+hit THEN is still called asynchronously (via `run-at-time'), so callers
+keep the same control flow whether the answer came from the wire or memory."
+  (let* ((key (irs--cache-key path payload))
+         (cached (irs--cache-get key)))
+    (if cached
+        (run-at-time 0 nil then cached)
+      (irs--post path payload
+                 (lambda (data) (funcall then (irs--cache-put key data)))
+                 else))))
+
 ;;;; Server lifecycle: probe -> verify identity -> adopt, else spawn
 
 (defun irs-ensure-server (&optional callback)
@@ -163,6 +280,27 @@ search sources need cost no second request."
                                          (shell-quote-argument log)))
                   :noquery t))
   (irs--poll-health 20 callback))
+
+(defun irs--status-refresh ()
+  "Refresh `irs--status' in the background, gating nothing.
+Unlike `irs-ensure-server' nothing waits on this: `irs-search' opens its
+minibuffer synchronously and the probe lands whenever it lands.  And
+unlike `irs-ensure-server' it never spawns — when nothing answers it
+says how to start the backend instead, because the old auto-spawn held
+the prompt through a health poll of up to ten seconds."
+  (irs--get "/v1/status"
+            (lambda (data)
+              (if (equal (alist-get 'service data) "irs")
+                  (setq irs--status data)
+                (message "irs: %s is answering at %s — not irs"
+                         (or (alist-get 'service data) "something else")
+                         irs-base-url)))
+            (lambda (_err)
+              (message
+               (substitute-command-keys
+                "irs: no backend at %s — \\[irs-restart-server] starts it (or `uv run irs serve' in %s)")
+               irs-base-url
+               (abbreviate-file-name (expand-file-name irs-backend-directory))))))
 
 (defun irs--poll-health (retries callback)
   (irs--get "/v1/status"
@@ -448,6 +586,7 @@ changed node.  Nothing here blocks Emacs."
 (declare-function consult--temporary-files "ext:consult")
 (declare-function consult--jump-state "ext:consult")
 (declare-function consult--file-action "ext:consult")
+(declare-function consult--lookup-member "ext:consult")
 ;; `marginalia--fields' expands into this; reachable only from the annotator,
 ;; which only marginalia itself calls
 (declare-function marginalia--truncate "ext:marginalia")
@@ -480,11 +619,10 @@ same as `consult-preview-key'.  Set it to a key, e.g. \"C-=\", for
 opt-in preview: matches are then shown only when you press that key on
 one, never automatically.
 
-Applied per source rather than to the command: `irs-search' opens its
-`consult--multi' from a timer (the server probe is async), so by then
-`this-command' is no longer `irs-search' and `consult-customize' would
-key on the wrong command.  `consult--multi' reads each source's
-`:preview-key', which is where this lands."
+Applied per source: `consult--multi' reads each source's
+`:preview-key' (falling back to `consult-preview-key' otherwise), so a
+source-level setting works without any `consult-customize' on the
+command."
   :type '(choice (const :tag "Preview as you move" any)
                  (const :tag "No preview" nil)
                  (key :tag "Manual preview key")
@@ -536,6 +674,21 @@ simply does not appear -- better than offering a search that 503s."
 ;; does NOT work here; consult reads `--' as "options end" and folds the rest
 ;; back into the query.  Bare `--root=blog', options start at the first
 ;; space-dash.
+;;
+;; Flag values are lists: `--root=blog+zetta', or repeat the flag.  The
+;; separator is `+' because a comma cannot reach this parser from the
+;; minibuffer: `consult--read' wraps every async function with
+;; `consult--async-split' (`consult--async-wrap', consult.el:2138) and this
+;; config splits on comma (`consult-async-split-style'), so everything after
+;; the first comma is client-side filter input, never backend input --
+;; `--root=a,b' silently searches root `a' and orderless-filters on "b".
+;; The regexp still accepts comma for input that skips the minibuffer (the
+;; gptel tools call this parser with plain strings).
+;;
+;; Full minibuffer grammar (worked examples in text-search.org):
+;;   QUERY [FLAGS...] [-- LITERAL-QUERY-TEXT] [,ORDERLESS-COMPONENT...]
+;; e.g. `server --root=logseq -- -v,proxy,section' -- query "server -v"
+;; scoped to logseq, rows then narrowed on "proxy" and "section".
 
 (defconst irs--flag-regexp "\\`--?\\([a-z]+\\)=\\(.*\\)\\'"
   "One `--key=value' flag.  Matched generically and dispatched on the key,
@@ -563,9 +716,9 @@ a request per keystroke that 400s while `--root=b', `--root=bl',
                 (val (match-string 2 opt)))
             (pcase key
               ((or "root" "r")
-               (setq roots (append roots (split-string val "," t "[ \t]+"))))
+               (setq roots (append roots (split-string val "[,+]" t "[ \t]+"))))
               ((or "type" "t")
-               (setq formats (append formats (split-string val "," t "[ \t]+"))))
+               (setq formats (append formats (split-string val "[,+]" t "[ \t]+"))))
               ((or "limit" "l")
                ;; a half-typed `--limit=' or `--limit=1x' must not search with
                ;; the default and look like it honoured the flag
@@ -579,18 +732,24 @@ a request per keystroke that 400s while `--root=b', `--root=bl',
     (list :query (string-trim query) :roots roots :formats formats
           :limit limit :valid valid)))
 
-(defun irs--request-payload (parsed)
-  "Backend request body for PARSED input.
+(defun irs--request-payload (parsed endpoint)
+  "Backend request body for PARSED input, bound for ENDPOINT.
 The facets travel to the server rather than filtering here, because a
 flag filters BEFORE `limit' and a client-side filter after it: ask for
-20 hits, narrow to Org, get 3.  That is a wrong result, not a slow one."
+20 hits, narrow to Org, get 3.  That is a wrong result, not a slow one.
+
+ENDPOINT picks the limit ceiling (`irs--limit-ceilings'): the cheap
+retrievers accept a huge `--limit=', the reranked ones clamp at 200 —
+so one flag value can mean \"everything\" where everything is affordable
+without handing the cross-encoder a 10000-row pool."
   (let ((roots (plist-get parsed :roots))
         (formats (plist-get parsed :formats)))
     `((query . ,(plist-get parsed :query))
       ;; `--limit=' overrides the default for this query only; both go through
       ;; the same clamp, so neither route can send a value the backend 422s on
       (limit . ,(max 1 (min (or (plist-get parsed :limit) irs-search-limit)
-                            irs--limit-max)))
+                            (or (cdr (assoc endpoint irs--limit-ceilings))
+                                irs--limit-max))))
       ,@(when roots `((roots . ,(vconcat roots))))
       ,@(when formats `((formats . ,(vconcat formats)))))))
 
@@ -748,27 +907,37 @@ FORMAT-FN renders a decoded response into candidate strings."
                    ;; nothing answerable: clear rather than leave stale hits
                    (progn (funcall sink 'flush)
                           (funcall sink [indicator finished]))
-                 ;; Deferred flush, as in `consult--async-process': hold the
-                 ;; old candidates until the new ones land, so the list does
-                 ;; not blink to empty on every keystroke.
-                 (let ((flush t) (input action))
-                   (funcall sink [indicator running])
-                   (setq proc
-                         (irs--post
-                          endpoint (irs--request-payload parsed)
-                          (lambda (data)
-                            ;; Stale guard.  Five sources answer at wildly
-                            ;; different latencies (1ms fts vs 190ms hybrid),
-                            ;; so a slower earlier request outliving a newer
-                            ;; one is the normal case, not the edge case.
-                            (when (equal input last-input)
-                              (when flush (setq flush nil) (funcall sink 'flush))
-                              (funcall sink (funcall format-fn data))
-                              (funcall sink [indicator finished])))
-                          (lambda (_err)
-                            (when (equal input last-input)
-                              (when flush (setq flush nil) (funcall sink 'flush))
-                              (funcall sink [indicator failed])))))))))
+                 (let* ((payload (irs--request-payload parsed endpoint))
+                        (key (irs--cache-key endpoint payload))
+                        (cached (irs--cache-get key)))
+                   (if cached
+                       ;; identical request, no build since: answer from memory,
+                       ;; no round trip.  Synchronous, so the stale-guard is moot.
+                       (progn (funcall sink 'flush)
+                              (funcall sink (funcall format-fn cached))
+                              (funcall sink [indicator finished]))
+                     ;; Deferred flush, as in `consult--async-process': hold the
+                     ;; old candidates until the new ones land, so the list does
+                     ;; not blink to empty on every keystroke.
+                     (let ((flush t) (input action))
+                       (funcall sink [indicator running])
+                       (setq proc
+                             (irs--post
+                              endpoint payload
+                              (lambda (data)
+                                ;; Stale guard.  Five sources answer at wildly
+                                ;; different latencies (1ms fts vs 190ms hybrid),
+                                ;; so a slower earlier request outliving a newer
+                                ;; one is the normal case, not the edge case.
+                                (when (equal input last-input)
+                                  (irs--cache-put key data)
+                                  (when flush (setq flush nil) (funcall sink 'flush))
+                                  (funcall sink (funcall format-fn data))
+                                  (funcall sink [indicator finished])))
+                              (lambda (_err)
+                                (when (equal input last-input)
+                                  (when flush (setq flush nil) (funcall sink 'flush))
+                                  (funcall sink [indicator failed])))))))))))
            nil)
           ((or 'cancel 'destroy)
            (irs--async-kill proc)
@@ -963,14 +1132,25 @@ so a typo searches nothing rather than quietly answering the wrong
 question — and typing toward `--root=blog' does not fire a request per
 keystroke.
 
+The prompt opens immediately, like `consult-ripgrep'; the status probe
+runs concurrently.  If no backend is answering, searches fail and the
+echo area says how to start one — `irs-restart-server', or `uv run irs
+serve' in `irs-backend-directory'.
+
 INITIAL is the starting input."
   (interactive)
   (unless (fboundp 'consult--multi)
     (user-error "irs: irs-search needs consult"))
-  (irs-ensure-server
-   (lambda ()
-     ;; never open the minibuffer from inside a plz callback
-     (run-at-time 0 nil #'irs--search-read initial))))
+  ;; No async gate ahead of the read.  The old flow held the prompt through
+  ;; a /v1/status round trip (a curl spawn, its sentinel, a `run-at-time'
+  ;; hop) — lag when those callbacks ran promptly, and a minibuffer popping
+  ;; up at some later surprising moment when the event loop was slow to run
+  ;; them.  The probe still runs, concurrently, because search needs
+  ;; `irs--status' only for flag validation, readiness gating and
+  ;; marginalia — each of which degrades gracefully on a stale or nil
+  ;; status, none of which is worth a wait the user can see.
+  (irs--status-refresh)
+  (irs--search-read initial))
 
 (defun irs--search-read (initial)
   (pcase-let ((`(,cand . ,src)
@@ -1020,6 +1200,12 @@ INITIAL is the starting input."
 (defface irs-marginalia-score '((t :inherit marginalia-number))
   "Face for the score field.")
 
+(defface irs-marginalia-relation '((t :inherit marginalia-key))
+  "Face for the graph-relation field — the edge a neighbour arrived by.")
+
+(defface irs-marginalia-hop '((t :inherit marginalia-number))
+  "Face for the hop field — degrees of separation from the seed node.")
+
 (defun irs--score-field (result)
   "RESULT's score, labelled with the scale it is on.
 
@@ -1061,26 +1247,51 @@ group, where the ordering already carries that information."
     'irs-marginalia-score))
 
 (defun irs--annotate-result (cand)
-  "Annotate CAND with its root, file type, node kind and score."
+  "Annotate CAND with graph relation, hop, root, file type, kind and score.
+
+The relation and hop columns are only present on results that came in
+through a graph action (neighbors/expand) — relation names the edge that
+reached them, hop the degrees of separation from the seed (0° is the
+seed itself, re-presented by expand).  Initial-search results have
+neither, and get the four-column annotation they always did: the two
+branches differ only by those leading fields, so no empty column is ever
+rendered."
   (when-let* ((result (get-text-property 0 'irs-result cand)))
-    (let ((path (alist-get 'path result)))
-      (marginalia--fields
-       ((or (irs--root-of path)
-            ;; concept/source nodes are synthesised at graph-build time and
-            ;; belong to no root and no file.  `member', not `memq': json-read
-            ;; gives strings, so the symbol test never once matched.
-            (if (member (alist-get 'kind result) '("concept" "source")) "—" "?"))
-        :truncate 10 :face 'irs-marginalia-root)
-       ((or (alist-get 'format result)
-            (and path (file-name-extension path))
-            "—")
-        :truncate 10 :face 'irs-marginalia-type)
-       ((format "%s" (or (alist-get 'kind result) "—"))
-        :truncate 10 :face 'irs-marginalia-kind)
-       ;; :face takes an expression -- marginalia--field splices it into a
-       ;; runtime `propertize', so it can vary per result
-       ((irs--score-field result)
-        :truncate 11 :face (irs--score-face result))))))
+    (let* ((path (alist-get 'path result))
+           (relation (alist-get 'relation result))
+           ;; hop rides in on both graph actions — /context/expand puts it on
+           ;; every result, /graph/neighbors on every edge (folded in by
+           ;; `irs--neighbor-results') — but a pre-depth backend omits it,
+           ;; so an empty field must degrade gracefully
+           (hop (let ((h (alist-get 'hop result)))
+                  (if (numberp h) (format "%d°" h) "")))
+           (root (or (irs--root-of path)
+                     ;; concept/source nodes are synthesised at graph-build time
+                     ;; and belong to no root and no file.  `member', not `memq':
+                     ;; json-read gives strings, so the symbol test never matched.
+                     (if (member (alist-get 'kind result) '("concept" "source"))
+                         "—" "?")))
+           (type (or (alist-get 'format result)
+                     (and path (file-name-extension path))
+                     "—"))
+           (kind (format "%s" (or (alist-get 'kind result) "—")))
+           (score (irs--score-field result))
+           ;; :face is spliced into a runtime `propertize', so it can vary
+           ;; per result -- CLIP colours against its floor, everything else flat
+           (score-face (irs--score-face result)))
+      (if relation
+          (marginalia--fields
+           (relation :truncate 20 :face 'irs-marginalia-relation)
+           (hop :truncate 3 :face 'irs-marginalia-hop)
+           (root :truncate 10 :face 'irs-marginalia-root)
+           (type :truncate 10 :face 'irs-marginalia-type)
+           (kind :truncate 10 :face 'irs-marginalia-kind)
+           (score :truncate 11 :face score-face))
+        (marginalia--fields
+         (root :truncate 10 :face 'irs-marginalia-root)
+         (type :truncate 10 :face 'irs-marginalia-type)
+         (kind :truncate 10 :face 'irs-marginalia-kind)
+         (score :truncate 11 :face score-face))))))
 
 (defconst irs--marginalia-annotators
   '((irs-result irs--annotate-result builtin none)))
@@ -1098,6 +1309,37 @@ group, where the ordering already carries that information."
 
 (defvar embark-keymap-alist)
 (defvar embark-general-map)
+(defvar irs--graph-history nil
+  "Minibuffer history for the re-presented neighbour/expand sessions.")
+
+(defcustom irs-graph-descend-containers t
+  "Whether graph actions resolve a container hit to its chunks first.
+
+FTS and hybrid hits are usually whole documents or sections, and a
+container node carries only hierarchy edges — the cross-document
+SIMILAR_TO graph hangs off the leaf chunks beneath it.  With this on,
+`irs-action-neighbors' and `irs-action-expand' ask the backend to
+descend a container seed to its text_units before traversing, so a
+document hit reaches the cross-document neighbourhood rather than just
+its own sections.  A chunk hit is unaffected — it is already a leaf.
+
+Sent as the `descend_containers' flag; the backend default is off, so
+turning this off here restores the pinned neighbours/expand contract."
+  :type 'boolean)
+
+(defun irs--descend-flag ()
+  "The `descend_containers' request value, as JSON true/false."
+  (if irs-graph-descend-containers t :json-false))
+
+;; The actions below are plain functions, NOT `(interactive)' commands, and
+;; that is load-bearing.  Embark dispatches a command action by INJECTING its
+;; target back into a minibuffer, and it injects the target
+;; `substring-no-properties' (embark.el, `embark--act') — which strips the
+;; `irs-result' text property every one of these reads.  A non-command
+;; function takes embark's other path, funcalled with the propertized target
+;; string intact.  Making these commands is what produced
+;; "irs: no result data on this candidate".  (Spot's actions are plain
+;; functions for the same reason.)
 
 (defun irs--target (item)
   (or (get-text-property 0 'irs-result item)
@@ -1135,110 +1377,228 @@ group, where the ordering already carries that information."
 
 (defun irs-action-show-data (item)
   "Display ITEM's raw result alist."
-  (interactive "s")
   (irs--present "*irs-result*" (list (pp-to-string (irs--target item)))))
 
 (defun irs-action-open (item)
   "Open ITEM's file."
-  (interactive "s")
   (let ((result (irs--target item)))
     (if-let* ((path (alist-get 'path result)))
         (progn (find-file path) (irs--seek result))
       (user-error "irs: this node has no file"))))
 
-(defun irs--neighbor-rows (data id)
-  "Group DATA's edges around node ID into an alist of (KIND . LINES).
+;;; Graph results, re-presented in consult
+;;
+;; A neighbourhood is just more results — so show it the way search results are
+;; shown (consult, preview on C-=, marginalia, embark) rather than dumping a
+;; static buffer.  Selecting a neighbour visits it; acting on it again walks
+;; another hop.  Two shapes feed in: /graph/neighbors nodes carry `id' + title
+;; + path (no snippet/heading_trail/line), and /context/expand results carry
+;; `id' (not `node_id'), a `via', a `hop' and a rerank `score'.  `irs--graph-result'
+;; normalises both onto the `irs-result' shape the shared candidate/preview/
+;; embark code already speaks, tagging each with the edge it arrived by.
+
+(defun irs--graph-result (node relation &optional hop)
+  "NODE (a /graph/neighbors or /context/expand summary) as an `irs-result'.
+
+Normalises `id' -> `node_id' — /context/expand names it `id', and every
+shared helper (`irs--node-id', `irs--report-selection') keys on
+`node_id', so without this a re-presented node could not be acted on
+again.  RELATION, the edge that reached this node, is stored under
+`relation' for the marginalia; nil leaves the annotation untouched.
+HOP, the degree of separation from the seed, is stored under `hop' — a
+/context/expand result already carries its own `hop', so callers only
+pass it for /graph/neighbors nodes, where it lives on the edge instead.
+Non-destructive: only prepends, never mutates the decoded JSON."
+  (let ((r node))
+    (when (and (alist-get 'id r) (not (assq 'node_id r)))
+      (setq r (cons (cons 'node_id (alist-get 'id r)) r)))
+    (when relation
+      (setq r (cons (cons 'relation relation) r)))
+    (when (and hop (not (assq 'hop r)))
+      (setq r (cons (cons 'hop hop) r)))
+    r))
+
+(defun irs--neighbor-results (data id)
+  "DATA's neighbours of node ID as `irs-result' alists, edge-tagged.
 
 The response is an adjacency map plus a flat edge list —
-{nodes: {\"<id>\": node}, edges: [{from_id, to_id, kind, …}]} — not
-grouped by kind, and `nodes' is keyed by the id as a STRING, so
-`json-read' turns it into symbols.
-
-Hierarchy edges arrive with `virtual: t': they are computed from
-parent_id/ordinal at read time and never stored, because two copies of
-one fact diverge on re-chunk (design doc, Part 2)."
+{nodes: {\"<id>\": node},
+ edges: [{from_id, to_id, kind, weight, virtual, hop, reached}]}
+— with `nodes' keyed by the id as a STRING (so `json-read' interns it).
+`hop' is the degree of separation the edge was found on and `reached' the
+node it discovered; both let a multi-hop pull (depth > 1) orient an edge
+that touches neither seed.
+Hierarchy edges arrive `virtual: t': computed from parent_id/ordinal at
+read time, never stored, because two copies of one fact diverge on
+re-chunk (design doc, Part 2).  k-NN writes SIMILAR_TO reciprocally
+(A->B and B->A both exist), so dedup on (kind . other) or every semantic
+neighbour lists twice."
   (let ((nodes (alist-get 'nodes data))
         (seen (make-hash-table :test #'equal))
-        (groups nil))
+        (out nil))
     (dolist (edge (append (alist-get 'edges data) nil))
       (let* ((from (alist-get 'from_id edge))
              (to (alist-get 'to_id edge))
+             ;; `reached' names the node this edge discovered; past hop 1 the
+             ;; edge touches neither seed, so the seed-relative fallback (used
+             ;; when a pre-depth backend omits `reached') can't orient it.
+             (reached (alist-get 'reached edge))
+             (hop (alist-get 'hop edge))
              (outp (equal from id))
-             (other (if outp to from))
+             (other (or reached (if outp to from)))
              (kind (format "%s" (alist-get 'kind edge)))
              (key (cons kind other)))
-        ;; k-NN writes SIMILAR_TO reciprocally (A->B and B->A both exist), so
-        ;; without this every semantic neighbour is listed twice
         (unless (gethash key seen)
           (puthash key t seen)
           (when-let* ((node (alist-get (intern (number-to-string other)) nodes)))
-            (let ((row (concat (if outp "→" "←")
-                               (irs--brief node)
-                               (when-let* ((w (alist-get 'weight edge)))
-                                 (propertize (format "  %.2f" w) 'face 'shadow))
-                               (when (eq (alist-get 'virtual edge) t)
-                                 (propertize "  (hierarchy)" 'face 'shadow)))))
-              (if-let* ((group (assoc kind groups)))
-                  (setcdr group (cons row (cdr group)))
-                (push (cons kind (list row)) groups)))))))
-    (mapcar (lambda (g) (cons (car g) (nreverse (cdr g))))
-            (nreverse groups))))
+            (push (irs--graph-result
+                   node
+                   (concat
+                    ;; the →/← arrow is meaningful only at hop 1, where the
+                    ;; seed is an endpoint; past that the edge touches
+                    ;; neither seed, so it gets a direction-free mark — the
+                    ;; distance itself is the marginalia hop column's job
+                    (cond ((and hop (> hop 1)) "· ")
+                          (outp "→ ")
+                          (t "← "))
+                    kind
+                    (when-let* ((w (alist-get 'weight edge)))
+                      (format " %.2f" w))
+                    (when (eq (alist-get 'virtual edge) t) " ⇡"))
+                   hop)
+                  out)))))
+    (nreverse out)))
+
+;; Graph results are rendered by `irs--candidate', the same builder search
+;; uses: /graph/neighbors and /context/expand now return `heading_trail' and a
+;; body `snippet' on every node (backend `_rich_summary'), so a neighbour reads
+;; as "doc > section  <chunk text>" — distinct per section, content visible —
+;; and `irs--seek' can jump to it on preview.  Before that enrichment these
+;; were bare filenames that all collapsed together and previewed to the
+;; document top.
+
+(defun irs--seed-label (item)
+  "Short headline for the seed ITEM, for a graph session's prompt."
+  (irs--truncate (irs--result-label (irs--target item)) 48))
+
+(defcustom irs-graph-label-width 34
+  "Max display width of the heading on a graph result's candidate line.
+Graph results (neighbours/expand) carry a marginalia column search
+results do not — the relation — so their candidate is bounded tighter
+than `irs-search-label-width' to leave the annotation room; otherwise the
+extra column pushes the rightmost fields off the edge."
+  :type 'natnum)
+
+(defcustom irs-graph-snippet-width 50
+  "Max display width of the snippet on a graph result's candidate line.
+See `irs-graph-label-width'."
+  :type 'natnum)
+
+(defun irs--read-results (prompt results)
+  "Present graph RESULTS in a consult session titled PROMPT, then visit
+the choice.  Deferred through `run-at-time' because the plz callback that
+calls this runs inside a process filter, and opening the minibuffer there
+wedges the command loop."
+  (run-at-time
+   0 nil
+   (lambda ()
+     ;; render graph candidates tighter than search's: `irs--candidate' reads
+     ;; these two widths dynamically, so binding them here reserves room for
+     ;; the relation column without touching search's own layout
+     (let* ((irs-search-label-width irs-graph-label-width)
+            (irs-search-snippet-width irs-graph-snippet-width)
+            (cands (irs--uniquify (mapcar #'irs--candidate results)))
+            (choice (consult--read
+                     cands
+                     :prompt prompt
+                     :category 'irs-result
+                     :require-match t
+                     :sort nil
+                     :lookup #'consult--lookup-member
+                     :state (irs--state)
+                     :preview-key irs-search-preview-key
+                     :history 'irs--graph-history)))
+       (when-let* ((result (and choice (get-text-property 0 'irs-result choice)))
+                   (path (alist-get 'path result)))
+         (find-file path)
+         ;; an image IS the hit; a concept/source node has no file at all and
+         ;; never reaches here (no `path').  `equal', not `eq': json-read
+         ;; decodes JSON strings to Elisp strings.
+         (unless (equal (alist-get 'kind result) "image")
+           (irs--seek result)
+           (when (fboundp 'org-fold-show-context)
+             (ignore-errors (org-fold-show-context)))))))))
 
 (defun irs-action-neighbors (item)
-  "Show ITEM's typed graph edges: LINKS_TO, MENTIONS, SIMILAR_TO, …"
-  (interactive "s")
-  (let ((id (irs--node-id item)))
-    (irs--post
-     "/v1/graph/neighbors" `((node_ids . ,(vector id)))
+  "Present ITEM's typed graph neighbours in a consult session.
+LINKS_TO, MENTIONS, SIMILAR_TO, PART_OF — each annotated with the edge
+that reaches it.  Pick one to visit it; act on it again to walk further.
+
+Prompts for the max neighbours to return (clamped to
+`irs--neighbors-limit-max') and the degrees of separation to reach: 1 is
+the immediate neighbours; higher walks the graph breadth-first, tagging
+each hit with the hop it was found on."
+  (let* ((id (irs--node-id item))
+         ;; may be invoked from within the search minibuffer (C-. n); embark's
+         ;; default quit-after-action clears it first, but bind recursive
+         ;; minibuffers so the prompts are safe either way
+         (enable-recursive-minibuffers t)
+         (limit (min (max 1 (read-number "max neighbours: " 50))
+                     irs--neighbors-limit-max))
+         (depth (read-number "degrees of separation: " 1)))
+    (irs--post-cached
+     "/v1/graph/neighbors" `((node_ids . ,(vector id))
+                             (depth . ,depth)
+                             (limit . ,limit)
+                             (descend_containers . ,(irs--descend-flag)))
      (lambda (data)
-       (let ((groups (irs--neighbor-rows data id)))
-         (if (null groups)
+       (let ((results (irs--neighbor-results data id)))
+         (if (null results)
              (message "irs: no graph edges on node %s — has irs-graph run?" id)
-           (irs--present
-            "*irs-neighbors*"
-            (mapcan (lambda (group)
-                      (append (list (propertize (car group) 'face 'bold))
-                              (cdr group) (list "")))
-                    groups))))))))
+           (irs--read-results (format "neighbors of %s: " (irs--seed-label item))
+                              results)))))))
 
 (defun irs-action-expand (item)
-  "Expand context around ITEM — the flagship: seeds → graph → rerank."
-  (interactive "s")
+  "Expand context around ITEM — the flagship: seeds → graph → rerank.
+The reranked frontier is re-presented in consult, each hit tagged with
+the `via' edge it was reached through.
+
+Prompts for the max results to return (clamped to `irs--expand-limit-max')
+and the degrees of separation: 2 is the tuned base (linked notes, shared
+concepts and sources); 1 keeps only the seed's direct edges, and higher
+reaches further out before the whole neighbourhood is reranked."
   (let* ((id (irs--node-id item))
+         ;; may be invoked from within the search minibuffer (C-. e); embark's
+         ;; default quit-after-action clears it first, but bind recursive
+         ;; minibuffers so the prompts are safe either way
+         (enable-recursive-minibuffers t)
          (query (read-string "irs expand (query for reranking): "
-                            (irs--result-label (irs--target item)))))
+                            (irs--result-label (irs--target item))))
+         (limit (min (max 1 (read-number "max results: " 20))
+                     irs--expand-limit-max))
+         (depth (read-number "degrees of separation: " 2)))
     (message "irs: expanding around node %s…" id)
-    (irs--post
+    (irs--post-cached
      "/v1/context/expand"
-     `((query . ,query) (seeds . ,(vector id)))
+     `((query . ,query) (seeds . ,(vector id))
+       (depth . ,depth)
+       (limit . ,limit)
+       (descend_containers . ,(irs--descend-flag)))
      (lambda (data)
-       ;; NOTE: /context/expand returns `id', not `node_id', and carries no
-       ;; snippet, heading_trail, retriever or line.  It is the one endpoint
-       ;; whose shape differs, so it gets its own formatter rather than
-       ;; silently rendering blank rows through the search one.
-       (let ((results (append (alist-get 'results data) nil)))
+       ;; /context/expand returns `id' (not `node_id') and carries `via' but
+       ;; no snippet/heading_trail/line -- `irs--graph-result' folds both onto
+       ;; the shared shape, so the same candidate/preview code renders it.
+       (let ((results (mapcar (lambda (r)
+                                (irs--graph-result
+                                 r (format "%s" (or (alist-get 'via r) "?"))))
+                              (append (alist-get 'results data) nil))))
          (if (null results)
              (message "irs: nothing to expand to from node %s" id)
-           (irs--present
-            "*irs-context*"
-            (append
-             (list (format "context around: %s" query)
-                   (format "seeds: %s   candidates: %s   reranked: %s"
-                           (alist-get 'seeds data)
-                           (alist-get 'candidates data)
-                           (if (eq (alist-get 'reranked data) :json-false)
-                               "no" "yes"))
-                   "")
-             (mapcar (lambda (r)
-                       (concat (irs--brief r)
-                               (when-let* ((via (alist-get 'via r)))
-                                 (propertize (format "   via %s" via)
-                                             'face 'shadow))))
-                     results)))))))))
+           (irs--read-results (format "context around %s: " (irs--seed-label item))
+                              results)))))))
 
 (defun irs-action-node (item)
   "Show ITEM's node with its ancestors and children."
-  (interactive "s")
   (let ((id (irs--node-id item)))
     (irs--get
      (format "/v1/nodes/%s" id)
@@ -1373,12 +1733,15 @@ one fact diverge on re-chunk (design doc, Part 2)."
      :args (list query-arg
                  '(:name "seeds" :type array :items (:type integer) :optional t
                    :description "node ids to expand from (from earlier results)")
+                 '(:name "depth" :type integer :optional t
+                   :description "degrees of separation to reach (default 2, the tuned base; higher reaches further)")
                  limit-arg)
-     :function (lambda (callback query &optional seeds limit)
+     :function (lambda (callback query &optional seeds depth limit)
                  (irs--tool-post
                   callback "/v1/context/expand"
                   `((query . ,query)
                     ,@(when seeds `((seeds . ,(append seeds nil))))
+                    ,@(when depth `((depth . ,depth)))
                     (limit . ,(or limit 15)))
                   (lambda (data)
                     (concat (irs--tool-format data)
@@ -1387,10 +1750,13 @@ one fact diverge on re-chunk (design doc, Part 2)."
      :name "irs_graph_neighbors" :category "irs" :async t
      :description "Typed graph edges around nodes: LINKS_TO, MENTIONS, SIMILAR_TO, DERIVED_FROM plus hierarchy."
      :args '((:name "node_ids" :type array :items (:type integer)
-              :description "node ids to inspect"))
-     :function (lambda (callback node-ids)
+              :description "node ids to inspect")
+             (:name "depth" :type integer :optional t
+              :description "degrees of separation to walk (default 1)"))
+     :function (lambda (callback node-ids &optional depth)
                  (irs--tool-post callback "/v1/graph/neighbors"
-                                 `((node_ids . ,(append node-ids nil)))
+                                 `((node_ids . ,(append node-ids nil))
+                                   ,@(when depth `((depth . ,depth))))
                                  #'json-encode)))
     (gptel-make-tool
      :name "irs_get_node" :category "irs" :async t

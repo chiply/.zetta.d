@@ -684,8 +684,12 @@ POST /embed/images        -- M7: CLIP-embed image nodes → job id (own job so a
                           --  CLIP run never needs the text model resident, and
                           --  vice versa)
 GET  /nodes/{id}          -- node + hierarchy view (parents, children, siblings)
-POST /graph/neighbors     -- typed, budgeted expansion from seed ids
-POST /context/expand      -- seeds → expand → dedup/MMR → rerank  (the flagship)
+POST /graph/neighbors     -- typed, budgeted expansion from seed ids; `depth`
+                          --  (default 1) walks N hops breadth-first, each edge
+                          --  tagged with its hop + the node it reached
+POST /context/expand      -- seeds → expand → dedup/MMR → rerank  (the flagship);
+                          --  `depth` (default 2 = the tuned base) reaches 1 hop
+                          --  or, above 2, walks the frontier further before rerank
 POST /feedback/selection  -- frontend reports the result the user picked
 #+end_src
 
@@ -1222,7 +1226,13 @@ construction, the rest are designed in:
   limits and budgets (so one hub type can't dominate) and apply a global
   candidate cap before rerank; defaults live in the service, so no client can
   accidentally blow itself up. Treat high-degree nodes as
-  expand-/through/-with-caps, not expand-/all/.
+  expand-/through/-with-caps, not expand-/all/. Reach (degrees of separation) is
+  the one client-tunable dimension — a =depth= request param (neighbours default
+  1, expand default 2) — but it is itself ceiling-bounded server-side (=le=5/6=)
+  and still runs inside the per-kind budgets and the global cap, so a deeper walk
+  widens the pool without escaping the enforced bound. Distinct from =knn_k=,
+  which sets how many =SIMILAR_TO= edges are /materialised/ per chunk at build
+  time (=config.toml=, read by =irs knn=) — build-time fan-out, not query reach.
 - *Dedup before rerank and before the LLM.* Overlap chunking + expanding a chunk
   /and/ its parent /and/ a sliding-window sibling guarantees near-duplicate
   text. =/context/expand= collapses parent/child/overlap duplicates (span
@@ -1344,13 +1354,14 @@ input as flags* and is passed down to the backend.
 
 #+begin_example
 svg rendering --root=blog --type=org
-kubernetes deploy --root=logseq,zetta
+kubernetes deploy --root=logseq+zetta
 emacs --type=pdf --limit=50
 a photo of a cat --root=blogimg          (narrowed to i)
 #+end_example
 
 Three flags, each with a one-letter form (=-r= / =-t= / =-l=): =--root== takes
-a root alias, =--type== a format or extension, =--limit== overrides
+one or more root aliases (=+=-separated, or repeat the flag), =--type== one or
+more formats or extensions (same list syntax), =--limit== overrides
 =irs-search-limit= for one query. Values are validated against =/v1/status=
 *before anything is sent*, so a typo searches nothing rather than answering a
 different question, and typing toward =--root=blog= does not fire a request
@@ -1396,6 +1407,50 @@ The last line is the trap: spot hand-rolls its own =" -- "= separator
 "options end here" and *folds the rest back into the query*. Use bare
 =--root=…=; options begin at the first space-dash. A query needing a literal
 leading dash escapes it (=\-=), exactly as in =consult-ripgrep=.
+
+/Also measured — a comma never survives the minibuffer:/ =consult--read= wraps
+every async source with =consult--async-split= (=consult--async-wrap=,
+=consult.el:2138=) — the split stage is added *around* the source's own
+pipeline, whether or not the source asked for it — and this config sets
+=consult-async-split-style= to =comma=, so everything after the first comma is
+client-side filter input (orderless, whose component separator is also =,=),
+never backend input. =--root=logseq,zetta= therefore searches =logseq= alone
+and lexically filters the hits on "zetta" — a deceptively plausible but wrong
+result set. Hence =+= as the in-flag list separator (=--root=logseq+zetta=),
+or repeat the flag (=--root=logseq --root=zetta=). The parser still accepts
+comma for input that bypasses the minibuffer — the gptel tools path calls it
+with plain strings.
+
+*Worked examples — the full input grammar.* Composition order: consult's
+async split takes everything before the /first/ comma as backend input and
+hands the rest to client-side completion filtering; the backend part then
+parses as =QUERY [FLAGS...] [-- LITERAL-QUERY-TEXT]=. Since
+=orderless-component-separator= is also =,= in this config, the first comma
+belongs to consult and every later comma belongs to orderless — one
+character, two layers, no conflict.
+
+#+begin_example
+server --root=logseq --type=org --limit=50   three backend facets on one query
+server -r=logseq -r=zetta                    repeated short flags union roots
+tree -- -sitter                              -- ends options: query is "tree -sitter"
+server --root=logseq -- -v                   flags AND a literal dash: query
+                                             "server -v", scoped to logseq
+server --root=logseq,proxy,section           comma 1 ends backend input ("server",
+                                             scoped); "proxy" and "section" are
+                                             orderless components narrowing the
+                                             returned rows client-side
+tree -- -sitter,elisp                        everything at once: literal "-sitter"
+                                             in the query, "elisp" filtering rows
+#+end_example
+
+Two spellings search a literal dash, not interchangeably. =--= ends options,
+so everything after it is query text, dashes included — the clean one. =\-=
+escapes a single dashed token, but /measured: the backslash travels with the
+query/ — ="self \-hosted"= parses to query ="self \-hosted"=, backslash
+intact. The literal source never notices (rg reads the regexp =\-= as =-=,
+which is exactly why the habit is invisible in =consult-ripgrep=), but
+fts/semantic receive the backslash as query text for the tokenizer to shrug
+at. Prefer =--= here.
 
 *** The literal source goes through the backend (revising Architecture)
 
@@ -1535,27 +1590,92 @@ search — so the structural layer lives in an embark keymap on =irs-result=:
 
 | Key | Action           | Endpoint                                       |
 |-----+------------------+------------------------------------------------|
-| =n= | Typed neighbours | =/v1/graph/neighbors= (LINKS_TO, MENTIONS, SIMILAR_TO, DERIVED_FROM, ILLUSTRATES + hierarchy) |
-| =e= | Expand context   | =/v1/context/expand= with =seeds=[node_id]= — the flagship |
+| =n= | Typed neighbours | =/v1/graph/neighbors= (LINKS_TO, MENTIONS, SIMILAR_TO, DERIVED_FROM, ILLUSTRATES + hierarchy) — prompts degrees of separation (default 1) |
+| =e= | Expand context   | =/v1/context/expand= with =seeds=[node_id]= — the flagship; prompts degrees of separation (default 2, the tuned base) |
 | =d= | Node + hierarchy | =/v1/nodes/{id}= (parents, children, body)      |
 | =o= | Open file        | —                                              |
+| =s= | Raw result alist | — (debug)                                      |
 
-Results re-present in a fresh consult interface, so expansion composes.
+Neighbours and expand *re-present in a fresh =consult--read=* over the same
+=irs-result= candidates the search uses — preview on =C-==, marginalia, and
+the same embark keymap — so a neighbour can be visited, or acted on again to
+walk another hop. The read is deferred through =run-at-time= because it is
+reached from a plz callback (a process filter); opening the minibuffer there
+wedges the command loop. (=irs-search= itself has no such deferral: it opens
+its minibuffer synchronously, like =consult-ripgrep=, and refreshes
+=irs--status= concurrently — gating the prompt on the async =/v1/status=
+probe cost a visible 50–700ms per invocation, and when the probe's
+callbacks were delayed the prompt surfaced at a random later moment. A dead
+backend now reports how to start it rather than being auto-spawned.)
 
-*Three response-shape traps, all measured — a single formatter cannot serve
-these:*
+*Four traps, all measured:*
 
-1. =/v1/context/expand= returns *=id=, not =node_id=*, and carries no
-   =snippet=, =heading_trail=, =retriever= or =line=. It needs its own
-   formatter; reusing the search formatter yields blank rows.
-2. Neither =/v1/context/expand= nor =/v1/graph/neighbors= accepts =roots= —
+1. *Embark strips text properties on command actions.* For a =(commandp)=
+   action embark injects the target =substring-no-properties= into a
+   minibuffer, discarding the =irs-result= property every action reads — the
+   symptom was =irs: no result data on this candidate=. The actions are
+   therefore *plain functions, not =(interactive)= commands*: embark's other
+   dispatch path funcalls them with the propertized target intact. (Spot's
+   actions are plain functions for the same reason.)
+2. *Two graph shapes, one shared renderer — by normalisation, not a second
+   formatter.* =/v1/context/expand= returns *=id=, not =node_id=*, a =via=, and
+   a rerank =score=; =/v1/graph/neighbors= keys nodes by id. =irs--graph-result=
+   folds both onto the =irs-result= shape (=id→node_id= so re-acting resolves;
+   the edge stored under =relation=), so the existing =irs--candidate=, preview
+   and embark code render them unchanged. The marginalia gains a *leading
+   relation column* (=→ SIMILAR_TO 0.86=, =← LINKS_TO=, =⇡= for hierarchy)
+   *only* when that key is present, so initial search keeps its four columns.
+   *For this to render as content rather than a bare pointer, the node must
+   carry =heading_trail= + =snippet=* — see below.
+5. *A bare graph node is unrenderable and unseekable.* The summaries first
+   returned only id/kind/title/path — so a chunk neighbour showed as just its
+   filename (title-less chunks all collapsing to =post-vompeccc.org (2)(3)=),
+   and previewing one landed on the *document top* because =irs--seek= had no
+   =line=, =heading_trail= or =snippet= to aim at. Fixed in the backend
+   (=_rich_summary=): =/graph/neighbors= and =/context/expand= now attach the
+   two fields the retrievers already carry — =heading_trail= (ancestor titles,
+   *plus the node's own title for a container* so a section reads "doc >
+   section" instead of inheriting the document's) and a body =snippet=. The
+   node is then rendered by the *same* =irs--candidate= as search (distinct per
+   section, chunk text shown) and =irs--seek= jumps to the section. No =line=
+   column exists, so seek is heading-level — the same fidelity as a semantic
+   hit. It is additive, so the MCP/gptel tools get the richer nodes too.
+3. Neither =/v1/context/expand= nor =/v1/graph/neighbors= accepts =roots= —
    so *embark actions cannot inherit =--root=* scoping*. Either thread the
    filter into those endpoints later or accept that expansion escapes the
    scope; do not pretend it is applied.
-3. =/v1/search/exact= has =score= *always null* and =heading_trail= always
+4. =/v1/search/exact= has =score= *always null* and =heading_trail= always
    =[]=, and its node-identity fields are null whenever path resolution misses
    (it resolves only =kind='document'= by path containment). It is the one
    source carrying a real =line=.
+
+*** Container seeds reach nothing semantic — descend to chunks (=descend_containers=)
+
+The cross-document graph is the point of the structural layer, and a
+container hit misses it entirely. FTS and hybrid hierarchy-roll-up to
+*document/section* nodes, and the k-NN =SIMILAR_TO= edges are written on
+*text_units*, never on containers (design doc, Part 2). So expanding a
+document traverses one hop of its own =CONTAINS= children and stops: measured,
+expanding document 1087 gave *2 results in 1 file*; the chunk beneath it has
+*17 =SIMILAR_TO= neighbours across 13 documents*.
+
+The fix is an opt-in =descend_containers= flag on =/v1/graph/neighbors= and
+=/v1/context/expand= (both actions send it; =irs-graph-descend-containers=,
+default on). When set, the backend resolves each *container* seed to its
+=text_unit= descendants (one recursive CTE) before traversing; chunk seeds pass
+through, and a container never split into chunks keeps itself so the seed set
+is never emptied. Bounded to =_DESCEND_MAX_LEAVES= (12) per container in id
+order, so a large document cannot flood =context_expand='s pre-rerank =cap=
+with its own chunks before a neighbour is reached. With it on, expanding 1087
+returns *8 results across 7 files* (6 =SIMILAR_TO= + 1 =LINKS_TO=, all
+cross-document). Default is *off server-side* — the pinned neighbours/expand
+contract and the gold eval are unchanged unless a caller opts in.
+
+Belongs in the backend, not the client: the same gap hits the MCP/gptel tools
+(=expand_context=, =graph_neighbors=) an LLM calls, and the descent is one CTE
+in-process versus a multi-round-trip tree walk from Emacs; and with the query
+in hand the backend can bound/select chunks under the cap, which a blind client
+prefix cannot.
 
 *** What M8 needs from the backend
 

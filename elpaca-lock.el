@@ -1042,6 +1042,23 @@
                 :source "elpaca-menu-lock-file" :id eca :host github
                 :type git :protocol https :inherit t :depth treeless
                 :ref "f143e3d62211395de843b6f1fdb3e97df126ad3e"))
+ (editorconfig :source "elpaca-menu-lock-file" :recipe
+               (:package "editorconfig" :fetcher github :repo
+                         "editorconfig/editorconfig-emacs" :old-names
+                         (editorconfig-core editorconfig-fnmatch)
+                         :files
+                         ("*.el" "*.el.in" "dir" "*.info" "*.texi"
+                          "*.texinfo" "doc/dir" "doc/*.info"
+                          "doc/*.texi" "doc/*.texinfo" "lisp/*.el"
+                          "docs/dir" "docs/*.info" "docs/*.texi"
+                          "docs/*.texinfo"
+                          (:exclude ".dir-locals.el" "test.el"
+                                    "tests.el" "*-test.el"
+                                    "*-tests.el" "LICENSE" "README*"
+                                    "*-pkg.el"))
+                         :source "MELPA" :protocol https :inherit t
+                         :depth treeless :ref
+                         "b18fcf7fdea1ce84b7fdc60360ad8016b5c00d79"))
  (ef-themes :source "elpaca-menu-lock-file" :recipe
             (:package "ef-themes" :repo
                       ("https://github.com/protesilaos/ef-themes"
@@ -2934,6 +2951,13 @@
                       :type git :protocol https :inherit t :depth
                       treeless :ref
                       "365f88238f46f9b1425685562105881800f10386"))
+ (peg :source "elpaca-menu-lock-file" :recipe
+      (:package "peg" :repo
+                ("https://github.com/emacsmirror/gnu_elpa" . "peg")
+                :branch "externals/peg" :files
+                ("*" (:exclude ".git" "COPYING")) :source "GNU ELPA"
+                :protocol https :inherit t :depth treeless :ref
+                "2bccc414a94f067eb571fe614270494750a5de0e"))
  (persist :source "elpaca-menu-lock-file" :recipe
           (:package "persist" :repo
                     ("https://github.com/emacsmirror/gnu_elpa"

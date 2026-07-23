@@ -591,6 +591,17 @@ cmd_ci_test() {
                              (info (car (last (elpaca<-log p)))))
                         (message \"  %s: %s\" name (if info (nth 2 info) \"unknown\"))))))" \
         --eval "(message \"ZETTA-OK packages=%d modules=%d\" (length (elpaca--queued)) (length user-files))" \
+        --eval "(let* ((lock (expand-file-name \"elpaca-lock.el\" user-emacs-directory))
+                       (locked (when (file-exists-p lock)
+                                 (with-temp-buffer
+                                   (insert-file-contents lock)
+                                   (mapcar #'car (read (current-buffer))))))
+                       (missing (cl-remove-if (lambda (id) (memq id locked))
+                                              (mapcar #'car (elpaca--queued)))))
+                  (when missing
+                    (message \"LOCK-MISSING %d queued packages have no elpaca-lock.el entry: %s\"
+                             (length missing)
+                             (mapconcat #'symbol-name missing \" \"))))" \
         2>&1 | tee "$logfile" || exit_code=$?
 
     # Check for success marker
@@ -603,6 +614,15 @@ cmd_ci_test() {
 
     _ok "Config loaded successfully"
     grep "ZETTA-OK" "$logfile"
+
+    # Advisory for now: unpinned packages float at whatever upstream serves
+    # that day, so the version CI tested is not what a fresh install gets.
+    # Flip this to a hard failure once the next `zetta freeze' catches the
+    # lock up with compat, track-changes and any newly added modules.
+    if grep -q "^LOCK-MISSING" "$logfile"; then
+        _warn "Unpinned packages (run 'bin/zetta freeze' in the same PR):"
+        grep "^LOCK-MISSING" "$logfile"
+    fi
 
     # Check for failed elpaca packages (match only actual output, not literal
     # strings embedded in backtraces which contain the eval'd Elisp code)

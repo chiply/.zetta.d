@@ -39,8 +39,14 @@ git clone https://github.com/chiply/.zetta.d ~/.zetta.d && cd ~/.zetta.d && bin/
 
 The install command will:
 1. Create `~/.zetta.el` (your config) and `~/.private.el` (API keys)
-2. Install and byte-compile all packages via Elpaca
-3. Native-compile everything (a few minutes)
+2. Purge stale compiled artifacts (`eln-cache/`, module/bootstrap `.elc`) —
+   Emacs prefers a matching native-compiled cache entry over the source on
+   disk, so a stale entry can silently shadow fixed code and crash the
+   installer. Reinstalling over an existing checkout is safe because of
+   this step; if you ever roll back package state by restoring an
+   `elpaca.pre-*.bak` snapshot, purge `eln-cache/` the same way.
+3. Install and byte-compile all packages via Elpaca
+4. Native-compile everything (a few minutes)
 
 ### With chemacs2
 

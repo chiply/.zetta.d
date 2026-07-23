@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.36](https://github.com/chiply/.zetta.d/compare/v0.1.35...v0.1.36) (2026-07-23)
+
+
+### Features
+
+* typst live-preview module; hyperbole keys; mode-line git-info cache ([#112](https://github.com/chiply/.zetta.d/issues/112)) ([80423ad](https://github.com/chiply/.zetta.d/commit/80423ade8de2f5bcb5ec6d969684705fbb625c46))
+
+
+### Bug Fixes
+
+* **ci:** survive cold elpaca caches — no git prompts, guard repeatable use ([#109](https://github.com/chiply/.zetta.d/issues/109)) ([51557bc](https://github.com/chiply/.zetta.d/commit/51557bca80d87483900f69638d19f7abee9155ac))
+* self-heal elfeed-org startup "database format is outdated" ([#107](https://github.com/chiply/.zetta.d/issues/107)) ([0a5def3](https://github.com/chiply/.zetta.d/commit/0a5def37282511d128faf8715333c3516f72d8c3))
+
 ## [0.1.35](https://github.com/chiply/.zetta.d/compare/v0.1.34...v0.1.35) (2026-07-22)
 
 

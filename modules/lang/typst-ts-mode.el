@@ -9,6 +9,16 @@
 ;; is auto-installed on first visit because `treesit-auto-install-grammar' is t
 ;; (set in modules/lang/treesit.el, Emacs 31); we register its source below.
 
+;; typst-ts-mode's generated autoloads execute a `define-compilation-mode'
+;; form at load time, so compile.el must be resident BEFORE elpaca activates
+;; the package or the load dies void-function.  Whether it was resident was
+;; a race decided by elpaca's async build interleaving — any declaration
+;; added ahead of this module shifts every queue boundary and re-rolls it
+;; (measured 2026-07-23: the snapshot CI job flipped red on an unrelated
+;; ordering PR).  Requiring it here is deterministic: this top-level form
+;; runs before the order below is declared, and activation follows it.
+(require 'compile)
+
 (defun zetta-typst-preview-in-emacs (pdf)
   "Open PDF in a right-hand side window and keep it live via auto-revert.
 Used as `typst-ts-preview-function' so the package's compile/watch

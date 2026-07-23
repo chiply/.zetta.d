@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.37](https://github.com/chiply/.zetta.d/compare/v0.1.36...v0.1.37) (2026-07-23)
+
+
+### Bug Fixes
+
+* require elpaca in bootstrap-elpaca — compiled bootstrap crashed startup ([#114](https://github.com/chiply/.zetta.d/issues/114)) ([7c10763](https://github.com/chiply/.zetta.d/commit/7c10763b35843b7e6a20c5fb807b2fd2297e9180))
+
 ## [0.1.36](https://github.com/chiply/.zetta.d/compare/v0.1.35...v0.1.36) (2026-07-23)
 
 

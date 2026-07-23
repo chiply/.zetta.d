@@ -97,6 +97,22 @@
 ;; make the ELPA versions the installed truth on every Emacs.
 (elpaca compat)
 (elpaca track-changes)
+;; Same trap, opposite direction: peg and editorconfig are builtin on
+;; Emacs 30+/31 but NOT on 29.4, where they queue as real transitive
+;; dependencies -- which a `zetta freeze' run on a newer Emacs can never
+;; see, so the LOCK-MISSING gate fired on 29.4 the moment it became
+;; enforcing (run 30024877208).  Managing them explicitly queues them on
+;; every Emacs, so one freeze covers all supported versions.
+;; ...and they must ALSO leave `elpaca-ignored-dependencies', which
+;; defaults to the RUNNING Emacs's builtin list -- on Emacs 31 that
+;; includes peg and editorconfig, and this elpaca version silently drops
+;; even explicit orders for ignored ids (measured: (elpaca peg) produced
+;; no order at all, so `zetta freeze' could never pin them).  Upstream
+;; made the same move for compat (elpaca c1833ca).
+(setq elpaca-ignored-dependencies
+      (cl-set-difference elpaca-ignored-dependencies '(peg editorconfig)))
+(elpaca peg)
+(elpaca editorconfig)
 (elpaca-wait)
 
 ;; Fix elpaca bug: when a package is re-declared after being queued as a

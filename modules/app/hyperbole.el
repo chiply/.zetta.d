@@ -156,13 +156,21 @@ otherwise appear as a bogus `zsh#...' completion candidate."
   :config
   (hyperbole-mode 1)
 
+  ;;(setq hsys-org-enable-smart-keys t)
+
   ;; --- HyWiki: highlight/buttonize WikiWords (pages live in ~/hywiki/) ---
   ;; `hyperbole-mode' alone does NOT highlight WikiWords; the global
   ;; `hywiki-mode' does.  `hywiki-directory' defaults to ~/hywiki/, which is
   ;; where the generated chiply.dev WikiWord pages live.  Follow a WikiWord
   ;; with the Action Key {s-H} (relocated from {M-RET} below).
-  (require 'hywiki)
+  ;;(require 'hywiki)
   (hywiki-mode 1)
+
+  (add-to-list 'brushup-styles
+               '(set-face-attribute 'hywiki--word-face nil
+                                   :foreground "goldenrod3"
+                                   ))
+
 
   ;; Make sure following a WikiWord always lands in a real page file on disk,
   ;; titled with the WikiWord, even if HyWiki's referent hash and the pages on
@@ -203,19 +211,19 @@ otherwise appear as a bogus `zsh#...' completion candidate."
                 hywiki--buttonize-character-regexp)
         hywiki--any-wikiword-regexp-list nil)
 
-  ;;;; --- Relocate the minibuffer menu: {C-h h} -> {C-h H} ---
-  ;;;; Hyperbole binds `hyperbole' to {C-h h} globally; undo that and rebind.
-  ;;(when (eq (lookup-key (current-global-map) (kbd "C-h h")) 'hyperbole)
-    ;;(global-set-key (kbd "C-h h") #'view-hello-file))
-  ;;(global-set-key (kbd "C-h H") #'hyperbole)
-;;
-  ;;;; --- Relocate the keyboard Action/Assist Key: {M-RET} -> {s-H} ---
-  ;;;; Free the default M-RET variants from `hyperbole-mode-map' (so org-mode's
-  ;;;; M-RET is no longer shadowed), then bind the Action Key on s-H via the
-  ;;;; supported `hkey-set-key' helper.  Assist Key = {C-u s-H}.
-  ;;(dolist (k '("M-RET" "M-<return>" "ESC RET" "ESC <return>"))
-    ;;(define-key hyperbole-mode-map (kbd k) nil))
-  ;;(hkey-set-key (kbd "s-H") #'hkey-either)
+  ;; --- Relocate the minibuffer menu: {C-h h} -> {C-h H} ---
+  ;; Hyperbole binds `hyperbole' to {C-h h} globally; undo that and rebind.
+  (when (eq (lookup-key (current-global-map) (kbd "C-h h")) 'hyperbole)
+    (global-set-key (kbd "C-h h") #'view-hello-file))
+  (global-set-key (kbd "C-h H") #'hyperbole)
+
+  ;; --- Relocate the keyboard Action/Assist Key: {M-RET} -> {s-H} ---
+  ;; Free the default M-RET variants from `hyperbole-mode-map' (so org-mode's
+  ;; M-RET is no longer shadowed), then bind the Action Key on s-H via the
+  ;; supported `hkey-set-key' helper.  Assist Key = {C-u s-H}.
+  (dolist (k '("M-RET" "M-<return>" "ESC RET" "ESC <return>"))
+    (define-key hyperbole-mode-map (kbd k) nil))
+  (hkey-set-key (kbd "s-H") #'hkey-either)
 
   ;; --- Give Hyperbole the physical M-<return> in outline buffers ---
   ;; evil-collection's outline module binds the physical key M-<return> to
@@ -232,7 +240,7 @@ otherwise appear as a bogus `zsh#...' completion candidate."
       (kbd "M-<return>") 'hkey-either))
 
   ;; --- HyRolo: search the Logseq pages as the rolo source ---
-  (setq hyrolo-file-list '("~/logseq/pages/"))
+  (setq hyrolo-file-list '("~/.rolo.org" "~/logseq/pages/"))
   ;; Make the consult-driven grep commands resolve their matched files
   ;; correctly (see `zetta-hyrolo-fix-consult-handoff' above).
   (advice-add 'hyrolo-grep-input :filter-return

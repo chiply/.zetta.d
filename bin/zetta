@@ -615,13 +615,16 @@ cmd_ci_test() {
     _ok "Config loaded successfully"
     grep "ZETTA-OK" "$logfile"
 
-    # Advisory for now: unpinned packages float at whatever upstream serves
-    # that day, so the version CI tested is not what a fresh install gets.
-    # Flip this to a hard failure once the next `zetta freeze' catches the
-    # lock up with compat, track-changes and any newly added modules.
+    # Hard gate (flipped 2026-07-23, once the lock caught up with compat,
+    # track-changes and typst-ts-mode): an unpinned package floats at
+    # whatever upstream serves that day, so the version CI tested is not
+    # what a fresh install gets -- the exact drift that broke fresh
+    # installs for ten weeks.  Fail the PR that introduces one.
     if grep -q "^LOCK-MISSING" "$logfile"; then
-        _warn "Unpinned packages (run 'bin/zetta freeze' in the same PR):"
+        _error "Unpinned packages -- run 'bin/zetta freeze' in this PR:"
         grep "^LOCK-MISSING" "$logfile"
+        rm -f "$logfile"
+        return 1
     fi
 
     # Check for failed elpaca packages (match only actual output, not literal

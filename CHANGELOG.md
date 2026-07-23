@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.38](https://github.com/chiply/.zetta.d/compare/v0.1.37...v0.1.38) (2026-07-23)
+
+
+### Bug Fixes
+
+* daemon startup crash + resolve every startup warning at the root ([#117](https://github.com/chiply/.zetta.d/issues/117)) ([f773711](https://github.com/chiply/.zetta.d/commit/f7737110ee278133039445d50080a2417c3d36f7))
+
 ## [0.1.37](https://github.com/chiply/.zetta.d/compare/v0.1.36...v0.1.37) (2026-07-23)
 
 

@@ -59,13 +59,19 @@ in the order they appear in the `zetta-modules!' declaration.")
                    "helm.el" "marginalia.el" "orderless.el" "embark.el"
                    "embark-consult.el" "consult.el" "tap.el"
                    "vertico.el" "corfu.el" "prescient.el" "mono-complete.el"
-                   "consult-gh.el" "consult-lsp.el" "consult-dash.el" "consult-ls-git.el"))
+                   "consult-gh.el" "consult-dash.el" "consult-ls-git.el"))
     (ui . ("display.el" "hud.el" "highlight-indent-guides.el" "ultra-scroll.el"
            "color-identifiers-mode.el" "volatile-highlights.el"
            "display-fill-column-indicator.el" "display-line-numbers.el"
            "face.el" "dimmer.el" "focus.el" "face-remap.el"
            "default-text-scale.el" "hl-line.el"
-           "all-the-icons.el" "minimalize.el" "treemacs.el"
+           "all-the-icons.el" "minimalize.el"
+           ;; avy before ace-window before treemacs: each is the next one's
+           ;; elpaca dependency, and a dependent declared first queues its
+           ;; deps implicitly — the later explicit declaration then hits the
+           ;; duplicate-queue warn path (racy dependent-unblock on cold
+           ;; builds; see the elfeed/elfeed-protocol precedent).
+           "avy.el" "ace-window.el" "treemacs.el"
            "all-the-icons-dired.el" "all-the-icons-ibuffer.el" "theme.el"
            "modern-fringes.el" "rainbow-mode.el" "image-mode.el" "browse-url.el"
            "mermaid-mode.el" "minimap.el" "unicode-fonts.el" "spinner.el"
@@ -79,8 +85,8 @@ in the order they appear in the `zetta-modules!' declaration.")
     (editor . ("super-save.el" "editing.el" "smartparens.el"
                "hungry-delete.el" "vimish-fold.el" "narrow.el" "ov.el" "iedit.el"
                "dumb-jump.el" "snippets.el" "ace-mc.el" "move-text.el"
-               "undo-tree.el" "macrostep.el" "highlight.el" "ace-window.el"
-               "windmove.el" "avy.el" "evil.el" "evil-anzu.el" "evil-surround.el"
+               "undo-tree.el" "macrostep.el" "highlight.el"
+               "windmove.el" "evil.el" "evil-anzu.el" "evil-surround.el"
                "evil-collection.el" "evil-exchange.el" "evil-indent-plus.el"
                "evil-search-highlight-persist.el" "evil-fringe-mark.el"
                "text-manipulation.el" "markdown-toc.el"))
@@ -94,6 +100,10 @@ in the order they appear in the `zetta-modules!' declaration.")
               "magit.el" "forge.el" "git-gutter.el" "docker.el" "dockerfile-mode.el"
               "docker-compose-mode.el" "convention.el" "tree-mode.el" "dap-mode.el"
               "dired.el" "dired-subtree.el" "dired-ranger.el" "tokei.el" "lsp.el"
+              ;; consult-lsp AFTER lsp.el: lsp-mode is its elpaca dependency —
+              ;; declared dependent-first it queued lsp-mode implicitly and
+              ;; tools/lsp.el's declaration became the duplicate.
+              "consult-lsp.el"
               "lark.el" "apheleia.el" "flycheck.el" "flycheck-indicator.el"
               "python-pytest.el" "multi-compile.el" "multi-compile-executors.el"
               "multi-compile-targets.el" "compile.el"

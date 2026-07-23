@@ -278,25 +278,32 @@ minibuffer with something like `exit-minibuffer'."
   ;; Enabling here -- idempotent, and `elfeed-feeds' still holds the Fever feed
   ;; at this point since `(elfeed-org)' has not run yet -- guarantees the advice
   ;; is in place first.  See also `:after elfeed org elfeed-protocol' above.
-  (when (fboundp 'elfeed-protocol-enable) (elfeed-protocol-enable))
-  ;; `(elfeed-org)' lazily first-touches the db (`elfeed-db-get-feed' ->
-  ;; `elfeed-db-ensure' -> `elfeed-db-load').  During elpaca's async startup
-  ;; that read of the ~30MB single-line index intermittently misfires and
-  ;; `elfeed-db-load' signals a bogus "Elfeed database format is outdated" --
-  ;; the on-disk index is valid v4 (it loads cleanly in `emacs -Q' and
-  ;; self-heals on any later load, e.g. the first `M-x elfeed').  That error
-  ;; aborts the rest of this :config, so the org feed tags never get applied
-  ;; that session.  It is a startup read-timing issue, NOT stale data: it
-  ;; reproduces on a freshly Miniflux-resynced v4 db.  Self-heal: on the error
-  ;; force a clean reload and retry; if startup is still churning, defer one
-  ;; final attempt to idle so the tags always land.
+  ;; Both `elfeed-protocol-enable' AND `(elfeed-org)' lazily first-touch the
+  ;; db (enable's metadata migration calls `elfeed-db-get-feed'; elfeed-org
+  ;; via `elfeed-db-ensure' -> `elfeed-db-load').  During elpaca's async
+  ;; startup that read of the ~30MB single-line index intermittently misfires:
+  ;; `read' hits end-of-file mid-parse, or `elfeed-db-load' signals a bogus
+  ;; "Elfeed database format is outdated" -- the on-disk index is valid v4 (it
+  ;; loads cleanly in `emacs -Q' and self-heals on any later load, e.g. the
+  ;; first `M-x elfeed').  It is a startup read-timing issue, NOT stale data:
+  ;; it reproduces on a freshly Miniflux-resynced v4 db.  The enable call used
+  ;; to sit OUTSIDE the retry ladder below, so a misfire there escaped to
+  ;; use-package, aborted the rest of this :config, and the org feed tags
+  ;; never landed that session (measured 2026-07-23: both error shapes
+  ;; reported as "elfeed-org/:config" errors, `elfeed-feeds' stuck at the
+  ;; lone Fever entry).  Run the WHOLE sequence through the ladder --
+  ;; `elfeed-protocol-enable' is idempotent, so retrying it is safe.
+  (defun zetta--elfeed-org-setup ()
+    "Enable elfeed-protocol's advice, then process the org feed file."
+    (when (fboundp 'elfeed-protocol-enable) (elfeed-protocol-enable))
+    (elfeed-org))
   (condition-case nil
-      (progn (elfeed-org) (message "loaded elfeed-org"))
+      (progn (zetta--elfeed-org-setup) (message "loaded elfeed-org"))
     (error
      (setq elfeed-db nil)
      (require 'elfeed-db)
      (condition-case nil
-         (progn (elfeed-db-load) (elfeed-org)
+         (progn (elfeed-db-load) (zetta--elfeed-org-setup)
                 (message "loaded elfeed-org (after db reload)"))
        (error
         (run-with-idle-timer
@@ -304,7 +311,7 @@ minibuffer with something like `exit-minibuffer'."
          (lambda ()
            (setq elfeed-db nil)
            (ignore-errors (elfeed-db-load))
-           (ignore-errors (elfeed-org))
+           (ignore-errors (zetta--elfeed-org-setup))
            (message "loaded elfeed-org (deferred)")))))))
   )
 

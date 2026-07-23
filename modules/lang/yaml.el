@@ -1,7 +1,11 @@
 ;;; yaml.el --- Configure yaml -*- lexical-binding: t; -*-
 
+;; The elpaca order (with the zkry/yaml.el recipe) lives in
+;; bootstrap-elpaca.el: ~/.private.el's swagg declaration loads before the
+;; modules and pulls yaml as a dependency, so an order declared here always
+;; arrived second (duplicate-queue warning, recipe ignored).
 (use-package yaml
-  :ensure (yaml :host github :repo "zkry/yaml.el"))
+  :ensure nil)
 
 (defun jpt-yaml-indentation-level (s)
   (if (string-match "^ " s)

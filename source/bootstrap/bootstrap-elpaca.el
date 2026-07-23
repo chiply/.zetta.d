@@ -54,6 +54,17 @@
     (require 'elpaca)
     (elpaca-generate-autoloads "elpaca" repo)
     (let ((load-source-file-function nil)) (load "./elpaca-autoloads"))))
+;; Load elpaca NOW, not lazily via the `elpaca' macro's autoload.  When
+;; this file is byte-compiled (`zetta install'/`zetta sync' compile the
+;; bootstrap), the macro calls below are already expanded into direct
+;; calls to elpaca internals (`elpaca--expand-declaration'), so loading
+;; the .elc crashes void-function before any autoload can fire.  That
+;; broke every interactive startup after the 2026-07-23 cold install,
+;; while CI and the installer never noticed -- both always load the
+;; bootstrap from source (install deletes .elc first; compile-angel
+;; excludes the bootstrap dir).  `require' is idempotent, and elpaca
+;; would be resident moments later anyway.
+(require 'elpaca)
 (add-hook 'elpaca-after-init-hook #'elpaca-process-queues)
 (elpaca `(,@elpaca-order))
 

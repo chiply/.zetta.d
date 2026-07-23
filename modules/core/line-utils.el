@@ -64,21 +64,45 @@
 (defun zetta-line-narrowed-icon ()
   (when (buffer-narrowed-p) "N"))
 
+;; Repo/branch render inside mode-line :eval forms (treemacs,
+;; telephone-line), so they run on every redisplay of those windows and
+;; must never fork a shell there: two `git rev-parse' subprocesses per
+;; window per redisplay block the main loop long enough to starve timers
+;; (async consult/irs results stall until a keypress).  Cache per
+;; directory instead; a branch switch shows up within `zetta-git-info-ttl'.
+(defvar zetta-git-info-ttl 10
+  "Seconds a cached repo/branch answer stays fresh.")
+(defvar zetta--git-info-cache (make-hash-table :test 'equal)
+  "Maps `default-directory' to (TIME REPO-NAME BRANCH-NAME).")
+
+(defun zetta--git-info ()
+  "Return (REPO-NAME BRANCH-NAME) for `default-directory', cached briefly.
+REPO-NAME is a one-element list, as `zetta-get-repo-name' has always
+returned; BRANCH-NAME is a string."
+  (let ((hit (gethash default-directory zetta--git-info-cache))
+        (now (float-time)))
+    (if (and hit (< (- now (car hit)) zetta-git-info-ttl))
+        (cdr hit)
+      (cdr (puthash
+            default-directory
+            (list now
+                  (last (split-string
+                         (nth 0 (split-string
+                                 (shell-command-to-string
+                                  "git rev-parse --show-toplevel")
+                                 "\n"))
+                         "/"))
+                  (nth 0 (split-string
+                          (shell-command-to-string
+                           "git rev-parse --abbrev-ref HEAD")
+                          "\n")))
+            zetta--git-info-cache)))))
+
 (defun zetta-get-repo-name ()
-  (last (split-string
-         (nth 0 (split-string
-                 (shell-command-to-string
-                  "git rev-parse --show-toplevel")
-                 "\n"))
-         "/"
-         ))
-  )
+  (nth 0 (zetta--git-info)))
 
 (defun zetta-get-branch-name ()
-  (nth 0 (split-string
-          (shell-command-to-string
-           "git rev-parse --abbrev-ref HEAD")
-          "\n")))
+  (nth 1 (zetta--git-info)))
 
 (defun zetta-line-col ()
   (let ((col-length (length (int-to-string (current-column)))))
@@ -798,12 +822,28 @@ below `zetta-tab-bar-battery-low'); above it the indicator is green."
   "Colours for low / medium / full battery levels (muted earth tones)."
   :type '(alist :key-type symbol :value-type color) :group 'zetta)
 
+(defvar zetta-tab-bar--battery-cache nil
+  "(TIME . DATA) of the last battery status read; DATA is the alist.")
+
+(defun zetta-tab-bar--battery-note (data)
+  "Record DATA from `battery-update-functions' so renders never poll."
+  (setq zetta-tab-bar--battery-cache (cons (float-time) data)))
+(add-hook 'battery-update-functions #'zetta-tab-bar--battery-note)
+
 (defun zetta-tab-bar--battery-data ()
-  "Return (PCT . PLUGGED) from `battery-status-function', or nil.
-PCT is the integer charge percentage; PLUGGED is non-nil when on AC power."
+  "Return (PCT . PLUGGED) from the cached battery status, or nil.
+PCT is the integer charge percentage; PLUGGED is non-nil when on AC power.
+`battery-status-function' shells out (pmset on macOS) and this renders
+inside redisplay, so the status is polled here at most once a minute;
+`display-battery-mode' normally refreshes the cache off-redisplay via
+`battery-update-functions' before that ever expires."
   (when (and (boundp 'battery-status-function) (functionp battery-status-function))
-    (let ((data (ignore-errors (funcall battery-status-function))))
-      (when data
+    (let ((now (float-time)))
+      (when (or (null zetta-tab-bar--battery-cache)
+                (> (- now (car zetta-tab-bar--battery-cache)) 60))
+        (setq zetta-tab-bar--battery-cache
+              (cons now (ignore-errors (funcall battery-status-function)))))
+      (when-let* ((data (cdr zetta-tab-bar--battery-cache)))
         (cons (string-to-number (or (cdr (assq ?p data)) "0"))
               (and (member (cdr (assq ?L data)) '("AC" "on-line" "on")) t))))))
 

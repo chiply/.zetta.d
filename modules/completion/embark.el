@@ -11,6 +11,7 @@
 (use-package embark
   :ensure (:wait t)
   :defer t
+  :after (hyperbole)
   :config
   ;; Don't quit on `embark-act' so it can be repeated.
   (defun embark-act-noquit ()
@@ -124,8 +125,8 @@ completing-read prompter."
   ;; falls back to `embark-general-map'.
   (with-eval-after-load 'embark-org
     (dolist (type '(drawer property-drawer quote-block example-block
-                    comment-block verse-block keyword planning
-                    latex-environment latex-fragment))
+                           comment-block verse-block keyword planning
+                           latex-environment latex-fragment))
       (cl-pushnew type embark-org--types)))
 
   ;; Act on the last echo-area message (from oantolin's config): jump to

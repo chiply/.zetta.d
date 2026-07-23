@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Nag when a commit adds package declarations without updating the lockfile.
+#
+# A package with no elpaca-lock.el entry floats at whatever upstream serves
+# that day, so the version CI tested is not the version a fresh install
+# gets.  Freeze in the same PR that adds the package:  bin/zetta freeze
+#
+# Activate once per clone:   git config core.hooksPath .githooks
+# Bypass deliberately with:  git commit --no-verify
+set -euo pipefail
+
+added=$(git diff --cached -U0 -- 'modules/*.el' 'modules/**/*.el' 'source/**/*.el' \
+  | grep -E '^\+[^+]' | grep -cE '\(use-package |\(elpaca |:ensure \(' || true)
+lock_staged=$(git diff --cached --name-only | grep -c '^elpaca-lock\.el$' || true)
+
+if [ "${added:-0}" -gt 0 ] && [ "${lock_staged:-0}" -eq 0 ]; then
+    echo "pre-commit: staged elisp adds package declarations, but elpaca-lock.el is not staged." >&2
+    echo "  New/changed packages stay unpinned until 'bin/zetta freeze' runs." >&2
+    echo "  Freeze in this PR, or bypass deliberately: git commit --no-verify" >&2
+    exit 1
+fi

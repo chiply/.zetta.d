@@ -157,6 +157,17 @@ Doom's pins or a `flake.lock`:
   mode that broke fresh installs for ten weeks in mid-2026. CI prints a
   `LOCK-MISSING` warning for unpinned packages, and an optional pre-commit
   hook nags locally: `git config core.hooksPath .githooks`
+- **Bumping elpaca itself?** Elpaca's own pin is not in the lockfile — it's
+  the `:ref` in `elpaca-order` in `source/bootstrap/bootstrap-elpaca.el`,
+  because the installer clones elpaca before any lockfile is read. When
+  bumping it, re-check the `zetta--elpaca-queue-return-struct` advice in the
+  same file: it patches the duplicate-declaration branch that returns the
+  `warn` string instead of the elpaca struct (which kills daemon startup with
+  `wrong-type-argument listp`, measured 2026-07-23). The queue function was
+  renamed `elpaca--queue` → `elpaca--enqueue` after the current pin, so the
+  advice targets both names and survives the rename — but drop the advice
+  entirely once the pinned ref carries an upstream fix that returns the
+  struct, and verify a cold `--fg-daemon` start either way.
 
 ## Uninstalling
 

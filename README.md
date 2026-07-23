@@ -139,6 +139,25 @@ bin/zetta freeze    # rewrite lockfile from current state
 
 To run on bleeding-edge instead of pinned: `(setq zetta-use-lockfile nil)` in `~/.zetta.el`.
 
+### The lockfile is distro-managed
+
+`elpaca-lock.el` pins every package to an exact commit so that a fresh
+install builds the same verified set CI tests (the weekly cold-install
+rehearsal builds from nothing against exactly these pins). Treat it like
+Doom's pins or a `flake.lock`:
+
+- **Don't hand-edit it, and don't commit your own `freeze` output** unless
+  you maintain a fork. Personal version preferences belong in `~/.zetta.el`
+  (`zetta-use-lockfile nil`), not in the lock.
+- **On a pull conflict**, take upstream's copy (`git checkout --theirs
+  elpaca-lock.el`) and re-run `bin/zetta freeze` afterwards if you maintain
+  your own pins.
+- **Adding a package? Freeze in the same PR.** A package without a lock
+  entry floats at whatever upstream serves that day — the exact failure
+  mode that broke fresh installs for ten weeks in mid-2026. CI prints a
+  `LOCK-MISSING` warning for unpinned packages, and an optional pre-commit
+  hook nags locally: `git config core.hooksPath .githooks`
+
 ## Uninstalling
 
 ```bash

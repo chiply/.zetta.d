@@ -29,8 +29,15 @@
 ;; update - abandoning custom emojis as these are implenented as
 ;; emojis, the rendering also doesn't really work
 
+;; :ensure t — this module must OWN the spinner order.  It used to be
+;; :ensure nil, freeloading on lsp-mode's dependency order, which only
+;; worked while consult-lsp (completion, early) queued lsp-mode before ui
+;; loaded; once lsp-mode moved to its natural tools-order slot the
+;; `:after' require raced spinner's build and lost ("Cannot load spinner",
+;; measured 2026-07-23).  Declared here (ui, before tools/lsp.el),
+;; lsp-mode's dependency scan reuses this order silently.
 (use-package spinner
-  :ensure nil
+  :ensure t
   :after (compile unicode-fonts)
 
   :config

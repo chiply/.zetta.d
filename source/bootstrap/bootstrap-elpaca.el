@@ -1,6 +1,10 @@
 ;;; bootstrap-elpaca.el --- Configure elpaca package manager -*- lexical-binding: t; -*-
 
-(defvar elpaca-installer-version 0.12)
+;; MUST match the version the pinned elpaca expects (its doc/installer.el;
+;; elpaca.el lwarns "installer version does not match" otherwise).  The
+;; pinned 1508298 declares 0.11; current master declares 0.12 — bump this
+;; together with the :ref below, never independently.
+(defvar elpaca-installer-version 0.11)
 (defvar elpaca-directory (expand-file-name "elpaca/" user-emacs-directory))
 (defvar elpaca-builds-directory (expand-file-name "builds/" elpaca-directory))
 ;; The bootstrap clone MUST land in elpaca-repos-directory/elpaca -- the
@@ -113,14 +117,32 @@
       (cl-set-difference elpaca-ignored-dependencies '(peg editorconfig)))
 (elpaca peg)
 (elpaca editorconfig)
+;; yaml must be ordered here, not in lang/yaml.el: ~/.private.el loads
+;; BEFORE the modules (init.el needs its API keys early) and declares
+;; swagg, whose dependency scan queues yaml first — so the module's
+;; explicit declaration always arrived second, tripping the
+;; duplicate-queue warn path AND silently discarding the module's
+;; zkry/yaml.el recipe in favor of the menu default.  Ordering it here
+;; makes the recipe authoritative and lets every dependent (swagg,
+;; consult-gh) resolve against a real order.  lang/yaml.el keeps the
+;; config with :ensure nil.
+(elpaca (yaml :host github :repo "zkry/yaml.el"))
 (elpaca-wait)
 
 ;; Fix elpaca bug: when a package is re-declared after being queued as a
-;; transitive dependency, elpaca--enqueue returns the `warn' string instead of
-;; the existing elpaca struct, causing elpaca--expand-declaration to crash
-;; with (wrong-type-argument listp ...) when it tries to access struct fields.
-;; Renamed from elpaca--queue to elpaca--enqueue in elpaca 0.12.
-(define-advice elpaca--enqueue (:around (fn order &optional queue) fix-duplicate-return)
+;; transitive dependency, the queue function's duplicate branch returns the
+;; value of `warn' instead of the existing elpaca struct (its own docstring
+;; says "Return E.").  In a frameless daemon `warn' returns the rendered
+;; warning string, which then crashes queue processing after init with
+;; (wrong-type-argument listp ...) -- aborting daemon startup before the
+;; server starts (measured 2026-07-23: ace-window re-declared after treemacs
+;; queued it; `--fg-daemon' exited after every module had loaded).  The
+;; function is `elpaca--queue' at the pinned ref and was renamed to
+;; `elpaca--enqueue' on later masters, so advise BOTH names -- advice on an
+;; undefined symbol is inert until the function is defined, which lets the
+;; fix survive a pin bump in either direction.  Drop this once the pin
+;; reaches an upstream where the duplicate branch returns the struct.
+(defun zetta--elpaca-queue-return-struct (fn order &optional queue)
   "Return existing elpaca struct for duplicate packages instead of warn string."
   (if-let* ((id (elpaca--first (or order (signal 'wrong-type-argument
                                                  '((or symbolp listp) nil)))))
@@ -132,6 +154,8 @@
           (warn "Duplicate item ID queued: %S" id))
         e)
     (funcall fn order queue)))
+(advice-add 'elpaca--queue :around #'zetta--elpaca-queue-return-struct)
+(advice-add 'elpaca--enqueue :around #'zetta--elpaca-queue-return-struct)
 
 ;; Configure use-package to use Elpaca by default
 (setq elpaca-use-package-by-default t)

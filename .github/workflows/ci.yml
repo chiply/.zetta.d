@@ -10,6 +10,17 @@ on:
   # release.yml; that workflow is unaffected.
   pull_request:
     branches: [main]
+  # Weekly cold-install rehearsal.  Warm-cache PR runs only prove the
+  # config loads against already-built packages; the install path itself
+  # went untested for ten weeks (2026-05-07 -> 2026-07-22) while broken
+  # for every fresh user, because caches kept every run warm.  Scheduled
+  # and manually-dispatched runs skip the cache restore below and build
+  # everything from nothing -- bootstrap, lockfile pins, every recipe --
+  # exactly what a new clone experiences.  GitHub emails the repo owner
+  # when a scheduled run fails.
+  schedule:
+    - cron: "0 6 * * 1"  # Mondays 06:00 UTC
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,10 +29,23 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # A moved or private repo makes git prompt for credentials; in batch CI
+  # the prompt is never answered, so the clone hangs silently until the
+  # 30-minute job timeout with no package name in the log (measured: the
+  # tools-category elpaca-wait hung 15 minutes past its last message).
+  # Disabling the prompt turns that hang into an immediate, named failure.
+  GIT_TERMINAL_PROMPT: "0"
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    # A fully cold elpaca build measures ~25 minutes, and when the sync
+    # step crashes early (tolerated by design) ci-test must do all of it
+    # inside its own elpaca window (2400s in bin/zetta).  Leave room for
+    # that plus the watchdog's stall window rather than letting the job
+    # timeout preempt the diagnostic dump.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -39,14 +63,22 @@ jobs:
         with:
           version: ${{ matrix.emacs-version }}
 
-      - name: Cache elpaca directory
+      - name: Restore elpaca cache
+        # Restore-only (paired with the explicit save at the end of the
+        # job): actions/cache's implicit post-step saves even from failed
+        # jobs, and a cache captured mid-wedge poisons every later restore
+        # (measured repeatedly during the cold-install repair, runs
+        # 29951544889+).  Scheduled and manually-dispatched runs skip the
+        # restore on purpose -- they are the cold fresh-install rehearsal.
+        # v2 epoch: orphans the v1 caches saved mid-wedge.
+        if: github.event_name == 'pull_request'
         id: cache-elpaca
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: elpaca
-          key: elpaca-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**', 'elpaca-lock.el') }}
+          key: elpaca-v2-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**', 'elpaca-lock.el') }}
           restore-keys: |
-            elpaca-${{ matrix.emacs-version }}-
+            elpaca-v2-${{ matrix.emacs-version }}-
 
       - name: Create stub files
         run: |
@@ -62,3 +94,16 @@ jobs:
       - name: Run CI test
         shell: bash
         run: bin/zetta ci-test
+
+      - name: Save elpaca cache
+        # Only a fully successful job may write the cache, so a restored
+        # cache always means a known-good build state.  Cold (scheduled/
+        # dispatched) successes also save, refreshing the cache weekly
+        # from a verified-clean fresh install.  Skipped on exact cache
+        # hits (nothing new to save); if the key already exists from a
+        # concurrent job, the save is a no-op warning.
+        if: success() && steps.cache-elpaca.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: elpaca
+          key: elpaca-v2-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**', 'elpaca-lock.el') }}

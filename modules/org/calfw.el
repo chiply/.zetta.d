@@ -1,7 +1,14 @@
 ;;; calfw.el --- Configure calfw calendar -*- lexical-binding: t; -*-
 
+;; calfw-org.el ships in the same repo as calfw.  Declared as its own
+;; elpaca order the pair coordinates through elpaca's monorepo machinery,
+;; which deadlocks on a cold first clone ("Waiting on monorepo" forever --
+;; measured on every cold CI run and a cold local build, 2026-07-22; warm
+;; it resolves instantly, which is why no working machine ever saw it).
+;; Building both files as ONE order removes the coordination entirely;
+;; the calfw-org use-package below stays for config but ensures nothing.
 (use-package calfw
-  :ensure t
+  :ensure (calfw :files ("calfw.el" "calfw-compat.el" "calfw-org.el"))
   :commands (cfw:open-calendar-buffer)
   :config
   ;; Auto-resize calendar when window dimensions change
@@ -60,7 +67,7 @@
 (autoload 'calfw-org-open-calendar "calfw-org" "Open calfw calendar with org agenda." t)
 
 (use-package calfw-org
-  :ensure t
+  :ensure nil  ; built as part of the calfw order above (same repo)
   :after calfw
   :demand t)
 

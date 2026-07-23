@@ -277,8 +277,15 @@ PREFIX is saved so repeatable can continue the loop."
                     :category 'embark-keybinding)))
       (call-interactively (intern (car (last (string-split command))))))))
 
-(add-to-list 'repeatable-help-backends
-             '(?\C-\S-h "C-S-h" "embark" zetta-embark-help-handler)
-             t)
+;; Registered only once repeatable is actually loaded.  The package
+;; requires Emacs 30.1, and bootstrap-repeatable's unavailable-fallback
+;; (CI cold cache, older Emacsen) shims only `repeatable-wrap' -- so a
+;; bare top-level reference here crashed init with void-variable on
+;; every cold-cache 29.4 run, which also stopped the elpaca cache from
+;; ever being saved, keeping those runs cold forever.
+(with-eval-after-load 'repeatable
+  (add-to-list 'repeatable-help-backends
+               '(?\C-\S-h "C-S-h" "embark" zetta-embark-help-handler)
+               t))
 
 ;;; embark.el ends here

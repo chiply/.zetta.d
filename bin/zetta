@@ -61,7 +61,7 @@ cmd_install() {
         --eval "(defvar zetta--install-stall-since nil)" \
         --eval "(let* ((start (float-time))
                        (timeout 600)
-                       (stall-limit 120))
+                       (stall-limit 600))
                   (setq zetta--install-timer
                         (run-with-timer 10 10
                          (lambda ()
@@ -398,6 +398,79 @@ cmd_test() {
 # ——————————————————————————————————————————
 # ci-sync  (install missing packages on stale cache)
 # ——————————————————————————————————————————
+
+# Watchdog installed BEFORE init.el loads.  The sync/test harnesses put
+# their stall detectors in --eval forms AFTER -l init.el, but init.el's
+# own category-boundary elpaca-wait can hang first (measured: 15 silent
+# minutes after tools/tilt.el, run 29879440841) -- and by then no
+# detector exists, so the job eats the full job timeout with no package
+# named in the log.  Timers fire inside elpaca-wait's sit-for loop, so a
+# timer registered up front reports from within that hang: a status line
+# every minute, and after ~5 minutes with no order reaching a terminal
+# state, a dump of every stuck order with its last elpaca log line, then
+# exit 70 so the step fails fast and named instead of silently timing out.
+ZETTA_CI_WATCHDOG="(progn
+  (defvar zetta--wd-prev \"\")
+  (defvar zetta--wd-stall 0)
+  (run-with-timer 60 60
+   (lambda ()
+     (when (featurep 'elpaca)
+       (let ((done 0) (total 0) (waiting nil))
+         (dolist (entry (elpaca--queued))
+           (setq total (1+ total))
+           (let ((s (elpaca--status (cdr entry))))
+             ;; 'blocked is NOT terminal here: elpaca-wait keeps waiting
+             ;; on blocked orders, so one blocked forever (dep of a failed
+             ;; package, monorepo partner) spins the wait while an
+             ;; all-terminal watchdog stays silent to the job ceiling
+             ;; (measured: run 29946929141/30.2 sat 7+ min at
+             ;; \"300/300 terminal\" before the 60-minute cancel).  In the
+             ;; waiting set, a frozen blocked order is dumped and killed
+             ;; like any other wedge.
+             (if (memq s '(finished failed))
+                 (setq done (1+ done))
+               (push (format \"%s[%s]\" (car entry) s) waiting))))
+         (let ((wstr (mapconcat #'identity (sort waiting #'string<) \" \")))
+           (message \"watchdog: %d/%d terminal%s\" done total
+                    (if waiting (concat \" -- waiting: \" wstr) \"\"))
+           ;; A stall is the waiting SET frozen -- same orders in the same
+           ;; states -- not merely a quiet minute: 30 parallel clones can
+           ;; legitimately produce zero newly-terminal orders for a while
+           ;; (measured: the first flat-progress criterion killed a healthy
+           ;; run mid-clone of the app category, run 29933654049/30.2).
+           (if (and waiting (equal wstr zetta--wd-prev))
+               (setq zetta--wd-stall (1+ zetta--wd-stall))
+             (setq zetta--wd-stall 0))
+           (setq zetta--wd-prev wstr)
+           (when (and waiting (>= zetta--wd-stall 10)
+                      (= 0 (mod zetta--wd-stall 10)))
+             (message \"WATCHDOG-STALL: waiting set frozen for %d minutes:\"
+                      zetta--wd-stall)
+             (dolist (entry (elpaca--queued))
+               (let* ((e (cdr entry)) (s (elpaca--status e)))
+                 ;; Failed orders are terminal but they are USUALLY the
+                 ;; reason others sit blocked -- without them the dump
+                 ;; names victims and hides the culprit (measured: three
+                 ;; elfeed dependents frozen [blocked], the failed elfeed
+                 ;; order that caused it invisible).
+                 ;; elpaca pushes log entries, so the log is stored
+                 ;; NEWEST-FIRST: seq-take from the front for the failure
+                 ;; reason (taking from the tail dumps \"Package queued\" -- the
+                 ;; three oldest, least informative lines).
+                 (cond
+                  ((eq s 'failed)
+                   (dolist (info (reverse (seq-take (elpaca<-log e) 4)))
+                     (message \"  FAILED: %s | %s\" (car entry)
+                              (nth 2 info))))
+                  ((eq s 'finished) nil)
+                  (t
+                   (let ((info (car (elpaca<-log e))))
+                     (message \"  STUCK: %s [%s] blockers=%S %s\"
+                              (car entry) s (elpaca<-blockers e)
+                              (if info (nth 2 info) \"\"))))))))
+           (when (and waiting (>= zetta--wd-stall 20))
+             (kill-emacs 70))))))))"
+
 cmd_ci_sync() {
     _info "Syncing packages (stale cache detected)…"
 
@@ -408,13 +481,14 @@ cmd_ci_sync() {
 
     local exit_code=0
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
+        --eval "$ZETTA_CI_WATCHDOG" \
         -l "$ZETTA_DIR/init.el" \
         --eval "(defvar zetta--sync-timer nil)" \
         --eval "(defvar zetta--sync-prev-done 0)" \
         --eval "(defvar zetta--sync-stall-since nil)" \
         --eval "(let* ((start (float-time))
-                       (timeout 480)
-                       (stall-limit 120))
+                       (timeout 900)
+                       (stall-limit 600))
                   (setq zetta--sync-timer
                         (run-with-timer 5 10
                          (lambda ()
@@ -478,10 +552,11 @@ cmd_ci_test() {
     # Stream output in real-time via tee so CI logs are visible during the run.
     # Use elpaca-wait with a timer for progress logging and a hard timeout.
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
+        --eval "$ZETTA_CI_WATCHDOG" \
         -l "$ZETTA_DIR/init.el" \
         --eval "(defvar zetta--ci-timer nil)" \
         --eval "(let* ((start (float-time))
-                       (timeout 480))
+                       (timeout 2400))
                   (setq zetta--ci-timer
                         (run-with-timer 10 10
                          (lambda ()

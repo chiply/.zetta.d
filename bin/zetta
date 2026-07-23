@@ -53,6 +53,21 @@ cmd_install() {
         cp "$ZETTA_DIR/templates/zetta.example.el" ~/.zetta.el
     fi
 
+    # Purge stale compiled artifacts BEFORE the install Emacs starts.  The
+    # phase-1 Emacs loads the bootstrap from whatever compiled form exists,
+    # and Emacs transparently prefers a matching eln-cache entry over the
+    # .elc/.el on disk — so a .eln native-compiled from since-corrected
+    # bytecode silently shadows the fix (measured 2026-07-23: a stale
+    # bootstrap-compile-angel.eln from the broken-bootstrap window crashed
+    # phase 1 with void-variable even though the on-disk .elc was correct).
+    # CI never sees this class of failure: fresh checkouts have no
+    # eln-cache and no .elc files.  Both are pure caches — the byte-compile
+    # and native-compile steps below regenerate them.  The same applies
+    # when rolling back to an elpaca.pre-*.bak snapshot: purge eln-cache.
+    _info "Purging stale compiled artifacts (eln-cache, module/bootstrap .elc)..."
+    rm -rf "$ZETTA_DIR/eln-cache"
+    find "$ZETTA_DIR/modules" "$ZETTA_DIR/source" -name '*.elc' -delete 2>/dev/null || true
+
     _info "Starting Emacs to install and build packages..."
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
         -l "$ZETTA_DIR/init.el" \

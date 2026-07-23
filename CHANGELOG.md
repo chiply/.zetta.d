@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.39](https://github.com/chiply/.zetta.d/compare/v0.1.38...v0.1.39) (2026-07-23)
+
+
+### Bug Fixes
+
+* purge eln-cache and stale .elc before install phase 1 ([#119](https://github.com/chiply/.zetta.d/issues/119)) ([80156f7](https://github.com/chiply/.zetta.d/commit/80156f73710cc553b08d842e42719005d8006c8a))
+
 ## [0.1.38](https://github.com/chiply/.zetta.d/compare/v0.1.37...v0.1.38) (2026-07-23)
 
 

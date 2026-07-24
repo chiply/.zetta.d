@@ -584,7 +584,7 @@ cmd_ci_test() {
         -l "$ZETTA_DIR/init.el" \
         --eval "(defvar zetta--ci-timer nil)" \
         --eval "(let* ((start (float-time))
-                       (timeout 2400))
+                       (timeout 4800))
                   (setq zetta--ci-timer
                         (run-with-timer 10 10
                          (lambda ()

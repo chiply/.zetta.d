@@ -40,12 +40,19 @@ env:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
-    # A fully cold elpaca build measures ~25 minutes, and when the sync
-    # step crashes early (tolerated by design) ci-test must do all of it
-    # inside its own elpaca window (2400s in bin/zetta).  Leave room for
-    # that plus the watchdog's stall window rather than letting the job
-    # timeout preempt the diagnostic dump.
-    timeout-minutes: 60
+    # A fully cold elpaca build measured ~25 minutes at the old
+    # 1508298 pin; the 7484867 elpaca's event system costs ~2x main-
+    # process CPU on these 4-vCPU runners and a cold sync now measures
+    # ~65 minutes (runs 30064121523 unthrottled and 30068189855
+    # throttled both blew a 60-minute ceiling while progressing
+    # normally).  Cold builds only happen on schedule/dispatch and
+    # epoch-cold first PR runs -- warm-cache runs are minutes -- so pay
+    # for them with ceiling instead of masking true wedges: the
+    # in-process watchdog still kills a frozen queue at 20 minutes.
+    # When the sync step crashes early (tolerated by design) ci-test
+    # must do the whole cold build inside its own elpaca window (4800s
+    # in bin/zetta); leave room for that plus the stall dump.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:

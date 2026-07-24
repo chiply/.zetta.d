@@ -33,6 +33,59 @@ _info()  { echo -e "${CYAN}::${NC} $*"; }
 _ok()    { echo -e "${GREEN}✓${NC} $*"; }
 _warn()  { echo -e "${YELLOW}!${NC} $*"; }
 _error() { echo -e "${RED}✗${NC} $*"; }
+_sha256() {
+    if command -v sha256sum &>/dev/null; then sha256sum "$1" | cut -d' ' -f1
+    else shasum -a 256 "$1" | cut -d' ' -f1; fi
+}
+
+# ——————————————————————————————————————————
+# prebuilt store
+# ——————————————————————————————————————————
+
+# CI publishes prebuilt elpaca stores (builds + treeless sources) to a
+# rolling GitHub release on every merge to main; seeding from one lets
+# a fresh install skip the package-build phase entirely (~1h on modest
+# hardware -> minutes).  Safety model: the artifact's manifest carries
+# the sha256 of the elpaca-lock.el it was built from and the Emacs
+# major.minor that byte-compiled it (.elc is portable across OSes but
+# NOT across Emacs versions); ANY mismatch -- version, lock, download,
+# extraction -- falls back to the normal source build, so a stale or
+# missing artifact can only make an install slower, never wrong.
+# Native-compiled .eln is never shipped: Emacs regenerates it locally
+# in the background.  Opt out with ZETTA_NO_PREBUILT=1; point
+# ZETTA_PREBUILT_URL at an alternate base URL (or file:// path) for
+# testing.
+PREBUILT_BASE="${ZETTA_PREBUILT_URL:-https://github.com/chiply/.zetta.d/releases/download/prebuilt}"
+
+try_prebuilt() {
+    [[ "${ZETTA_NO_PREBUILT:-}" == "1" ]] && return 1
+    # Fresh installs only: an existing store belongs to elpaca.
+    [[ -d "$ZETTA_DIR/elpaca/builds" ]] && return 1
+    local mm
+    mm=$("$EMACS" -Q --batch --eval '(princ (format "%s.%s" emacs-major-version emacs-minor-version))' 2>/dev/null) || return 1
+    local url="$PREBUILT_BASE/zetta-elpaca-${mm}.tar.zst"
+    local tmpdir
+    tmpdir=$(mktemp -d) || return 1
+    _info "Trying prebuilt store for Emacs ${mm}..."
+    if ! curl -fL --retry 2 --progress-bar -o "$tmpdir/store.tar.zst" "$url"; then
+        _info "No prebuilt store for Emacs $mm (building from source)"
+        rm -rf "$tmpdir"; return 1
+    fi
+    if ! tar -xf "$tmpdir/store.tar.zst" -C "$tmpdir"; then
+        _warn "Prebuilt store: extraction failed (tar with zstd support required); building from source"
+        rm -rf "$tmpdir"; return 1
+    fi
+    local lock_sha manifest_sha
+    lock_sha=$(_sha256 "$LOCK_FILE")
+    manifest_sha=$(grep -o '"lock_sha256": *"[a-f0-9]\{64\}"' "$tmpdir/elpaca-manifest.json" 2>/dev/null | grep -o '[a-f0-9]\{64\}')
+    if [[ -z "$manifest_sha" || "$manifest_sha" != "$lock_sha" ]]; then
+        _warn "Prebuilt store does not match elpaca-lock.el (stale artifact); building from source"
+        rm -rf "$tmpdir"; return 1
+    fi
+    mv "$tmpdir/elpaca" "$ZETTA_DIR/elpaca"
+    rm -rf "$tmpdir"
+    _ok "Prebuilt store installed (package builds will be skipped)"
+}
 
 # ——————————————————————————————————————————
 # install
@@ -67,6 +120,10 @@ cmd_install() {
     _info "Purging stale compiled artifacts (eln-cache, module/bootstrap .elc)..."
     rm -rf "$ZETTA_DIR/eln-cache"
     find "$ZETTA_DIR/modules" "$ZETTA_DIR/source" -name '*.elc' -delete 2>/dev/null || true
+
+    # Seed from a prebuilt store when possible (fresh installs only;
+    # every mismatch falls back to the source build below).
+    try_prebuilt || true
 
     _info "Starting Emacs to install and build packages..."
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
@@ -701,8 +758,10 @@ cmd_help() {
     echo "  help             Show this help message"
     echo ""
     echo "Environment:"
-    echo "  EMACS            Path to Emacs binary (default: emacs)"
-    echo "  ZETTA_DIR        Path to Zetta config (default: auto-detected)"
+    echo "  EMACS              Path to Emacs binary (default: emacs)"
+    echo "  ZETTA_DIR          Path to Zetta config (default: auto-detected)"
+    echo "  ZETTA_NO_PREBUILT  Set to 1 to skip the prebuilt store and build from source"
+    echo "  ZETTA_PREBUILT_URL Alternate base URL for prebuilt stores (testing)"
 }
 
 # ——————————————————————————————————————————

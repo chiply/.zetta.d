@@ -234,6 +234,45 @@
     (elpaca-resolve 'source-dir-exists (elpaca<-source-dir e))))
 (advice-add 'elpaca-continue :before #'zetta--elpaca-resolve-source-dir-after-checkout)
 
+;; Restore treeless clones for lock-pinned recipes.  `elpaca-git--clone'
+;; ignores :depth whenever the recipe carries a :ref ("Ignoring :depth
+;; in favor of :ref"), so every lock-pinned package -- all of them: the
+;; lockfile writes :ref into every recipe -- is FULL-cloned on a cold
+;; install.  That is upstream over-caution: a treeless clone
+;; (--filter=tree:0) has the complete commit graph, so checking out an
+;; arbitrary pinned SHA works, fetching its trees on demand -- and a SHA
+;; unreachable from every ref is absent from a full clone too, so
+;; nothing is lost.  Full clones cost real bytes (measured 2026-07-24:
+;; consult-gh ~300MB of media history for a ~2MB checkout).  Mask :ref
+;; only while the clone command is constructed; the struct's recipe is
+;; restored as soon as the clone process has spawned, so the later
+;; checkout-ref step and the clone-failure fallback (re-clone with
+;; :depth nil) both see the real recipe.  Tradeoff (documented in
+;; ~/upgrade-elpaca.org): historical git operations inside sources/
+;; (blame, log -p, checking out unrelated old refs) lazy-fetch from the
+;; remote and need network; normal builds, pulls, and `zetta freeze'
+;; are unaffected.  Drop once upstream honors treeless/blobless
+;; alongside :ref.
+(defun zetta--elpaca-clone-treeless-with-ref (fn e)
+  "Keep the treeless/blobless filter for :ref recipes during E's clone.
+Mask only when a clone command will actually be constructed (source
+dir absent): in the dir-exists path `elpaca-git--clone' short-circuits
+into `elpaca-continue', which runs later build steps SYNCHRONOUSLY
+inside this advice -- a mono-repo partner's checkout-ref would then
+read the masked recipe and check out a branch tip instead of the pin
+(observed 2026-07-24: failed orders' event dumps carried :ref nil)."
+  (let* ((recipe (elpaca<-recipe e))
+         (depth (plist-get recipe :depth)))
+    (if (and (memq depth '(treeless blobless))
+             (plist-get recipe :ref)
+             (not (file-exists-p (elpaca<-source-dir e))))
+        (progn
+          (setf (elpaca<-recipe e) (plist-put (copy-sequence recipe) :ref nil))
+          (unwind-protect (funcall fn e)
+            (setf (elpaca<-recipe e) recipe)))
+      (funcall fn e))))
+(advice-add 'elpaca-git--clone :around #'zetta--elpaca-clone-treeless-with-ref)
+
 ;; Cap concurrent active builds EVERYWHERE, batch included.  History:
 ;; at the old 1508298 pin batch had to run unthrottled -- a stale
 ;; queue-length snapshot in `elpaca--finalize' finalized queues

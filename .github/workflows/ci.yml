@@ -41,18 +41,21 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     # A fully cold elpaca build measured ~25 minutes at the old
-    # 1508298 pin; the 7484867 elpaca's event system costs ~2x main-
-    # process CPU on these 4-vCPU runners and a cold sync now measures
-    # ~65 minutes (runs 30064121523 unthrottled and 30068189855
-    # throttled both blew a 60-minute ceiling while progressing
-    # normally).  Cold builds only happen on schedule/dispatch and
-    # epoch-cold first PR runs -- warm-cache runs are minutes -- so pay
-    # for them with ceiling instead of masking true wedges: the
-    # in-process watchdog still kills a frozen queue at 20 minutes.
-    # When the sync step crashes early (tolerated by design) ci-test
-    # must do the whole cold build inside its own elpaca window (4800s
-    # in bin/zetta); leave room for that plus the stall dump.
-    timeout-minutes: 90
+    # 1508298 pin; the 7484867 elpaca's event system costs 2-3x main-
+    # process CPU on these 4-vCPU runners and the cost compounds on the
+    # slow tail categories -- run 30071082660 was still syncing at
+    # 300/318 when a 90-minute ceiling cancelled it, progressing
+    # normally the whole way (runs 30064125083/30068189855 likewise at
+    # 60).  A green cold job needs ~105 minutes end to end.  Cold
+    # builds only happen on schedule/dispatch and epoch-cold first PR
+    # runs -- warm-cache runs are minutes -- so pay for them with
+    # ceiling instead of masking true wedges: the in-process watchdog
+    # still kills a frozen queue at 20 minutes.  Follow-up: profile
+    # batch elpaca on a 4-vCPU container and file upstream.  When the
+    # sync step crashes early (tolerated by design) ci-test must do the
+    # whole cold build inside its own elpaca window (4800s in
+    # bin/zetta); leave room for that plus the stall dump.
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:

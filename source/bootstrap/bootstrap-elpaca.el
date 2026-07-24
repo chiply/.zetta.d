@@ -234,16 +234,22 @@
     (elpaca-resolve 'source-dir-exists (elpaca<-source-dir e))))
 (advice-add 'elpaca-continue :before #'zetta--elpaca-resolve-source-dir-after-checkout)
 
-;; In batch mode (`zetta install'/CI), `after-init-time' is already set
-;; before init.el loads, so every declaration runs `elpaca--unprocess',
-;; which resets `builtp' -- and the throttle only exempts built packages,
-;; so with a limit set EVERYTHING would throttle.  Batch therefore runs
-;; unthrottled (nil).  Interactively the limit caps concurrent active
-;; builds at 8.  (The old rationale here -- a stale queue-length snapshot
-;; in `elpaca--finalize' finalizing the queue prematurely -- no longer
-;; describes upstream: queue completion is subscriber-driven and always
-;; re-checks the whole queue since the pub-sub redesign.)
-(setq elpaca-queue-limit (unless noninteractive 8))
+;; Cap concurrent active builds EVERYWHERE, batch included.  History:
+;; at the old 1508298 pin batch had to run unthrottled -- a stale
+;; queue-length snapshot in `elpaca--finalize' finalized queues
+;; prematurely under throttling -- but that bug is structurally gone
+;; (queue completion is subscriber-driven and always re-checks the
+;; whole queue since the pub-sub redesign), and unthrottled batch now
+;; actively breaks CI: a category-boundary `elpaca-wait' with ~60
+;; concurrent pty build subprocesses drowns the 4-vCPU runner in
+;; process-filter/event churn, `accept-process-output' starves timers
+;; (the CI watchdog fell silent for 28 minutes while builds crawled),
+;; and every job blew the 60-minute ceiling (measured: run
+;; 30064121523, all three Emacs versions, 2026-07-24; the previous
+;; unthrottled elpaca finished the same cold build in ~27 minutes --
+;; the event system's per-chunk overhead is what tipped it over).
+;; Throttling bounds the churn and lets timers breathe.
+(setq elpaca-queue-limit 8)
 
 ;; Enable lockfile for reproducible builds.
 ;; The lockfile pins all packages to exact commits.

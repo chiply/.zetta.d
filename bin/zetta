@@ -83,12 +83,12 @@ cmd_install() {
                            (let ((pending 0) (failed 0) (total 0) (done 0) (stuck nil))
                              (dolist (entry (elpaca--queued))
                                (cl-incf total)
-                               (pcase (elpaca--status (cdr entry))
+                               (pcase (elpaca<-status (cdr entry))
                                  ('failed (cl-incf failed))
                                  ((or 'finished 'blocked) (cl-incf done))
                                  (_ (cl-incf pending)
                                     (push (format \"%s [%s]\" (car entry)
-                                                  (elpaca--status (cdr entry)))
+                                                  (elpaca<-status (cdr entry)))
                                           stuck))))
                              (message \"install: %d/%d done, %d pending, %d failed (%.0fs)\"
                                       done total pending failed
@@ -421,19 +421,37 @@ cmd_test() {
 # detector exists, so the job eats the full job timeout with no package
 # named in the log.  Timers fire inside elpaca-wait's sit-for loop, so a
 # timer registered up front reports from within that hang: a status line
-# every minute, and after ~5 minutes with no order reaching a terminal
-# state, a dump of every stuck order with its last elpaca log line, then
-# exit 70 so the step fails fast and named instead of silently timing out.
+# every minute, and after a stretch with no order reaching a terminal
+# state, a dump of every stuck order with its most recent event text,
+# then exit 70 so the step fails fast and named instead of silently
+# timing out.
 ZETTA_CI_WATCHDOG="(progn
   (defvar zetta--wd-prev \"\")
   (defvar zetta--wd-stall 0)
+  ;; elpaca's per-order log slot is gone (2026 struct redesign); the
+  ;; global event log ('elpaca--event-log', newest first) is the batch
+  ;; introspection surface.  An event's human-readable text is :info
+  ;; (elpaca-note -- includes failure reasons) or :output (subprocess
+  ;; output); bare status-transition events carry neither, skip them.
+  (defun zetta--elpaca-events (id n)
+    \"Up to N most recent elpaca event texts for package ID, oldest first.\"
+    (let (texts)
+      (catch 'done
+        (dolist (ev (elpaca-event-log id))
+          (let* ((payload (elpaca-event<-payload ev))
+                 (text (or (plist-get payload :info)
+                           (plist-get payload :output))))
+            (when text
+              (push text texts)
+              (when (>= (length texts) n) (throw 'done nil))))))
+      texts))
   (run-with-timer 60 60
    (lambda ()
      (when (featurep 'elpaca)
        (let ((done 0) (total 0) (waiting nil))
          (dolist (entry (elpaca--queued))
            (setq total (1+ total))
-           (let ((s (elpaca--status (cdr entry))))
+           (let ((s (elpaca<-status (cdr entry))))
              ;; 'blocked is NOT terminal here: elpaca-wait keeps waiting
              ;; on blocked orders, so one blocked forever (dep of a failed
              ;; package, monorepo partner) spins the wait while an
@@ -462,27 +480,22 @@ ZETTA_CI_WATCHDOG="(progn
              (message \"WATCHDOG-STALL: waiting set frozen for %d minutes:\"
                       zetta--wd-stall)
              (dolist (entry (elpaca--queued))
-               (let* ((e (cdr entry)) (s (elpaca--status e)))
+               (let* ((e (cdr entry)) (s (elpaca<-status e)))
                  ;; Failed orders are terminal but they are USUALLY the
                  ;; reason others sit blocked -- without them the dump
                  ;; names victims and hides the culprit (measured: three
                  ;; elfeed dependents frozen [blocked], the failed elfeed
                  ;; order that caused it invisible).
-                 ;; elpaca pushes log entries, so the log is stored
-                 ;; NEWEST-FIRST: seq-take from the front for the failure
-                 ;; reason (taking from the tail dumps \"Package queued\" -- the
-                 ;; three oldest, least informative lines).
                  (cond
                   ((eq s 'failed)
-                   (dolist (info (reverse (seq-take (elpaca<-log e) 4)))
-                     (message \"  FAILED: %s | %s\" (car entry)
-                              (nth 2 info))))
+                   (dolist (msg (zetta--elpaca-events (car entry) 4))
+                     (message \"  FAILED: %s | %s\" (car entry) msg)))
                   ((eq s 'finished) nil)
                   (t
-                   (let ((info (car (elpaca<-log e))))
-                     (message \"  STUCK: %s [%s] blockers=%S %s\"
-                              (car entry) s (elpaca<-blockers e)
-                              (if info (nth 2 info) \"\"))))))))
+                   (message \"  STUCK: %s [%s] step=%s conditions=%S %s\"
+                            (car entry) s (elpaca<-current-step e)
+                            (elpaca<-conditions e)
+                            (or (car (last (zetta--elpaca-events (car entry) 1))) \"\")))))))
            (when (and waiting (>= zetta--wd-stall 20))
              (kill-emacs 70))))))))"
 
@@ -510,12 +523,12 @@ cmd_ci_sync() {
                            (let ((pending 0) (failed 0) (total 0) (done 0) (stuck nil))
                              (dolist (entry (elpaca--queued))
                                (cl-incf total)
-                               (pcase (elpaca--status (cdr entry))
+                               (pcase (elpaca<-status (cdr entry))
                                  ('failed (cl-incf failed))
                                  ((or 'finished 'blocked) (cl-incf done))
                                  (_ (cl-incf pending)
                                     (push (format \"%s [%s]\" (car entry)
-                                                  (elpaca--status (cdr entry)))
+                                                  (elpaca<-status (cdr entry)))
                                           stuck))))
                              (message \"sync: %d/%d done, %d pending, %d failed (%.0fs)\"
                                       done total pending failed
@@ -578,7 +591,7 @@ cmd_ci_test() {
                            (let ((pending 0) (failed 0) (total 0))
                              (dolist (entry (elpaca--queued))
                                (cl-incf total)
-                               (pcase (elpaca--status (cdr entry))
+                               (pcase (elpaca<-status (cdr entry))
                                  ('failed (cl-incf failed))
                                  ((or 'finished 'blocked) nil)
                                  (_ (cl-incf pending))))
@@ -588,23 +601,22 @@ cmd_ci_test() {
                            (when (> (- (float-time) start) timeout)
                              (message \"ELPACA-TIMEOUT after %ds\" timeout)
                              (dolist (entry (elpaca--queued))
-                               (unless (memq (elpaca--status (cdr entry)) '(finished blocked))
-                                 (message \"  %s [%s]\" (car entry) (elpaca--status (cdr entry)))))
+                               (unless (memq (elpaca<-status (cdr entry)) '(finished blocked))
+                                 (message \"  %s [%s]\" (car entry) (elpaca<-status (cdr entry)))))
                              (cancel-timer zetta--ci-timer)
                              (throw 'elpaca-timeout nil)))))
                   (catch 'elpaca-timeout
                     (unwind-protect (elpaca-wait) (cancel-timer zetta--ci-timer)))
                   (message \"elpaca-wait: finished in %.0fs\" (- (float-time) start)))" \
         --eval "(let ((failed-pkgs (cl-remove-if-not
-                                    (lambda (e) (eq (elpaca--status (cdr e)) 'failed))
+                                    (lambda (e) (eq (elpaca<-status (cdr e)) 'failed))
                                     (elpaca--queued))))
                   (when failed-pkgs
                     (message \"ELPACA-FAILED %d packages:\" (length failed-pkgs))
                     (dolist (e failed-pkgs)
                       (let* ((name (car e))
-                             (p (cdr e))
-                             (info (car (last (elpaca<-log p)))))
-                        (message \"  %s: %s\" name (if info (nth 2 info) \"unknown\"))))))" \
+                             (msg (car (zetta--elpaca-events name 1))))
+                        (message \"  %s: %s\" name (or msg \"unknown\"))))))" \
         --eval "(message \"ZETTA-OK packages=%d modules=%d\" (length (elpaca--queued)) (length user-files))" \
         --eval "(let* ((lock (expand-file-name \"elpaca-lock.el\" user-emacs-directory))
                        (locked (when (file-exists-p lock)

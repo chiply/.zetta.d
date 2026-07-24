@@ -206,6 +206,34 @@
 (advice-add 'elpaca--queue :around #'zetta--elpaca-queue-return-struct)
 (advice-add 'elpaca--enqueue :around #'zetta--elpaca-queue-return-struct)
 
+;; Fix elpaca mono-repo deadlock (verified present at pin 7484867).
+;; `elpaca-source' blocks a shared-source-dir partner on the
+;; (source-dir-exists . DIR) condition while the dir's OWNER still has
+;; `elpaca-git--checkout-ref' pending -- or when ANY earlier waiter is
+;; already in the condition table -- but the only `elpaca-resolve'
+;; calls for that condition live in the CLONE path (elpaca-git.el:
+;; clone sentinel + dir-exists branch).  A partner that blocks after
+;; the owner's clone already resolved (fast clone; partner enqueued
+;; during or after the owner's checkout) therefore waits forever, and
+;; the owner then waits on the partner as a dependency: deadlock
+;; (measured cold 2026-07-23: swiper [blocked (finished . ivy)] while
+;; ivy and counsel sat [blocked (source-dir-exists . sources/swiper/)]
+;; -- the abo-abo mono-repo; watchdog killed the run at 20 frozen
+;; minutes.  The same race produced the earlier "counsel failed"
+;; sentinel crash.  The slow-clone interleaving works -- waiters arrive
+;; while the clone is still in flight and its sentinel releases them --
+;; which is why consult-gh's partners survive).  Resolve the condition
+;; whenever an order COMPLETES its checkout-ref step: the checkout
+;; sentinel funnels into `elpaca-continue' with `current-step' still
+;; `elpaca-git--checkout-ref', and resolving with no waiters is a
+;; no-op, so this closes the window for every shared-repo group
+;; generically.  Report upstream; drop once the pin reaches a fix.
+(defun zetta--elpaca-resolve-source-dir-after-checkout (e &rest _)
+  "Release (source-dir-exists . DIR) waiters when E completes checkout-ref."
+  (when (eq (elpaca<-current-step e) 'elpaca-git--checkout-ref)
+    (elpaca-resolve 'source-dir-exists (elpaca<-source-dir e))))
+(advice-add 'elpaca-continue :before #'zetta--elpaca-resolve-source-dir-after-checkout)
+
 ;; In batch mode (`zetta install'/CI), `after-init-time' is already set
 ;; before init.el loads, so every declaration runs `elpaca--unprocess',
 ;; which resets `builtp' -- and the throttle only exempts built packages,

@@ -45,8 +45,35 @@ The install command will:
    installer. Reinstalling over an existing checkout is safe because of
    this step; if you ever roll back package state by restoring an
    `elpaca.pre-*.bak` snapshot, purge `eln-cache/` the same way.
-3. Install and byte-compile all packages via Elpaca
+3. Seed the package store from a prebuilt artifact when one matches
+   (see below) — otherwise install and byte-compile all packages via
+   Elpaca
 4. Native-compile everything (a few minutes)
+
+### Prebuilt package stores
+
+CI publishes a prebuilt, pre-verified elpaca store (byte-compiled
+builds plus treeless source clones) for each supported Emacs version
+on every merge to main, and `bin/zetta install` uses one automatically
+on fresh installs — turning the ~1 hour build-everything-from-source
+step into a few minutes of download.
+
+Safety model: each artifact's manifest records the sha256 of the exact
+`elpaca-lock.el` it was built from and the Emacs major.minor that
+byte-compiled it (`.elc` is portable across operating systems, but not
+across Emacs versions). Any mismatch — Emacs version, lockfile,
+download, extraction — silently falls back to the normal source build,
+so a stale artifact can only ever make an install slower, never wrong.
+Native-compiled `.eln` is never shipped; your Emacs regenerates it
+locally in the background.
+
+The seeded store contains real (treeless) git clones, so
+`elpaca-pull-all`, `zetta update`, and hacking on packages in place
+all work exactly as with a source install. Treeless means historical
+git operations inside `elpaca/sources/` (blame, `log -p`, checking out
+old refs) fetch from the network on demand.
+
+Opt out with `ZETTA_NO_PREBUILT=1 bin/zetta install`.
 
 ### With chemacs2
 

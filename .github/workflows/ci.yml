@@ -1,14 +1,21 @@
 name: CI
 
 on:
-  # CI runs on PRs only.  The merge commit on main is byte-for-byte
-  # identical to the PR's last-tested commit, so re-testing on push to
-  # main catches nothing new -- but doubles CI usage per merge, and
-  # quadruples it across a feature-PR -> release-PR cycle.  Branch
-  # protection requires PR review, so direct pushes to main are not a
-  # supported flow.  release-please still fires on push to main via
-  # release.yml; that workflow is unaffected.
+  # The TEST matrix runs on PRs only.  The merge commit on main is
+  # byte-for-byte identical to the PR's last-tested commit, so
+  # re-TESTING on push to main catches nothing new -- but doubles CI
+  # usage per merge, and quadruples it across a feature-PR ->
+  # release-PR cycle.  Branch protection requires PR review, so direct
+  # pushes to main are not a supported flow.  release-please still
+  # fires on push to main via release.yml; that workflow is unaffected.
+  #
+  # Push to main triggers ONLY the `package` job below: it produces
+  # something a PR run cannot (prebuilt store artifacts bound to the
+  # merged lockfile, plus fresh main-scope caches), reconciling and
+  # re-validating warm rather than re-testing cold.
   pull_request:
+    branches: [main]
+  push:
     branches: [main]
   # Weekly cold-install rehearsal.  Warm-cache PR runs only prove the
   # config loads against already-built packages; the install path itself
@@ -39,6 +46,8 @@ env:
 
 jobs:
   test:
+    # Push-to-main runs the package job instead (see trigger comment).
+    if: github.event_name != 'push'
     runs-on: ${{ matrix.os }}
     # A fully cold elpaca build measured ~25 minutes at the old
     # 1508298 pin; the 7484867 elpaca's event system costs 2-3x main-
@@ -122,3 +131,104 @@ jobs:
         with:
           path: elpaca
           key: elpaca-v3-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**', 'elpaca-lock.el') }}
+
+  package:
+    # Publish prebuilt package stores so fresh installs can skip the
+    # source build (~105 min on CI-class hardware, ~1h on modest user
+    # machines -> minutes; see README "Prebuilt installs").  Runs on
+    # push to main INSTEAD of the test matrix (see trigger comment).
+    #
+    # The store is never published untested: the job reconciles the
+    # restored main-scope cache to the merged commit with ci-sync,
+    # validates with ci-test, saves the refreshed cache, and only then
+    # packages.  The manifest binds each artifact to the sha256 of the
+    # exact elpaca-lock.el it was built from -- bin/zetta install
+    # compares that against the local lock and falls back to a source
+    # build on any mismatch, so a stale or missing artifact can never
+    # produce a wrong install, only a slower one.
+    #
+    # Side benefit: main-scope caches now refresh on every merge
+    # instead of only at the weekly rehearsal.  Worst case (no
+    # restorable cache, e.g. right after a cache-epoch bump) this is a
+    # full cold build -- the ceiling matches the test job's.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        emacs-version:
+          - 29.4
+          - 30.2
+          - snapshot  # Emacs 31 (pre-release)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Emacs
+        uses: jcs090218/setup-emacs@master
+        with:
+          version: ${{ matrix.emacs-version }}
+
+      - name: Restore elpaca cache
+        id: cache-elpaca
+        uses: actions/cache/restore@v4
+        with:
+          path: elpaca
+          key: elpaca-v3-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**', 'elpaca-lock.el') }}
+          restore-keys: |
+            elpaca-v3-${{ matrix.emacs-version }}-
+
+      - name: Create stub files
+        run: |
+          touch ~/.dir-locals.el
+          echo ";;" > ~/.private.el
+          cp templates/zetta.example.el ~/.zetta.el
+
+      - name: Sync missing packages
+        if: steps.cache-elpaca.outputs.cache-hit != 'true'
+        shell: bash
+        run: bin/zetta ci-sync
+
+      - name: Run CI test
+        shell: bash
+        run: bin/zetta ci-test
+
+      - name: Save elpaca cache
+        if: success() && steps.cache-elpaca.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: elpaca
+          key: elpaca-v3-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**', 'elpaca-lock.el') }}
+
+      - name: Package prebuilt store
+        shell: bash
+        run: |
+          set -euo pipefail
+          MM=$(emacs -Q --batch --eval '(princ (format "%s.%s" emacs-major-version emacs-minor-version))')
+          FULL=$(emacs -Q --batch --eval '(princ emacs-version)')
+          LOCK_SHA=$(sha256sum elpaca-lock.el | cut -d' ' -f1)
+          # Menu caches regenerate cheaply and may embed absolute
+          # paths: drop them.  Build dirs symlink into sources/ with
+          # ABSOLUTE targets, so tar dereferences (-h) to materialize
+          # portable copies.
+          rm -rf elpaca/cache
+          printf '{"emacs": "%s", "emacs_mm": "%s", "matrix": "%s", "lock_sha256": "%s", "commit": "%s", "created": "%s"}\n' \
+            "$FULL" "$MM" "${{ matrix.emacs-version }}" "$LOCK_SHA" "${{ github.sha }}" \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > elpaca-manifest.json
+          tar --zstd -chf "zetta-elpaca-$MM.tar.zst" elpaca-manifest.json elpaca
+          ls -lh "zetta-elpaca-$MM.tar.zst"
+
+      - name: Upload to rolling prebuilt release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          MM=$(emacs -Q --batch --eval '(princ (format "%s.%s" emacs-major-version emacs-minor-version))')
+          gh release view prebuilt >/dev/null 2>&1 || \
+            gh release create prebuilt --prerelease --title "Prebuilt package stores (rolling)" \
+              --notes "Rolling prebuilt elpaca stores, refreshed on every merge to main.  Consumed automatically by bin/zetta install; each artifact's manifest binds it to the exact elpaca-lock.el it was built from, and installs fall back to a source build on any mismatch."
+          gh release upload prebuilt "zetta-elpaca-$MM.tar.zst" --clobber

@@ -148,7 +148,13 @@ otherwise appear as a bogus `zsh#...' completion candidate."
         (shell-command-switch "-c"))
     (apply orig args)))
 
+;; Official GitHub mirror -- git.savannah.gnu.org is slow and
+;; intermittently times out on CI runners (cold-run clone flake, PR
+;; #114's 29.4 job, 2026-07-23).  A true mirror shares commit SHAs, so
+;; the lockfile pin holds; verified the pinned f076ff8 present on the
+;; mirror 2026-07-23.
 (use-package hyperbole
+  :ensure (hyperbole :host github :repo "rswgnu/hyperbole")
   :defer 1
   :init
   ;; Keep Hyperbole's default key initialization; we relocate two keys below.

@@ -40,12 +40,22 @@ env:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
-    # A fully cold elpaca build measures ~25 minutes, and when the sync
-    # step crashes early (tolerated by design) ci-test must do all of it
-    # inside its own elpaca window (2400s in bin/zetta).  Leave room for
-    # that plus the watchdog's stall window rather than letting the job
-    # timeout preempt the diagnostic dump.
-    timeout-minutes: 60
+    # A fully cold elpaca build measured ~25 minutes at the old
+    # 1508298 pin; the 7484867 elpaca's event system costs 2-3x main-
+    # process CPU on these 4-vCPU runners and the cost compounds on the
+    # slow tail categories -- run 30071082660 was still syncing at
+    # 300/318 when a 90-minute ceiling cancelled it, progressing
+    # normally the whole way (runs 30064125083/30068189855 likewise at
+    # 60).  A green cold job needs ~105 minutes end to end.  Cold
+    # builds only happen on schedule/dispatch and epoch-cold first PR
+    # runs -- warm-cache runs are minutes -- so pay for them with
+    # ceiling instead of masking true wedges: the in-process watchdog
+    # still kills a frozen queue at 20 minutes.  Follow-up: profile
+    # batch elpaca on a 4-vCPU container and file upstream.  When the
+    # sync step crashes early (tolerated by design) ci-test must do the
+    # whole cold build inside its own elpaca window (4800s in
+    # bin/zetta); leave room for that plus the stall dump.
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -70,15 +80,20 @@ jobs:
         # (measured repeatedly during the cold-install repair, runs
         # 29951544889+).  Scheduled and manually-dispatched runs skip the
         # restore on purpose -- they are the cold fresh-install rehearsal.
-        # v2 epoch: orphans the v1 caches saved mid-wedge.
+        # v2 epoch: orphaned the v1 caches saved mid-wedge.  v3 epoch:
+        # orphans every old-elpaca (pin 1508298) cache so the prefix
+        # restore-key can never feed a pre-upgrade store into a
+        # new-elpaca (pin 7484867, sources/ layout) run.  The bootstrap
+        # also self-verifies the elpaca clone against the pin, so the
+        # epoch bump is belt-and-braces rather than load-bearing.
         if: github.event_name == 'pull_request'
         id: cache-elpaca
         uses: actions/cache/restore@v4
         with:
           path: elpaca
-          key: elpaca-v2-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**', 'elpaca-lock.el') }}
+          key: elpaca-v3-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**', 'elpaca-lock.el') }}
           restore-keys: |
-            elpaca-v2-${{ matrix.emacs-version }}-
+            elpaca-v3-${{ matrix.emacs-version }}-
 
       - name: Create stub files
         run: |
@@ -106,4 +121,4 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: elpaca
-          key: elpaca-v2-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**', 'elpaca-lock.el') }}
+          key: elpaca-v3-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**', 'elpaca-lock.el') }}

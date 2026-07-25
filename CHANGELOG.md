@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.0](https://github.com/chiply/.zetta.d/compare/v0.1.39...v0.2.0) (2026-07-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* existing installs keep working untouched until they pull this commit, then converge automatically on next start (elpaca re-clones into sources/ and all packages rebuild); a full `bin/zetta install` is the recommended migration path.
+
+### Features
+
+* prebuilt package stores -- CI-published, lock-bound, auto-consumed ([#124](https://github.com/chiply/.zetta.d/issues/124)) ([76360ac](https://github.com/chiply/.zetta.d/commit/76360aceb09b93ef46a2b1753b8e64133e5a8880))
+* treeless clones for lock-pinned recipes ([#123](https://github.com/chiply/.zetta.d/issues/123)) ([f4397a8](https://github.com/chiply/.zetta.d/commit/f4397a85a09e01fb21369f367335aae34607e2d1))
+* upgrade elpaca pin 1508298 -&gt; 7484867 (2026-07-21 master) ([#121](https://github.com/chiply/.zetta.d/issues/121)) ([dbc4d23](https://github.com/chiply/.zetta.d/commit/dbc4d2373569f560b9b9b7ab5396fbee98bec78d))
+
+
+### Bug Fixes
+
+* **ci:** package-step resilience — orphan kill, tar tolerance, 150-min ceiling ([#125](https://github.com/chiply/.zetta.d/issues/125)) ([b4aab85](https://github.com/chiply/.zetta.d/commit/b4aab8592a453c9cbc4c1e072ac232a211797059))
+
 ## [0.1.39](https://github.com/chiply/.zetta.d/compare/v0.1.38...v0.1.39) (2026-07-23)
 
 

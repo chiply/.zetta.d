@@ -75,7 +75,10 @@ jobs:
         emacs-version:
           - 29.4
           - 30.2
-          - snapshot  # Emacs 31 (pre-release)
+          # Master (emacs-snapshot) proved too unstable to gate on and
+          # its artifacts (Emacs 32.x) matched no real users; the release
+          # branch tracks the latest Emacs 31 pretest instead.
+          - release-snapshot  # Emacs 31 (release branch)
 
     steps:
       - uses: actions/checkout@v4
@@ -129,7 +132,15 @@ jobs:
         # from a verified-clean fresh install.  Skipped on exact cache
         # hits (nothing new to save); if the key already exists from a
         # concurrent job, the save is a no-op warning.
-        if: success() && steps.cache-elpaca.outputs.cache-hit != 'true'
+        # NEVER saved from pull_request runs: branch-scoped PR caches
+        # (~775MB x 3 versions per key-changing PR) are dead weight
+        # after merge but count against the repo's 10GB quota, and a
+        # burst of PRs evicts the MAIN-scope caches (measured: the
+        # first package run went full cold, 30123672876).  PRs restore
+        # main's caches via the prefix key, and the package job
+        # refreshes main-scope on every merge, so PR-side saves buy
+        # nothing but quota pressure.
+        if: success() && steps.cache-elpaca.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
         uses: actions/cache/save@v4
         with:
           path: elpaca
@@ -168,7 +179,10 @@ jobs:
         emacs-version:
           - 29.4
           - 30.2
-          - snapshot  # Emacs 31 (pre-release)
+          # Master (emacs-snapshot) proved too unstable to gate on and
+          # its artifacts (Emacs 32.x) matched no real users; the release
+          # branch tracks the latest Emacs 31 pretest instead.
+          - release-snapshot  # Emacs 31 (release branch)
 
     steps:
       - uses: actions/checkout@v4

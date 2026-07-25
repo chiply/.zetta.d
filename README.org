@@ -1,0 +1,57 @@
+#+title: Zetta Emacs
+
+An Emacs configuration distro: an always-loaded bootstrap layer plus
+selectively loaded modules (chosen via =zetta-modules!= in
+=~/.zetta.el=), with packages managed by elpaca against a committed
+lockfile (=elpaca-lock.el=).
+
+* Supported Emacs versions
+
+CI builds and tests every change against:
+
+- Emacs 29.4 (released)
+- Emacs 30.2 (released)
+- the Emacs 31 pretest (the =emacs-31= release branch — a moving
+  target until 31.1 ships)
+
+* Prebuilt package stores and Emacs version compatibility
+
+On every merge to main, CI publishes a prebuilt elpaca store
+(byte-compiled =builds/= plus treeless sources) to the rolling
+=prebuilt= GitHub release, one artifact per Emacs major.minor.
+=bin/zetta install= seeds a fresh install from the matching store,
+skipping the package-build phase (~1 hour on modest hardware).
+
+Byte-compiled files are portable across operating systems, but only
+across Emacsen built from the *same Lisp sources*.  For released
+versions the version number pins those sources: any 29.4 can safely
+run bytecode compiled by any other 29.4.  Pretest builds break that
+rule: a version number like 31.0.50 or 31.0.90 sits unchanged across
+months of development, so two builds that both call themselves "Emacs
+31.0" can differ in core macros and setters.  We learned this the hard
+way: a store compiled by a 31.0.90 release-branch build called the
+named setter function =(setf image-property)=, which does not exist in
+a 31.0.50 master snapshot from four months earlier — every
+all-the-icons SVG icon then failed with =void-function=, surfacing as
+"Vertico detected an error" during completion.
+
+Three guards keep this from biting:
+
+- *install* — =bin/zetta install= compares the exact =emacs-version=
+  recorded in the store's manifest against the local Emacs and falls
+  back to a source build on any mismatch.
+- *startup* — an installed store keeps its manifest at
+  =elpaca/elpaca-manifest.json=; if the running Emacs stops matching
+  it (say, after an Emacs upgrade or downgrade), startup raises a
+  warning naming both versions and the fix.
+- *diagnosis* — =bin/zetta doctor= censuses every =.elc= under
+  =elpaca/builds/= and reports any compiled by a different Emacs than
+  the one it is run with, whatever their origin (store or local).
+
+If you run the Emacs 31 pretest (e.g. Homebrew =emacs-plus@31=), keep
+it current: CI compiles against the latest release-branch pretest, so
+an old local pretest build will refuse the store and build from
+source instead.  Building from source is always the safe fallback:
+=ZETTA_NO_PREBUILT=1 bin/zetta install= skips the store entirely, and
+after a mismatch warning =rm -rf elpaca && bin/zetta install= rebuilds
+everything against the running Emacs.

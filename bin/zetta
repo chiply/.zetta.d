@@ -143,6 +143,13 @@ cmd_install() {
     # every mismatch falls back to the source build below).
     try_prebuilt || true
 
+    # A source build compiles against the local Emacs, so a manifest
+    # left over from an earlier store seed would misreport the
+    # bytecode's builder to the startup check (bootstrap-store-check).
+    # Reaching here with no builds/ means no store was just installed
+    # -- drop any stale manifest before building.
+    [[ -d "$ZETTA_DIR/elpaca/builds" ]] || rm -f "$ZETTA_DIR/elpaca/elpaca-manifest.json"
+
     _info "Starting Emacs to install and build packages..."
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
         -l "$ZETTA_DIR/init.el" \

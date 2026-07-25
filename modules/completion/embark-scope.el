@@ -10,9 +10,19 @@
 ;;   from `treesit-tap-embark-types' if treesit-tap-embark is loaded).
 ;; - Optional: enables `embark-scope-target-word-at-point' as a finder.
 
+;; Both zettapkg paths, not just embark-scope's own: the PACKAGE
+;; (require 'treesit-tap)s at top level, but treesit-tap's load-path
+;; entry lives in its wrapper module `treesit-tap.el', which loads
+;; AFTER this one (alphabetical within the category).  Whenever embark
+;; is already resident during module loading -- every batch run -- the
+;; :after fires immediately and embark-scope loaded before the path
+;; existed: "Cannot open load file: treesit-tap", cascading into
+;; batch byte-compile failures for every org/term module that touches
+;; `embark-scope-nav-type-map'.  Declaring both paths here removes the
+;; ordering dependency outright.
 (use-package embark-scope
   :ensure nil
-  :load-path "source/zettapkg/embark-scope"
+  :load-path ("source/zettapkg/embark-scope" "source/zettapkg/treesit-tap")
   :after embark
   :config
   ;; Enable the suite (capture-mode + sort + back-cycle + bindings +

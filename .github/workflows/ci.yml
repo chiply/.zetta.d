@@ -59,12 +59,15 @@ jobs:
     # builds only happen on schedule/dispatch and epoch-cold first PR
     # runs -- warm-cache runs are minutes -- so pay for them with
     # ceiling instead of masking true wedges: the in-process watchdog
-    # still kills a frozen queue at 20 minutes.  Follow-up: profile
-    # batch elpaca on a 4-vCPU container and file upstream.  When the
-    # sync step crashes early (tolerated by design) ci-test must do the
-    # whole cold build inside its own elpaca window (4800s in
-    # bin/zetta); leave room for that plus the stall dump.
-    timeout-minutes: 120
+    # still kills a frozen queue at 20 minutes.  Cold 29.4 measured
+    # 105-120+ minutes across four runs (two rode a 120 ceiling), so
+    # 150 clears the variance band.  Follow-up: profile batch elpaca
+    # on a 4-vCPU container and file upstream -- shrinking the build
+    # is the real fix.  When the sync step crashes early (tolerated by
+    # design) ci-test must do the whole cold build inside its own
+    # elpaca window (4800s in bin/zetta); leave room for that plus the
+    # stall dump.
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:

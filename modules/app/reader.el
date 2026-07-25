@@ -7,7 +7,19 @@
 ;; with (file-missing "render-core") -- which is exactly how the 29.4 CI job
 ;; failed its serious-errors check (run 29946929141) after an otherwise
 ;; clean cold build.
-(when (eq system-type 'darwin)
+;;
+;; ...and interactive-only by construction: in batch the declaration only
+;; queues a build that nothing can use, and it broke `zetta install' twice
+;; over (measured 2026-07-25, first prebuilt-seeded install): the package's
+;; `make' runs in elpaca's non-login subprocess env where it produced no
+;; dylib, and reader's build/activation machinery raced batch teardown --
+;; an "error in process sentinel: Cannot open load file: render-core"
+;; during exit turned the whole batch run into exit 255, aborting install
+;; phases 2-3.  Slow source builds never hit the window; a 2-minute seeded
+;; install reaches teardown while the reader subprocess chain is still in
+;; flight.  Interactive startups build it on first launch in the user's
+;; real login env, where the same `make' works.
+(when (and (eq system-type 'darwin) (not noninteractive))
   (use-package reader
     :ensure (:host codeberg :repo "MonadicSheep/emacs-reader"
              :files ("*.el" "render-core.dylib")

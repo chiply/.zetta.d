@@ -59,12 +59,15 @@ jobs:
     # builds only happen on schedule/dispatch and epoch-cold first PR
     # runs -- warm-cache runs are minutes -- so pay for them with
     # ceiling instead of masking true wedges: the in-process watchdog
-    # still kills a frozen queue at 20 minutes.  Follow-up: profile
-    # batch elpaca on a 4-vCPU container and file upstream.  When the
-    # sync step crashes early (tolerated by design) ci-test must do the
-    # whole cold build inside its own elpaca window (4800s in
-    # bin/zetta); leave room for that plus the stall dump.
-    timeout-minutes: 120
+    # still kills a frozen queue at 20 minutes.  Cold 29.4 measured
+    # 105-120+ minutes across four runs (two rode a 120 ceiling), so
+    # 150 clears the variance band.  Follow-up: profile batch elpaca
+    # on a 4-vCPU container and file upstream -- shrinking the build
+    # is the real fix.  When the sync step crashes early (tolerated by
+    # design) ci-test must do the whole cold build inside its own
+    # elpaca window (4800s in bin/zetta); leave room for that plus the
+    # stall dump.
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
@@ -153,7 +156,10 @@ jobs:
     # full cold build -- the ceiling matches the test job's.
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # Higher than the test job's ceiling: this job stacks packaging on
+    # top of the same build, and a cold 29.4 sync alone rode the
+    # 120-minute ceiling on the first package run (30123672876).
+    timeout-minutes: 150
     permissions:
       contents: write
     strategy:
@@ -207,6 +213,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # ci-test can leave orphaned subprocesses (async native-comp
+          # workers, copilot's node server) that keep mutating the tree
+          # while tar reads it -- measured: run 30123672876/snapshot
+          # died "File removed before we read it" on a file an orphan
+          # touched.  Kill strays first, and tolerate tar's
+          # warning-class exit 1 ("file changed/removed as we read
+          # it"): the archive is still complete for every file that
+          # held still, and the manifest/lock binding is what
+          # guarantees correctness to consumers.
+          pkill -f '[Ee]macs' 2>/dev/null || true
+          pkill -f copilot 2>/dev/null || true
+          sleep 2
           MM=$(emacs -Q --batch --eval '(princ (format "%s.%s" emacs-major-version emacs-minor-version))')
           FULL=$(emacs -Q --batch --eval '(princ emacs-version)')
           LOCK_SHA=$(sha256sum elpaca-lock.el | cut -d' ' -f1)
@@ -218,7 +236,7 @@ jobs:
           printf '{"emacs": "%s", "emacs_mm": "%s", "matrix": "%s", "lock_sha256": "%s", "commit": "%s", "created": "%s"}\n' \
             "$FULL" "$MM" "${{ matrix.emacs-version }}" "$LOCK_SHA" "${{ github.sha }}" \
             "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > elpaca-manifest.json
-          tar --zstd -chf "zetta-elpaca-$MM.tar.zst" elpaca-manifest.json elpaca
+          tar --zstd -chf "zetta-elpaca-$MM.tar.zst" elpaca-manifest.json elpaca || [ $? -eq 1 ]
           ls -lh "zetta-elpaca-$MM.tar.zst"
 
       - name: Upload to rolling prebuilt release

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/chiply/.zetta.d/compare/v0.2.0...v0.2.1) (2026-07-26)
+
+
+### Bug Fixes
+
+* batch-clean init -- gate reader from batch; fix zettapkg load-path ordering ([#127](https://github.com/chiply/.zetta.d/issues/127)) ([238a9fe](https://github.com/chiply/.zetta.d/commit/238a9fe0c1d42c041aecbfd1fe070cf9f016325e))
+* remove prebuilt store distribution; local-only builds ([#129](https://github.com/chiply/.zetta.d/issues/129)) ([192bffb](https://github.com/chiply/.zetta.d/commit/192bffb22e9fe418e54a4cd23593d8162582dff8))
+
 ## [0.2.0](https://github.com/chiply/.zetta.d/compare/v0.1.39...v0.2.0) (2026-07-25)
 
 

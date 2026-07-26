@@ -39,57 +39,14 @@ _sha256() {
 }
 
 # ——————————————————————————————————————————
-# prebuilt store
-# ——————————————————————————————————————————
-
-# CI publishes prebuilt elpaca stores (builds + treeless sources) to a
-# rolling GitHub release on every merge to main; seeding from one lets
-# a fresh install skip the package-build phase entirely (~1h on modest
-# hardware -> minutes).  Safety model: the artifact's manifest carries
-# the sha256 of the elpaca-lock.el it was built from and the Emacs
-# major.minor that byte-compiled it (.elc is portable across OSes but
-# NOT across Emacs versions); ANY mismatch -- version, lock, download,
-# extraction -- falls back to the normal source build, so a stale or
-# missing artifact can only make an install slower, never wrong.
-# Native-compiled .eln is never shipped: Emacs regenerates it locally
-# in the background.  Opt out with ZETTA_NO_PREBUILT=1; point
-# ZETTA_PREBUILT_URL at an alternate base URL (or file:// path) for
-# testing.
-PREBUILT_BASE="${ZETTA_PREBUILT_URL:-https://github.com/chiply/.zetta.d/releases/download/prebuilt}"
-
-try_prebuilt() {
-    [[ "${ZETTA_NO_PREBUILT:-}" == "1" ]] && return 1
-    # Fresh installs only: an existing store belongs to elpaca.
-    [[ -d "$ZETTA_DIR/elpaca/builds" ]] && return 1
-    local mm
-    mm=$("$EMACS" -Q --batch --eval '(princ (format "%s.%s" emacs-major-version emacs-minor-version))' 2>/dev/null) || return 1
-    local url="$PREBUILT_BASE/zetta-elpaca-${mm}.tar.zst"
-    local tmpdir
-    tmpdir=$(mktemp -d) || return 1
-    _info "Trying prebuilt store for Emacs ${mm}..."
-    if ! curl -fL --retry 2 --progress-bar -o "$tmpdir/store.tar.zst" "$url"; then
-        _info "No prebuilt store for Emacs $mm (building from source)"
-        rm -rf "$tmpdir"; return 1
-    fi
-    if ! tar -xf "$tmpdir/store.tar.zst" -C "$tmpdir"; then
-        _warn "Prebuilt store: extraction failed (tar with zstd support required); building from source"
-        rm -rf "$tmpdir"; return 1
-    fi
-    local lock_sha manifest_sha
-    lock_sha=$(_sha256 "$LOCK_FILE")
-    manifest_sha=$(grep -o '"lock_sha256": *"[a-f0-9]\{64\}"' "$tmpdir/elpaca-manifest.json" 2>/dev/null | grep -o '[a-f0-9]\{64\}')
-    if [[ -z "$manifest_sha" || "$manifest_sha" != "$lock_sha" ]]; then
-        _warn "Prebuilt store does not match elpaca-lock.el (stale artifact); building from source"
-        rm -rf "$tmpdir"; return 1
-    fi
-    mv "$tmpdir/elpaca" "$ZETTA_DIR/elpaca"
-    rm -rf "$tmpdir"
-    _ok "Prebuilt store installed (package builds will be skipped)"
-}
-
-# ——————————————————————————————————————————
 # install
 # ——————————————————————————————————————————
+# Everything builds from source on the user's machine, against
+# whatever Emacs they bring.  Prebuilt package stores (CI-compiled
+# .elc distributed via a rolling release) were tried and removed
+# 2026-07-26: bytecode is only guaranteed correct for the exact Emacs
+# build that compiled it, and cross-compiling on headless Linux CI
+# for other platforms produced a long tail of incompatibilities.
 cmd_install() {
     _info "Installing Zetta Emacs packages..."
 
@@ -120,10 +77,6 @@ cmd_install() {
     _info "Purging stale compiled artifacts (eln-cache, module/bootstrap .elc)..."
     rm -rf "$ZETTA_DIR/eln-cache"
     find "$ZETTA_DIR/modules" "$ZETTA_DIR/source" -name '*.elc' -delete 2>/dev/null || true
-
-    # Seed from a prebuilt store when possible (fresh installs only;
-    # every mismatch falls back to the source build below).
-    try_prebuilt || true
 
     _info "Starting Emacs to install and build packages..."
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
@@ -389,6 +342,29 @@ cmd_doctor() {
         local pkg_count
         pkg_count=$(ls -d "$ZETTA_DIR/elpaca/builds"/*/ 2>/dev/null | wc -l | tr -d ' ')
         _ok "Installed packages: $pkg_count"
+
+        # Bytecode <-> Emacs consistency.  Every .elc records the Emacs
+        # that compiled it on its third header line; bytecode from a
+        # different build can reference functions this Emacs lacks.
+        # Catches an Emacs upgrade/switch over an existing install --
+        # the fix is a rebuild with the current Emacs.
+        local full compilers others
+        full=$("$EMACS" -Q --batch --eval '(princ emacs-version)' 2>/dev/null)
+        compilers=$(find "$ZETTA_DIR/elpaca/builds" -name '*.elc' \
+                -exec grep -a -h -m1 -o 'in Emacs version [0-9.]*' {} + 2>/dev/null \
+            | sed 's/in Emacs version //' | sort | uniq -c | sort -rn)
+        others=$(echo "$compilers" | awk -v v="$full" 'NF && $2 != v')
+        if [[ -z "$compilers" ]]; then
+            _warn "No .elc files found under elpaca/builds"
+        elif [[ -n "$others" ]]; then
+            _warn "Bytecode compiled by a different Emacs than $full (count, version):"
+            echo "$compilers" | while IFS= read -r line; do
+                echo "    $line"
+            done
+            echo "    Fix: run the matching Emacs, or rebuild: rm -rf $ZETTA_DIR/elpaca && bin/zetta install"
+        else
+            _ok "Bytecode: all .elc compiled by Emacs $full"
+        fi
     else
         _warn "No packages installed (run 'zetta install')"
     fi
@@ -760,8 +736,6 @@ cmd_help() {
     echo "Environment:"
     echo "  EMACS              Path to Emacs binary (default: emacs)"
     echo "  ZETTA_DIR          Path to Zetta config (default: auto-detected)"
-    echo "  ZETTA_NO_PREBUILT  Set to 1 to skip the prebuilt store and build from source"
-    echo "  ZETTA_PREBUILT_URL Alternate base URL for prebuilt stores (testing)"
 }
 
 # ——————————————————————————————————————————

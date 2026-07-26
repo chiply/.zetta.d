@@ -4,7 +4,7 @@ _A reproducible, batteries-included Emacs distribution. Pick what you want via a
 
 [![CI](https://github.com/chiply/.zetta.d/actions/workflows/ci.yml/badge.svg)](https://github.com/chiply/.zetta.d/actions/workflows/ci.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
-[![Emacs](https://img.shields.io/badge/Emacs-29.4%20%7C%2030.2%20%7C%2031--snapshot-purple.svg)](https://www.gnu.org/software/emacs/)
+[![Emacs](https://img.shields.io/badge/Emacs-29.4%20%7C%2030.2%20%7C%2031--pretest-purple.svg)](https://www.gnu.org/software/emacs/)
 
 > **Status:** This is my personal Emacs config, published in the open. Use at your own risk; expect breaking changes whenever I want them.
 
@@ -25,7 +25,9 @@ _A reproducible, batteries-included Emacs distribution. Pick what you want via a
 
 ## Requirements
 
-- **Emacs 29+** (30+ recommended). CI tests 29.4, 30.2, and the 31 snapshot.
+- **Emacs 29+** (30+ recommended). CI tests 29.4, 30.2, and the Emacs 31
+  pretest (release branch); master snapshots are untested. The pretest entry
+  becomes a pinned 31.1 once it ships.
 - **Git**, **ripgrep** (for consult-ripgrep)
 - Optional: Node.js (LSP servers), Python 3 (python-ts-mode, pytest), `fd` (fast file search)
 
@@ -45,35 +47,27 @@ The install command will:
    installer. Reinstalling over an existing checkout is safe because of
    this step; if you ever roll back package state by restoring an
    `elpaca.pre-*.bak` snapshot, purge `eln-cache/` the same way.
-3. Seed the package store from a prebuilt artifact when one matches
-   (see below) — otherwise install and byte-compile all packages via
-   Elpaca
-4. Native-compile everything (a few minutes)
+3. Install and byte-compile all packages from source via Elpaca
+4. Native-compile everything
 
-### Prebuilt package stores
+### Everything builds locally
 
-CI publishes a prebuilt, pre-verified elpaca store (byte-compiled
-builds plus treeless source clones) for each supported Emacs version
-on every merge to main, and `bin/zetta install` uses one automatically
-on fresh installs — turning the ~1 hour build-everything-from-source
-step into a few minutes of download.
+`bin/zetta install` builds every package from source on your machine,
+against whatever Emacs you bring. Nothing prebuilt is distributed:
+byte-compiled artifacts are only guaranteed correct for the exact
+Emacs build that produced them, and cross-compiling on CI for other
+platforms and Emacs builds produces subtle incompatibilities (we
+tried). A full first build takes on the order of an hour; after that,
+installs are incremental.
 
-Safety model: each artifact's manifest records the sha256 of the exact
-`elpaca-lock.el` it was built from and the Emacs major.minor that
-byte-compiled it (`.elc` is portable across operating systems, but not
-across Emacs versions). Any mismatch — Emacs version, lockfile,
-download, extraction — silently falls back to the normal source build,
-so a stale artifact can only ever make an install slower, never wrong.
-Native-compiled `.eln` is never shipped; your Emacs regenerates it
-locally in the background.
+Building locally also means running a moving target like the Emacs 31
+pretest is harmless: your bytecode is always compiled by exactly the
+Emacs that runs it.
 
-The seeded store contains real (treeless) git clones, so
-`elpaca-pull-all`, `zetta update`, and hacking on packages in place
-all work exactly as with a source install. Treeless means historical
-git operations inside `elpaca/sources/` (blame, `log -p`, checking out
-old refs) fetch from the network on demand.
-
-Opt out with `ZETTA_NO_PREBUILT=1 bin/zetta install`.
+If you switch to a different Emacs build over an existing install,
+rebuild against it: `rm -rf elpaca && bin/zetta install`.
+`bin/zetta doctor` includes a bytecode census that flags any `.elc`
+compiled by a different Emacs than the one it is run with.
 
 ### With chemacs2
 
@@ -217,7 +211,7 @@ If you used chemacs2, also remove the `("zetta" ...)` entry from `~/.emacs-profi
 ├── bin/zetta              # CLI wrapper
 ├── init.el                # Entry point
 ├── early-init.el          # Startup optimization
-├── elpaca-lockfile.el     # Package version lockfile
+├── elpaca-lock.el         # Package version lockfile
 ├── templates/             # User config templates
 ├── source/
 │   ├── bootstrap/         # Core initialization

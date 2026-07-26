@@ -9,10 +9,14 @@ lockfile (=elpaca-lock.el=).
 
 CI builds and tests every change against:
 
-- Emacs 29.4 (released)
-- Emacs 30.2 (released)
-- the Emacs 31 pretest (the =emacs-31= release branch — a moving
-  target until 31.1 ships)
+- Emacs 29.4
+- Emacs 30.2
+
+Released versions only.  Pretest and snapshot builds are not tested
+or supported: their version numbers don't pin the Lisp sources (two
+builds both calling themselves "31.0" can differ in core macros and
+setters), which breaks every guarantee the prebuilt store relies on.
+Emacs 31 will join the matrix as a pinned entry once 31.1 ships.
 
 * Prebuilt package stores and Emacs version compatibility
 
@@ -48,10 +52,10 @@ Three guards keep this from biting:
   =elpaca/builds/= and reports any compiled by a different Emacs than
   the one it is run with, whatever their origin (store or local).
 
-If you run the Emacs 31 pretest (e.g. Homebrew =emacs-plus@31=), keep
-it current: CI compiles against the latest release-branch pretest, so
-an old local pretest build will refuse the store and build from
-source instead.  Building from source is always the safe fallback:
-=ZETTA_NO_PREBUILT=1 bin/zetta install= skips the store entirely, and
-after a mismatch warning =rm -rf elpaca && bin/zetta install= rebuilds
-everything against the running Emacs.
+If you run an unsupported pretest or snapshot Emacs anyway, the
+installer will refuse the (release-built) stores and build from
+source — slower, and correctness is on you.  Building from source is
+always the safe fallback: =ZETTA_NO_PREBUILT=1 bin/zetta install=
+skips the store entirely, and after a mismatch warning
+=rm -rf elpaca && bin/zetta install= rebuilds everything against the
+running Emacs.

@@ -75,10 +75,14 @@ jobs:
         emacs-version:
           - 29.4
           - 30.2
-          # Master (emacs-snapshot) proved too unstable to gate on and
-          # its artifacts (Emacs 32.x) matched no real users; the release
-          # branch tracks the latest Emacs 31 pretest instead.
-          - release-snapshot  # Emacs 31 (release branch)
+          # Released versions only.  Master (emacs-snapshot) proved too
+          # unstable to gate on, and the Emacs 31 pretest
+          # (release-snapshot) followed it out (2026-07-25): a pretest
+          # version number doesn't pin the Lisp sources, so bytecode
+          # from two builds both calling themselves "31.0" isn't
+          # interchangeable, and a store built from a moving pretest
+          # can never reliably match a user's local build.  Re-add 31
+          # as a pinned entry once 31.1 ships.
 
     steps:
       - uses: actions/checkout@v4
@@ -179,10 +183,14 @@ jobs:
         emacs-version:
           - 29.4
           - 30.2
-          # Master (emacs-snapshot) proved too unstable to gate on and
-          # its artifacts (Emacs 32.x) matched no real users; the release
-          # branch tracks the latest Emacs 31 pretest instead.
-          - release-snapshot  # Emacs 31 (release branch)
+          # Released versions only.  Master (emacs-snapshot) proved too
+          # unstable to gate on, and the Emacs 31 pretest
+          # (release-snapshot) followed it out (2026-07-25): a pretest
+          # version number doesn't pin the Lisp sources, so bytecode
+          # from two builds both calling themselves "31.0" isn't
+          # interchangeable, and a store built from a moving pretest
+          # can never reliably match a user's local build.  Re-add 31
+          # as a pinned entry once 31.1 ships.
 
     steps:
       - uses: actions/checkout@v4

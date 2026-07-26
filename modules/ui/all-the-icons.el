@@ -1,5 +1,23 @@
 ;;; all-the-icons.el --- Configure all-the-icons -*- lexical-binding: t; -*-
 
+;; all-the-icons uses (setf (image-property ...)) without requiring
+;; 'image.  An Emacs whose build doesn't preload image.el (headless CI
+;; runners byte-compiling the prebuilt store) compiles that into a call
+;; to the named setter function (setf image-property), which no
+;; released Emacs defines -- every icon render then fails with
+;; void-function, prebuilt stores shipped that bytecode to every
+;; platform (measured 2026-07-25: 30.2- and 31.0.90-built stores
+;; alike), and the vertico UI surfaced it as "Vertico detected an
+;; error".  Define the setter so such bytecode works no matter which
+;; Emacs compiled it.  Harmless when unneeded; skipped if some future
+;; Emacs defines it natively.
+(unless (fboundp (intern "(setf image-property)"))
+  (defalias (intern "(setf image-property)")
+    (lambda (value image property)
+      (require 'image)
+      (image--set-property image property value))
+    "Named setter for `image-property', for bytecode compiled without image.el."))
+
 (use-package all-the-icons
   :ensure (all-the-icons
            :host github

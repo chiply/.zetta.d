@@ -239,6 +239,23 @@ jobs:
           pkill -f '[Ee]macs' 2>/dev/null || true
           pkill -f copilot 2>/dev/null || true
           sleep 2
+          # all-the-icons uses (setf (image-property ...)) without
+          # requiring 'image; this headless Emacs doesn't preload
+          # image.el, so the byte-compiler silently emits calls to the
+          # nonexistent named setter (setf image-property) -- bytecode
+          # that crashes every icon render on consumers' machines.
+          # Recompile with image loaded, then fail the publish if the
+          # phantom setter is still referenced anywhere in the store.
+          if [ -f elpaca/builds/all-the-icons/all-the-icons.el ]; then
+            emacs -Q --batch --eval '(require (quote image))' \
+              -L elpaca/builds/all-the-icons \
+              -f batch-byte-compile elpaca/builds/all-the-icons/all-the-icons.el
+          fi
+          if grep -aql 'setf. image-property' elpaca/builds/*/*.elc; then
+            echo "phantom (setf image-property) calls remain in:" >&2
+            grep -al 'setf. image-property' elpaca/builds/*/*.elc >&2
+            exit 1
+          fi
           MM=$(emacs -Q --batch --eval '(princ (format "%s.%s" emacs-major-version emacs-minor-version))')
           FULL=$(emacs -Q --batch --eval '(princ emacs-version)')
           LOCK_SHA=$(sha256sum elpaca-lock.el | cut -d' ' -f1)

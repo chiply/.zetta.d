@@ -15,47 +15,20 @@ CI builds and tests every change against:
 Released versions only.  Pretest and snapshot builds are not tested
 or supported: their version numbers don't pin the Lisp sources (two
 builds both calling themselves "31.0" can differ in core macros and
-setters), which breaks every guarantee the prebuilt store relies on.
-Emacs 31 will join the matrix as a pinned entry once 31.1 ships.
+setters).  Emacs 31 will join the matrix as a pinned entry once 31.1
+ships.
 
-* Prebuilt package stores and Emacs version compatibility
+* Installation model
 
-On every merge to main, CI publishes a prebuilt elpaca store
-(byte-compiled =builds/= plus treeless sources) to the rolling
-=prebuilt= GitHub release, one artifact per Emacs major.minor.
-=bin/zetta install= seeds a fresh install from the matching store,
-skipping the package-build phase (~1 hour on modest hardware).
+=bin/zetta install= builds every package from source on your machine,
+against whatever Emacs you bring.  Nothing prebuilt is distributed:
+byte-compiled artifacts are only guaranteed correct for the exact
+Emacs build that produced them, and cross-compiling on CI for other
+platforms and Emacs builds produces subtle incompatibilities (we
+tried).  A full first build takes on the order of an hour; after
+that, installs are incremental.
 
-Byte-compiled files are portable across operating systems, but only
-across Emacsen built from the *same Lisp sources*.  For released
-versions the version number pins those sources: any 29.4 can safely
-run bytecode compiled by any other 29.4.  Pretest builds break that
-rule: a version number like 31.0.50 or 31.0.90 sits unchanged across
-months of development, so two builds that both call themselves "Emacs
-31.0" can differ in core macros and setters.  We learned this the hard
-way: a store compiled by a 31.0.90 release-branch build called the
-named setter function =(setf image-property)=, which does not exist in
-a 31.0.50 master snapshot from four months earlier — every
-all-the-icons SVG icon then failed with =void-function=, surfacing as
-"Vertico detected an error" during completion.
-
-Three guards keep this from biting:
-
-- *install* — =bin/zetta install= compares the exact =emacs-version=
-  recorded in the store's manifest against the local Emacs and falls
-  back to a source build on any mismatch.
-- *startup* — an installed store keeps its manifest at
-  =elpaca/elpaca-manifest.json=; if the running Emacs stops matching
-  it (say, after an Emacs upgrade or downgrade), startup raises a
-  warning naming both versions and the fix.
-- *diagnosis* — =bin/zetta doctor= censuses every =.elc= under
-  =elpaca/builds/= and reports any compiled by a different Emacs than
-  the one it is run with, whatever their origin (store or local).
-
-If you run an unsupported pretest or snapshot Emacs anyway, the
-installer will refuse the (release-built) stores and build from
-source — slower, and correctness is on you.  Building from source is
-always the safe fallback: =ZETTA_NO_PREBUILT=1 bin/zetta install=
-skips the store entirely, and after a mismatch warning
-=rm -rf elpaca && bin/zetta install= rebuilds everything against the
-running Emacs.
+If you switch to a different Emacs build over an existing install,
+rebuild against it: =rm -rf elpaca && bin/zetta install=.
+=bin/zetta doctor= includes a bytecode census that flags any =.elc=
+compiled by a different Emacs than the one it is run with.

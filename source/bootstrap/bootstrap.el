@@ -10,7 +10,6 @@
 (require 'bootstrap-repeatable)
 (require 'bootstrap-brushup)
 (require 'bootstrap-display)
-(require 'bootstrap-store-check)
 
 (provide 'bootstrap)
 ;;; bootstrap.el ends here

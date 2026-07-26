@@ -100,4 +100,3 @@ touchtype/
 chiply-isr/server/.venv/
 chiply-isr/server/**/__pycache__/
 chiply-isr/db/
-elpaca/elpaca-manifest.json

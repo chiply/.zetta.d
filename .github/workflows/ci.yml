@@ -9,10 +9,10 @@ on:
   # pushes to main are not a supported flow.  release-please still
   # fires on push to main via release.yml; that workflow is unaffected.
   #
-  # Push to main triggers ONLY the `package` job below: it produces
-  # something a PR run cannot (prebuilt store artifacts bound to the
-  # merged lockfile, plus fresh main-scope caches), reconciling and
-  # re-validating warm rather than re-testing cold.
+  # Push to main triggers ONLY the `cache` job below: it refreshes the
+  # main-scope elpaca caches against the merged commit (something PR
+  # runs never save), reconciling and re-validating warm rather than
+  # re-testing cold.
   pull_request:
     branches: [main]
   push:
@@ -140,8 +140,8 @@ jobs:
         # (~775MB x 3 versions per key-changing PR) are dead weight
         # after merge but count against the repo's 10GB quota, and a
         # burst of PRs evicts the MAIN-scope caches (measured: the
-        # first package run went full cold, 30123672876).  PRs restore
-        # main's caches via the prefix key, and the package job
+        # first cache-job run went full cold, 30123672876).  PRs
+        # restore main's caches via the prefix key, and the cache job
         # refreshes main-scope on every merge, so PR-side saves buy
         # nothing but quota pressure.
         if: success() && steps.cache-elpaca.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
@@ -150,33 +150,28 @@ jobs:
           path: elpaca
           key: elpaca-v3-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**', 'elpaca-lock.el') }}
 
-  package:
-    # Publish prebuilt package stores so fresh installs can skip the
-    # source build (~105 min on CI-class hardware, ~1h on modest user
-    # machines -> minutes; see README "Prebuilt installs").  Runs on
-    # push to main INSTEAD of the test matrix (see trigger comment).
+  cache:
+    # Refresh main-scope elpaca caches on every merge.  PR runs never
+    # save caches (quota pressure -- see the test job's save comment),
+    # so without this job caches would refresh only at the weekly cold
+    # rehearsal and every PR run in between would pay the same re-sync
+    # tax.  The job reconciles the restored cache to the merged commit
+    # with ci-sync, re-validates with ci-test, and saves.
     #
-    # The store is never published untested: the job reconciles the
-    # restored main-scope cache to the merged commit with ci-sync,
-    # validates with ci-test, saves the refreshed cache, and only then
-    # packages.  The manifest binds each artifact to the sha256 of the
-    # exact elpaca-lock.el it was built from -- bin/zetta install
-    # compares that against the local lock and falls back to a source
-    # build on any mismatch, so a stale or missing artifact can never
-    # produce a wrong install, only a slower one.
-    #
-    # Side benefit: main-scope caches now refresh on every merge
-    # instead of only at the weekly rehearsal.  Worst case (no
-    # restorable cache, e.g. right after a cache-epoch bump) this is a
-    # full cold build -- the ceiling matches the test job's.
+    # This job once also packaged prebuilt package stores for
+    # distribution (removed 2026-07-26): byte-compiling on a headless
+    # Linux CI Emacs and shipping the result to other platforms and
+    # Emacs builds produced a long tail of incompatibilities -- e.g.
+    # bytecode calling a named setter that only exists when image.el
+    # is loaded at compile time, and pretest version numbers that
+    # don't pin core Lisp sources at all.  Users build locally with
+    # whatever Emacs they bring.
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    # Higher than the test job's ceiling: this job stacks packaging on
-    # top of the same build, and a cold 29.4 sync alone rode the
-    # 120-minute ceiling on the first package run (30123672876).
+    # Worst case (no restorable cache, e.g. right after a cache-epoch
+    # bump) this is a full cold build; a cold 29.4 sync alone rode the
+    # 120-minute ceiling on this job's first run (30123672876).
     timeout-minutes: 150
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -230,62 +225,3 @@ jobs:
         with:
           path: elpaca
           key: elpaca-v3-${{ matrix.emacs-version }}-${{ hashFiles('early-init.el', 'init.el', 'source/**', 'modules/**', 'elpaca-lock.el') }}
-
-      - name: Package prebuilt store
-        shell: bash
-        run: |
-          set -euo pipefail
-          # ci-test can leave orphaned subprocesses (async native-comp
-          # workers, copilot's node server) that keep mutating the tree
-          # while tar reads it -- measured: run 30123672876/snapshot
-          # died "File removed before we read it" on a file an orphan
-          # touched.  Kill strays first, and tolerate tar's
-          # warning-class exit 1 ("file changed/removed as we read
-          # it"): the archive is still complete for every file that
-          # held still, and the manifest/lock binding is what
-          # guarantees correctness to consumers.
-          pkill -f '[Ee]macs' 2>/dev/null || true
-          pkill -f copilot 2>/dev/null || true
-          sleep 2
-          # all-the-icons uses (setf (image-property ...)) without
-          # requiring 'image; this headless Emacs doesn't preload
-          # image.el, so the byte-compiler silently emits calls to the
-          # nonexistent named setter (setf image-property) -- bytecode
-          # that crashes every icon render on consumers' machines.
-          # Recompile with image loaded, then fail the publish if the
-          # phantom setter is still referenced anywhere in the store.
-          if [ -f elpaca/builds/all-the-icons/all-the-icons.el ]; then
-            emacs -Q --batch --eval '(require (quote image))' \
-              -L elpaca/builds/all-the-icons \
-              -f batch-byte-compile elpaca/builds/all-the-icons/all-the-icons.el
-          fi
-          if grep -aql 'setf. image-property' elpaca/builds/*/*.elc; then
-            echo "phantom (setf image-property) calls remain in:" >&2
-            grep -al 'setf. image-property' elpaca/builds/*/*.elc >&2
-            exit 1
-          fi
-          MM=$(emacs -Q --batch --eval '(princ (format "%s.%s" emacs-major-version emacs-minor-version))')
-          FULL=$(emacs -Q --batch --eval '(princ emacs-version)')
-          LOCK_SHA=$(sha256sum elpaca-lock.el | cut -d' ' -f1)
-          # Menu caches regenerate cheaply and may embed absolute
-          # paths: drop them.  Build dirs symlink into sources/ with
-          # ABSOLUTE targets, so tar dereferences (-h) to materialize
-          # portable copies.
-          rm -rf elpaca/cache
-          printf '{"emacs": "%s", "emacs_mm": "%s", "matrix": "%s", "lock_sha256": "%s", "commit": "%s", "created": "%s"}\n' \
-            "$FULL" "$MM" "${{ matrix.emacs-version }}" "$LOCK_SHA" "${{ github.sha }}" \
-            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > elpaca-manifest.json
-          tar --zstd -chf "zetta-elpaca-$MM.tar.zst" elpaca-manifest.json elpaca || [ $? -eq 1 ]
-          ls -lh "zetta-elpaca-$MM.tar.zst"
-
-      - name: Upload to rolling prebuilt release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          MM=$(emacs -Q --batch --eval '(princ (format "%s.%s" emacs-major-version emacs-minor-version))')
-          gh release view prebuilt >/dev/null 2>&1 || \
-            gh release create prebuilt --prerelease --title "Prebuilt package stores (rolling)" \
-              --notes "Rolling prebuilt elpaca stores, refreshed on every merge to main.  Consumed automatically by bin/zetta install; each artifact's manifest binds it to the exact elpaca-lock.el it was built from, and installs fall back to a source build on any mismatch."
-          gh release upload prebuilt "zetta-elpaca-$MM.tar.zst" --clobber

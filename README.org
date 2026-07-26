@@ -1,0 +1,34 @@
+#+title: Zetta Emacs
+
+An Emacs configuration distro: an always-loaded bootstrap layer plus
+selectively loaded modules (chosen via =zetta-modules!= in
+=~/.zetta.el=), with packages managed by elpaca against a committed
+lockfile (=elpaca-lock.el=).
+
+* Supported Emacs versions
+
+CI builds and tests every change against:
+
+- Emacs 29.4
+- Emacs 30.2
+- the Emacs 31 pretest (release branch)
+
+Because installs build everything locally (see below), a pretest's
+moving version number is harmless here: your bytecode is always
+compiled by exactly the Emacs that runs it.  Master snapshots remain
+untested.  The pretest entry becomes a pinned 31.1 once it ships.
+
+* Installation model
+
+=bin/zetta install= builds every package from source on your machine,
+against whatever Emacs you bring.  Nothing prebuilt is distributed:
+byte-compiled artifacts are only guaranteed correct for the exact
+Emacs build that produced them, and cross-compiling on CI for other
+platforms and Emacs builds produces subtle incompatibilities (we
+tried).  A full first build takes on the order of an hour; after
+that, installs are incremental.
+
+If you switch to a different Emacs build over an existing install,
+rebuild against it: =rm -rf elpaca && bin/zetta install=.
+=bin/zetta doctor= includes a bytecode census that flags any =.elc=
+compiled by a different Emacs than the one it is run with.

@@ -11,12 +11,12 @@ CI builds and tests every change against:
 
 - Emacs 29.4
 - Emacs 30.2
+- the Emacs 31 pretest (release branch)
 
-Released versions only.  Pretest and snapshot builds are not tested
-or supported: their version numbers don't pin the Lisp sources (two
-builds both calling themselves "31.0" can differ in core macros and
-setters).  Emacs 31 will join the matrix as a pinned entry once 31.1
-ships.
+Because installs build everything locally (see below), a pretest's
+moving version number is harmless here: your bytecode is always
+compiled by exactly the Emacs that runs it.  Master snapshots remain
+untested.  The pretest entry becomes a pinned 31.1 once it ships.
 
 * Installation model
 

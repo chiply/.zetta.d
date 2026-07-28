@@ -139,8 +139,14 @@ triggers (typing, directory mtime churn) into a single repaint."
              (lambda ()
                (setq zetta--hywiki-rehighlight-timer nil)
                (when zetta--hywiki-rehighlight-pending
-                 (apply (car zetta--hywiki-rehighlight-pending)
-                        (cdr zetta--hywiki-rehighlight-pending)))))))))
+                 ;; Upstream's pass forces a redisplay per window via
+                 ;; `sit-for 0' ("display buffer before font-locking") —
+                 ;; meaningless at idle in already-displayed windows, and
+                 ;; the source of the residual once-per-burst flash.
+                 ;; Neutralize it for this deferred invocation only.
+                 (cl-letf (((symbol-function 'sit-for) #'ignore))
+                   (apply (car zetta--hywiki-rehighlight-pending)
+                          (cdr zetta--hywiki-rehighlight-pending))))))))))
 
 ;; HyWiki completion offers a bogus `zsh#no matches found...' candidate.
 ;; `hywiki-completion-at-point' lists page candidates by globbing `./PREFIX*.org'

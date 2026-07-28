@@ -1,7 +1,5 @@
 ;;; org-remark.el --- Configure org-remark -*- lexical-binding: t; -*-
 
-;; TODO cleanup my-org-remark-notes-file-name
-
 (use-package org-remark
   :demand t
   :after org
@@ -119,71 +117,77 @@ Builds the same string as elfeed's own store function: link
     (when (equal major-mode 'elfeed-show-mode)
       (my-org-remark-elfeed-link-string)))
 
-  ;; Sanitize filenames to match logseq's :triple-lowbar naming format.
-  ;; Logseq uses ___ for / and percent-encoding for other unsafe chars.
-  (defun my-org-remark-sanitize-notes-file-name (filename)
-    (string-replace
-     "/" "___"
-     (string-replace
-      ":" "%3A"
-      (string-replace
-       "?" "%3F"
-       (string-replace
-        "|" "%7C"
-        (string-replace
-         "\\" "%5C"
-         filename))))))
+  ;; Notes land in the synced kb tree, mirroring the readwise layout
+  ;; (<source>/<middle-dimension>/<title-slug>.org) where it makes sense.
+  (defvar my-org-remark-directory (expand-file-name "~/kb/org-remark/")
+    "Root for org-remark notes files, inside the synced kb tree.")
 
-  (defun my-org-remark-notes-file-name-url (url)
-    (my-org-remark-sanitize-notes-file-name
-     (let ((url-parsed (url-generic-parse-url url)))
-       (concat
-        (url-host url-parsed)
-        (url-filename url-parsed)
-        "-annotations.org"))))
+  (defun my-org-remark-slugify (s &optional maxlen)
+    "Lowercase-hyphenate S readwise-style; never empty."
+    (let ((slug (string-trim (replace-regexp-in-string
+                              "[^a-z0-9]+" "-" (downcase (or s "")))
+                             "-+" "-+")))
+      (if (string-empty-p slug)
+          "untitled"
+        (substring slug 0 (min (length slug) (or maxlen 80))))))
 
-  ;; TODO cleanup references to logseq dir, maybe use a directory
+  (defun my-org-remark-url-notes-path (subdir url)
+    "Notes path for URL under SUBDIR: <subdir>/<host>/<path-slug>.org."
+    (let* ((u (url-generic-parse-url url))
+           (host (or (url-host u) "unknown"))
+           (path-slug (my-org-remark-slugify (url-filename u))))
+      (expand-file-name
+       (concat subdir "/" host "/"
+               (if (string= path-slug "untitled") "index" path-slug)
+               ".org")
+       my-org-remark-directory)))
+
   (defun my-org-remark-notes-file-name ()
     (cond
-     ;; Logseq files
-     ((and buffer-file-name
-           (string-match-p (expand-file-name "~/logseq/graphs/") buffer-file-name))
-      (concat (file-name-sans-extension buffer-file-name) "-annotations.org"))
-     ;; Elfeed
+     ;; Elfeed: feed domain is the middle dimension
      ((eq major-mode 'elfeed-show-mode)
-      (expand-file-name
-       (concat
-        "~/logseq/pages/(highlights elfeed) "
-        (let ((link-parts (split-string (my-org-remark-elfeed-link-string)
-                                        "\\]\\[")))
-          (my-org-remark-sanitize-notes-file-name
-           (concat (nth 0 (split-string (nth 1 link-parts) "\\]\\]"))
-                   "-annotations.org"))))))
-     ;; Wombag
+      (let* ((id (elfeed-entry-id elfeed-show-entry))
+             (feed-host (or (url-host (url-generic-parse-url (car id)))
+                            "unknown")))
+        (expand-file-name
+         (concat "elfeed/" feed-host "/"
+                 (my-org-remark-slugify (elfeed-entry-title elfeed-show-entry))
+                 ".org")
+         my-org-remark-directory)))
+     ;; Wombag / Eww: page domain is the middle dimension
      ((eq major-mode 'wombag-show-mode)
-      (expand-file-name
-       (concat
-        "~/logseq/pages/(highlights wombag) "
-        (my-org-remark-notes-file-name-url
-         (alist-get 'url wombag-show-entry)))))
-     ;; Wombag
-     ((eq major-mode 'pubmed-show-mode)
-      (expand-file-name
-       (concat
-        "~/logseq/pages/(highlights pubmed) "
-        (my-org-remark-notes-file-name-url
-         (pubmed-extract-pmid)))))
-     ;; Eww
+      (my-org-remark-url-notes-path "wombag" (alist-get 'url wombag-show-entry)))
      ((eq major-mode 'eww-mode)
+      (my-org-remark-url-notes-path "eww" (eww-current-url)))
+     ;; Pubmed: pmid is already a unique flat id
+     ((eq major-mode 'pubmed-show-mode)
+      (expand-file-name (concat "pubmed/" (pubmed-extract-pmid) ".org")
+                        my-org-remark-directory))
+     ;; Info manuals: one notes file per manual
+     ((eq major-mode 'Info-mode)
       (expand-file-name
-       (concat
-        "~/logseq/pages/(highlights eww) "
-        (my-org-remark-notes-file-name-url
-         (eww-current-url)))))
-     ;; if it is a file
+       (concat "info/"
+               (my-org-remark-slugify
+                (file-name-sans-extension
+                 (file-name-nondirectory Info-current-file)))
+               ".org")
+       my-org-remark-directory))
+     ;; Epubs via nov.el
+     ((eq major-mode 'nov-mode)
+      (expand-file-name
+       (concat "books/"
+               (my-org-remark-slugify
+                (file-name-sans-extension (file-name-nondirectory nov-file-name)))
+               ".org")
+       my-org-remark-directory))
+     ;; kb's own notes: annotations live next to the file they annotate
+     ((and buffer-file-name
+           (string-prefix-p (expand-file-name "~/kb/") buffer-file-name))
+      (concat (file-name-sans-extension buffer-file-name) "-annotations.org"))
+     ;; any other file: marginalia.org in the file's own directory
      (buffer-file-name "marginalia.org")
-     ;; otherwise
-     (t (expand-file-name "marginalia.org" user-emacs-directory))))
+     ;; otherwise: synced catch-all
+     (t (expand-file-name "marginalia.org" my-org-remark-directory))))
 
   (setq org-remark-notes-file-name 'my-org-remark-notes-file-name)
 

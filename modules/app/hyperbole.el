@@ -208,6 +208,19 @@ otherwise appear as a bogus `zsh#...' completion candidate."
   (advice-add 'hywiki-maybe-highlight-wikiwords-in-frame :around
               #'zetta-hywiki-debounce-frame-rehighlight)
 
+  ;; The buffer-(de)highlight paths force a redisplay per buffer the same
+  ;; way (sit-for 0, "display before font-locking") -- a flash on buffer
+  ;; switches/opens and referent-table updates.  Same cure: run them with
+  ;; sit-for neutralized; normal redisplay paints the results anyway.
+  (defun zetta-hywiki-quiet-sit-for (orig &rest args)
+    "Run ORIG with `sit-for' neutralized to suppress forced redisplays."
+    (cl-letf (((symbol-function 'sit-for) #'ignore))
+      (apply orig args)))
+  (advice-add 'hywiki-word-highlight-in-buffers :around
+              #'zetta-hywiki-quiet-sit-for)
+  (advice-add 'hywiki-word-dehighlight-in-buffers :around
+              #'zetta-hywiki-quiet-sit-for)
+
   ;; Keep zsh's `no matches found' glob error out of HyWiki completion
   ;; candidates (see `zetta-hywiki-completion-posix-shell').
   (advice-add 'hywiki-completion-at-point :around

@@ -83,14 +83,53 @@
     (apply orig args))
   (advice-add 'eww-display-pdf :around #'zetta-eww--remember-pdf-url)
 
+  (defun zetta-eww--link-text-at-point ()
+    "Text of the shr link at point, when it looks like a real title."
+    (when (get-text-property (point) 'shr-url)
+      (let* ((start (or (previous-single-property-change (1+ (point)) 'shr-url)
+                        (point-min)))
+             (end (or (next-single-property-change (point) 'shr-url)
+                      (point-max)))
+             (text (string-trim (buffer-substring-no-properties start end))))
+        ;; skip generic link labels like "PDF", "[pdf]", "Download"
+        (when (and (> (length text) 7)
+                   (not (string-match-p "\\`\\[?\\(pdf\\|download\\|link\\|here\\)"
+                                        (downcase text))))
+          text))))
+
+  (defun zetta-kb--pdf-title (file)
+    "FILE's PDF metadata title, when present and plausible."
+    (when (fboundp 'pdf-info-metadata)
+      (let ((title (ignore-errors (cdr (assq 'title (pdf-info-metadata file))))))
+        (when (and title
+                   (> (length title) 3)
+                   (not (string-match-p "\\`[0-9v. -]+\\'" title)))
+          title))))
+
+  (defun zetta-kb--sanitize-file-name (name)
+    "Collapse whitespace and strip filesystem-hostile chars from NAME.
+Quotes vanish; path separators and friends become dashes; no leading
+or trailing dash debris."
+    (string-trim
+     (replace-regexp-in-string
+      "\\` *- *\\| *- *\\'" ""
+      (replace-regexp-in-string
+       "[/\\:*?<>|]+" "-"
+       (replace-regexp-in-string
+        "[\"']+" ""
+        (replace-regexp-in-string "[ \t\n]+" " " name))))))
+
   (defun zetta-eww-save-pdf-to-kb (&optional url)
     "Download the PDF at point or URL into `zetta-kb-pdf-directory'.
-Uses the link at point, else the current page's URL, else prompts.
-Files land in ~/kb/pdfs/<domain>/<name>.pdf; a missing .pdf suffix is
-added (arxiv-style URLs), and an existing file is overwritten so
-re-downloading the same URL is idempotent."
+Grabs the link at point, else the current page's URL, else the URL of
+the PDF shown in the *eww pdf* buffer, else prompts.  The filename is
+imputed from the PDF's metadata title when present, else the link text
+at point, else the URL basename — always confirmed via minibuffer, so
+RET accepts and editing fixes garbage metadata.  Files land in
+~/kb/pdf/<domain>/."
     (interactive)
-    (let* ((url (or url
+    (let* ((link-text (zetta-eww--link-text-at-point))
+           (url (or url
                     (get-text-property (point) 'shr-url)
                     (and (derived-mode-p 'eww-mode) (eww-current-url))
                     (and (derived-mode-p 'pdf-view-mode 'doc-view-mode)
@@ -98,20 +137,24 @@ re-downloading the same URL is idempotent."
                     (read-string "PDF URL: ")))
            (parsed (url-generic-parse-url url))
            (host (or (url-host parsed) "unknown"))
-           (path (car (url-path-and-query parsed)))
-           (name (url-unhex-string (file-name-nondirectory
-                                    (directory-file-name (or path "")))))
-           (name (if (string-empty-p name) "document" name))
-           (name (if (string-suffix-p ".pdf" (downcase name))
-                     name
-                   (concat name ".pdf")))
-           (dir (file-name-as-directory
-                 (expand-file-name host zetta-kb-pdf-directory)))
-           (target (expand-file-name name dir)))
-      (make-directory dir t)
-      (url-copy-file url target t)
-      (message "kb pdf: %s" (abbreviate-file-name target))
-      target))
+           (base (url-unhex-string (file-name-nondirectory
+                                    (directory-file-name
+                                     (or (car (url-path-and-query parsed)) "")))))
+           (base (file-name-sans-extension
+                  (if (string-empty-p base) "document" base)))
+           (tmp (make-temp-file "kb-pdf-" nil ".pdf")))
+      (url-copy-file url tmp t)
+      (let* ((title (or (zetta-kb--pdf-title tmp) link-text base))
+             (name (read-string "kb pdf name: "
+                                (concat (zetta-kb--sanitize-file-name title)
+                                        ".pdf")))
+             (dir (file-name-as-directory
+                   (expand-file-name host zetta-kb-pdf-directory)))
+             (target (expand-file-name name dir)))
+        (make-directory dir t)
+        (rename-file tmp target t)
+        (message "kb pdf: %s" (abbreviate-file-name target))
+        target)))
 
   :general
   (

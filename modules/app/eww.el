@@ -63,12 +63,47 @@
     (interactive)
     (browse-url (thing-at-point 'url)))
 
+  ;; PDFs land in the synced kb tree, per-domain like org-remark notes;
+  ;; they sync everywhere and are annotatable on iOS in Preview via
+  ;; Files -> Synctrain.
+  (defvar zetta-kb-pdf-directory (expand-file-name "~/kb/pdfs/")
+    "Root for PDFs saved into the synced kb tree.")
+
+  (defun zetta-eww-save-pdf-to-kb (&optional url)
+    "Download the PDF at point or URL into `zetta-kb-pdf-directory'.
+Uses the link at point, else the current page's URL, else prompts.
+Files land in ~/kb/pdfs/<domain>/<name>.pdf; a missing .pdf suffix is
+added (arxiv-style URLs), and an existing file is overwritten so
+re-downloading the same URL is idempotent."
+    (interactive)
+    (let* ((url (or url
+                    (get-text-property (point) 'shr-url)
+                    (and (derived-mode-p 'eww-mode) (eww-current-url))
+                    (read-string "PDF URL: ")))
+           (parsed (url-generic-parse-url url))
+           (host (or (url-host parsed) "unknown"))
+           (path (car (url-path-and-query parsed)))
+           (name (url-unhex-string (file-name-nondirectory
+                                    (directory-file-name (or path "")))))
+           (name (if (string-empty-p name) "document" name))
+           (name (if (string-suffix-p ".pdf" (downcase name))
+                     name
+                   (concat name ".pdf")))
+           (dir (file-name-as-directory
+                 (expand-file-name host zetta-kb-pdf-directory)))
+           (target (expand-file-name name dir)))
+      (make-directory dir t)
+      (url-copy-file url target t)
+      (message "kb pdf: %s" (abbreviate-file-name target))
+      target))
+
   :general
   (
    :keymaps '(eww-mode-map)
    :states '(normal)
    "C-&" 'zetta-eww-switch-to-eaf
    "<return>" 'zetta-eww-follow-link
+   "D" 'zetta-eww-save-pdf-to-kb
    "x" '(lambda () (interactive) (kill-buffer (current-buffer)))
    "s-i" 'eww-toggle-images
    "s-j" 'treesit-tap-next

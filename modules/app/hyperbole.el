@@ -279,7 +279,8 @@ otherwise appear as a bogus `zsh#...' completion candidate."
       (kbd "M-<return>") 'hkey-either))
 
   ;; --- HyRolo: search the Logseq pages as the rolo source ---
-  (setq hyrolo-file-list '("~/.rolo.org" "~/logseq/pages/"))
+  (setq hyrolo-file-list '("~/.rolo.org" "~/kb/notes/" "~/kb/wiki/"
+                           "~/kb/todo/" "~/kb/inbox.org"))
   ;; Make the consult-driven grep commands resolve their matched files
   ;; correctly (see `zetta-hyrolo-fix-consult-handoff' above).
   (advice-add 'hyrolo-grep-input :filter-return

@@ -156,6 +156,52 @@ RET accepts and editing fixes garbage metadata.  Files land in
         (message "kb pdf: %s" (abbreviate-file-name target))
         target)))
 
+  ;; Images: same idea as PDFs — point at it, one key, lands in kb.
+  (defvar zetta-kb-image-directory (expand-file-name "~/kb/images/")
+    "Root for images saved into the synced kb tree.")
+
+  (defun zetta-eww--wikimedia-fullsize (url)
+    "Upgrade a wikimedia thumbnail URL to its full-size original."
+    (if (and (string-match-p "upload\\.wikimedia\\.org" url)
+             (string-match "\\`\\(.*\\)/thumb/\\(.*\\)/[0-9]+px-[^/]*\\'" url))
+        (concat (match-string 1 url) "/" (match-string 2 url))
+      url))
+
+  (defun zetta-eww-save-image-to-kb ()
+    "Save the image at point into `zetta-kb-image-directory'.
+Files land in images/<page-domain>/ (the page you are reading, not the
+CDN host serving the image); wikimedia thumbnails are upgraded to the
+full-size original.  The name is confirmed via minibuffer."
+    (interactive)
+    (let* ((img-url (or (get-text-property (point) 'image-url)
+                        (user-error "No image at point")))
+           (img-url (zetta-eww--wikimedia-fullsize img-url))
+           (page-host (or (and (derived-mode-p 'eww-mode)
+                               (url-host (url-generic-parse-url
+                                          (eww-current-url))))
+                          (url-host (url-generic-parse-url img-url))
+                          "unknown"))
+           (base (url-unhex-string
+                  (file-name-nondirectory
+                   (or (car (url-path-and-query
+                             (url-generic-parse-url img-url)))
+                       ""))))
+           (base (if (string-empty-p base) "image" base))
+           (name (read-string "kb image name: "
+                              (zetta-kb--sanitize-file-name base)))
+           (dir (file-name-as-directory
+                 (expand-file-name page-host zetta-kb-image-directory)))
+           (target (expand-file-name name dir)))
+      (make-directory dir t)
+      (url-copy-file img-url target t)
+      (message "kb image: %s" (abbreviate-file-name target))
+      target))
+
+  ;; Images carry shr-image-map as a text property, which outranks evil
+  ;; state maps — bind there too so I works with point ON the image.
+  (with-eval-after-load 'shr
+    (define-key shr-image-map "I" 'zetta-eww-save-image-to-kb))
+
   :general
   (
    :keymaps '(eww-mode-map)
@@ -163,6 +209,7 @@ RET accepts and editing fixes garbage metadata.  Files land in
    "C-&" 'zetta-eww-switch-to-eaf
    "<return>" 'zetta-eww-follow-link
    "D" 'zetta-eww-save-pdf-to-kb
+   "I" 'zetta-eww-save-image-to-kb
    "x" '(lambda () (interactive) (kill-buffer (current-buffer)))
    "s-i" 'eww-toggle-images
    "s-j" 'treesit-tap-next

@@ -74,6 +74,32 @@ Manual subtitles win over auto-captions."
   (let ((h (/ secs 3600)) (m (/ (% secs 3600) 60)) (s (% secs 60)))
     (if (> h 0) (format "%d:%02d:%02d" h m s) (format "%d:%02d" m s))))
 
+(defvar zetta-kb-yt-paragraph-stamps nil
+  "When non-nil, prefix each Transcript paragraph with its start-time link.")
+
+(defvar zetta-kb-yt-paragraph-gap 4
+  "Silence (seconds between captions) that starts a new paragraph.")
+
+(defvar zetta-kb-yt-paragraph-max 90
+  "Maximum seconds of speech per paragraph before forcing a break.")
+
+(defun zetta-kb--yt-paragraphs (lines)
+  "Group caption LINES ((SECONDS . TEXT)...) into (START-SECONDS . PROSE)."
+  (let (paras cur cur-start prev-start)
+    (dolist (l lines)
+      (let ((start (car l)))
+        (when (and cur
+                   (or (> (- start prev-start) zetta-kb-yt-paragraph-gap)
+                       (> (- start cur-start) zetta-kb-yt-paragraph-max)))
+          (push (cons cur-start (string-join (nreverse cur) " ")) paras)
+          (setq cur nil))
+        (unless cur (setq cur-start start))
+        (push (cdr l) cur)
+        (setq prev-start start)))
+    (when cur
+      (push (cons cur-start (string-join (nreverse cur) " ")) paras))
+    (nreverse paras)))
+
 ;;;###autoload
 (defun zetta-kb-save-yt-transcript (url)
   "Fetch the transcript for the YouTube video at URL into kb.
@@ -108,6 +134,16 @@ imports are just a `dolist' over this function."
       (insert "#+source: " canonical "\n"
               "#+transcript_kind: " (cdr cap) "\n"
               "#+filetags: :yt:transcript:\n\n")
+      ;; readable prose first: pause-segmented paragraphs, one line each
+      ;; (visual-line wraps; grep hits carry whole-paragraph context)
+      (insert "* Transcript\n\n")
+      (dolist (p (zetta-kb--yt-paragraphs lines))
+        (when zetta-kb-yt-paragraph-stamps
+          (insert (format "[[%s?t=%d][%s]] "
+                          canonical (car p) (zetta-kb--yt-stamp (car p)))))
+        (insert (cdr p) "\n\n"))
+      ;; fine-grained navigation at the end, folded away by org
+      (insert "* Timestamped\n")
       (dolist (l lines)
         (insert (format "[[%s?t=%d][%s]] %s\n"
                         canonical (car l) (zetta-kb--yt-stamp (car l))

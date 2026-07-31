@@ -28,7 +28,8 @@
   ;; to each PDF — the same convention org-remark uses for kb files —
   ;; so pdf: links are same-dir relative and resolve against the note's
   ;; own directory.
-  (setq pdfnote-assets-directory (expand-file-name "~/kb/pdf/")
+  (setq pdfnote-file-prefix ""      ; logseq-era naming; dir context suffices
+        pdfnote-assets-directory (expand-file-name "~/kb/pdf/")
         pdfnote-pages-directory  (expand-file-name "~/kb/pdf/")
         pdfnote-asset-link-directory "."
         pdfnote-page-file-function

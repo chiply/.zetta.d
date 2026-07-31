@@ -1,7 +1,7 @@
 ;;; tools/irs.el --- information-retrieval-service (irs) client -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; Search over the personal corpus (logseq pages/journals, hywiki, design
+;; Search over the personal corpus (kb notes/todo/readwise, hywiki, design
 ;; docs) via the irs FastAPI backend at
 ;; ~/source_code/information-retrieval-service.  Design doc:
 ;; text-search.org at the repo root.

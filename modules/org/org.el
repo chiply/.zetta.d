@@ -386,7 +386,7 @@ Set this in ~/.private.el before modules load.")
         (append
          '(("o" "Simple capture"
             entry
-            (file "~/logseq/pages/capture.org")
+            (file "~/kb/inbox.org")
             "* %?\n%a"
             :prepend t))
          (zetta-logseq-generate-capture-templates)))

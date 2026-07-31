@@ -6,6 +6,11 @@
   :demand t
   :config
 
+  ;; Non-VC project roots (e.g. ~/kb, whose .git lives only on the sync
+  ;; hub): a .project marker file makes project-try-vc treat the dir as
+  ;; a root, and the marker syncs to every device with the folder.
+  (setq project-vc-extra-root-markers '(".project"))
+
   ;; Fallback for directories not recognized by project-find-functions.
   ;; Must use with-eval-after-load since nested use-package :config
   ;; may not reliably run with elpaca.

@@ -23,6 +23,18 @@
   :commands (pdfnote-sync-file pdfnote-sync-buffer pdfnote-sync-all
              pdfnote-preview pdfnote-visit-notes)
   :init
+  ;; kb targeting (was the Logseq graph): PDFs live under ~/kb/pdf/
+  ;; (domain subdirs); notes are a SIBLING <name>-annotations.org next
+  ;; to each PDF — the same convention org-remark uses for kb files —
+  ;; so pdf: links are same-dir relative and resolve against the note's
+  ;; own directory.
+  (setq pdfnote-file-prefix ""      ; logseq-era naming; dir context suffices
+        pdfnote-assets-directory (expand-file-name "~/kb/pdf/")
+        pdfnote-pages-directory  (expand-file-name "~/kb/pdf/")
+        pdfnote-asset-link-directory "."
+        pdfnote-page-file-function
+        (lambda (pdf)
+          (concat (file-name-sans-extension pdf) "-annotations.org")))
   ;; Register the `pdf:' backlink early (before the package is first
   ;; loaded) so those links are followable in any Org buffer; following
   ;; one autoloads the package on demand.

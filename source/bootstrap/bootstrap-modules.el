@@ -17,7 +17,8 @@ Download Terminus TTF from https://files.ax86.net/terminus-ttf/")
 (defvar zetta-literature-dir "~/.lit/"
   "Directory for bibliography files and PDFs.  Set in ~/.zetta.el.")
 
-(defvar zetta-logseq-dir "~/logseq/pages/"
+;; name is vestigial (logseq era); points at the kb todo dir since 2026-07
+(defvar zetta-logseq-dir "~/kb/todo/"
   "Directory containing Logseq pages.  Set in ~/.zetta.el.")
 
 (defvar zetta-use-lockfile t

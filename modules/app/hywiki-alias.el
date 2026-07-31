@@ -602,8 +602,8 @@ visible buffers."
 ;; Enable automatically once HyWiki is available.  This file loads at startup,
 ;; before Hyperbole's deferred load, so the mode turns on as soon as HyWiki
 ;; provides.  Toggle it off any time with `M-x zetta-hywiki-alias-mode'.
-(with-eval-after-load 'hywiki
-  (zetta-hywiki-alias-mode 1))
+;;(with-eval-after-load 'hywiki
+  ;;(zetta-hywiki-alias-mode 1))
 
 (provide 'hywiki-alias)
 ;;; hywiki-alias.el ends here

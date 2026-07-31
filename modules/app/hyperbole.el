@@ -108,27 +108,45 @@ open in a buffer, are untouched."
       (let ((title (file-name-sans-extension (file-name-nondirectory file))))
         (write-region (format "#+title: %s\n\n" title) nil file nil 0)))))
 
-;; HyWiki flashes the whole frame on every keystroke of a capital-letter word
-;; when `~/hywiki/' holds NO pages.  With an empty referent hash,
-;; `hywiki-get-referent-hasht' computes an empty `hywiki--any-wikiword-regexp-list'
-;; (nil `mapcar'), so its own `(unless ... regexp-list ...)' guard never latches
-;; and it re-highlights every window in the frame -- each via `sit-for 0' -- on
-;; every WikiWord lookup, which HyWiki performs per `post-self-insert' while you
-;; type a candidate WikiWord.  Each forced redisplay repaints the SVG tab/mode/
-;; header lines: a visible whole-frame flash on every keystroke.  With zero pages
-;; there is nothing to highlight, so skip the frame-wide re-highlight pass while
-;; the referent hash is empty.  (Upstream Hyperbole bug; guarded here.)
-(defun zetta-hywiki-skip-empty-rehighlight (orig &rest args)
-  "Skip HyWiki's frame-wide WikiWord re-highlight when there are no pages.
-Around advice for `hywiki-maybe-highlight-wikiwords-in-frame'.  When the HyWiki
-referent hash is empty there are no WikiWords to highlight, yet
-`hywiki-get-referent-hasht' still triggers the re-highlight (with `sit-for') on
-every lookup -- a whole-frame flash on each keystroke of a candidate WikiWord.
-Run ORIG only when the referent hash is non-empty."
+;; HyWiki's frame-wide WikiWord re-highlight walks every window with a
+;; `sit-for 0' redisplay each -- with SVG tab/mode/header lines that is a
+;; visible whole-frame flash plus cursor churn (`with-selected-window').
+;; It fires per `post-self-insert' lookup while typing capital-letter
+;; words, and on every `hywiki-directory' mtime change (lockfiles,
+;; autosaves, the .hywiki.eld cache, syncthing deliveries -- the wiki now
+;; lives in the synced ~/kb tree).  The original empty-hash skip
+;; (#98) only masked the zero-pages case; with real pages the pass ran
+;; raw again.  Debounce instead: coalesce every trigger into ONE pass,
+;; run after Emacs has been idle -- never mid-keystroke.  The empty-hash
+;; skip is preserved.  (Upstream Hyperbole issue; guarded here.)
+(defvar zetta--hywiki-rehighlight-pending nil
+  "Cons of (ORIG . ARGS) for the most recent coalesced re-highlight call.")
+(defvar zetta--hywiki-rehighlight-timer nil)
+(defun zetta-hywiki-debounce-frame-rehighlight (orig &rest args)
+  "Coalesce HyWiki frame-wide re-highlights into one idle-time pass.
+Around advice for `hywiki-maybe-highlight-wikiwords-in-frame'.  Skips
+entirely while the referent hash is empty (nothing to highlight);
+otherwise defers ORIG until 0.7s of idle time, collapsing bursts of
+triggers (typing, directory mtime churn) into a single repaint."
   (unless (and (boundp 'hywiki--referent-hasht)
                (hash-table-p hywiki--referent-hasht)
                (zerop (hash-table-count hywiki--referent-hasht)))
-    (apply orig args)))
+    (setq zetta--hywiki-rehighlight-pending (cons orig args))
+    (unless (timerp zetta--hywiki-rehighlight-timer)
+      (setq zetta--hywiki-rehighlight-timer
+            (run-with-idle-timer
+             0.7 nil
+             (lambda ()
+               (setq zetta--hywiki-rehighlight-timer nil)
+               (when zetta--hywiki-rehighlight-pending
+                 ;; Upstream's pass forces a redisplay per window via
+                 ;; `sit-for 0' ("display buffer before font-locking") —
+                 ;; meaningless at idle in already-displayed windows, and
+                 ;; the source of the residual once-per-burst flash.
+                 ;; Neutralize it for this deferred invocation only.
+                 (cl-letf (((symbol-function 'sit-for) #'ignore))
+                   (apply (car zetta--hywiki-rehighlight-pending)
+                          (cdr zetta--hywiki-rehighlight-pending))))))))))
 
 ;; HyWiki completion offers a bogus `zsh#no matches found...' candidate.
 ;; `hywiki-completion-at-point' lists page candidates by globbing `./PREFIX*.org'
@@ -170,6 +188,7 @@ otherwise appear as a bogus `zsh#...' completion candidate."
   ;; where the generated chiply.dev WikiWord pages live.  Follow a WikiWord
   ;; with the Action Key {s-H} (relocated from {M-RET} below).
   ;;(require 'hywiki)
+  (setq hywiki-directory (expand-file-name "~/kb/wiki"))
   (hywiki-mode 1)
 
   (add-to-list 'brushup-styles
@@ -183,10 +202,24 @@ otherwise appear as a bogus `zsh#...' completion candidate."
   ;; disk have drifted apart (see `zetta-hywiki-ensure-page-file').
   (advice-add 'hywiki-display-page :before #'zetta-hywiki-ensure-page-file)
 
-  ;; Stop the whole-frame flash when typing WikiWords with an empty ~/hywiki/
-  ;; (see `zetta-hywiki-skip-empty-rehighlight').
+  ;; Debounce the whole-frame WikiWord re-highlight: one idle-time pass
+  ;; instead of a sit-for flash per trigger (see
+  ;; `zetta-hywiki-debounce-frame-rehighlight').
   (advice-add 'hywiki-maybe-highlight-wikiwords-in-frame :around
-              #'zetta-hywiki-skip-empty-rehighlight)
+              #'zetta-hywiki-debounce-frame-rehighlight)
+
+  ;; The buffer-(de)highlight paths force a redisplay per buffer the same
+  ;; way (sit-for 0, "display before font-locking") -- a flash on buffer
+  ;; switches/opens and referent-table updates.  Same cure: run them with
+  ;; sit-for neutralized; normal redisplay paints the results anyway.
+  (defun zetta-hywiki-quiet-sit-for (orig &rest args)
+    "Run ORIG with `sit-for' neutralized to suppress forced redisplays."
+    (cl-letf (((symbol-function 'sit-for) #'ignore))
+      (apply orig args)))
+  (advice-add 'hywiki-word-highlight-in-buffers :around
+              #'zetta-hywiki-quiet-sit-for)
+  (advice-add 'hywiki-word-dehighlight-in-buffers :around
+              #'zetta-hywiki-quiet-sit-for)
 
   ;; Keep zsh's `no matches found' glob error out of HyWiki completion
   ;; candidates (see `zetta-hywiki-completion-posix-shell').
@@ -246,7 +279,8 @@ otherwise appear as a bogus `zsh#...' completion candidate."
       (kbd "M-<return>") 'hkey-either))
 
   ;; --- HyRolo: search the Logseq pages as the rolo source ---
-  (setq hyrolo-file-list '("~/.rolo.org" "~/logseq/pages/"))
+  (setq hyrolo-file-list '("~/.rolo.org" "~/kb/notes/" "~/kb/wiki/"
+                           "~/kb/todo/" "~/kb/inbox.org"))
   ;; Make the consult-driven grep commands resolve their matched files
   ;; correctly (see `zetta-hyrolo-fix-consult-handoff' above).
   (advice-add 'hyrolo-grep-input :filter-return

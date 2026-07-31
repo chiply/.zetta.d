@@ -687,8 +687,8 @@ simply does not appear -- better than offering a search that 503s."
 ;;
 ;; Full minibuffer grammar (worked examples in text-search.org):
 ;;   QUERY [FLAGS...] [-- LITERAL-QUERY-TEXT] [,ORDERLESS-COMPONENT...]
-;; e.g. `server --root=logseq -- -v,proxy,section' -- query "server -v"
-;; scoped to logseq, rows then narrowed on "proxy" and "section".
+;; e.g. `server --root=notes -- -v,proxy,section' -- query "server -v"
+;; scoped to notes, rows then narrowed on "proxy" and "section".
 
 (defconst irs--flag-regexp "\\`--?\\([a-z]+\\)=\\(.*\\)\\'"
   "One `--key=value' flag.  Matched generically and dispatched on the key,
@@ -780,7 +780,7 @@ rendering identically would leave one of them permanently unreachable."
 The candidate is `label  snippet'; marginalia's columns (root, type,
 kind, score) are right-aligned AFTER it, so an unbounded candidate fills
 the line and pushes the annotation off the right edge — which is exactly
-what a logseq readwise title like
+what a long capture title like
 \"(highlights eww) github.com/namilus/completions-overlay-annotations\"
 does.  Bounding both parts reserves room for the annotation."
   :type 'natnum)
@@ -1117,7 +1117,7 @@ filter -- a source that is not shown never fires its request.
 Scope with flags in the input, which are passed to the backend:
 
   svg rendering --root=blog --type=org
-  kubernetes deploy --root=logseq,zetta
+  kubernetes deploy --root=notes,zetta
   emacs --type=pdf --limit=50
 
 `--root=' (`-r=') takes a corpus root alias.  `--type=' (`-t=') takes an

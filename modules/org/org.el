@@ -56,7 +56,10 @@ TYPE is a character: ?a alphabetic, ?t timestamp, ?p priority, ?o TODO order."
 
 (use-package org
   :ensure nil
-  :mode ("\\.org" . org-mode)
+  ;; \\' anchor is load-bearing: unanchored, this matched ".org" anywhere
+  ;; in the PATH — e.g. kb/images/en.wikipedia.org/photo.jpg opened as an
+  ;; org buffer of raw JPEG bytes.
+  :mode ("\\.org\\'" . org-mode)
 
   :config
   (setq-default org-indent-mode nil)
@@ -383,7 +386,7 @@ Set this in ~/.private.el before modules load.")
         (append
          '(("o" "Simple capture"
             entry
-            (file "~/logseq/pages/capture.org")
+            (file "~/kb/inbox.org")
             "* %?\n%a"
             :prepend t))
          (zetta-logseq-generate-capture-templates)))

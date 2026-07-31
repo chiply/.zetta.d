@@ -587,7 +587,9 @@ Shown whenever `flycheck-mode' is active."
        ;; keymap, so it would render as plain, non-clickable text).
        (if (fboundp 'breadcrumb-imenu-crumbs)
            (concat (ignore-errors (concat (nerd-icons-mdicon "nf-md-format_list_bulleted") " "))
-                   (breadcrumb-imenu-crumbs))
+                   ;; crumbs can signal on malformed imenu indexes (e.g.
+                   ;; pdf-view outlines); never let that escape redisplay
+                   (or (ignore-errors (breadcrumb-imenu-crumbs)) ""))
          (propertize
           (or (ignore-errors (org-display-outline-path nil t "/" t)) "/")
           'face '(:height 0.8))))
@@ -598,7 +600,7 @@ Shown whenever `flycheck-mode' is active."
        (concat (jpt-yaml-path-to-point)))
       (t (when (fboundp 'breadcrumb-imenu-crumbs)
            (concat (ignore-errors (concat (nerd-icons-mdicon "nf-md-format_list_bulleted") " "))
-                   (breadcrumb-imenu-crumbs)))))))
+                   (or (ignore-errors (breadcrumb-imenu-crumbs)) "")))))))
   "Mode-line construct for header-line row 2 (lsp / org / imenu crumbs).")
 
 (defun zetta-header-line-svg--line1 ()

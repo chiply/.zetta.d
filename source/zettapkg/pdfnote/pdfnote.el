@@ -460,7 +460,7 @@ With prefix arg FORCE, overwrite even a non-pdfnote-managed page."
   "Sync every annotated PDF in `pdfnote-assets-directory'.
 Return the list of written files."
   (interactive "P")
-  (let ((pdfs (directory-files pdfnote-assets-directory t "\\.pdf\\'"))
+  (let ((pdfs (directory-files-recursively pdfnote-assets-directory "\\.pdf\\'"))
         (written 0) (empty 0) (refused 0) files)
     (dolist (pdf pdfs)
       (let ((r (ignore-errors (pdfnote--sync-1 pdf force))))

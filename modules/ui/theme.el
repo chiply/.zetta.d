@@ -4,32 +4,27 @@
   :init
   (load-theme zetta-theme t))
 
-(message "nord-theme")
-(use-package nord-theme)
 
-(message "poet-theme")
-(use-package poet-theme)
 
-(message "heroku-theme")
-(use-package heroku-theme)
+;;(message "nord-theme")
+;;(use-package nord-theme)
+;;(message "poet-theme")
+;;(use-package poet-theme)
+;;(message "heroku-theme")
+;;(use-package heroku-theme)
+;;(message "jbeans-theme")
+;;(use-package jbeans-theme)
+;;(message "leuven-theme")
+;;(use-package leuven-theme)
+;;(message "rebecca-theme")
+;;(use-package rebecca-theme)
+;;(message "zenburn-theme")
+;;(use-package zenburn-theme)
+;;(message "lavender-theme")
+;;(use-package lavender-theme)
+;;(message "chocolate-theme")
+;;(use-package chocolate-theme)
 
-(message "jbeans-theme")
-(use-package jbeans-theme)
-
-(message "leuven-theme")
-(use-package leuven-theme)
-
-(message "rebecca-theme")
-(use-package rebecca-theme)
-
-(message "zenburn-theme")
-(use-package zenburn-theme)
-
-(message "lavender-theme")
-(use-package lavender-theme)
-
-(message "chocolate-theme")
-(use-package chocolate-theme)
 (custom-set-faces
  '(cursor ((t (:background "gray"))))
  '(header-line-inactive ((t (:background unspecified :foreground unspecified :inherit header-line)))))

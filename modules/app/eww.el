@@ -66,8 +66,8 @@
   ;; PDFs land in the synced kb tree, per-domain like org-remark notes;
   ;; they sync everywhere and are annotatable on iOS in Preview via
   ;; Files -> Synctrain.
-  (defvar zetta-kb-pdf-directory (expand-file-name "~/kb/pdfs/")
-    "Root for PDFs saved into the synced kb tree.")
+  (defvar zetta-kb-pdf-directory (expand-file-name "~/kb/pdf/")
+    "Root for PDFs saved into the synced kb tree (existing kb layout).")
 
   ;; eww renders PDFs into a separate "*eww pdf*" pdf-view buffer that is
   ;; not eww-mode and knows nothing of its URL.  Stash the URL on the way

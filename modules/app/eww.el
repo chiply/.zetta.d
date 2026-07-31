@@ -69,6 +69,20 @@
   (defvar zetta-kb-pdf-directory (expand-file-name "~/kb/pdfs/")
     "Root for PDFs saved into the synced kb tree.")
 
+  ;; eww renders PDFs into a separate "*eww pdf*" pdf-view buffer that is
+  ;; not eww-mode and knows nothing of its URL.  Stash the URL on the way
+  ;; through: when `eww-display-pdf' is called, the current buffer is the
+  ;; url retrieval buffer, which carries `url-current-object'.
+  (defvar zetta-eww--pdf-url nil
+    "URL of the PDF most recently displayed by eww.")
+
+  (defun zetta-eww--remember-pdf-url (orig &rest args)
+    "Record the PDF's URL before eww hands it to pdf-view."
+    (when (bound-and-true-p url-current-object)
+      (setq zetta-eww--pdf-url (url-recreate-url url-current-object)))
+    (apply orig args))
+  (advice-add 'eww-display-pdf :around #'zetta-eww--remember-pdf-url)
+
   (defun zetta-eww-save-pdf-to-kb (&optional url)
     "Download the PDF at point or URL into `zetta-kb-pdf-directory'.
 Uses the link at point, else the current page's URL, else prompts.
@@ -79,6 +93,8 @@ re-downloading the same URL is idempotent."
     (let* ((url (or url
                     (get-text-property (point) 'shr-url)
                     (and (derived-mode-p 'eww-mode) (eww-current-url))
+                    (and (derived-mode-p 'pdf-view-mode 'doc-view-mode)
+                         zetta-eww--pdf-url)
                     (read-string "PDF URL: ")))
            (parsed (url-generic-parse-url url))
            (host (or (url-host parsed) "unknown"))
@@ -108,6 +124,11 @@ re-downloading the same URL is idempotent."
    "s-i" 'eww-toggle-images
    "s-j" 'treesit-tap-next
    "s-k" 'treesit-tap-prev
+   )
+  (
+   :keymaps 'pdf-view-mode-map
+   :states '(normal)
+   "D" 'zetta-eww-save-pdf-to-kb
    )
   (
    :keymaps 'menu-lookup-map

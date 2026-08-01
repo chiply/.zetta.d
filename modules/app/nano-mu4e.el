@@ -24,6 +24,12 @@
   :ensure (nano-mu4e :host github :repo "rougier/nano-mu4e")
   :after mu4e
   :hook (mu4e-headers-mode . nano-mu4e-mode)
+  :config
+  ;; Body excerpts under messages in the headers view.  The stock
+  ;; predicate previews only NEW messages that aren't github
+  ;; notifications or list mail.
+  (setq nano-mu4e-msg-preview t
+        nano-mu4e-msg-preview-func #'nano-mu4e-msg-preview-p)
   :init
   (defvar zetta-nano-mu4e--fontset-done nil)
   (defun zetta-nano-mu4e--fontset (&optional frame)

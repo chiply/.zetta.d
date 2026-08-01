@@ -2545,6 +2545,12 @@
                              multiple-cursors :type git :protocol
                              https :inherit t :depth treeless :ref
                              "ddd677091afc7d65ce56d11866e18aeded110ada"))
+ (mu4e-dashboard :source "elpaca-menu-lock-file" :recipe
+                 (:source "elpaca-menu-lock-file" :package "mu4e-dashboard"
+                          :id mu4e-dashboard :host github :repo
+                          "rougier/mu4e-dashboard" :type git :protocol https
+                          :inherit t :depth treeless :ref
+                          "d40f501edad5078386e43a74b2bc3e2b22e33009"))
  (mw-thesaurus :source "elpaca-menu-lock-file" :recipe
                (:package "mw-thesaurus" :repo "agzam/mw-thesaurus.el"
                          :fetcher github :files
@@ -2728,6 +2734,12 @@
                      :type git :protocol https :inherit t :depth
                      treeless :ref
                      "ffaad784a8597ee52842a578c01bd347d3e0281d"))
+ (org-msg :source "elpaca-menu-lock-file" :recipe
+          (:source "elpaca-menu-lock-file" :package "org-msg"
+                   :id org-msg :host github :repo
+                   "jeremy-compostella/org-msg" :type git :protocol https
+                   :inherit t :depth treeless :ref
+                   "7b45df759340f3e388e84f497052b7cf3a41698c"))
  (org-noter :source "elpaca-menu-lock-file" :recipe
             (:package "org-noter" :fetcher github :repo
                       "org-noter/org-noter" :files

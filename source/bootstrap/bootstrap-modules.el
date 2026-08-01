@@ -119,7 +119,8 @@ in the order they appear in the `zetta-modules!' declaration.")
             "bookmark.el" "bookmark+.el" "bookmark-in-project.el" "dogears.el"
             "olivetti.el" "activities.el" "spot4e.el" "elfeed.el" "wombag.el"
             "whisper.el" "say.el" "md4rd.el" "wttrin.el" "nov.el" "eca-emacs.el"
-            "mastodon.el" "erc.el" "eww.el" "nano-mu4e.el" "flappy-fish.el" "speed-type.el"
+            "mastodon.el" "erc.el" "eww.el" "nano-mu4e.el" "mu4e-dashboard.el"
+            "org-msg.el" "flappy-fish.el" "speed-type.el"
             "spray.el" "touchtype.el" "key-quiz.el"))
     (org . ("org.el" "org-ql.el" "org-capture.el" "org-ref.el" "ob-mermaid.el"
             "pdf-tools.el" "biblio.el" "citar.el" "org-remark.el"

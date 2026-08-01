@@ -56,45 +56,13 @@
         (mu4e-search-rerun))
       (message "nano-mu4e display %s" (if enable "enabled" "disabled"))))
 
-  ;; Upstream bug: nano-mu4e sets/executes a `tag' mark, but stock
-  ;; mu4e-marks has no such entry — nano's mode-on styling creates a
-  ;; :char-only stub whose nil :action/:show-target crash execution
-  ;; ("void function nil").  Define a real mark.  nano passes the
-  ;; complete final tag list; mu4e-action-retag-message wants +/-
-  ;; deltas, so diff against the message's current tags.
-  (defun zetta-nano-mu4e--retag-absolute (_docid msg target)
-    "Set MSG's tags to exactly TARGET, a comma-separated list."
-    (let* ((want (split-string (or target "") "," t "[ \t]+"))
-           (have (mu4e-message-field msg :tags))
-           (delta (append
-                   (mapcar (lambda (tag) (concat "+" tag))
-                           (cl-set-difference want have :test #'string=))
-                   (mapcar (lambda (tag) (concat "-" tag))
-                           (cl-set-difference have want :test #'string=)))))
-      (when delta
-        (mu4e-action-retag-message msg (mapconcat #'identity delta ",")))))
-  (setf (alist-get 'tag mu4e-marks)
-        (list :char '("(T)" . " ")
-              :prompt "tag"
-              :ask-target (lambda () (read-string "Tags (comma separated): "))
-              :show-target (lambda (target) target)
-              :action #'zetta-nano-mu4e--retag-absolute))
-
-  ;; Retagging edits the message file and reindexes asynchronously,
-  ;; but nano's immediate refresh re-renders from cached message
-  ;; plists, so the new tag never shows (and the stock per-message
-  ;; update handler jitters the custom layout).  Re-query the server
-  ;; shortly after any tag operation instead.
-  (defun zetta-nano-mu4e--rerun-after-tag (&rest _)
-    (run-at-time 0.4 nil
-                 (lambda ()
-                   (when-let* ((buf (mu4e-get-headers-buffer)))
-                     (when (buffer-live-p buf)
-                       (with-current-buffer buf
-                         (ignore-errors (nano-mu4e-rerun))))))))
-  (advice-add 'nano-mu4e-toggle-todo :after #'zetta-nano-mu4e--rerun-after-tag)
-  (advice-add 'nano-mu4e-edit-tags :after #'zetta-nano-mu4e--rerun-after-tag)
-  (advice-add 'nano-mu4e-edit-tags-root :after #'zetta-nano-mu4e--rerun-after-tag)
+  ;; Tags feature deliberately disabled: mu4e tags are local-only,
+  ;; upstream's tag mark is broken without private config (missing
+  ;; mu4e-marks entry), and the async retag/refresh dance flashes the
+  ;; buffer.  Mail todos go through org-capture ("m" template) instead.
+  ;; Unbind nano's tag keys so they can't hit the broken path.
+  (define-key nano-mu4e-mode-map (kbd "t") nil)
+  (define-key nano-mu4e-mode-map (kbd "T") nil)
 
   ;; Keys: C-j/C-k for message motion; C-l unbound so it falls through
   ;; to the global recenter-top-bottom; vim-style "g r" reruns the
@@ -106,13 +74,10 @@
   (define-key nano-mu4e-mode-map (kbd "g") nil)
   (define-key nano-mu4e-mode-map (kbd "g r") #'nano-mu4e-rerun)
   ;; Leave ":" (ex) and "G" (bottom) to evil; gg is restored inside the
-  ;; g prefix.  Tag editing lives on g a / g A ("annotate") — g t
-  ;; belongs to spacetree, g l to mu4e-show-log.
+  ;; g prefix.
   (define-key nano-mu4e-mode-map (kbd ":") nil)
   (define-key nano-mu4e-mode-map (kbd "G") nil)
   (define-key nano-mu4e-mode-map (kbd "g g") #'beginning-of-buffer)
-  (define-key nano-mu4e-mode-map (kbd "g a") #'nano-mu4e-edit-tags-root)
-  (define-key nano-mu4e-mode-map (kbd "g A") #'nano-mu4e-edit-tags)
 
   ;; Let mu4e's and nano-mu4e's own keys through the modal layers.
   ;; Both meow-normal and evil-normal sit in emulation-mode-map-alists

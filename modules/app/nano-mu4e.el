@@ -80,6 +80,22 @@
               :show-target (lambda (target) target)
               :action #'zetta-nano-mu4e--retag-absolute))
 
+  ;; Retagging edits the message file and reindexes asynchronously,
+  ;; but nano's immediate refresh re-renders from cached message
+  ;; plists, so the new tag never shows (and the stock per-message
+  ;; update handler jitters the custom layout).  Re-query the server
+  ;; shortly after any tag operation instead.
+  (defun zetta-nano-mu4e--rerun-after-tag (&rest _)
+    (run-at-time 0.4 nil
+                 (lambda ()
+                   (when-let* ((buf (mu4e-get-headers-buffer)))
+                     (when (buffer-live-p buf)
+                       (with-current-buffer buf
+                         (ignore-errors (nano-mu4e-rerun))))))))
+  (advice-add 'nano-mu4e-toggle-todo :after #'zetta-nano-mu4e--rerun-after-tag)
+  (advice-add 'nano-mu4e-edit-tags :after #'zetta-nano-mu4e--rerun-after-tag)
+  (advice-add 'nano-mu4e-edit-tags-root :after #'zetta-nano-mu4e--rerun-after-tag)
+
   ;; Keys: C-j/C-k for message motion; C-l unbound so it falls through
   ;; to the global recenter-top-bottom; vim-style "g r" reruns the
   ;; search (making g a prefix displaces the map's g =

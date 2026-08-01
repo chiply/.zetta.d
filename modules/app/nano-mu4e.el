@@ -65,13 +65,14 @@
   (define-key nano-mu4e-mode-map (kbd "C-l") nil)
   (define-key nano-mu4e-mode-map (kbd "g") nil)
   (define-key nano-mu4e-mode-map (kbd "g r") #'nano-mu4e-rerun)
-  ;; Leave ":" (ex) and "G" (bottom) to evil; tag editing moves under
-  ;; the g prefix, and gg is restored inside it.
+  ;; Leave ":" (ex) and "G" (bottom) to evil; gg is restored inside the
+  ;; g prefix.  Tag editing lives on g a / g A ("annotate") — g t
+  ;; belongs to spacetree, g l to mu4e-show-log.
   (define-key nano-mu4e-mode-map (kbd ":") nil)
   (define-key nano-mu4e-mode-map (kbd "G") nil)
   (define-key nano-mu4e-mode-map (kbd "g g") #'beginning-of-buffer)
-  (define-key nano-mu4e-mode-map (kbd "g t") #'nano-mu4e-edit-tags-root)
-  (define-key nano-mu4e-mode-map (kbd "g T") #'nano-mu4e-edit-tags)
+  (define-key nano-mu4e-mode-map (kbd "g a") #'nano-mu4e-edit-tags-root)
+  (define-key nano-mu4e-mode-map (kbd "g A") #'nano-mu4e-edit-tags)
 
   ;; Let mu4e's and nano-mu4e's own keys through the modal layers.
   ;; Both meow-normal and evil-normal sit in emulation-mode-map-alists

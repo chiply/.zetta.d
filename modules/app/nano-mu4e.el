@@ -93,12 +93,26 @@
   ;; everything else stays evil (j/k, "," leader, /-search, gg/G, :).
   ;; Main and view keep emacs state: they're menu/reading buffers whose
   ;; single-letter mu4e keys (s, r, f, q...) evil normal would eat.
+  ;; Article view: same arrangement as headers — evil normal with the
+  ;; view map overriding.  Free evil's essentials first: "," is the
+  ;; launch leader (was mu4e-sexp-at-point, a debug helper), k is
+  ;; line-up (save-url moves to g U), g becomes a prefix (go-to-url on
+  ;; g u, gg restored).
+  (define-key mu4e-view-mode-map (kbd ",") nil)
+  (define-key mu4e-view-mode-map (kbd "k") nil)
+  (define-key mu4e-view-mode-map (kbd "g") nil)
+  (define-key mu4e-view-mode-map (kbd "g g") #'beginning-of-buffer)
+  (define-key mu4e-view-mode-map (kbd "g u") #'mu4e-view-go-to-url)
+  (define-key mu4e-view-mode-map (kbd "g U") #'mu4e-view-save-url)
+
   (with-eval-after-load 'evil
     (evil-set-initial-state 'mu4e-headers-mode 'normal)
     (evil-make-overriding-map nano-mu4e-mode-map 'normal)
     (add-hook 'nano-mu4e-mode-hook #'evil-normalize-keymaps)
-    (dolist (mode '(mu4e-main-mode mu4e-view-mode))
-      (evil-set-initial-state mode 'emacs)))
+    (evil-set-initial-state 'mu4e-view-mode 'normal)
+    (evil-make-overriding-map mu4e-view-mode-map 'normal)
+    (add-hook 'mu4e-view-mode-hook #'evil-normalize-keymaps)
+    (evil-set-initial-state 'mu4e-main-mode 'emacs)))
 
   ;; Re-apply brushup styles now that the faces below exist.
   (when (fboundp 'brushup) (brushup))

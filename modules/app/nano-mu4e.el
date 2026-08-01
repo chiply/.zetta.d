@@ -56,6 +56,30 @@
         (mu4e-search-rerun))
       (message "nano-mu4e display %s" (if enable "enabled" "disabled"))))
 
+  ;; Upstream bug: nano-mu4e sets/executes a `tag' mark, but stock
+  ;; mu4e-marks has no such entry — nano's mode-on styling creates a
+  ;; :char-only stub whose nil :action/:show-target crash execution
+  ;; ("void function nil").  Define a real mark.  nano passes the
+  ;; complete final tag list; mu4e-action-retag-message wants +/-
+  ;; deltas, so diff against the message's current tags.
+  (defun zetta-nano-mu4e--retag-absolute (_docid msg target)
+    "Set MSG's tags to exactly TARGET, a comma-separated list."
+    (let* ((want (split-string (or target "") "," t "[ \t]+"))
+           (have (mu4e-message-field msg :tags))
+           (delta (append
+                   (mapcar (lambda (tag) (concat "+" tag))
+                           (cl-set-difference want have :test #'string=))
+                   (mapcar (lambda (tag) (concat "-" tag))
+                           (cl-set-difference have want :test #'string=)))))
+      (when delta
+        (mu4e-action-retag-message msg (mapconcat #'identity delta ",")))))
+  (setf (alist-get 'tag mu4e-marks)
+        (list :char '("(T)" . " ")
+              :prompt "tag"
+              :ask-target (lambda () (read-string "Tags (comma separated): "))
+              :show-target (lambda (target) target)
+              :action #'zetta-nano-mu4e--retag-absolute))
+
   ;; Keys: C-j/C-k for message motion; C-l unbound so it falls through
   ;; to the global recenter-top-bottom; vim-style "g r" reruns the
   ;; search (making g a prefix displaces the map's g =

@@ -56,6 +56,16 @@
         (mu4e-search-rerun))
       (message "nano-mu4e display %s" (if enable "enabled" "disabled"))))
 
+  ;; Keys: C-j/C-k for message motion; C-l unbound so it falls through
+  ;; to the global recenter-top-bottom; vim-style "g r" reruns the
+  ;; search (making g a prefix displaces the map's g =
+  ;; nano-mu4e-edit-tags-root; G still edits tags at point).
+  (define-key nano-mu4e-mode-map (kbd "C-j") #'nano-mu4e-next-msg)
+  (define-key nano-mu4e-mode-map (kbd "C-k") #'nano-mu4e-prev-msg)
+  (define-key nano-mu4e-mode-map (kbd "C-l") nil)
+  (define-key nano-mu4e-mode-map (kbd "g") nil)
+  (define-key nano-mu4e-mode-map (kbd "g r") #'nano-mu4e-rerun)
+
   ;; Let mu4e's and nano-mu4e's own keys through the modal layers.
   ;; Both meow-normal and evil-normal sit in emulation-mode-map-alists
   ;; above nano-mu4e's minor-mode map: meow suppresses unbound

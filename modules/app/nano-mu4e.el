@@ -65,6 +65,13 @@
   (define-key nano-mu4e-mode-map (kbd "C-l") nil)
   (define-key nano-mu4e-mode-map (kbd "g") nil)
   (define-key nano-mu4e-mode-map (kbd "g r") #'nano-mu4e-rerun)
+  ;; Leave ":" (ex) and "G" (bottom) to evil; tag editing moves under
+  ;; the g prefix, and gg is restored inside it.
+  (define-key nano-mu4e-mode-map (kbd ":") nil)
+  (define-key nano-mu4e-mode-map (kbd "G") nil)
+  (define-key nano-mu4e-mode-map (kbd "g g") #'beginning-of-buffer)
+  (define-key nano-mu4e-mode-map (kbd "g t") #'nano-mu4e-edit-tags-root)
+  (define-key nano-mu4e-mode-map (kbd "g T") #'nano-mu4e-edit-tags)
 
   ;; Let mu4e's and nano-mu4e's own keys through the modal layers.
   ;; Both meow-normal and evil-normal sit in emulation-mode-map-alists
@@ -75,8 +82,16 @@
   (with-eval-after-load 'meow
     (dolist (mode '(mu4e-main-mode mu4e-headers-mode mu4e-view-mode))
       (add-to-list 'meow-mode-state-list (cons mode 'motion))))
+  ;; Headers: evil NORMAL state with nano-mu4e's map overriding it
+  ;; (evil-collection-style) — nano keys (TAB, g r, n/p, x, t...) win,
+  ;; everything else stays evil (j/k, "," leader, /-search, gg/G, :).
+  ;; Main and view keep emacs state: they're menu/reading buffers whose
+  ;; single-letter mu4e keys (s, r, f, q...) evil normal would eat.
   (with-eval-after-load 'evil
-    (dolist (mode '(mu4e-main-mode mu4e-headers-mode mu4e-view-mode))
+    (evil-set-initial-state 'mu4e-headers-mode 'normal)
+    (evil-make-overriding-map nano-mu4e-mode-map 'normal)
+    (add-hook 'nano-mu4e-mode-hook #'evil-normalize-keymaps)
+    (dolist (mode '(mu4e-main-mode mu4e-view-mode))
       (evil-set-initial-state mode 'emacs)))
 
   ;; Re-apply brushup styles now that the faces below exist.

@@ -30,6 +30,40 @@
   ;; notifications or list mail.
   (setq nano-mu4e-msg-preview t
         nano-mu4e-msg-preview-func #'nano-mu4e-msg-preview-p)
+
+  ;; Upstream bug: `nano-mu4e-msg-preview' binds charset inside its
+  ;; when-let*, so a MIME part with no explicit charset= parameter
+  ;; (RFC-legal, defaults to us-ascii) nils the chain and the preview
+  ;; silently disappears.  Corrected copy; drop when fixed upstream.
+  (defun zetta-nano-mu4e--msg-preview (&optional msg size)
+    "Extract a short preview from MSG, limiting it to SIZE characters."
+    (let* ((msg (or msg (mu4e-message-at-point)))
+           (size (or size 256))
+           (filename (mu4e-message-readable-path msg)))
+      (with-temp-buffer
+        (insert-file-contents-literally filename)
+        (let* ((handles (mm-dissect-buffer t)))
+          (unwind-protect
+              (when-let* ((handle (if (bufferp (car handles))
+                                      handles
+                                    (or (mm-find-part-by-type (cdr handles) "text/plain" nil t)
+                                        (mm-find-part-by-type (cdr handles) "text/html" nil t))))
+                          (media-type (mm-handle-media-type handle))
+                          (content (mm-get-part handle)))
+                (let ((charset (or (mail-content-type-get (mm-handle-type handle) 'charset)
+                                   'us-ascii)))
+                  (cond ((string= media-type "text/plain")
+                         (with-temp-buffer
+                           (insert (mm-decode-string content charset))
+                           (nano-mu4e-preview--process size)))
+                        ((string= media-type "text/html")
+                         (with-temp-buffer
+                           (insert (mm-decode-string content charset))
+                           (shr-render-region (point-min) (point-max))
+                           (nano-mu4e-preview--process size)))
+                        (t "No message body found"))))
+            (mm-destroy-parts handles))))))
+  (advice-add 'nano-mu4e-msg-preview :override #'zetta-nano-mu4e--msg-preview)
   :init
   (defvar zetta-nano-mu4e--fontset-done nil)
   (defun zetta-nano-mu4e--fontset (&optional frame)

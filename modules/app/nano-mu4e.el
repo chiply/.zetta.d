@@ -25,11 +25,11 @@
   :after mu4e
   :hook (mu4e-headers-mode . nano-mu4e-mode)
   :config
-  ;; Body excerpts under messages in the headers view.  The stock
-  ;; predicate previews only NEW messages that aren't github
-  ;; notifications or list mail.
+  ;; Body excerpts under messages in the headers view, for ALL new
+  ;; messages (the stock predicate `nano-mu4e-msg-preview-p' would
+  ;; exclude github notifications and list mail).
   (setq nano-mu4e-msg-preview t
-        nano-mu4e-msg-preview-func #'nano-mu4e-msg-preview-p)
+        nano-mu4e-msg-preview-func #'nano-mu4e-msg-is-new)
 
   ;; Upstream bug: `nano-mu4e-msg-preview' binds charset inside its
   ;; when-let*, so a MIME part with no explicit charset= parameter

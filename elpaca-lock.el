@@ -2561,6 +2561,12 @@
                          mw-thesaurus :type git :protocol https
                          :inherit t :depth treeless :ref
                          "c44d793595c2d0f6789621da457da065920968ac"))
+ (nano-mu4e :source "elpaca-menu-lock-file" :recipe
+            (:source "elpaca-menu-lock-file" :package "nano-mu4e"
+                     :id nano-mu4e :host github :repo
+                     "rougier/nano-mu4e" :type git :protocol https
+                     :inherit t :depth treeless :ref
+                     "068086f5cc633595130b273647dda13d5f158973"))
  (nano-theme :source "elpaca-menu-lock-file" :recipe
              (:package "nano-theme" :repo
                        ("https://github.com/rougier/nano-theme"

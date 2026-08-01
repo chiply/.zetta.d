@@ -56,6 +56,19 @@
         (mu4e-search-rerun))
       (message "nano-mu4e display %s" (if enable "enabled" "disabled"))))
 
+  ;; Let mu4e's and nano-mu4e's own keys through the modal layers.
+  ;; Both meow-normal and evil-normal sit in emulation-mode-map-alists
+  ;; above nano-mu4e's minor-mode map: meow suppresses unbound
+  ;; printables (P/U/g...) and evil normal binds TAB (evil-jump-forward)
+  ;; among others.  meow motion reserves only j/k/SPC; evil emacs state
+  ;; reserves nothing.  The "," launch-map is bound in motion state.
+  (with-eval-after-load 'meow
+    (dolist (mode '(mu4e-main-mode mu4e-headers-mode mu4e-view-mode))
+      (add-to-list 'meow-mode-state-list (cons mode 'motion))))
+  (with-eval-after-load 'evil
+    (dolist (mode '(mu4e-main-mode mu4e-headers-mode mu4e-view-mode))
+      (evil-set-initial-state mode 'emacs)))
+
   ;; Re-apply brushup styles now that the faces below exist.
   (when (fboundp 'brushup) (brushup))
 

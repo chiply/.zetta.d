@@ -117,6 +117,44 @@ Builds the same string as elfeed's own store function: link
     (when (equal major-mode 'elfeed-show-mode)
       (my-org-remark-elfeed-link-string)))
 
+  ;; mu4e support
+  (defun my-org-remark-mu4e-link-string ()
+    "Org bracket link for the viewed mu4e message, without `org-store-link'.
+Message-ids are stable across re-syncs (unlike maildir paths, which
+Gmail moves around), so they make a durable source identity."
+    (let ((msg (mu4e-message-at-point)))
+      (org-link-make-string
+       (concat "mu4e:msgid:" (plist-get msg :message-id))
+       (or (plist-get msg :subject) "No subject"))))
+
+  (define-minor-mode org-remark-mu4e-mode
+    "Enable Org-remark to work with mu4e's article view."
+    :global t
+    :group 'org-remark-mu4e
+    (if org-remark-mu4e-mode
+        ;; Enable
+        (progn
+          (add-hook 'mu4e-view-rendered-hook #'org-remark-auto-on)
+          (add-hook 'org-remark-source-find-file-name-functions
+                    #'org-remark-mu4e-find-file-name)
+          (add-hook 'org-remark-highlight-link-to-source-functions
+                    #'org-remark-mu4e-highlight-link-to-source))
+      ;; Disable
+      (remove-hook 'mu4e-view-rendered-hook #'org-remark-auto-on)
+      (remove-hook 'org-remark-source-find-file-name-functions
+                   #'org-remark-mu4e-find-file-name)
+      (remove-hook 'org-remark-highlight-link-to-source-functions
+                   #'org-remark-mu4e-highlight-link-to-source)))
+
+  (defun org-remark-mu4e-find-file-name ()
+    (when (equal major-mode 'mu4e-view-mode)
+      (my-org-remark-transform-org-link-to-filename
+       (my-org-remark-mu4e-link-string))))
+
+  (defun org-remark-mu4e-highlight-link-to-source (_filename _point)
+    (when (equal major-mode 'mu4e-view-mode)
+      (my-org-remark-mu4e-link-string)))
+
   ;; Notes land in the synced kb tree, mirroring the readwise layout
   ;; (<source>/<middle-dimension>/<title-slug>.org) where it makes sense.
   (defvar my-org-remark-directory (expand-file-name "~/kb/org-remark/")
@@ -144,6 +182,16 @@ Builds the same string as elfeed's own store function: link
 
   (defun my-org-remark-notes-file-name ()
     (cond
+     ;; mu4e: sender domain is the middle dimension
+     ((eq major-mode 'mu4e-view-mode)
+      (let* ((msg (mu4e-message-at-point))
+             (from (mu4e-contact-email (car (mu4e-message-field msg :from))))
+             (domain (or (cadr (split-string (or from "") "@")) "unknown")))
+        (expand-file-name
+         (concat "mail/" domain "/"
+                 (my-org-remark-slugify (mu4e-message-field msg :subject))
+                 ".org")
+         my-org-remark-directory)))
      ;; Elfeed: feed domain is the middle dimension
      ((eq major-mode 'elfeed-show-mode)
       (let* ((id (elfeed-entry-id elfeed-show-entry))
@@ -201,6 +249,7 @@ Builds the same string as elfeed's own store function: link
   (org-remark-wombag-mode)
   (org-remark-elfeed-mode)
   (org-remark-pubmed-mode)
+  (org-remark-mu4e-mode)
   (use-package org-remark-info :ensure nil :after info
     :config (org-remark-info-mode +1))
   (use-package org-remark-eww  :ensure nil :after eww

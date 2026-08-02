@@ -382,12 +382,21 @@ Set this in ~/.private.el before modules load.")
 ;;; org-capture configuration (deferred until org loads)
 (with-eval-after-load 'org
   (require 'org-capture)
+  ;; mu4e-org (ships with mu4e's site-lisp) registers mu4e: org links so
+  ;; %a from a mu4e buffer captures a link back to the message.
+  (when (locate-library "mu4e-org")
+    (require 'mu4e-org))
   (setq org-capture-templates
         (append
          '(("o" "Simple capture"
             entry
             (file "~/kb/inbox.org")
             "* %?\n%a"
+            :prepend t)
+           ("m" "Mail (capture message link)"
+            entry
+            (file "~/kb/inbox.org")
+            "* TODO %:fromname: %:subject\n%a\n%?"
             :prepend t))
          (zetta-logseq-generate-capture-templates)))
   (zetta-logseq-update-agenda-files))

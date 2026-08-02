@@ -112,7 +112,7 @@
     (evil-set-initial-state 'mu4e-view-mode 'normal)
     (evil-make-overriding-map mu4e-view-mode-map 'normal)
     (add-hook 'mu4e-view-mode-hook #'evil-normalize-keymaps)
-    (evil-set-initial-state 'mu4e-main-mode 'emacs)))
+    (evil-set-initial-state 'mu4e-main-mode 'emacs))
 
   ;; Re-apply brushup styles now that the faces below exist.
   (when (fboundp 'brushup) (brushup))

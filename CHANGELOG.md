@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/chiply/.zetta.d/compare/v0.2.1...v0.2.2) (2026-08-02)
+
+
+### Features
+
+* **config:** mail modules — nano-mu4e, org-msg, mu4e-dashboard ([#132](https://github.com/chiply/.zetta.d/issues/132)) ([97e5e2b](https://github.com/chiply/.zetta.d/commit/97e5e2b5e75fda1ffd02e6355da7757fc69a2693))
+
 ## [0.2.1](https://github.com/chiply/.zetta.d/compare/v0.2.0...v0.2.1) (2026-07-26)
 
 

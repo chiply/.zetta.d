@@ -145,6 +145,20 @@ web/script apps must authenticate token requests as
   (advice-add 'md4rd--fetch-sub :override #'zetta-md4rd--fetch-sub)
   (advice-add 'md4rd--fetch-comments :override #'zetta-md4rd--fetch-comments)
 
+  ;; Votes and replies hit oauth.reddit.com with the raw access token
+  ;; and :complete nil, so a stale token means a silent 401.  Keep it
+  ;; fresh for writes too.
+  (advice-add 'md4rd--post-vote :before
+              (lambda (&rest _) (zetta-md4rd--ensure-token)))
+  (advice-add 'md4rd--post-reply :before
+              (lambda (&rest _) (zetta-md4rd--ensure-token)))
+
+  ;; md4rd-mode is a hand-rolled mode: no after-change-major-mode-hook
+  ;; (so global-tab-line-mode never fires) and kill-all-local-variables
+  ;; on every render (so a manually enabled tab-line vanishes).  The
+  ;; mode hook does run each render — re-enable it there.
+  (add-hook 'md4rd-mode-hook #'tab-line-mode)
+
   ;; needed to use this to set things up https://not-an-aardvark.github.io/reddit-oauth-helper/
   (setq
    md4rd-subs-active

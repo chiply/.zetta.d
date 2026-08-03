@@ -78,6 +78,10 @@
   (define-key nano-mu4e-mode-map (kbd ":") nil)
   (define-key nano-mu4e-mode-map (kbd "G") nil)
   (define-key nano-mu4e-mode-map (kbd "g g") #'beginning-of-buffer)
+  ;; "r" marks for read.  mu4e's stock r (refile) is already eaten by
+  ;; evil normal here, and nano-mu4e leaves r unbound, so nothing
+  ;; useful is displaced; "!" still works too.
+  (define-key nano-mu4e-mode-map (kbd "r") #'mu4e-headers-mark-for-read)
 
   ;; Let mu4e's and nano-mu4e's own keys through the modal layers.
   ;; Both meow-normal and evil-normal sit in emulation-mode-map-alists
@@ -136,8 +140,12 @@
                                         (mm-find-part-by-type (cdr handles) "text/html" nil t))))
                           (media-type (mm-handle-media-type handle))
                           (content (mm-get-part handle)))
+                ;; utf-8, not the RFC 2046 default us-ascii: ASCII is a
+                ;; subset of UTF-8 so conforming parts decode the same,
+                ;; and undeclared-UTF-8 senders render correctly (matches
+                ;; the upstream PR after Rougier's review).
                 (let ((charset (or (mail-content-type-get (mm-handle-type handle) 'charset)
-                                   'us-ascii)))
+                                   'utf-8)))
                   (cond ((string= media-type "text/plain")
                          (with-temp-buffer
                            (insert (mm-decode-string content charset))

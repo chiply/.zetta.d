@@ -159,6 +159,12 @@ web/script apps must authenticate token requests as
   ;; mode hook does run each render — re-enable it there.
   (add-hook 'md4rd-mode-hook #'tab-line-mode)
 
+  ;; Tree-widget's GUI image theme (diamond icons, line bitmaps) looks
+  ;; wrong here; use its plain-text fallback (the emacs -nw look)
+  ;; everywhere.  Global, but md4rd/hierarchy are the only tree-widget
+  ;; consumers in this config.
+  (setq tree-widget-image-enable nil)
+
   ;; needed to use this to set things up https://not-an-aardvark.github.io/reddit-oauth-helper/
   (setq
    md4rd-subs-active

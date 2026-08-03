@@ -393,10 +393,13 @@ Set this in ~/.private.el before modules load.")
             (file "~/kb/inbox.org")
             "* %?\n%a"
             :prepend t)
+           ;; Mail TODOs land in the email todo file (agenda-visible via
+           ;; the (todo)-file scan), not the general inbox.  CREATED
+           ;; drawer matches the generated todo-file templates.
            ("m" "Mail (capture message link)"
             entry
-            (file "~/kb/inbox.org")
-            "* TODO %:fromname: %:subject\n%a\n%?"
+            (file "~/kb/todo/(todo) email.org")
+            "* TODO %:fromname: %:subject\n:PROPERTIES:\n:CREATED: %U\n:END:\n%a\n%?"
             :prepend t))
          (zetta-logseq-generate-capture-templates)))
   (zetta-logseq-update-agenda-files))

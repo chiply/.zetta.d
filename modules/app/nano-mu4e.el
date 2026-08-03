@@ -44,6 +44,27 @@
   (setq mu4e-thread--fold-status t)
   (advice-add 'nano-mu4e-found-handler :after #'zetta-nano-mu4e--fold-all)
 
+  ;; Keep conversation forks visible.  Upstream's nano-mu4e-thread-prefix
+  ;; blanks every tree glyph except the connection bar, flattening a
+  ;; thread to a plain sequence (depth-first order still groups each
+  ;; branch, but siblings are indistinguishable).  Restore minimal
+  ;; child/last-child glyphs; plain box-drawing only — Terminus has no
+  ;; arc glyphs.  Both cons cells identical so fancy-chars is moot.
+  (defun zetta-nano-mu4e-thread-prefix (msg)
+    "Thread prefix with fork structure (├/└) kept visible."
+    (let* ((meta (plist-get msg :meta))
+           (mu4e-headers-thread-root-prefix          '(""   . ""))
+           (mu4e-headers-thread-first-child-prefix   '(" ├" . " ├"))
+           (mu4e-headers-thread-child-prefix         '(" ├" . " ├"))
+           (mu4e-headers-thread-last-child-prefix    '(" └" . " └"))
+           (mu4e-headers-thread-connection-prefix    '(" │" . " │"))
+           (mu4e-headers-thread-blank-prefix         '("  " . "  "))
+           (mu4e-headers-thread-orphan-prefix        '(""   . ""))
+           (mu4e-headers-thread-single-orphan-prefix '(""   . ""))
+           (mu4e-headers-thread-duplicate-prefix     '(""   . "")))
+      (mu4e~headers-thread-prefix meta)))
+  (advice-add 'nano-mu4e-thread-prefix :override #'zetta-nano-mu4e-thread-prefix)
+
   (defun zetta-nano-mu4e-toggle ()
     "Toggle between the nano-mu4e and stock mu4e headers display."
     (interactive)

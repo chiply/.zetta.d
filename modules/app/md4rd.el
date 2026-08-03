@@ -68,6 +68,13 @@ URL should be a Reddit permalink or comments URL."
   (defvar zetta-md4rd-user-agent "emacs:md4rd:0.3.1 (personal reader)"
     "Descriptive User-Agent, per Reddit API rules.")
 
+  (defvar zetta-md4rd-client-secret nil
+    "Reddit app client secret, or nil for secretless installed apps.
+md4rd assumes an installed app (Basic auth = \"client_id:\"), but
+web/script apps must authenticate token requests as
+\"client_id:secret\" — without it Reddit returns 401.  Set from
+1Password in ~/.private.el.")
+
   (defvar zetta-md4rd--token-refreshed-at 0
     "`float-time' of the last successful access-token refresh.")
 
@@ -81,7 +88,9 @@ URL should be a Reddit permalink or comments URL."
               ("User-Agent" . ,zetta-md4rd-user-agent)
               ("Authorization" . ,(concat "Basic "
                                           (base64-encode-string
-                                           (format "%s:" md4rd--oauth-client-id) t)))))
+                                           (format "%s:%s" md4rd--oauth-client-id
+                                                   (or zetta-md4rd-client-secret ""))
+                                           t)))))
            (buf (ignore-errors
                   (url-retrieve-synchronously
                    "https://www.reddit.com/api/v1/access_token" t nil 10))))

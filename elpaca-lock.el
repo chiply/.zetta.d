@@ -3039,6 +3039,19 @@
                        :type git :protocol https :inherit t :depth
                        treeless :ref
                        "482789397c5e11dbb95438c87ccd0cad3d37a33a"))
+ (promise :source "elpaca-menu-lock-file" :recipe
+          (:package "promise" :repo "chuntaro/emacs-promise" :fetcher
+                    github :files
+                    ("*.el" "*.el.in" "dir" "*.info" "*.texi"
+                     "*.texinfo" "doc/dir" "doc/*.info" "doc/*.texi"
+                     "doc/*.texinfo" "lisp/*.el" "docs/dir"
+                     "docs/*.info" "docs/*.texi" "docs/*.texinfo"
+                     (:exclude ".dir-locals.el" "test.el" "tests.el"
+                               "*-test.el" "*-tests.el" "LICENSE"
+                               "README*" "*-pkg.el"))
+                    :source "MELPA" :id promise :type git :protocol
+                    https :inherit t :depth treeless :ref
+                    "cec51feb5f957e8febe6325335cf57dc2db6be30"))
  (pubmed :source "elpaca-menu-lock-file" :recipe
          (:package "pubmed" :fetcher gitlab :repo
                    "fvdbeek/emacs-pubmed" :files
@@ -3138,6 +3151,19 @@
                                 :protocol https :inherit t :depth
                                 treeless :ref
                                 "4805275937585102aba0047169f047032201c5b9"))
+ (reddigg :source "elpaca-menu-lock-file" :recipe
+          (:package "reddigg" :fetcher github :repo
+                    "thanhvg/emacs-reddigg" :files
+                    ("*.el" "*.el.in" "dir" "*.info" "*.texi"
+                     "*.texinfo" "doc/dir" "doc/*.info" "doc/*.texi"
+                     "doc/*.texinfo" "lisp/*.el" "docs/dir"
+                     "docs/*.info" "docs/*.texi" "docs/*.texinfo"
+                     (:exclude ".dir-locals.el" "test.el" "tests.el"
+                               "*-test.el" "*-tests.el" "LICENSE"
+                               "README*" "*-pkg.el"))
+                    :source "MELPA" :id reddigg :host github :type git
+                    :protocol https :inherit t :depth treeless :ref
+                    "4d22e06a6e2523fe6d83c0280847d3bde19fabb5"))
  (repeatable :source "elpaca-menu-lock-file" :recipe
              (:source "elpaca-menu-lock-file" :package "repeatable"
                       :id repeatable :host github :repo

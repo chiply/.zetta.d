@@ -7,6 +7,7 @@ WALLABAG_CLIENT_SECRET={{ op://Dev/Wallabag/client-secret }}
 MINIFLUX_PASSWORD={{ op://Dev/Miniflux/password }}
 POSTGRESQL_LOCAL_PASSWORD={{ op://Dev/PostgreSQL-Local/password }}
 REDDIT_CLIENT_ID={{ op://Dev/Reddit/client-id }}
+REDDIT_CLIENT_SECRET={{ op://Dev/Reddit/client-secret }}
 REDDIT_REFRESH_TOKEN={{ op://Dev/Reddit/refresh-token }}
 REDDIT_ACCESS_TOKEN={{ op://Dev/Reddit/access-token }}
 PUBMED_API_KEY={{ op://Dev/PubMed/api-key }}

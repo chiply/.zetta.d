@@ -187,10 +187,15 @@ Exits evil visual state afterwards so the marks are visible."
   ;; (RFC-legal, defaults to us-ascii) nils the chain and the preview
   ;; silently disappears.  Corrected copy; drop when fixed upstream.
   (defun zetta-nano-mu4e--msg-preview (&optional msg size)
-    "Extract a short preview from MSG, limiting it to SIZE characters."
-    (let* ((msg (or msg (mu4e-message-at-point)))
-           (size (or size 256))
-           (filename (mu4e-message-readable-path msg)))
+    "Extract a short preview from MSG, limiting it to SIZE characters.
+Returns nil when MSG's file is not readable: executing marks renames
+maildir files (read = new/ → cur/ + S flag) and nano-mu4e's delayed
+refresh re-renders from cached paths, so a signaling
+`mu4e-message-readable-path' would abort the refresh mid-render and
+leave the headers buffer half-drawn."
+    (when-let* ((msg (or msg (mu4e-message-at-point)))
+                (size (or size 256))
+                (filename (ignore-errors (mu4e-message-readable-path msg))))
       (with-temp-buffer
         (insert-file-contents-literally filename)
         (let* ((handles (mm-dissect-buffer t)))

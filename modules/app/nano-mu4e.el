@@ -136,6 +136,14 @@ Exits evil visual state afterwards so the marks are visible."
   ;; key.  Displaces the stock mu4e-view-mark-for-refile; refiling
   ;; still works from the headers view.
   (define-key mu4e-view-mode-map (kbd "r") #'mu4e-compose-reply)
+  ;; "e" always prompts for the save directory (stock needs C-u e;
+  ;; plain e dumps into mu4e-attachment-dir, which .private.el points
+  ;; at ~/Desktop — that stays the prompt's starting suggestion).
+  (defun zetta-mu4e-save-attachments-ask ()
+    "Save attachment(s), prompting for the target directory."
+    (interactive)
+    (mu4e-view-save-attachments t))
+  (define-key mu4e-view-mode-map (kbd "e") #'zetta-mu4e-save-attachments-ask)
 
   (with-eval-after-load 'evil
     (evil-set-initial-state 'mu4e-headers-mode 'normal)

@@ -116,10 +116,14 @@ web/script apps must authenticate token requests as
     `(("User-Agent" . ,zetta-md4rd-user-agent)
       ("Authorization" . ,(concat "bearer " md4rd--oauth-access-token))))
 
+  (defvar zetta-md4rd-listing-limit 100
+    "Posts to fetch per subreddit.  Reddit caps a single request at 100.")
+
   (defun zetta-md4rd--fetch-sub (sub)
     "Fetch SUB's hot listing via the authenticated API."
     (zetta-md4rd--ensure-token)
-    (request (format "https://oauth.reddit.com/r/%s/hot" sub)
+    (request (format "https://oauth.reddit.com/r/%s/hot?limit=%d"
+                     sub zetta-md4rd-listing-limit)
              :complete (cl-function
                         (lambda (&rest data &allow-other-keys)
                           (apply #'md4rd--fetch-sub-callback sub data)))

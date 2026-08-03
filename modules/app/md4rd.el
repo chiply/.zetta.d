@@ -54,6 +54,19 @@ URL should be a Reddit permalink or comments URL."
   (general-unbind :keymaps 'elfeed-show-mode-map "R")
   (general-define-key :keymaps 'elfeed-show-mode-map :states 'normal "R" 'md4rd-elfeed-show-reddit-comments)
 
+  ;; Same from the search listing, without opening the article first.
+  ;; Bound to gc in the elfeed-search hook (elfeed.el) — R there is
+  ;; already the incremental-update key.
+  (defun md4rd-elfeed-search-reddit-comments ()
+    "Show Reddit comments for the elfeed entry at point."
+    (interactive)
+    (if-let* ((entry (car (elfeed-search-selected)))
+              (url (elfeed-entry-link entry)))
+        (if (string-match-p "reddit\\.com" url)
+            (md4rd-load-comments-from-url url)
+          (message "Entry at point is not a Reddit URL"))
+      (message "No entry at point")))
+
   ;; --- OAuth reads --------------------------------------------------
   ;; Reddit 403-blocks the unauthenticated *.json endpoints md4rd uses
   ;; for ALL reads (any User-Agent; curl and url.el alike — verified

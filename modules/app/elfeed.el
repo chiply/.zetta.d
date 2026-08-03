@@ -187,6 +187,8 @@ minibuffer with something like `exit-minibuffer'."
             ;; changes for old entries (fever's API has no better way).
             (evil-local-set-key 'normal "R" #'elfeed-update)
             (evil-local-set-key 'normal "gR" #'elfeed-protocol-fever-reinit)
+            ;; md4rd comments for the reddit entry at point (md4rd.el)
+            (evil-local-set-key 'normal "gc" #'md4rd-elfeed-search-reddit-comments)
             (evil-local-set-key 'normal "tt" #'prot-elfeed-search-tag-filter)
             ;; quick filters
             (evil-local-set-key 'normal "fu" (my-elfeed-filter "@6-months-ago +unread"))

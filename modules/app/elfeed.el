@@ -705,4 +705,108 @@ reset, which permanently wedges background updates."
                  (run-with-timer zetta-elfeed-auto-update-interval
                                  zetta-elfeed-auto-update-interval
                                  #'zetta-elfeed--auto-update))))))
+
+;;; Miniflux feed sync — elfeed.org is the single source of truth.
+;;
+;; Feeds were maintained in two places: subscribe in the Miniflux GUI,
+;; then mirror into elfeed.org for tags.  Instead, edit elfeed.org
+;; only and push the diff to Miniflux over its REST API (the v1 API,
+;; not the Fever endpoint elfeed reads).  Additive by design: feeds
+;; missing from Miniflux are added; feeds Miniflux has but the org
+;; file doesn't are only REPORTED, never deleted.
+;;
+;; Needs `zetta-miniflux-api-key' (Miniflux Settings → API keys),
+;; served from 1Password in ~/.private.el.
+
+(defvar url-http-end-of-headers)
+(defvar url-http-response-status)
+
+(defvar zetta-miniflux-api-url "https://reader.miniflux.app/v1"
+  "Base URL of the Miniflux REST API.")
+
+(defvar zetta-miniflux-api-key nil
+  "Miniflux API key (Settings → API keys).  Set from 1Password.")
+
+(defun zetta-miniflux--request (method endpoint &optional payload)
+  "Make a synchronous Miniflux API METHOD request to ENDPOINT.
+PAYLOAD, when given, is JSON-encoded as the request body.  Return
+the parsed JSON response (alists/lists), or nil for empty bodies.
+Signal an error on non-2xx responses."
+  (unless zetta-miniflux-api-key
+    (user-error "zetta-miniflux-api-key is not set (op://Dev/Miniflux/api-key)"))
+  (let* ((url-request-method method)
+         (url-request-data
+          (and payload (encode-coding-string (json-encode payload) 'utf-8)))
+         (url-request-extra-headers
+          `(("X-Auth-Token" . ,zetta-miniflux-api-key)
+            ("Content-Type" . "application/json")))
+         (buf (url-retrieve-synchronously
+               (concat zetta-miniflux-api-url endpoint) t nil 30)))
+    (unless buf (error "Miniflux: no response from %s" endpoint))
+    (with-current-buffer buf
+      (unwind-protect
+          (progn
+            (goto-char url-http-end-of-headers)
+            (if (and (>= url-http-response-status 200)
+                     (< url-http-response-status 300))
+                (unless (eobp)
+                  (json-parse-buffer :object-type 'alist :array-type 'list))
+              (error "Miniflux %s %s → %d: %s" method endpoint
+                     url-http-response-status
+                     (buffer-substring-no-properties
+                      (point) (min (point-max) (+ (point) 200))))))
+        (kill-buffer buf)))))
+
+(defun zetta-elfeed-org-feed-urls ()
+  "Return the feed URLs from `rmh-elfeed-org-files'."
+  (let (urls)
+    (dolist (file rmh-elfeed-org-files)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (while (re-search-forward "\\[\\[\\(https?://[^]]+\\)\\]" nil t)
+          (push (match-string-no-properties 1) urls))))
+    (nreverse urls)))
+
+(defun zetta-elfeed-miniflux-sync (&optional dry-run)
+  "Add feeds from elfeed.org that Miniflux doesn't have; report the diff.
+With prefix argument DRY-RUN, only report.  Feeds present in
+Miniflux but absent from elfeed.org are listed for manual review —
+Miniflux may rewrite a feed URL after redirects, so an entry there
+can be a moved feed rather than one to delete."
+  (interactive "P")
+  (let* ((org-urls (zetta-elfeed-org-feed-urls))
+         (remote (zetta-miniflux--request "GET" "/feeds"))
+         (remote-urls (mapcar (lambda (f) (alist-get 'feed_url f)) remote))
+         (missing (cl-set-difference org-urls remote-urls :test #'equal))
+         (extra (cl-set-difference remote-urls org-urls :test #'equal))
+         (category-id (alist-get 'id (car (zetta-miniflux--request "GET" "/categories"))))
+         (added nil) (failed nil))
+    (unless dry-run
+      (dolist (url missing)
+        (condition-case err
+            (progn
+              (zetta-miniflux--request
+               "POST" "/feeds" `((feed_url . ,url) (category_id . ,category-id)))
+              (push url added))
+          (error (push (cons url (error-message-string err)) failed)))))
+    (with-current-buffer (get-buffer-create "*miniflux-sync*")
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (format "Miniflux sync %s— org: %d feeds, miniflux: %d feeds\n\n"
+                        (if dry-run "(dry run) " "") (length org-urls) (length remote-urls)))
+        (insert (format "* In elfeed.org, missing from Miniflux (%d)%s:\n"
+                        (length missing) (if dry-run "" " — added")))
+        (dolist (url missing) (insert "  " url "\n"))
+        (when failed
+          (insert (format "\n* FAILED to add (%d) — dead feed or bad URL:\n" (length failed)))
+          (dolist (f failed) (insert "  " (car f) "\n    " (cdr f) "\n")))
+        (insert (format "\n* In Miniflux, not in elfeed.org (%d) — review manually:\n"
+                        (length extra)))
+        (dolist (url extra) (insert "  " url "\n"))
+        (special-mode))
+      (display-buffer (current-buffer)))
+    (message "miniflux-sync: %d added, %d failed, %d only-remote%s"
+             (length added) (length failed) (length extra)
+             (if dry-run " (dry run — nothing written)" ""))))
 ;;; elfeed.el ends here

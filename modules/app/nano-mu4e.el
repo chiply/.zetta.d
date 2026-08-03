@@ -132,6 +132,10 @@ Exits evil visual state afterwards so the marks are visible."
   (define-key mu4e-view-mode-map (kbd "g g") #'beginning-of-buffer)
   (define-key mu4e-view-mode-map (kbd "g u") #'mu4e-view-go-to-url)
   (define-key mu4e-view-mode-map (kbd "g U") #'mu4e-view-save-url)
+  ;; "r" replies, matching r = mark-read in headers as the "obvious"
+  ;; key.  Displaces the stock mu4e-view-mark-for-refile; refiling
+  ;; still works from the headers view.
+  (define-key mu4e-view-mode-map (kbd "r") #'mu4e-compose-reply)
 
   (with-eval-after-load 'evil
     (evil-set-initial-state 'mu4e-headers-mode 'normal)

@@ -145,10 +145,14 @@ web/script apps must authenticate token requests as
              :headers (zetta-md4rd--oauth-headers)))
 
   (defun zetta-md4rd--fetch-comments (comment-url)
-    "Fetch COMMENT-URL via the authenticated API."
+    "Fetch COMMENT-URL via the authenticated API.
+Any reddit host variant is rewritten — elfeed entries arriving via
+the Fever backend link to old.reddit.com, which the stock
+convert-to-json-url helper passes through unchanged."
     (zetta-md4rd--ensure-token)
     (request (replace-regexp-in-string
-              "\\`https?://\\(www\\.\\)?reddit\\.com" "https://oauth.reddit.com"
+              "\\`https?://\\(?:old\\.\\|www\\.\\|api\\.\\|m\\.\\)?reddit\\.com"
+              "https://oauth.reddit.com"
               comment-url)
              :complete #'md4rd--fetch-comments-callback
              :sync nil

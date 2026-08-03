@@ -186,10 +186,52 @@ Exits evil visual state afterwards so the marks are visible."
   ;; Previews are recomputed synchronously on EVERY render upstream —
   ;; measured 29s of a 29.3s render for the 16k-unread inbox (~1500
   ;; lines with include-related, all "new" so all previewed, digests
-  ;; through shr).  Bodies are immutable, so cache by docid: repeat
-  ;; renders (mark-refreshes, reruns, fold toggles) become free.
-  (defvar zetta-nano-mu4e--preview-cache (make-hash-table :test 'eql)
-    "Message docid → preview string.")
+  ;; through shr).  Bodies are immutable, so cache them — keyed by
+  ;; message-id, which survives reindexing (docids renumber) — and
+  ;; persist the cache across sessions so only genuinely new mail
+  ;; pays the extraction cost.
+  (require 'dom)
+
+  (defvar zetta-nano-mu4e--preview-cache (make-hash-table :test 'equal)
+    "Message-id → preview string.")
+
+  (defvar zetta-nano-mu4e--preview-cache-file
+    (expand-file-name "nano-mu4e-preview-cache.eld" user-emacs-directory)
+    "Persisted preview cache (gitignored).")
+
+  (defvar zetta-nano-mu4e--preview-cache-dirty nil)
+
+  (defun zetta-nano-mu4e--preview-cache-load ()
+    "Merge the persisted preview cache into the in-memory table."
+    (when (file-readable-p zetta-nano-mu4e--preview-cache-file)
+      (ignore-errors
+        (with-temp-buffer
+          (insert-file-contents zetta-nano-mu4e--preview-cache-file)
+          (dolist (pair (read (current-buffer)))
+            (puthash (car pair) (cdr pair) zetta-nano-mu4e--preview-cache))))))
+
+  (defun zetta-nano-mu4e--preview-cache-save ()
+    "Write the preview cache to disk when it has new entries."
+    (when zetta-nano-mu4e--preview-cache-dirty
+      (setq zetta-nano-mu4e--preview-cache-dirty nil)
+      (ignore-errors
+        (with-temp-file zetta-nano-mu4e--preview-cache-file
+          (let ((print-length nil) (print-level nil) (pairs nil))
+            (maphash (lambda (k v) (push (cons k v) pairs))
+                     zetta-nano-mu4e--preview-cache)
+            (prin1 pairs (current-buffer)))))))
+
+  (zetta-nano-mu4e--preview-cache-load)
+  (add-hook 'kill-emacs-hook #'zetta-nano-mu4e--preview-cache-save)
+  (run-with-idle-timer 120 t #'zetta-nano-mu4e--preview-cache-save)
+
+  (defun zetta-nano-mu4e--dom-text (node)
+    "Text content of NODE, skipping style/script/head/title subtrees.
+`dom-texts' would include CSS from marketing mail's <style> blocks."
+    (cond
+     ((stringp node) node)
+     ((memq (dom-tag node) '(style script head title comment)) "")
+     (t (mapconcat #'zetta-nano-mu4e--dom-text (dom-children node) " "))))
 
   (defun zetta-nano-mu4e--msg-preview (&optional msg size)
     "Extract a short preview from MSG, limiting it to SIZE characters.
@@ -199,8 +241,8 @@ refresh re-renders from cached paths, so a signaling
 `mu4e-message-readable-path' would abort the refresh mid-render and
 leave the headers buffer half-drawn."
     (let* ((msg (or msg (mu4e-message-at-point)))
-           (docid (and msg (plist-get msg :docid))))
-      (or (and docid (gethash docid zetta-nano-mu4e--preview-cache))
+           (msgid (and msg (plist-get msg :message-id))))
+      (or (and msgid (gethash msgid zetta-nano-mu4e--preview-cache))
           (when-let* ((msg msg)
                       (size (or size 256))
                       (filename (ignore-errors (mu4e-message-readable-path msg))))
@@ -231,14 +273,24 @@ leave the headers buffer half-drawn."
                                      ((string= media-type "text/html")
                                       (with-temp-buffer
                                         (insert (mm-decode-string content charset))
-                                        ;; text output only — image work is waste
-                                        (let ((shr-inhibit-images t))
-                                          (shr-render-region (point-min) (point-max)))
+                                        ;; libxml (native C) + text walk beats
+                                        ;; shr's full layout pass by ~an order
+                                        ;; of magnitude; a 256-char excerpt
+                                        ;; doesn't need layout.
+                                        (if (fboundp 'libxml-parse-html-region)
+                                            (let ((dom (libxml-parse-html-region
+                                                        (point-min) (point-max))))
+                                              (erase-buffer)
+                                              (when dom
+                                                (insert (zetta-nano-mu4e--dom-text dom))))
+                                          (let ((shr-inhibit-images t))
+                                            (shr-render-region (point-min) (point-max))))
                                         (nano-mu4e-preview--process size)))
                                      (t "No message body found"))))
                          (mm-destroy-parts handles))))))
-              (when (and docid preview)
-                (puthash docid preview zetta-nano-mu4e--preview-cache))
+              (when (and msgid preview)
+                (puthash msgid preview zetta-nano-mu4e--preview-cache)
+                (setq zetta-nano-mu4e--preview-cache-dirty t))
               preview)))))
   (advice-add 'nano-mu4e-msg-preview :override #'zetta-nano-mu4e--msg-preview)
 

@@ -179,13 +179,18 @@ Exits evil visual state afterwards so the marks are visible."
     (add-hook 'mu4e-view-mode-hook #'evil-normalize-keymaps)
     (evil-set-initial-state 'mu4e-main-mode 'emacs))
 
-  ;; Re-apply brushup styles now that the faces below exist.
-  (when (fboundp 'brushup) (brushup))
-
   ;; Upstream bug: `nano-mu4e-msg-preview' binds charset inside its
   ;; when-let*, so a MIME part with no explicit charset= parameter
   ;; (RFC-legal, defaults to us-ascii) nils the chain and the preview
   ;; silently disappears.  Corrected copy; drop when fixed upstream.
+  ;; Previews are recomputed synchronously on EVERY render upstream —
+  ;; measured 29s of a 29.3s render for the 16k-unread inbox (~1500
+  ;; lines with include-related, all "new" so all previewed, digests
+  ;; through shr).  Bodies are immutable, so cache by docid: repeat
+  ;; renders (mark-refreshes, reruns, fold toggles) become free.
+  (defvar zetta-nano-mu4e--preview-cache (make-hash-table :test 'eql)
+    "Message docid → preview string.")
+
   (defun zetta-nano-mu4e--msg-preview (&optional msg size)
     "Extract a short preview from MSG, limiting it to SIZE characters.
 Returns nil when MSG's file is not readable: executing marks renames
@@ -193,36 +198,48 @@ maildir files (read = new/ → cur/ + S flag) and nano-mu4e's delayed
 refresh re-renders from cached paths, so a signaling
 `mu4e-message-readable-path' would abort the refresh mid-render and
 leave the headers buffer half-drawn."
-    (when-let* ((msg (or msg (mu4e-message-at-point)))
-                (size (or size 256))
-                (filename (ignore-errors (mu4e-message-readable-path msg))))
-      (with-temp-buffer
-        (insert-file-contents-literally filename)
-        (let* ((handles (mm-dissect-buffer t)))
-          (unwind-protect
-              (when-let* ((handle (if (bufferp (car handles))
-                                      handles
-                                    (or (mm-find-part-by-type (cdr handles) "text/plain" nil t)
-                                        (mm-find-part-by-type (cdr handles) "text/html" nil t))))
-                          (media-type (mm-handle-media-type handle))
-                          (content (mm-get-part handle)))
-                ;; utf-8, not the RFC 2046 default us-ascii: ASCII is a
-                ;; subset of UTF-8 so conforming parts decode the same,
-                ;; and undeclared-UTF-8 senders render correctly (matches
-                ;; the upstream PR after Rougier's review).
-                (let ((charset (or (mail-content-type-get (mm-handle-type handle) 'charset)
-                                   'utf-8)))
-                  (cond ((string= media-type "text/plain")
-                         (with-temp-buffer
-                           (insert (mm-decode-string content charset))
-                           (nano-mu4e-preview--process size)))
-                        ((string= media-type "text/html")
-                         (with-temp-buffer
-                           (insert (mm-decode-string content charset))
-                           (shr-render-region (point-min) (point-max))
-                           (nano-mu4e-preview--process size)))
-                        (t "No message body found"))))
-            (mm-destroy-parts handles))))))
+    (let* ((msg (or msg (mu4e-message-at-point)))
+           (docid (and msg (plist-get msg :docid))))
+      (or (and docid (gethash docid zetta-nano-mu4e--preview-cache))
+          (when-let* ((msg msg)
+                      (size (or size 256))
+                      (filename (ignore-errors (mu4e-message-readable-path msg))))
+            (when (> (hash-table-count zetta-nano-mu4e--preview-cache) 5000)
+              (clrhash zetta-nano-mu4e--preview-cache))
+            (let ((preview
+                   (with-temp-buffer
+                     (insert-file-contents-literally filename)
+                     (let* ((handles (mm-dissect-buffer t)))
+                       (unwind-protect
+                           (when-let* ((handle (if (bufferp (car handles))
+                                                   handles
+                                                 (or (mm-find-part-by-type (cdr handles) "text/plain" nil t)
+                                                     (mm-find-part-by-type (cdr handles) "text/html" nil t))))
+                                       (media-type (mm-handle-media-type handle))
+                                       (content (mm-get-part handle)))
+                             ;; utf-8, not the RFC 2046 default us-ascii:
+                             ;; ASCII is a subset of UTF-8 so conforming
+                             ;; parts decode the same, and undeclared-UTF-8
+                             ;; senders render correctly (matches the
+                             ;; upstream PR after Rougier's review).
+                             (let ((charset (or (mail-content-type-get (mm-handle-type handle) 'charset)
+                                                'utf-8)))
+                               (cond ((string= media-type "text/plain")
+                                      (with-temp-buffer
+                                        (insert (mm-decode-string content charset))
+                                        (nano-mu4e-preview--process size)))
+                                     ((string= media-type "text/html")
+                                      (with-temp-buffer
+                                        (insert (mm-decode-string content charset))
+                                        ;; text output only — image work is waste
+                                        (let ((shr-inhibit-images t))
+                                          (shr-render-region (point-min) (point-max)))
+                                        (nano-mu4e-preview--process size)))
+                                     (t "No message body found"))))
+                         (mm-destroy-parts handles))))))
+              (when (and docid preview)
+                (puthash docid preview zetta-nano-mu4e--preview-cache))
+              preview)))))
   (advice-add 'nano-mu4e-msg-preview :override #'zetta-nano-mu4e--msg-preview)
 
   :brushup
@@ -245,6 +262,12 @@ leave the headers buffer half-drawn."
                                       :inherit 'shadow :slant 'normal)
                   (set-face-attribute 'nano-mu4e-gutter-body nil :underline nil)
                   (set-face-attribute 'nano-mu4e-gutter-match nil :underline nil)))
+  ;; Re-apply NOW: the :brushup keyword is appended at the END of
+  ;; use-package-keywords, so this section runs after :config — a
+  ;; re-apply there fires before the form above is registered, and the
+  ;; faces (created by nano-mu4e loading, long after the theme was
+  ;; applied) stay at upstream defaults until the first theme toggle.
+  (when (fboundp 'brushup) (brushup))
   :init
   (defvar zetta-nano-mu4e--fontset-done nil)
   (defun zetta-nano-mu4e--fontset (&optional frame)

@@ -82,6 +82,30 @@
   ;; evil normal here, and nano-mu4e leaves r unbound, so nothing
   ;; useful is displaced; "!" still works too.
   (define-key nano-mu4e-mode-map (kbd "r") #'mu4e-headers-mark-for-read)
+  ;; RET opens the message.  Without this, RET reaches evil's evil-ret,
+  ;; which activates the button under point — usually the sender name,
+  ;; whose action is a from:<sender> search.  Mouse still clicks buttons.
+  (define-key nano-mu4e-mode-map (kbd "RET") #'mu4e-headers-view-message)
+
+  ;; Region marking: mu4e-mark-set's own region loop advances with
+  ;; mu4e-headers-next, which cannot step across nano-mu4e's
+  ;; multi-line boxes (it immediately reports no-more-messages), so it
+  ;; would only mark the first message.  Walk the msg text-property
+  ;; blocks instead — one contiguous block per message.
+  (defun zetta-nano-mu4e-visual-mark-read (beg end)
+    "Mark every message touched by the region BEG..END for read.
+Exits evil visual state afterwards so the marks are visible."
+    (interactive "r")
+    (deactivate-mark)
+    (save-excursion
+      (let ((pos beg))
+        (while (and pos (< pos end))
+          (when (get-text-property pos 'msg)
+            (goto-char pos)
+            (mu4e-mark-set 'read))
+          (setq pos (next-single-property-change pos 'msg nil end)))))
+    (when (and (fboundp 'evil-visual-state-p) (evil-visual-state-p))
+      (evil-exit-visual-state)))
 
   ;; Let mu4e's and nano-mu4e's own keys through the modal layers.
   ;; Both meow-normal and evil-normal sit in emulation-mode-map-alists
@@ -112,6 +136,10 @@
   (with-eval-after-load 'evil
     (evil-set-initial-state 'mu4e-headers-mode 'normal)
     (evil-make-overriding-map nano-mu4e-mode-map 'normal)
+    ;; The overriding map only covers normal state; in visual state r
+    ;; would fall back to evil-replace, so bind it there explicitly.
+    (evil-define-key 'visual nano-mu4e-mode-map
+      (kbd "r") #'zetta-nano-mu4e-visual-mark-read)
     (add-hook 'nano-mu4e-mode-hook #'evil-normalize-keymaps)
     (evil-set-initial-state 'mu4e-view-mode 'normal)
     (evil-make-overriding-map mu4e-view-mode-map 'normal)

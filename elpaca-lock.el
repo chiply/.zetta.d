@@ -334,8 +334,9 @@
                      (:exclude ".dir-locals.el" "test.el" "tests.el"
                                "*-test.el" "*-tests.el" "LICENSE"
                                "README*" "*-pkg.el"))
-                    :source "MELPA" :id bluesky :host github :type git
-                    :protocol https :inherit t :depth treeless :ref
+                    :source "elpaca-menu-lock-file" :id bluesky :host
+                    github :type git :protocol https :inherit t :depth
+                    treeless :ref
                     "b4b7957a3af0533918535486f44afcb808d38d24"))
  (bookmark+ :source "elpaca-menu-lock-file" :recipe
             (:source "elpaca-menu-lock-file" :package "bookmark+" :id
@@ -1399,6 +1400,13 @@
                               fancy-compilation :type git :protocol
                               https :inherit t :depth treeless :ref
                               "502d36e0fb4c4daedc16ea5d732dcbc8285d6fb1"))
+ (flamegraph :source "elpaca-menu-lock-file" :recipe
+             (:package "flamegraph" :repo "dgutov/emacs-flamegraph"
+                       :tar "0.2" :host github :files
+                       ("*" (:exclude ".git")) :source "NonGNU ELPA"
+                       :id flamegraph :type git :protocol https
+                       :inherit t :depth treeless :ref
+                       "4ce420f28663fc11a979c5b665db69d46471f6bc"))
  (flycheck :source "elpaca-menu-lock-file" :recipe
            (:package "flycheck" :repo "flycheck/flycheck" :fetcher
                      github :files
@@ -1493,9 +1501,9 @@
         (:package "futur" :repo
                   ("https://github.com/emacsmirror/gnu_elpa" . "futur")
                   :tar "1.7" :host gnu :branch "externals/futur"
-                  :files ("*" (:exclude ".git")) :source "GNU ELPA"
-                  :id futur :type git :protocol https :inherit t
-                  :depth treeless :ref
+                  :files ("*" (:exclude ".git")) :source
+                  "elpaca-menu-lock-file" :id futur :type git
+                  :protocol https :inherit t :depth treeless :ref
                   "71e45426889d6c9bf61ad906ddb999c1a7aa2b3f"))
  (gcmh :source "elpaca-menu-lock-file" :recipe
        (:package "gcmh" :repo "koral/gcmh" :fetcher gitlab :files
@@ -3864,8 +3872,8 @@
                  (:exclude ".dir-locals.el" "test.el" "tests.el"
                            "*-test.el" "*-tests.el" "LICENSE"
                            "README*" "*-pkg.el"))
-                :source "MELPA" :id vui :type git :protocol https
-                :inherit t :depth treeless :ref
+                :source "elpaca-menu-lock-file" :id vui :type git
+                :protocol https :inherit t :depth treeless :ref
                 "9101db52a29c4276b45f85e63924008f0e41c39c"))
  (web-mode :source "elpaca-menu-lock-file" :recipe
            (:package "web-mode" :repo "fxbois/web-mode" :fetcher

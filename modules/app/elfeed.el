@@ -809,4 +809,29 @@ can be a moved feed rather than one to delete."
     (message "miniflux-sync: %d added, %d failed, %d only-remote%s"
              (length added) (length failed) (length extra)
              (if dry-run " (dry run — nothing written)" ""))))
+
+;;; Org backlinks from elfeed — `org-store-link' (and so capture's %a)
+;; has no backend for elfeed buffers.  Store the entry's web URL with
+;; its title: portable https link, opens in the browser, survives the
+;; entry aging out of the elfeed db.
+(with-eval-after-load 'ol
+  (defun zetta-org-elfeed-store-link (&optional _interactive)
+    "Store the elfeed entry (shown, or at point in search) as an org link.
+Org 9.7+ calls :store functions with an INTERACTIVE? argument."
+    (when-let* ((entry (cond ((derived-mode-p 'elfeed-show-mode)
+                              (bound-and-true-p elfeed-show-entry))
+                             ((derived-mode-p 'elfeed-search-mode)
+                              (car (elfeed-search-selected)))))
+                (link (elfeed-entry-link entry)))
+      (org-link-store-props
+       :type "https"
+       :link link
+       :description (elfeed-entry-title entry))))
+  (org-link-set-parameters "elfeed-entry" :store #'zetta-org-elfeed-store-link)
+  ;; elfeed's own elfeed-link.el backend competes and wins: in search
+  ;; buffers it stores the FILTER (not the entry), and its elfeed: links
+  ;; die when entries age out of the db.  Drop its :store; keep :follow
+  ;; so existing elfeed: links still open.
+  (with-eval-after-load 'elfeed-link
+    (org-link-set-parameters "elfeed" :store nil)))
 ;;; elfeed.el ends here

@@ -95,6 +95,10 @@ TYPE is a character: ?a alphabetic, ?t timestamp, ?p priority, ?o TODO order."
         zetta-org-log-initial-schedule 'time
         org-outline-path-complete-in-steps nil
         org-refile-allow-creating-parent-nodes 'confirm
+        ;; Files themselves are refile targets (filed as top-level
+        ;; entries) — the flat (todo) files have no headings to file
+        ;; under, and the capture flow is inbox-first + refile-later.
+        org-refile-use-outline-path 'file
         org-refile-targets '((nil :maxlevel . 10)
                              (org-agenda-files :maxlevel . 10))
         org-src-window-setup 'plain
@@ -386,22 +390,31 @@ Set this in ~/.private.el before modules load.")
   ;; %a from a mu4e buffer captures a link back to the message.
   (when (locate-library "mu4e-org")
     (require 'mu4e-org))
+  ;; Two-gesture capture: notes land in the inbox (n, or N with an
+  ;; org backlink to wherever capture was invoked via %a); TODO-ing
+  ;; and routing happen later — C-c C-w in the capture buffer
+  ;; (org-capture-refile) files directly elsewhere when the target is
+  ;; already known.  The per-(todo)-file templates are retired: refile
+  ;; covers routing (org-refile-use-outline-path 'file makes the flat
+  ;; todo files themselves valid targets).  m stays as the mail
+  ;; specialization — the sender/subject prefill has no generic
+  ;; equivalent (%:fromname/%:subject only bind in mail buffers).
   (setq org-capture-templates
-        (append
-         '(("o" "Simple capture"
-            entry
-            (file "~/kb/inbox.org")
-            "* %?\n%a"
-            :prepend t)
-           ;; Mail TODOs land in the email todo file (agenda-visible via
-           ;; the (todo)-file scan), not the general inbox.  CREATED
-           ;; drawer matches the generated todo-file templates.
-           ("m" "Mail (capture message link)"
-            entry
-            (file "~/kb/todo/(todo) email.org")
-            "* TODO %:fromname: %:subject\n:PROPERTIES:\n:CREATED: %U\n:END:\n%a\n%?"
-            :prepend t))
-         (zetta-logseq-generate-capture-templates)))
+        '(("n" "Note"
+           entry
+           (file "~/kb/inbox.org")
+           "* %?\n:PROPERTIES:\n:CREATED: %U\n:END:\n"
+           :prepend t)
+          ("N" "Note (with backlink)"
+           entry
+           (file "~/kb/inbox.org")
+           "* %?\n:PROPERTIES:\n:CREATED: %U\n:END:\n%a\n"
+           :prepend t)
+          ("m" "Mail (capture message link)"
+           entry
+           (file "~/kb/todo/(todo) email.org")
+           "* TODO %:fromname: %:subject\n:PROPERTIES:\n:CREATED: %U\n:END:\n%a\n%?"
+           :prepend t)))
   (zetta-logseq-update-agenda-files))
 
 ;;; Log initial deadline/schedule creation

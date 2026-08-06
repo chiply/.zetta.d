@@ -182,6 +182,45 @@ convert-to-json-url helper passes through unchanged."
   ;; consumers in this config.
   (setq tree-widget-image-enable nil)
 
+  ;; Org backlinks (capture %a) from md4rd buffers.  The listing's
+  ;; widgets keep their post item in a closure, so match the post whose
+  ;; title appears on the current line; the comments buffer links its
+  ;; thread (the first listing in the cached response).  https links,
+  ;; like the elfeed backend.
+  (with-eval-after-load 'ol
+    (defun zetta-org-md4rd-store-link (&optional _interactive)
+      "Store the reddit post at point (listing) or the shown thread (comments)."
+      (when (derived-mode-p 'md4rd-mode)
+        (if (string= (buffer-name) "*subreddits*")
+            (let* ((line (buffer-substring-no-properties
+                          (line-beginning-position) (line-end-position)))
+                   (found nil))
+              (maphash
+               (lambda (_sub posts)
+                 (unless found
+                   (setq found
+                         (cl-find-if
+                          (lambda (p)
+                            (let ((title (alist-get 'title p)))
+                              (and title (> (length title) 0)
+                                   (string-search title line))))
+                          posts))))
+               md4rd--sub-composite)
+              (when found
+                (org-link-store-props
+                 :type "https"
+                 :link (concat "https://www.reddit.com" (alist-get 'permalink found))
+                 :description (alist-get 'title found))))
+          (when-let* ((post (ignore-errors
+                              (let-alist (alist-get 'data (elt md4rd--cache-comments 0))
+                                (alist-get 'data (elt .children 0)))))
+                      (permalink (alist-get 'permalink post)))
+            (org-link-store-props
+             :type "https"
+             :link (concat "https://www.reddit.com" permalink)
+             :description (alist-get 'title post))))))
+    (org-link-set-parameters "md4rd-post" :store #'zetta-org-md4rd-store-link))
+
   ;; needed to use this to set things up https://not-an-aardvark.github.io/reddit-oauth-helper/
   (setq
    md4rd-subs-active

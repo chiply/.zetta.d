@@ -79,9 +79,16 @@ value isn't an integer (`zetta-circle-number' returns nil in those cases)."
 ;; drops the wrapper.  Text properties (bold selected space) survive
 ;; the substring operations.
 (defun zetta-space-tree--plain-lighter (s)
-  "Remove the brace wrapper and trailing whitespace from lighter string S."
-  (string-trim-right
-   (string-remove-suffix "}" (string-remove-prefix "{ " s))))
+  "Remove the brace wrapper and trailing whitespace from lighter string S.
+Ends with a no-break space: the circled glyphs ink wider than their
+reported advance, and without right padding the last one clips at
+the frame edge (the brace used to absorb the overhang).  NBSP
+because it is not XML whitespace, so svg-line's SVG text cannot
+collapse it the way a plain trailing space would be."
+  (concat
+   (string-trim-right
+    (string-remove-suffix "}" (string-remove-prefix "{ " s)))
+   "\u00A0"))
 
 (with-eval-after-load 'space-tree
   (advice-add 'space-tree-modeline-lighter

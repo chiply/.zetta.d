@@ -76,6 +76,12 @@ argument FIT-WIDTH, fit to the window width."
       (user-error "No image link at point"))
     (zetta-image-pop-out-file file fit-width)))
 
+;; Wrap long lines instead of clipping them, mirroring the org-mode
+;; hook's (toggle-truncate-lines -1).  Covers gfm-mode too (derived).
+(defun zetta-markdown--no-truncate ()
+  (toggle-truncate-lines -1))
+(add-hook 'markdown-mode-hook #'zetta-markdown--no-truncate)
+
 ;; markdown-mode is installed by elpaca as a dependency of markdown-toc;
 ;; configure it once it loads rather than queueing a duplicate order.
 (with-eval-after-load 'markdown-mode

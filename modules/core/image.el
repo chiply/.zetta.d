@@ -62,20 +62,27 @@ to fit-height so it can be scrolled, a tall one to fit-width."
 (defun zetta-image--clean-display ()
   "Drop text-editing chrome in image buffers.
 Line numbers render a giant number beside the image, hl-line draws
-a stripe straight through it, and the cursor paints an
-image-height bar.  Evil re-stamps `cursor-type' on every state
-refresh — and resets it to the default when a spec is nil — so its
-buffer-local specs get a zero-height hbar (invisible) instead."
+a stripe straight through it, and any visible cursor paints ON the
+image — an hbar's width is the glyph's width, i.e. the whole image."
   (setq-local display-line-numbers nil)
   (setq-local global-hl-line-mode nil)
   (when (fboundp 'global-hl-line-unhighlight) (global-hl-line-unhighlight))
-  (setq-local cursor-type '(hbar . 0))
-  (dolist (v '(evil-normal-state-cursor evil-motion-state-cursor
-               evil-emacs-state-cursor evil-insert-state-cursor
-               evil-visual-state-cursor evil-operator-state-cursor))
-    (set (make-local-variable v) '((hbar . 0)))))
+  (setq-local cursor-type nil))
 (add-hook 'image-mode-hook #'zetta-image--clean-display)
 (add-hook 'doc-view-mode-hook #'zetta-image--clean-display)
+
+;; Evil and meow both re-stamp `cursor-type' on every state refresh,
+;; and both reset a nil spec to their state default — all their
+;; writes funnel through these two functions, so make them leave
+;; image-ish buffers alone and the nil above sticks.
+(defun zetta-image--suppress-cursor-stamp (&rest _)
+  (derived-mode-p 'image-mode 'doc-view-mode 'pdf-view-mode))
+(with-eval-after-load 'evil
+  (advice-add 'evil-refresh-cursor :before-until
+              #'zetta-image--suppress-cursor-stamp))
+(with-eval-after-load 'meow
+  (advice-add 'meow--set-cursor-type :before-until
+              #'zetta-image--suppress-cursor-stamp))
 
 ;; global-display-line-numbers-mode re-enables numbers AFTER mode
 ;; hooks run (global minor modes fire in after-change-major-mode-hook),

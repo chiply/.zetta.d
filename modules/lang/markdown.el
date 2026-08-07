@@ -82,11 +82,48 @@ argument FIT-WIDTH, fit to the window width."
   (toggle-truncate-lines -1))
 (add-hook 'markdown-mode-hook #'zetta-markdown--no-truncate)
 
+;; Follow GitHub-style intra-document anchor links ([text](#anchor)).
+;; For a bare "#fragment" URL, url-path-and-query returns an empty
+;; path, so markdown--browse-url's (> (length file) 0) check silently
+;; does nothing.  Jump to the heading whose GFM slug matches instead.
+(defun zetta-markdown--gfm-slug (text)
+  "GitHub-style anchor slug for heading TEXT.
+Downcase, strip everything but alphanumerics/spaces/hyphens,
+spaces become hyphens."
+  (let* ((s (downcase (string-trim text)))
+         (s (replace-regexp-in-string "[^[:alnum:][:space:]-]" "" s))
+         (s (replace-regexp-in-string "[[:space:]]+" "-" s)))
+    s))
+
+(defun zetta-markdown-goto-anchor (anchor)
+  "Jump to the heading matching ANCHOR (leading # optional).
+Pushes the mark so jumping back works."
+  (let ((target (if (string-prefix-p "#" anchor) (substring anchor 1) anchor))
+        (found nil))
+    (save-excursion
+      (goto-char (point-min))
+      (while (and (not found)
+                  (re-search-forward "^#+[ \t]+\\(.*\\)" nil t))
+        (when (string= target
+                       (zetta-markdown--gfm-slug (match-string-no-properties 1)))
+          (setq found (match-beginning 0)))))
+    (unless found (user-error "No heading matches anchor #%s" target))
+    (push-mark)
+    (goto-char found)))
+
+(defun zetta-markdown--browse-url-anchors (orig url)
+  "Handle in-document #fragment URLs before ORIG sees them."
+  (if (string-prefix-p "#" url)
+      (zetta-markdown-goto-anchor url)
+    (funcall orig url)))
+
 ;; markdown-mode is installed by elpaca as a dependency of markdown-toc;
 ;; configure it once it loads rather than queueing a duplicate order.
 (with-eval-after-load 'markdown-mode
   (advice-add 'markdown-display-inline-images :before
               #'zetta-markdown--cap-inline-image-size)
+  (advice-add 'markdown--browse-url :around
+              #'zetta-markdown--browse-url-anchors)
   (general-define-key
    :keymaps 'markdown-mode-map
    "C-c v" #'zetta-markdown-pop-out-image

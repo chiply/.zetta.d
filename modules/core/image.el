@@ -11,6 +11,18 @@
 (defvar zetta-image-inline-height-fraction 0.33
   "Max height of inline document images, as a fraction of the frame height.")
 
+;; Emacs built with ImageMagick routes image-mode through IM for
+;; almost every format (image--imagemagick-wanted-p), and IM
+;; PRE-RESAMPLES the bitmap to the window's logical size — on a 2x
+;; display that bitmap is then pixel-doubled: guaranteed blur, in
+;; image buffers and inline images alike.  Inhibit IM entirely: the
+;; native pipeline keeps the original bitmap and scales at draw time
+;; at device resolution (browser-sharp).  Everything actually viewed
+;; here (png/jpeg/gif/webp/svg/tiff/heic) has native support; only
+;; IM's exotic formats (PSD, DDS, RAW…) and arbitrary-angle rotation
+;; are lost.
+(setq imagemagick-types-inhibit t)
+
 (defvar zetta-image--remote-cache (make-hash-table :test 'equal)
   "URL -> downloaded temp file, for popping out remote images.")
 

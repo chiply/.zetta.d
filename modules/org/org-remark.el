@@ -317,12 +317,72 @@ Gmail moves around), so they make a durable source identity."
                        ;; new date every day
                        org-remark-highlight-date ,(my/org-remark-get-date)))
 
+  ;; Semantic pens beyond the generic default.  "question" marks
+  ;; brush-up-on-this-later passages in study guides (faint orange);
+  ;; "important" separates truly-important highlights from the routine
+  ;; ones (light purple).  Both carry the same date-link property as
+  ;; the default pen.
+  (defface zetta-org-remark-question-face
+    '((((background light)) :background "#FFE9D2")
+      (t :background "#4A3A28"))
+    "Faint orange highlight for the org-remark question pen.")
+
+  (defface zetta-org-remark-important-face
+    '((((background light)) :background "#EFE3F8")
+      (t :background "#403354"))
+    "Light purple highlight for the org-remark important pen.")
+
+  (org-remark-create "question"
+                     'zetta-org-remark-question-face
+                     `(CATEGORY "question"
+                       org-remark-highlight-date ,(my/org-remark-get-date)))
+
+  (org-remark-create "important"
+                     'zetta-org-remark-important-face
+                     `(CATEGORY "important"
+                       org-remark-highlight-date ,(my/org-remark-get-date)))
+
+  ;; Re-pen the highlight at point: prompts with the OTHER pens only
+  ;; (upstream org-remark-change includes the current one and offers
+  ;; raw function names).  Typical gestures: promote default →
+  ;; important, downgrade question → default once groked.
+  (defun zetta-org-remark-change-pen ()
+    "Switch the pen of the highlight at point, excluding its current pen."
+    (interactive)
+    (let* ((ov (org-remark-find-dwim))
+           (current (and ov (overlay-get ov 'org-remark-label)))
+           (type (and ov (overlay-get ov 'org-remark-type))))
+      (unless ov (user-error "No highlight at point"))
+      (let* ((label-of (lambda (fn)
+                         (string-remove-prefix "org-remark-mark-"
+                                               (symbol-name fn))))
+             ;; upstream registers sample pens (yellow, red-line) and
+             ;; the label-less base pen; only offer the deliberate ones
+             (noise '("org-remark-mark" "yellow" "red-line"))
+             (candidates
+              (seq-filter
+               (lambda (fn)
+                 (let ((label (funcall label-of fn)))
+                   (and (eql type (function-get fn 'org-remark-type))
+                        (not (string= label current))
+                        (not (member label noise)))))
+               org-remark-available-pens))
+             (table (mapcar (lambda (fn) (cons (funcall label-of fn) fn))
+                            candidates))
+             (choice (completing-read
+                      (format "Change pen (%s → ): " current)
+                      table nil t)))
+        (org-remark-change (cdr (assoc choice table))))))
+
   :bind (("C-c n m" . org-remark-mark-default)
+         ("C-c n q" . org-remark-mark-question)
+         ("C-c n i" . org-remark-mark-important)
          ("C-c n l" . org-remark-mark-line)
          :map org-remark-mode-map
          ("C-c n o" . org-remark-open)
          ("C-c n ]" . org-remark-view-next)
          ("C-c n [" . org-remark-view-prev)
          ("C-c n r" . org-remark-remove)
-         ("C-c n d" . org-remark-delete)))
+         ("C-c n d" . org-remark-delete)
+         ("C-c n c" . zetta-org-remark-change-pen)))
 ;;; org-remark.el ends here

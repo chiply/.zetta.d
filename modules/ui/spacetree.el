@@ -78,17 +78,37 @@ value isn't an integer (`zetta-circle-number' returns nil in those cases)."
 ;; padding is needed here.  Degrades to a no-op if space-tree ever
 ;; drops the wrapper.  Text properties (bold selected space) survive
 ;; the substring operations.
+(defface zetta-space-tree-selected
+  '((t :foreground "#6c4dab" :weight bold))
+  "The selected space at each level of the tab-bar lighter.
+Same purple as `zetta-tab-bar-svg-icon-color' \u2014 color alone marks
+the current space; no apostrophe."
+  :group 'space-tree)
+
 (defun zetta-space-tree--plain-lighter (s)
-  "Remove the brace wrapper and trailing whitespace from lighter string S.
-Ends with a no-break space: the circled glyphs ink wider than their
-reported advance, and without right padding the last one clips at
-the frame edge (the brace used to absorb the overhang).  NBSP
-because it is not XML whitespace, so svg-line's SVG text cannot
-collapse it the way a plain trailing space would be."
-  (concat
-   (string-trim-right
-    (string-remove-suffix "}" (string-remove-prefix "{ " s)))
-   "\u00A0"))
+  "Clean up lighter string S for the svg-line tab bar.
+Removes the brace wrapper and space-tree's apostrophe
+selected-markers; the selected space at every level is instead
+recolored purple (`zetta-space-tree-selected', replacing the bold
+face the package applies).  Ends with a no-break space: the circled
+glyphs ink wider than their reported advance, and without right
+padding the last one clips at the frame edge \u2014 NBSP because it is
+not XML whitespace, so svg-line's SVG text cannot collapse it the
+way a plain trailing space would be."
+  (let* ((s (string-remove-prefix "{ " s))
+         (s (string-remove-suffix "}" s))
+         (s (string-replace "'" "" s))
+         (s (string-trim-right s))
+         (len (length s))
+         (pos 0))
+    (while (< pos len)
+      (let ((face (get-text-property pos 'face s))
+            (next (or (next-single-property-change pos 'face s) len)))
+        (when (or (eq face 'bold)
+                  (and (listp face) (memq 'bold face)))
+          (put-text-property pos next 'face 'zetta-space-tree-selected s))
+        (setq pos next)))
+    (concat s "\u00A0")))
 
 (with-eval-after-load 'space-tree
   (advice-add 'space-tree-modeline-lighter

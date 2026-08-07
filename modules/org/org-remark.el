@@ -239,6 +239,23 @@ Gmail moves around), so they make a durable source identity."
 
   (setq org-remark-notes-file-name 'my-org-remark-notes-file-name)
 
+  ;; The first highlight in a new domain hits two prompts: auto-on's
+  ;; load path already visited the (nonexistent) notes file while its
+  ;; parent directory didn't exist, so at highlight time the revisit
+  ;; inside find-file-noselect sees file-writable-p nil → "read-only
+  ;; on disk.  Make buffer read-only, too?", and then save-buffer asks
+  ;; to create the directory.  Create the directory when a highlight
+  ;; is actually MADE — not in the notes-file-name function, which the
+  ;; load path calls for every page render and would litter the synced
+  ;; kb with empty per-domain dirs for pages never highlighted.
+  (defun my-org-remark-ensure-notes-dir (&rest _)
+    "Create the notes file's directory before a highlight is saved."
+    (when-let* ((path (org-remark-notes-get-file-name))
+                (dir (file-name-directory path)))
+      (unless (file-directory-p dir)
+        (make-directory dir t))))
+  (advice-add 'org-remark-highlight-mark :before #'my-org-remark-ensure-notes-dir)
+
   ;; EWW eww-readable integration
   (defun my-advice-eww-show-mode-org-remark (&rest _args)
     (org-remark-auto-on))

@@ -284,9 +284,21 @@ Gmail moves around), so they make a durable source identity."
   (add-to-list 'brushup-styles
                '(set-face-attribute
                  'org-remark-highlighter nil
-                 :background brushup-bg-2
-                 :underline brushup-bg-4
+                 :background brushup-bg-1
+                 :underline brushup-bg-3
                  ))
+
+  ;; symbol-overlay's overlays sit at priority 90 (set in
+  ;; modules/ui/symbol-overlay.el), while org-remark's carry none —
+  ;; so symbol highlights painted over remark highlights.  The remark
+  ;; highlight should win; 95 outranks symbol-overlay but org-remark
+  ;; has no overlay keymap, so symbol-overlay's keys still work inside
+  ;; a highlight.
+  (defun zetta-org-remark--bump-priority (ov)
+    (when (overlayp ov) (overlay-put ov 'priority 95))
+    ov)
+  (advice-add 'org-remark-highlight-make-overlay :filter-return
+              #'zetta-org-remark--bump-priority)
 
   ;; custom pens
   (defun my/org-remark-get-date ()

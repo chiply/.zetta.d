@@ -113,3 +113,28 @@ way a plain trailing space would be."
 (with-eval-after-load 'space-tree
   (advice-add 'space-tree-modeline-lighter
               :filter-return #'zetta-space-tree--plain-lighter))
+
+;; svg-line strips text properties when flattening tab-bar segments
+;; (svg-line--item->string → substring-no-properties), so the purple
+;; face above never reaches the SVG.  Color has to travel through
+;; svg-line's segment DSL instead: emit the lighter as (:svg-segs …)
+;; with the selected pieces as (:svg-seg TXT :color purple) runs and
+;; the rest as plain text.  This replaces the bare
+;; space-tree-modeline-lighter entry in the tab-bar format
+;; (tab-bar-svg.el).
+(defun zetta-tab-bar-space-tree ()
+  "Space-tree lighter as svg-line segments, selected spaces in purple."
+  (let* ((s (space-tree-modeline-lighter))  ; advised: cleaned + faced
+         (len (length s))
+         (pos 0)
+         (items nil))
+    (while (< pos len)
+      (let* ((face (get-text-property pos 'face s))
+             (next (or (next-single-property-change pos 'face s) len))
+             (txt (substring-no-properties s pos next)))
+        (push (if (eq face 'zetta-space-tree-selected)
+                  (list :svg-seg txt :color "#6c4dab")
+                txt)
+              items)
+        (setq pos next)))
+    (cons :svg-segs (nreverse items))))

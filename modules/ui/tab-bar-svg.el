@@ -205,7 +205,10 @@ The sunrise/sunset flank and the date/moon-phase widget were removed."
           recursion-indicator--string tab-bar-format-global
           internal-echo-keystrokes-prefix
           zetta-insert-space zetta-current-prefix zetta-insert-space
-          space-tree-modeline-lighter
+          ;; svg-line segment wrapper (spacetree.el) — colors the
+          ;; selected spaces purple; text properties don't survive
+          ;; svg-line's flattening, so the bare lighter can't.
+          zetta-tab-bar-space-tree
           )))
 
 (add-to-list 'brushup-styles

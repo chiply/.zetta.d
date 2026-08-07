@@ -119,7 +119,23 @@ Pushes the mark so jumping back works."
 
 ;; markdown-mode is installed by elpaca as a dependency of markdown-toc;
 ;; configure it once it loads rather than queueing a duplicate order.
+(defun zetta-markdown--native-inline-images (orig &rest args)
+  "Create inline images through the native pipeline, not ImageMagick.
+markdown-mode hardcodes (create-image file \\='imagemagick ...) for
+max-size capping whenever IM is available — pre-resampled to logical
+pixels and pixel-doubled on 2x displays, i.e. blurry.  Shadowing the
+availability check makes it fall through to its native :max-width
+branch, which scales at draw time at device resolution."
+  (require 'cl-lib)
+  (cl-letf* ((orig-fn (symbol-function 'image-type-available-p))
+             ((symbol-function 'image-type-available-p)
+              (lambda (type) (and (not (eq type 'imagemagick))
+                                  (funcall orig-fn type)))))
+    (apply orig args)))
+
 (with-eval-after-load 'markdown-mode
+  (advice-add 'markdown-display-inline-images :around
+              #'zetta-markdown--native-inline-images)
   (advice-add 'markdown-display-inline-images :before
               #'zetta-markdown--cap-inline-image-size)
   (advice-add 'markdown--browse-url :around

@@ -69,72 +69,27 @@ value isn't an integer (`zetta-circle-number' returns nil in those cases)."
 (with-eval-after-load 'space-tree
   (advice-add 'space-tree--modeline-string-for-level
               :around #'zetta-space-tree--circle-numbers))
-
-;; Strip the lighter's hardcoded "{ … }" wrapper and trailing space:
-;; the braces plus each label's own trailing space (and the circled
-;; glyphs' side bearings) made the whitespace around the numbers
-;; uneven in the svg-line tab bar.  The icon gap comes from the
-;; zetta-insert-space preceding the lighter in tab-bar-svg.el, so no
-;; padding is needed here.  Degrades to a no-op if space-tree ever
-;; drops the wrapper.  Text properties (bold selected space) survive
-;; the substring operations.
-(defface zetta-space-tree-selected
-  '((t :foreground "#6c4dab" :weight bold))
-  "The selected space at each level of the tab-bar lighter.
-Same purple as `zetta-tab-bar-svg-icon-color' \u2014 color alone marks
-the current space; no apostrophe."
-  :group 'space-tree)
-
+;; The svg-line tab bar renders this lighter through
+;; `zetta-tab-bar-svg--workspace' (line-utils.el), which splits it
+;; into per-token segments, detects each level's selected space by
+;; space-tree's trailing apostrophe, DROPS the apostrophe itself, and
+;; colors that token with `zetta-tab-bar-svg-active-space-color' (the
+;; masthead purple).  So this advice must NOT touch the apostrophes —
+;; they are the selection signal.  It only:
+;;   1. strips the hardcoded "{ … }" wrapper (the bracket clutter),
+;;   2. appends " " + NBSP, which survives the workspace splitter as
+;;      a standalone trailing padding token: the circled glyphs ink
+;;      wider than their reported advance, and without a final
+;;      padding segment the last one clips at the frame edge (the
+;;      brace used to absorb the overhang).  NBSP because it is not
+;;      XML whitespace, so svg-line's SVG text cannot collapse it.
 (defun zetta-space-tree--plain-lighter (s)
-  "Clean up lighter string S for the svg-line tab bar.
-Removes the brace wrapper and space-tree's apostrophe
-selected-markers; the selected space at every level is instead
-recolored purple (`zetta-space-tree-selected', replacing the bold
-face the package applies).  Ends with a no-break space: the circled
-glyphs ink wider than their reported advance, and without right
-padding the last one clips at the frame edge \u2014 NBSP because it is
-not XML whitespace, so svg-line's SVG text cannot collapse it the
-way a plain trailing space would be."
-  (let* ((s (string-remove-prefix "{ " s))
-         (s (string-remove-suffix "}" s))
-         (s (string-replace "'" "" s))
-         (s (string-trim-right s))
-         (len (length s))
-         (pos 0))
-    (while (< pos len)
-      (let ((face (get-text-property pos 'face s))
-            (next (or (next-single-property-change pos 'face s) len)))
-        (when (or (eq face 'bold)
-                  (and (listp face) (memq 'bold face)))
-          (put-text-property pos next 'face 'zetta-space-tree-selected s))
-        (setq pos next)))
-    (concat s "\u00A0")))
+  "Strip the brace wrapper from lighter S; keep apostrophes, add padding."
+  (concat
+   (string-trim-right
+    (string-remove-suffix "}" (string-remove-prefix "{ " s)))
+   " \u00A0"))
 
 (with-eval-after-load 'space-tree
   (advice-add 'space-tree-modeline-lighter
               :filter-return #'zetta-space-tree--plain-lighter))
-
-;; svg-line strips text properties when flattening tab-bar segments
-;; (svg-line--item->string → substring-no-properties), so the purple
-;; face above never reaches the SVG.  Color has to travel through
-;; svg-line's segment DSL instead: emit the lighter as (:svg-segs …)
-;; with the selected pieces as (:svg-seg TXT :color purple) runs and
-;; the rest as plain text.  This replaces the bare
-;; space-tree-modeline-lighter entry in the tab-bar format
-;; (tab-bar-svg.el).
-(defun zetta-tab-bar-space-tree ()
-  "Space-tree lighter as svg-line segments, selected spaces in purple."
-  (let* ((s (space-tree-modeline-lighter))  ; advised: cleaned + faced
-         (len (length s))
-         (pos 0)
-         (items nil))
-    (while (< pos len)
-      (let* ((face (get-text-property pos 'face s))
-             (next (or (next-single-property-change pos 'face s) len))
-             (txt (substring-no-properties s pos next)))
-        (push (if (eq face 'zetta-space-tree-selected)
-                  (list :svg-seg txt :color "#6c4dab")
-                txt)
-              items)
-        (setq pos next)))
-    (cons :svg-segs (nreverse items))))

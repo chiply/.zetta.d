@@ -11,6 +11,13 @@
   :config
   (setq git-gutter:window-width 2)
   (setq git-gutter:update-interval 2)
+  ;; Binary buffers: git-gutter:live-update writes the buffer to a
+  ;; temp file to diff it, and raw image/pdf bytes can't be utf-8
+  ;; encoded — Emacs pops the select-safe-coding-system warning +
+  ;; minibuffer prompt on every idle tick for any image visited
+  ;; inside a git repo.  A gutter is meaningless for these anyway.
+  (setq git-gutter:disabled-modes
+        '(image-mode doc-view-mode pdf-view-mode archive-mode tar-mode))
 
   ;; add indicator to margin showing the current line number
 

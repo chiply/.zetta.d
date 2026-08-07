@@ -23,6 +23,13 @@
 ;; are lost.
 (setq imagemagick-types-inhibit t)
 
+;; The last sliver of graininess vs a browser: the default smoothing
+;; heuristic (image--default-smoothing) only detects downscales
+;; expressed via :scale, so :max-width/:max-height-capped images (all
+;; inline markdown images, image-mode fits) render WITHOUT
+;; interpolation.  Browsers always interpolate — do the same.
+(setq image-transform-smoothing t)
+
 (defvar zetta-image--remote-cache (make-hash-table :test 'equal)
   "URL -> downloaded temp file, for popping out remote images.")
 

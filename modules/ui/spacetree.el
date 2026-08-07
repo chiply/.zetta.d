@@ -69,3 +69,20 @@ value isn't an integer (`zetta-circle-number' returns nil in those cases)."
 (with-eval-after-load 'space-tree
   (advice-add 'space-tree--modeline-string-for-level
               :around #'zetta-space-tree--circle-numbers))
+
+;; Strip the lighter's hardcoded "{ … }" wrapper and trailing space:
+;; the braces plus each label's own trailing space (and the circled
+;; glyphs' side bearings) made the whitespace around the numbers
+;; uneven in the svg-line tab bar.  The icon gap comes from the
+;; zetta-insert-space preceding the lighter in tab-bar-svg.el, so no
+;; padding is needed here.  Degrades to a no-op if space-tree ever
+;; drops the wrapper.  Text properties (bold selected space) survive
+;; the substring operations.
+(defun zetta-space-tree--plain-lighter (s)
+  "Remove the brace wrapper and trailing whitespace from lighter string S."
+  (string-trim-right
+   (string-remove-suffix "}" (string-remove-prefix "{ " s))))
+
+(with-eval-after-load 'space-tree
+  (advice-add 'space-tree-modeline-lighter
+              :filter-return #'zetta-space-tree--plain-lighter))

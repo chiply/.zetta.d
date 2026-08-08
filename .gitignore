@@ -4,6 +4,9 @@ tree-sitter
 modules/**/*.elc
 source/**/*.elc
 
+# Runtime caches
+nano-mu4e-preview-cache.eld
+
 # Package manager caches
 elpaca/builds/
 elpaca/repos/

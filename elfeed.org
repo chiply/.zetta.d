@@ -193,3 +193,6 @@
 ** [[https://old.reddit.com/r/eink/.rss][r/eink]] :reddit:eink:
 ** [[https://www.chiply.dev/rss.xml][Charlie Holland's Blog]] :myblog:
 ** [[https://toobnix.org/feeds/videos.xml?videoChannelName=screwtape_channel][Lispy Gopher Climate extras]] :peertube:lisp:emacs:
+** [[https://fosstodon.org/tags/emacs.rss][Mastodon #emacs]] :mastodon:emacs:
+** [[https://mathstodon.xyz/@oantolin.rss][Omar Antolín (@oantolin@mathstodon.xyz)]] :mastodon:emacs:oantolin:
+** [[https://lobste.rs/t/emacs.rss][Lobsters #emacs]] :lobsters:emacs:

@@ -71,6 +71,30 @@ every file."
           result))
     result))
 
+;; --- HyRolo: retrieve matches WITH their ancestors ---
+;; HyRolo retrieval is downward-only: a match pulls in its entry plus all
+;; descendants, never the ancestor headings above it (verified empirically,
+;; 2026-08-06).  The logical-search engine can do better: with its
+;; INCLUDE-SUB-ENTRIES flag, `hyrolo-fgrep-logical' evaluates the query over
+;; each entry's whole subtree starting from the top level, so a deep match
+;; causes the top-level ancestor to match and the entire hierarchy is
+;; emitted -- ancestors, descendants, and siblings within that tree.  No
+;; defcustom exposes this, and the interactive spec feeds the same prefix
+;; arg to both COUNT-ONLY and INCLUDE-SUB-ENTRIES (so {C-u} gets you a
+;; count, not the hierarchy) -- hence this wrapper.  Caveat: unlike the
+;; consult-driven greps (ripgrep), the logic engine loads and scans every
+;; rolo file in elisp, so a search over the full ~/kb file list blocks for
+;; a while -- expect seconds, not instant.
+
+(defun zetta-hyrolo-grep-with-ancestors (term)
+  "HyRolo search for TERM, retrieving the full hierarchy around each match.
+Unlike `hyrolo-grep'/`hyrolo-fgrep', whose results show only the matching
+entry and its descendants, this emits the entire top-level record tree
+containing each match, ancestor headings included.  TERM is a plain string;
+multi-word terms match as an exact phrase."
+  (interactive "sFind rolo term (with ancestors): ")
+  (hyrolo-fgrep-logical (format "(and %S)" term) nil t))
+
 ;; --- HyWiki: make sure a WikiWord always has a real page file on disk ---
 ;; HyWiki writes a page file when it first creates the page, but a WikiWord can
 ;; end up registered in its referent hash with no file behind it -- the hash and
@@ -280,7 +304,9 @@ otherwise appear as a bogus `zsh#...' completion candidate."
 
   ;; --- HyRolo: search the Logseq pages as the rolo source ---
   (setq hyrolo-file-list '("~/.rolo.org" "~/kb/notes/" "~/kb/wiki/"
-                           "~/kb/todo/" "~/kb/inbox.org"))
+                           "~/kb/todo/" "~/kb/inbox.org"
+                           "~/kb/readwise/"
+                           ))
   ;; Make the consult-driven grep commands resolve their matched files
   ;; correctly (see `zetta-hyrolo-fix-consult-handoff' above).
   (advice-add 'hyrolo-grep-input :filter-return

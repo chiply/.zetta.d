@@ -11,6 +11,23 @@
   :config
   (setq git-gutter:window-width 2)
   (setq git-gutter:update-interval 2)
+  ;; Binary buffers: git-gutter:live-update writes the buffer to a
+  ;; temp file to diff it, and raw image/pdf bytes can't be utf-8
+  ;; encoded — Emacs pops the select-safe-coding-system warning +
+  ;; minibuffer prompt on every idle tick for any image visited
+  ;; inside a git repo.  A gutter is meaningless for these anyway.
+  (setq git-gutter:disabled-modes
+        '(image-mode doc-view-mode pdf-view-mode archive-mode tar-mode))
+  ;; The live-update idle timer is global and trusts buffer-local
+  ;; state blindly: async diff sentinels can leave git-gutter:enabled
+  ;; t in buffers where the mode never enabled (no vcs-type), and the
+  ;; timer then errors every tick — "Error running timer
+  ;; 'git-gutter:live-update': (wrong-type-argument arrayp nil)".
+  ;; Only live-update where the mode is actually on and initialized.
+  (defun zetta-git-gutter--live-update-sane-p (&rest _)
+    (and git-gutter-mode git-gutter:vcs-type))
+  (advice-add 'git-gutter:live-update :before-while
+              #'zetta-git-gutter--live-update-sane-p)
 
   ;; add indicator to margin showing the current line number
 

@@ -47,9 +47,19 @@
 
   (global-set-key (kbd "s-.") 'symbol-overlay-transient)
 
+  ;; The auto-highlight face's stock #f0f0f0 is indistinguishable from
+  ;; the org-remark default highlighter (brushup-bg-1) — use the
+  ;; half-step between pure background and bg-1: visibly lighter than
+  ;; a remark highlight, still detectable, theme-adaptive.
+  (add-to-list 'brushup-styles
+               '(set-face-attribute
+                 'symbol-overlay-default-face nil
+                 :background brushup-bg-1_0))
+  (when (fboundp 'brushup) (brushup))
+
   ;; modes
   :hook ((sql-mode python-ts-mode emacs-lisp-mode yaml-mode
                    jsonian-mode json-mode web-mode shell-command-mode sh-mode grep-mode
-                   lark-mode makefile-mode helpful-mode org-mode terraform-mode) .
+                   lark-mode makefile-mode helpful-mode org-mode terraform-mode eww-mode) .
                    symbol-overlay-mode))
 ;;; symbol-overlay.el ends here

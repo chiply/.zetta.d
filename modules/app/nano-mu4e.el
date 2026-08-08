@@ -44,6 +44,27 @@
   (setq mu4e-thread--fold-status t)
   (advice-add 'nano-mu4e-found-handler :after #'zetta-nano-mu4e--fold-all)
 
+  ;; Keep conversation forks visible.  Upstream's nano-mu4e-thread-prefix
+  ;; blanks every tree glyph except the connection bar, flattening a
+  ;; thread to a plain sequence (depth-first order still groups each
+  ;; branch, but siblings are indistinguishable).  Restore minimal
+  ;; child/last-child glyphs; plain box-drawing only — Terminus has no
+  ;; arc glyphs.  Both cons cells identical so fancy-chars is moot.
+  (defun zetta-nano-mu4e-thread-prefix (msg)
+    "Thread prefix with fork structure (├/└) kept visible."
+    (let* ((meta (plist-get msg :meta))
+           (mu4e-headers-thread-root-prefix          '(""   . ""))
+           (mu4e-headers-thread-first-child-prefix   '(" ├" . " ├"))
+           (mu4e-headers-thread-child-prefix         '(" ├" . " ├"))
+           (mu4e-headers-thread-last-child-prefix    '(" └" . " └"))
+           (mu4e-headers-thread-connection-prefix    '(" │" . " │"))
+           (mu4e-headers-thread-blank-prefix         '("  " . "  "))
+           (mu4e-headers-thread-orphan-prefix        '(""   . ""))
+           (mu4e-headers-thread-single-orphan-prefix '(""   . ""))
+           (mu4e-headers-thread-duplicate-prefix     '(""   . "")))
+      (mu4e~headers-thread-prefix meta)))
+  (advice-add 'nano-mu4e-thread-prefix :override #'zetta-nano-mu4e-thread-prefix)
+
   (defun zetta-nano-mu4e-toggle ()
     "Toggle between the nano-mu4e and stock mu4e headers display."
     (interactive)
@@ -78,6 +99,34 @@
   (define-key nano-mu4e-mode-map (kbd ":") nil)
   (define-key nano-mu4e-mode-map (kbd "G") nil)
   (define-key nano-mu4e-mode-map (kbd "g g") #'beginning-of-buffer)
+  ;; "r" marks for read.  mu4e's stock r (refile) is already eaten by
+  ;; evil normal here, and nano-mu4e leaves r unbound, so nothing
+  ;; useful is displaced; "!" still works too.
+  (define-key nano-mu4e-mode-map (kbd "r") #'mu4e-headers-mark-for-read)
+  ;; RET opens the message.  Without this, RET reaches evil's evil-ret,
+  ;; which activates the button under point — usually the sender name,
+  ;; whose action is a from:<sender> search.  Mouse still clicks buttons.
+  (define-key nano-mu4e-mode-map (kbd "RET") #'mu4e-headers-view-message)
+
+  ;; Region marking: mu4e-mark-set's own region loop advances with
+  ;; mu4e-headers-next, which cannot step across nano-mu4e's
+  ;; multi-line boxes (it immediately reports no-more-messages), so it
+  ;; would only mark the first message.  Walk the msg text-property
+  ;; blocks instead — one contiguous block per message.
+  (defun zetta-nano-mu4e-visual-mark-read (beg end)
+    "Mark every message touched by the region BEG..END for read.
+Exits evil visual state afterwards so the marks are visible."
+    (interactive "r")
+    (deactivate-mark)
+    (save-excursion
+      (let ((pos beg))
+        (while (and pos (< pos end))
+          (when (get-text-property pos 'msg)
+            (goto-char pos)
+            (mu4e-mark-set 'read))
+          (setq pos (next-single-property-change pos 'msg nil end)))))
+    (when (and (fboundp 'evil-visual-state-p) (evil-visual-state-p))
+      (evil-exit-visual-state)))
 
   ;; Let mu4e's and nano-mu4e's own keys through the modal layers.
   ;; Both meow-normal and evil-normal sit in emulation-mode-map-alists
@@ -104,51 +153,145 @@
   (define-key mu4e-view-mode-map (kbd "g g") #'beginning-of-buffer)
   (define-key mu4e-view-mode-map (kbd "g u") #'mu4e-view-go-to-url)
   (define-key mu4e-view-mode-map (kbd "g U") #'mu4e-view-save-url)
+  ;; "r" replies, matching r = mark-read in headers as the "obvious"
+  ;; key.  Displaces the stock mu4e-view-mark-for-refile; refiling
+  ;; still works from the headers view.
+  (define-key mu4e-view-mode-map (kbd "r") #'mu4e-compose-reply)
+  ;; "e" always prompts for the save directory (stock needs C-u e;
+  ;; plain e dumps into mu4e-attachment-dir, which .private.el points
+  ;; at ~/Desktop — that stays the prompt's starting suggestion).
+  (defun zetta-mu4e-save-attachments-ask ()
+    "Save attachment(s), prompting for the target directory."
+    (interactive)
+    (mu4e-view-save-attachments t))
+  (define-key mu4e-view-mode-map (kbd "e") #'zetta-mu4e-save-attachments-ask)
 
   (with-eval-after-load 'evil
     (evil-set-initial-state 'mu4e-headers-mode 'normal)
     (evil-make-overriding-map nano-mu4e-mode-map 'normal)
+    ;; The overriding map only covers normal state; in visual state r
+    ;; would fall back to evil-replace, so bind it there explicitly.
+    (evil-define-key 'visual nano-mu4e-mode-map
+      (kbd "r") #'zetta-nano-mu4e-visual-mark-read)
     (add-hook 'nano-mu4e-mode-hook #'evil-normalize-keymaps)
     (evil-set-initial-state 'mu4e-view-mode 'normal)
     (evil-make-overriding-map mu4e-view-mode-map 'normal)
     (add-hook 'mu4e-view-mode-hook #'evil-normalize-keymaps)
     (evil-set-initial-state 'mu4e-main-mode 'emacs))
 
-  ;; Re-apply brushup styles now that the faces below exist.
-  (when (fboundp 'brushup) (brushup))
-
   ;; Upstream bug: `nano-mu4e-msg-preview' binds charset inside its
   ;; when-let*, so a MIME part with no explicit charset= parameter
   ;; (RFC-legal, defaults to us-ascii) nils the chain and the preview
   ;; silently disappears.  Corrected copy; drop when fixed upstream.
+  ;; Previews are recomputed synchronously on EVERY render upstream —
+  ;; measured 29s of a 29.3s render for the 16k-unread inbox (~1500
+  ;; lines with include-related, all "new" so all previewed, digests
+  ;; through shr).  Bodies are immutable, so cache them — keyed by
+  ;; message-id, which survives reindexing (docids renumber) — and
+  ;; persist the cache across sessions so only genuinely new mail
+  ;; pays the extraction cost.
+  (require 'dom)
+
+  (defvar zetta-nano-mu4e--preview-cache (make-hash-table :test 'equal)
+    "Message-id → preview string.")
+
+  (defvar zetta-nano-mu4e--preview-cache-file
+    (expand-file-name "nano-mu4e-preview-cache.eld" user-emacs-directory)
+    "Persisted preview cache (gitignored).")
+
+  (defvar zetta-nano-mu4e--preview-cache-dirty nil)
+
+  (defun zetta-nano-mu4e--preview-cache-load ()
+    "Merge the persisted preview cache into the in-memory table."
+    (when (file-readable-p zetta-nano-mu4e--preview-cache-file)
+      (ignore-errors
+        (with-temp-buffer
+          (insert-file-contents zetta-nano-mu4e--preview-cache-file)
+          (dolist (pair (read (current-buffer)))
+            (puthash (car pair) (cdr pair) zetta-nano-mu4e--preview-cache))))))
+
+  (defun zetta-nano-mu4e--preview-cache-save ()
+    "Write the preview cache to disk when it has new entries."
+    (when zetta-nano-mu4e--preview-cache-dirty
+      (setq zetta-nano-mu4e--preview-cache-dirty nil)
+      (ignore-errors
+        (with-temp-file zetta-nano-mu4e--preview-cache-file
+          (let ((print-length nil) (print-level nil) (pairs nil))
+            (maphash (lambda (k v) (push (cons k v) pairs))
+                     zetta-nano-mu4e--preview-cache)
+            (prin1 pairs (current-buffer)))))))
+
+  (zetta-nano-mu4e--preview-cache-load)
+  (add-hook 'kill-emacs-hook #'zetta-nano-mu4e--preview-cache-save)
+  (run-with-idle-timer 120 t #'zetta-nano-mu4e--preview-cache-save)
+
+  (defun zetta-nano-mu4e--dom-text (node)
+    "Text content of NODE, skipping style/script/head/title subtrees.
+`dom-texts' would include CSS from marketing mail's <style> blocks."
+    (cond
+     ((stringp node) node)
+     ((memq (dom-tag node) '(style script head title comment)) "")
+     (t (mapconcat #'zetta-nano-mu4e--dom-text (dom-children node) " "))))
+
   (defun zetta-nano-mu4e--msg-preview (&optional msg size)
-    "Extract a short preview from MSG, limiting it to SIZE characters."
+    "Extract a short preview from MSG, limiting it to SIZE characters.
+Returns nil when MSG's file is not readable: executing marks renames
+maildir files (read = new/ → cur/ + S flag) and nano-mu4e's delayed
+refresh re-renders from cached paths, so a signaling
+`mu4e-message-readable-path' would abort the refresh mid-render and
+leave the headers buffer half-drawn."
     (let* ((msg (or msg (mu4e-message-at-point)))
-           (size (or size 256))
-           (filename (mu4e-message-readable-path msg)))
-      (with-temp-buffer
-        (insert-file-contents-literally filename)
-        (let* ((handles (mm-dissect-buffer t)))
-          (unwind-protect
-              (when-let* ((handle (if (bufferp (car handles))
-                                      handles
-                                    (or (mm-find-part-by-type (cdr handles) "text/plain" nil t)
-                                        (mm-find-part-by-type (cdr handles) "text/html" nil t))))
-                          (media-type (mm-handle-media-type handle))
-                          (content (mm-get-part handle)))
-                (let ((charset (or (mail-content-type-get (mm-handle-type handle) 'charset)
-                                   'us-ascii)))
-                  (cond ((string= media-type "text/plain")
-                         (with-temp-buffer
-                           (insert (mm-decode-string content charset))
-                           (nano-mu4e-preview--process size)))
-                        ((string= media-type "text/html")
-                         (with-temp-buffer
-                           (insert (mm-decode-string content charset))
-                           (shr-render-region (point-min) (point-max))
-                           (nano-mu4e-preview--process size)))
-                        (t "No message body found"))))
-            (mm-destroy-parts handles))))))
+           (msgid (and msg (plist-get msg :message-id))))
+      (or (and msgid (gethash msgid zetta-nano-mu4e--preview-cache))
+          (when-let* ((msg msg)
+                      (size (or size 256))
+                      (filename (ignore-errors (mu4e-message-readable-path msg))))
+            (when (> (hash-table-count zetta-nano-mu4e--preview-cache) 5000)
+              (clrhash zetta-nano-mu4e--preview-cache))
+            (let ((preview
+                   (with-temp-buffer
+                     (insert-file-contents-literally filename)
+                     (let* ((handles (mm-dissect-buffer t)))
+                       (unwind-protect
+                           (when-let* ((handle (if (bufferp (car handles))
+                                                   handles
+                                                 (or (mm-find-part-by-type (cdr handles) "text/plain" nil t)
+                                                     (mm-find-part-by-type (cdr handles) "text/html" nil t))))
+                                       (media-type (mm-handle-media-type handle))
+                                       (content (mm-get-part handle)))
+                             ;; utf-8, not the RFC 2046 default us-ascii:
+                             ;; ASCII is a subset of UTF-8 so conforming
+                             ;; parts decode the same, and undeclared-UTF-8
+                             ;; senders render correctly (matches the
+                             ;; upstream PR after Rougier's review).
+                             (let ((charset (or (mail-content-type-get (mm-handle-type handle) 'charset)
+                                                'utf-8)))
+                               (cond ((string= media-type "text/plain")
+                                      (with-temp-buffer
+                                        (insert (mm-decode-string content charset))
+                                        (nano-mu4e-preview--process size)))
+                                     ((string= media-type "text/html")
+                                      (with-temp-buffer
+                                        (insert (mm-decode-string content charset))
+                                        ;; libxml (native C) + text walk beats
+                                        ;; shr's full layout pass by ~an order
+                                        ;; of magnitude; a 256-char excerpt
+                                        ;; doesn't need layout.
+                                        (if (fboundp 'libxml-parse-html-region)
+                                            (let ((dom (libxml-parse-html-region
+                                                        (point-min) (point-max))))
+                                              (erase-buffer)
+                                              (when dom
+                                                (insert (zetta-nano-mu4e--dom-text dom))))
+                                          (let ((shr-inhibit-images t))
+                                            (shr-render-region (point-min) (point-max))))
+                                        (nano-mu4e-preview--process size)))
+                                     (t "No message body found"))))
+                         (mm-destroy-parts handles))))))
+              (when (and msgid preview)
+                (puthash msgid preview zetta-nano-mu4e--preview-cache)
+                (setq zetta-nano-mu4e--preview-cache-dirty t))
+              preview)))))
   (advice-add 'nano-mu4e-msg-preview :override #'zetta-nano-mu4e--msg-preview)
 
   :brushup
@@ -171,6 +314,12 @@
                                       :inherit 'shadow :slant 'normal)
                   (set-face-attribute 'nano-mu4e-gutter-body nil :underline nil)
                   (set-face-attribute 'nano-mu4e-gutter-match nil :underline nil)))
+  ;; Re-apply NOW: the :brushup keyword is appended at the END of
+  ;; use-package-keywords, so this section runs after :config — a
+  ;; re-apply there fires before the form above is registered, and the
+  ;; faces (created by nano-mu4e loading, long after the theme was
+  ;; applied) stay at upstream defaults until the first theme toggle.
+  (when (fboundp 'brushup) (brushup))
   :init
   (defvar zetta-nano-mu4e--fontset-done nil)
   (defun zetta-nano-mu4e--fontset (&optional frame)

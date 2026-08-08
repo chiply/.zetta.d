@@ -69,3 +69,27 @@ value isn't an integer (`zetta-circle-number' returns nil in those cases)."
 (with-eval-after-load 'space-tree
   (advice-add 'space-tree--modeline-string-for-level
               :around #'zetta-space-tree--circle-numbers))
+;; The svg-line tab bar renders this lighter through
+;; `zetta-tab-bar-svg--workspace' (line-utils.el), which splits it
+;; into per-token segments, detects each level's selected space by
+;; space-tree's trailing apostrophe, DROPS the apostrophe itself, and
+;; colors that token with `zetta-tab-bar-svg-active-space-color' (the
+;; masthead purple).  So this advice must NOT touch the apostrophes —
+;; they are the selection signal.  It only:
+;;   1. strips the hardcoded "{ … }" wrapper (the bracket clutter),
+;;   2. appends " " + NBSP, which survives the workspace splitter as
+;;      a standalone trailing padding token: the circled glyphs ink
+;;      wider than their reported advance, and without a final
+;;      padding segment the last one clips at the frame edge (the
+;;      brace used to absorb the overhang).  NBSP because it is not
+;;      XML whitespace, so svg-line's SVG text cannot collapse it.
+(defun zetta-space-tree--plain-lighter (s)
+  "Strip the brace wrapper from lighter S; keep apostrophes, add padding."
+  (concat
+   (string-trim-right
+    (string-remove-suffix "}" (string-remove-prefix "{ " s)))
+   " \u00A0"))
+
+(with-eval-after-load 'space-tree
+  (advice-add 'space-tree-modeline-lighter
+              :filter-return #'zetta-space-tree--plain-lighter))

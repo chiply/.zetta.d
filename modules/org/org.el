@@ -95,6 +95,10 @@ TYPE is a character: ?a alphabetic, ?t timestamp, ?p priority, ?o TODO order."
         zetta-org-log-initial-schedule 'time
         org-outline-path-complete-in-steps nil
         org-refile-allow-creating-parent-nodes 'confirm
+        ;; Files themselves are refile targets (filed as top-level
+        ;; entries) — the flat (todo) files have no headings to file
+        ;; under, and the capture flow is inbox-first + refile-later.
+        org-refile-use-outline-path 'file
         org-refile-targets '((nil :maxlevel . 10)
                              (org-agenda-files :maxlevel . 10))
         org-src-window-setup 'plain
@@ -103,17 +107,65 @@ TYPE is a character: ?a alphabetic, ?t timestamp, ?p priority, ?o TODO order."
           ("emacs-lisp" . emacs-lisp) ("shell" . sh) ("sqlite" . sql)
           ("html" . web) ("js" . js2) ("jsx" . rjsx))
         org-table-shrunk-column-indicator "|"
+        ;; 4-letter states (2026-08-08 migration: STARTED→PROG,
+        ;; CANCELLED→NOPE; WAITING/NEXT/OBSOLETE had zero uses).
+        ;; PROG = in progress, WAIT = blocked externally, QUES = open
+        ;; question (pairs with the org-remark question pen), HOLD =
+        ;; paused by choice (backlog skill vocabulary), IDEA =
+        ;; someday/maybe, NOPE = cancelled.  Scheduling stays with
+        ;; org's SCHEDULED timestamps, not a state.
         org-todo-keywords
         '((sequence
            "TODO(t!)"
-           "STARTED(s!)"
-           "WAITING(w!)"
+           "PROG(p!)"
+           "WAIT(w!)"
+           "QUES(q!)"
            "HOLD(h!)"
-           "NEXT(n!)"
+           "IDEA(i!)"
            "|"
            "DONE(d!)"
-           "CANCELLED(c!)"
-           "OBSOLETE(o!)")))
+           "NOPE(n!)")))
+
+  ;; State faces: QUES in the question pen's orange family, IDEA in
+  ;; the important pen's purple family, NOPE struck through; all
+  ;; light/dark aware.  TODO and DONE keep org's stock faces.
+  (defface zetta-org-todo-prog
+    '((((background light)) :foreground "#1F6FB2" :weight bold)
+      (t :foreground "#6FB3E0" :weight bold))
+    "Face for the PROG todo keyword."
+    :group 'org-faces)
+  (defface zetta-org-todo-wait
+    '((((background light)) :foreground "#8A6D3B" :weight bold)
+      (t :foreground "#C9A66B" :weight bold))
+    "Face for the WAIT todo keyword."
+    :group 'org-faces)
+  (defface zetta-org-todo-ques
+    '((((background light)) :foreground "#C25E00" :weight bold)
+      (t :foreground "#E8A45C" :weight bold))
+    "Face for the QUES todo keyword."
+    :group 'org-faces)
+  (defface zetta-org-todo-hold
+    '((((background light)) :foreground "#767676" :weight bold)
+      (t :foreground "#9E9E9E" :weight bold))
+    "Face for the HOLD todo keyword."
+    :group 'org-faces)
+  (defface zetta-org-todo-idea
+    '((((background light)) :foreground "#7B4FA6" :weight bold)
+      (t :foreground "#B08FD6" :weight bold))
+    "Face for the IDEA todo keyword."
+    :group 'org-faces)
+  (defface zetta-org-todo-nope
+    '((((background light)) :foreground "#9A9A9A" :strike-through t)
+      (t :foreground "#7A7A7A" :strike-through t))
+    "Face for the NOPE todo keyword."
+    :group 'org-faces)
+  (setq org-todo-keyword-faces
+        '(("PROG" . zetta-org-todo-prog)
+          ("WAIT" . zetta-org-todo-wait)
+          ("QUES" . zetta-org-todo-ques)
+          ("HOLD" . zetta-org-todo-hold)
+          ("IDEA" . zetta-org-todo-idea)
+          ("NOPE" . zetta-org-todo-nope)))
 
   (defun orgtree-forward-orgtree (&optional arg)
     "Move ARG times to start of a set of the same orgtree characters."
@@ -386,19 +438,31 @@ Set this in ~/.private.el before modules load.")
   ;; %a from a mu4e buffer captures a link back to the message.
   (when (locate-library "mu4e-org")
     (require 'mu4e-org))
+  ;; Two-gesture capture: notes land in the inbox (n, or N with an
+  ;; org backlink to wherever capture was invoked via %a); TODO-ing
+  ;; and routing happen later — C-c C-w in the capture buffer
+  ;; (org-capture-refile) files directly elsewhere when the target is
+  ;; already known.  The per-(todo)-file templates are retired: refile
+  ;; covers routing (org-refile-use-outline-path 'file makes the flat
+  ;; todo files themselves valid targets).  m stays as the mail
+  ;; specialization — the sender/subject prefill has no generic
+  ;; equivalent (%:fromname/%:subject only bind in mail buffers).
   (setq org-capture-templates
-        (append
-         '(("o" "Simple capture"
-            entry
-            (file "~/kb/inbox.org")
-            "* %?\n%a"
-            :prepend t)
-           ("m" "Mail (capture message link)"
-            entry
-            (file "~/kb/inbox.org")
-            "* TODO %:fromname: %:subject\n%a\n%?"
-            :prepend t))
-         (zetta-logseq-generate-capture-templates)))
+        '(("n" "Note"
+           entry
+           (file "~/kb/inbox.org")
+           "* %?\n:PROPERTIES:\n:CREATED: %U\n:END:\n"
+           :prepend t)
+          ("N" "Note (with backlink)"
+           entry
+           (file "~/kb/inbox.org")
+           "* %?\n:PROPERTIES:\n:CREATED: %U\n:END:\n%a\n"
+           :prepend t)
+          ("m" "Mail (capture message link)"
+           entry
+           (file "~/kb/todo/(todo) email.org")
+           "* TODO %:fromname: %:subject\n:PROPERTIES:\n:CREATED: %U\n:END:\n%a\n%?"
+           :prepend t)))
   (zetta-logseq-update-agenda-files))
 
 ;;; Log initial deadline/schedule creation

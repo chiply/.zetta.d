@@ -54,6 +54,173 @@ URL should be a Reddit permalink or comments URL."
   (general-unbind :keymaps 'elfeed-show-mode-map "R")
   (general-define-key :keymaps 'elfeed-show-mode-map :states 'normal "R" 'md4rd-elfeed-show-reddit-comments)
 
+  ;; Same from the search listing, without opening the article first.
+  ;; Bound to gc in the elfeed-search hook (elfeed.el) — R there is
+  ;; already the incremental-update key.
+  (defun md4rd-elfeed-search-reddit-comments ()
+    "Show Reddit comments for the elfeed entry at point."
+    (interactive)
+    (if-let* ((entry (car (elfeed-search-selected)))
+              (url (elfeed-entry-link entry)))
+        (if (string-match-p "reddit\\.com" url)
+            (md4rd-load-comments-from-url url)
+          (message "Entry at point is not a Reddit URL"))
+      (message "No entry at point")))
+
+  ;; --- OAuth reads --------------------------------------------------
+  ;; Reddit 403-blocks the unauthenticated *.json endpoints md4rd uses
+  ;; for ALL reads (any User-Agent; curl and url.el alike — verified
+  ;; 2026-08-03), so listings/comments silently render nothing.  Route
+  ;; reads through oauth.reddit.com with the bearer token instead.
+  ;; Needs a token carrying the `read' scope: stock md4rd only asks for
+  ;; vote,submit, so widen the authorize URL for future logins.
+  (setq md4rd--oauth-url
+        (replace-regexp-in-string "scope=vote,submit" "scope=read,vote,submit"
+                                  md4rd--oauth-url))
+
+  (defvar zetta-md4rd-user-agent "emacs:md4rd:0.3.1 (personal reader)"
+    "Descriptive User-Agent, per Reddit API rules.")
+
+  (defvar zetta-md4rd-client-secret nil
+    "Reddit app client secret, or nil for secretless installed apps.
+md4rd assumes an installed app (Basic auth = \"client_id:\"), but
+web/script apps must authenticate token requests as
+\"client_id:secret\" — without it Reddit returns 401.  Set from
+1Password in ~/.private.el.")
+
+  (defvar zetta-md4rd--token-refreshed-at 0
+    "`float-time' of the last successful access-token refresh.")
+
+  (defun zetta-md4rd--refresh-token-sync ()
+    "Refresh the OAuth access token, blocking.  Return it, or nil."
+    (let* ((url-request-method "POST")
+           (url-request-data (format "grant_type=refresh_token&refresh_token=%s"
+                                     md4rd--oauth-refresh-token))
+           (url-request-extra-headers
+            `(("Content-Type" . "application/x-www-form-urlencoded")
+              ("User-Agent" . ,zetta-md4rd-user-agent)
+              ("Authorization" . ,(concat "Basic "
+                                          (base64-encode-string
+                                           (format "%s:%s" md4rd--oauth-client-id
+                                                   (or zetta-md4rd-client-secret ""))
+                                           t)))))
+           (buf (ignore-errors
+                  (url-retrieve-synchronously
+                   "https://www.reddit.com/api/v1/access_token" t nil 10))))
+      (when buf
+        (with-current-buffer buf
+          (when-let* ((json (ignore-errors
+                              (json-read-from-string
+                               (buffer-substring (1+ url-http-end-of-headers)
+                                                 (point-max)))))
+                      (token (alist-get 'access_token json)))
+            (setq md4rd--oauth-access-token token
+                  zetta-md4rd--token-refreshed-at (float-time))
+            token)))))
+
+  (defun zetta-md4rd--ensure-token ()
+    "Refresh the access token when older than 50 min (1 h lifetime)."
+    (when (> (- (float-time) zetta-md4rd--token-refreshed-at) 3000)
+      (or (zetta-md4rd--refresh-token-sync)
+          (message "md4rd: token refresh failed — run M-x md4rd-login"))))
+
+  (defun zetta-md4rd--oauth-headers ()
+    "Bearer auth headers for authenticated Reddit reads."
+    `(("User-Agent" . ,zetta-md4rd-user-agent)
+      ("Authorization" . ,(concat "bearer " md4rd--oauth-access-token))))
+
+  (defvar zetta-md4rd-listing-limit 100
+    "Posts to fetch per subreddit.  Reddit caps a single request at 100.")
+
+  (defun zetta-md4rd--fetch-sub (sub)
+    "Fetch SUB's hot listing via the authenticated API."
+    (zetta-md4rd--ensure-token)
+    (request (format "https://oauth.reddit.com/r/%s/hot?limit=%d"
+                     sub zetta-md4rd-listing-limit)
+             :complete (cl-function
+                        (lambda (&rest data &allow-other-keys)
+                          (apply #'md4rd--fetch-sub-callback sub data)))
+             :sync nil
+             :parser #'json-read
+             :headers (zetta-md4rd--oauth-headers)))
+
+  (defun zetta-md4rd--fetch-comments (comment-url)
+    "Fetch COMMENT-URL via the authenticated API.
+Any reddit host variant is rewritten — elfeed entries arriving via
+the Fever backend link to old.reddit.com, which the stock
+convert-to-json-url helper passes through unchanged."
+    (zetta-md4rd--ensure-token)
+    (request (replace-regexp-in-string
+              "\\`https?://\\(?:old\\.\\|www\\.\\|api\\.\\|m\\.\\)?reddit\\.com"
+              "https://oauth.reddit.com"
+              comment-url)
+             :complete #'md4rd--fetch-comments-callback
+             :sync nil
+             :parser #'json-read
+             :headers (zetta-md4rd--oauth-headers)))
+
+  (advice-add 'md4rd--fetch-sub :override #'zetta-md4rd--fetch-sub)
+  (advice-add 'md4rd--fetch-comments :override #'zetta-md4rd--fetch-comments)
+
+  ;; Votes and replies hit oauth.reddit.com with the raw access token
+  ;; and :complete nil, so a stale token means a silent 401.  Keep it
+  ;; fresh for writes too.
+  (advice-add 'md4rd--post-vote :before
+              (lambda (&rest _) (zetta-md4rd--ensure-token)))
+  (advice-add 'md4rd--post-reply :before
+              (lambda (&rest _) (zetta-md4rd--ensure-token)))
+
+  ;; md4rd-mode is a hand-rolled mode: no after-change-major-mode-hook
+  ;; (so global-tab-line-mode never fires) and kill-all-local-variables
+  ;; on every render (so a manually enabled tab-line vanishes).  The
+  ;; mode hook does run each render — re-enable it there.
+  (add-hook 'md4rd-mode-hook #'tab-line-mode)
+
+  ;; Tree-widget's GUI image theme (diamond icons, line bitmaps) looks
+  ;; wrong here; use its plain-text fallback (the emacs -nw look)
+  ;; everywhere.  Global, but md4rd/hierarchy are the only tree-widget
+  ;; consumers in this config.
+  (setq tree-widget-image-enable nil)
+
+  ;; Org backlinks (capture %a) from md4rd buffers.  The listing's
+  ;; widgets keep their post item in a closure, so match the post whose
+  ;; title appears on the current line; the comments buffer links its
+  ;; thread (the first listing in the cached response).  https links,
+  ;; like the elfeed backend.
+  (with-eval-after-load 'ol
+    (defun zetta-org-md4rd-store-link (&optional _interactive)
+      "Store the reddit post at point (listing) or the shown thread (comments)."
+      (when (derived-mode-p 'md4rd-mode)
+        (if (string= (buffer-name) "*subreddits*")
+            (let* ((line (buffer-substring-no-properties
+                          (line-beginning-position) (line-end-position)))
+                   (found nil))
+              (maphash
+               (lambda (_sub posts)
+                 (unless found
+                   (setq found
+                         (cl-find-if
+                          (lambda (p)
+                            (let ((title (alist-get 'title p)))
+                              (and title (> (length title) 0)
+                                   (string-search title line))))
+                          posts))))
+               md4rd--sub-composite)
+              (when found
+                (org-link-store-props
+                 :type "https"
+                 :link (concat "https://www.reddit.com" (alist-get 'permalink found))
+                 :description (alist-get 'title found))))
+          (when-let* ((post (ignore-errors
+                              (let-alist (alist-get 'data (elt md4rd--cache-comments 0))
+                                (alist-get 'data (elt .children 0)))))
+                      (permalink (alist-get 'permalink post)))
+            (org-link-store-props
+             :type "https"
+             :link (concat "https://www.reddit.com" permalink)
+             :description (alist-get 'title post))))))
+    (org-link-set-parameters "md4rd-post" :store #'zetta-org-md4rd-store-link))
+
   ;; needed to use this to set things up https://not-an-aardvark.github.io/reddit-oauth-helper/
   (setq
    md4rd-subs-active

@@ -22,6 +22,17 @@
         org-msg-default-alternatives '((new . (text html))
                                        (reply-to-html . (text html))
                                        (reply-to-text . (text))))
-  (org-msg-mode))
+  (org-msg-mode)
+
+  ;; C-c C-c only sends when no org element at point claims it (org-msg
+  ;; sends via org-ctrl-c-ctrl-c-final-hook), and it should keep doing
+  ;; its org job anyway.  C-RET is the dedicated send key; the heading
+  ;; command it shadows (org-insert-heading-respect-content) is unused,
+  ;; and only in compose buffers.  C-u C-RET sends without exiting.
+  (defun zetta-org-msg-send ()
+    "Send the message, regardless of the org element at point."
+    (interactive)
+    (org-msg-ctrl-c-ctrl-c))
+  (define-key org-msg-edit-mode-map (kbd "C-<return>") #'zetta-org-msg-send))
 
 ;;; org-msg.el ends here

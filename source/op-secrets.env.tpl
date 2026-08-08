@@ -4,9 +4,16 @@ SPOTIFY_REFRESH_TOKEN={{ op://Dev/Spotify/refresh-token }}
 WALLABAG_PASSWORD={{ op://Dev/Wallabag/password }}
 WALLABAG_CLIENT_ID={{ op://Dev/Wallabag/client-id }}
 WALLABAG_CLIENT_SECRET={{ op://Dev/Wallabag/client-secret }}
-MINIFLUX_PASSWORD={{ op://Dev/Miniflux/password }}
+# Two Dev items share the Miniflux name (2026-08-03), so it is
+# ambiguous and would fail the whole inject — reference by item ID.
+# khjv... = original (fever password), dzoj... = api-key item.
+# Collapse back to name-based refs once consolidated.  NB: op inject
+# resolves op-scheme URIs even inside comments; never quote one here.
+MINIFLUX_PASSWORD={{ op://Dev/khjv4m35sqe66tvssor3ldvx4m/password }}
+MINIFLUX_API_KEY={{ op://Dev/dzojnnugzyp4tiiqpjel4hz2ym/api-key }}
 POSTGRESQL_LOCAL_PASSWORD={{ op://Dev/PostgreSQL-Local/password }}
 REDDIT_CLIENT_ID={{ op://Dev/Reddit/client-id }}
+REDDIT_CLIENT_SECRET={{ op://Dev/Reddit/client-secret }}
 REDDIT_REFRESH_TOKEN={{ op://Dev/Reddit/refresh-token }}
 REDDIT_ACCESS_TOKEN={{ op://Dev/Reddit/access-token }}
 PUBMED_API_KEY={{ op://Dev/PubMed/api-key }}

@@ -69,9 +69,11 @@ See .private.sample.el for an example.")
             (e-user (plist-get entry :user))
             (e-port (plist-get entry :port))
             (e-key  (plist-get entry :key)))
-        (when (and (or (null host) (equal host e-host))
-                   (or (null user) (equal user e-user))
-                   (or (null port) (equal port e-port)))
+        ;; t in a spec slot is auth-source's wildcard ("present, any
+        ;; value") — emacs-bluesky searches with :user t.
+        (when (and (or (null host) (eq host t) (equal host e-host))
+                   (or (null user) (eq user t) (equal user e-user))
+                   (or (null port) (eq port t) (equal port e-port)))
           (let ((secret-key e-key))
             (push (list :host e-host
                         :user e-user

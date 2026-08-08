@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/chiply/.zetta.d/compare/v0.2.2...v0.2.3) (2026-08-08)
+
+
+### Features
+
+* mail, reddit, feeds, capture, and reading-stack overhaul ([#135](https://github.com/chiply/.zetta.d/issues/135)) ([1eacc62](https://github.com/chiply/.zetta.d/commit/1eacc62927587dd6a2497dfc04e57b257fd5976c))
+
 ## [0.2.2](https://github.com/chiply/.zetta.d/compare/v0.2.1...v0.2.2) (2026-08-02)
 
 

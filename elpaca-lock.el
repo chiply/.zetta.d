@@ -166,6 +166,12 @@
                      :type git :protocol https :inherit t :depth
                      treeless :ref
                      "a755afa7db7f3fa515f8dd2c0518113be0b027f6"))
+ (anki :source "elpaca-menu-lock-file" :recipe
+       (:source nil :package "anki" :id anki :host github :repo
+                "chenyanming/anki.el" :build
+                (:not elpaca--byte-compile) :type git :protocol https
+                :inherit t :depth treeless :ref
+                "cc26dcf38ab6f7d566dd8049590f07321176bc80"))
  (annalist :source "elpaca-menu-lock-file" :recipe
            (:package "annalist" :fetcher github :repo
                      "noctuid/annalist.el" :files
@@ -1403,10 +1409,10 @@
  (flamegraph :source "elpaca-menu-lock-file" :recipe
              (:package "flamegraph" :repo "dgutov/emacs-flamegraph"
                        :tar "0.2" :host github :files
-                       ("*" (:exclude ".git")) :source "NonGNU ELPA"
-                       :id flamegraph :type git :protocol https
-                       :inherit t :depth treeless :ref
-                       "4ce420f28663fc11a979c5b665db69d46471f6bc"))
+                       ("*" (:exclude ".git")) :source
+                       "elpaca-menu-lock-file" :id flamegraph :type
+                       git :protocol https :inherit t :depth treeless
+                       :ref "4ce420f28663fc11a979c5b665db69d46471f6bc"))
  (flycheck :source "elpaca-menu-lock-file" :recipe
            (:package "flycheck" :repo "flycheck/flycheck" :fetcher
                      github :files

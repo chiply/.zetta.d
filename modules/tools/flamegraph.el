@@ -11,8 +11,11 @@
 ;; M-x flamegraph-find-profile (for perf, fold with -F +srcline to
 ;; get source locations).
 
-(use-package flamegraph
-  :ensure (flamegraph :host github :repo "dgutov/emacs-flamegraph")
-  :commands (flamegraph-profiler-report flamegraph-find-profile))
+;; Package-Requires (emacs "30.1") — skip entirely on older Emacsen
+;; (the CI matrix includes 29.4, where elpaca would fail the build).
+(when (version<= "30.1" emacs-version)
+  (use-package flamegraph
+    :ensure (flamegraph :host github :repo "dgutov/emacs-flamegraph")
+    :commands (flamegraph-profiler-report flamegraph-find-profile)))
 
 ;;; flamegraph.el ends here

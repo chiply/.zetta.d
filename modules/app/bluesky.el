@@ -8,8 +8,11 @@
 ;; 1Password auth-source backend (init.el) via the guarded entry in
 ;; ~/.private.el — fields handle/app-password on op://Dev/Bluesky.
 
-(use-package bluesky
-  :ensure (bluesky :host github :repo "ahyatt/emacs-bluesky")
-  :commands (bluesky))
+;; Package-Requires (emacs "30.1") — skip entirely on older Emacsen
+;; (the CI matrix includes 29.4, where elpaca would fail the build).
+(when (version<= "30.1" emacs-version)
+  (use-package bluesky
+    :ensure (bluesky :host github :repo "ahyatt/emacs-bluesky")
+    :commands (bluesky)))
 
 ;;; bluesky.el ends here

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/chiply/.zetta.d/compare/v0.2.3...v0.2.4) (2026-08-10)
+
+
+### Bug Fixes
+
+* overhaul python tooling ergonomics across completion, lsp, and dap ([7bd6b00](https://github.com/chiply/.zetta.d/commit/7bd6b008872aa754656898363da9bc2cdac64078))
+
 ## [0.2.3](https://github.com/chiply/.zetta.d/compare/v0.2.2...v0.2.3) (2026-08-08)
 
 

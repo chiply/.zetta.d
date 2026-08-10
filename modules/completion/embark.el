@@ -118,6 +118,12 @@ completing-read prompter."
   (advice-add #'embark-completing-read-prompter
               :around #'embark-hide-which-key-indicator)
 
+  ;; docs for the identifier at point (mode-dispatched: helpful for
+  ;; lisps, lsp hover elsewhere; defined in modules/tools/lsp.el).
+  ;; Shadows `display-local-help', which keeps its global home on
+  ;; `C-h .' — and matches `h' in the treesit-tap embark maps.
+  (keymap-set embark-identifier-map "h" #'zetta-doc-at-point)
+
   ;; Extend `embark-org--types' with element types that the upstream
   ;; embark-org explicitly leaves out.  Each becomes an `org-<type>'
   ;; target via `embark-org-target-element-context'.  Bind a keymap

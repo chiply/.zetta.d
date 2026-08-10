@@ -25,7 +25,7 @@
     "Set shr-inhibit-images based on URL before calling eww."
     (setq shr-inhibit-images
           (not (string-match-p
-                "reddit\\.com\\|twitter\\.com\\|xkcd\\.com\\|github\\.com\\|wikipedia\\.org\\|wikipedia\\.org"
+                "reddit\\.com\\|twitter\\.com\\|xkcd\\.com\\|github\\.com\\|wikipedia\\.org\\|wikipedia\\.org\\|old\\.reddit\\.com"
                 url)))
     (apply orig-fun url args))
   (advice-add 'eww :around #'my-eww-inhibit-images-advice)

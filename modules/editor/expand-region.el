@@ -10,6 +10,7 @@
               embark-collect-mode-map wgrep-mode-map csv-mode-map
               help-mode-map helpful-mode-map text-mode-map
               pubmed-show-mode-map json-mode-map eww-mode-map
+              messages-buffer-mode-map
               jmespath-mode-map jsonian-mode-map js2-mode-map
               compilation-mode-map lark-mode-map css-mode-map
               fundamental-mode-map lisp-data-mode-map prog-mode-map)

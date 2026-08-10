@@ -27,7 +27,8 @@
            (bookmark-get-bookmark "org-capture-last-stored")))
    "N" '(lambda () (interactive)
           (bookmark-set)
-          (bmkp-set-lighting-for-this-buffer 'rfringe nil 'auto nil t)
+          ;; NOTE bookmark+ (and its fringe lighting) is disabled —
+          ;; see modules/app/disabled/bookmark+.el
           (bookmark-save)
           )
    )

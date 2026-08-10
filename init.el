@@ -125,7 +125,7 @@ Returns a backend object when ENTRY is the symbol `zetta-op'."
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(bmkp-last-as-first-bookmark-file "~/.zetta.d/bookmarks")
+ '(bmkp-last-as-first-bookmark-file "~/.zetta.d/bookmarks" t)
  '(connection-local-criteria-alist
    '(((:application tramp :machine "localhost")
       tramp-connection-local-darwin-ps-profile)
@@ -207,7 +207,9 @@ Returns a backend object when ENTRY is the symbol `zetta-op'."
       (path-separator . ":") (null-device . "/dev/null"))
      (eshell-connection-default-profile (eshell-path-env-list))))
  '(custom-safe-themes
-   '("4c7228157ba3a48c288ad8ef83c490b94cb29ef01236205e360c2c4db200bb18"
+   '("b2fedbd478e90e41360d033506fb2bd42b8594fe472e48db94284dca85eebb79"
+     "1b7e575c6681e66d8d83634c2c160b40af12f3756360a4dd81b8032f4495cb5e"
+     "4c7228157ba3a48c288ad8ef83c490b94cb29ef01236205e360c2c4db200bb18"
      default))
  '(helm-minibuffer-history-key "M-p")
  '(org-fold-core-style 'overlays)

@@ -13,6 +13,11 @@
   ;; proceed with using detached despite ignoring the error in
   ;; detached-init
   (condition-case nil (detached-init) (error nil))
+
+  ;; NOTE detached-consult deliberately NOT enabled: upstream has been
+  ;; dormant since 2022-11 and its consult--multi sources predate
+  ;; modern consult (session structs crash in mapcar).  detached-list
+  ;; is the session UI; treat detached as pinned legacy — don't deepen.
   (add-hook 'detached-log-mode-hook
             '(lambda ()
                (progn

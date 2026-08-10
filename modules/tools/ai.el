@@ -217,6 +217,14 @@ tools like HyRolo or consult-grep open in the background to scan files."
                (or (< copilot-max-char 0)
                    (<= (buffer-size) copilot-max-char)))
       (copilot-mode 1)))
-  (add-hook 'prog-mode-hook #'zetta-copilot-maybe-enable))
+  (add-hook 'prog-mode-hook #'zetta-copilot-maybe-enable)
+
+  :config
+  ;; -32800 "Request was canceled" is routine — it means we typed past
+  ;; an in-flight inlineCompletion request; don't echo it
+  (define-advice copilot--log (:around (fn level format &rest args) zetta-silence-cancelled)
+    (unless (string-match-p "Request was canceled\\|-32800"
+                            (apply #'format format args))
+      (apply fn level format args))))
 
 ;;; ai.el ends here

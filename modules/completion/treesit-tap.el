@@ -24,7 +24,11 @@
 
   ;; Embark sub-extension: load once embark is available.
   (with-eval-after-load 'embark
-    (require 'treesit-tap-embark)))
+    (require 'treesit-tap-embark)
+    ;; zetta-only action: docs for the node at point (h = help).
+    ;; Bound here rather than in the package, which uses builtins only.
+    (keymap-set treesit-tap-embark-call-map "h" #'zetta-doc-at-point)
+    (keymap-set treesit-tap-embark-defun-map "h" #'zetta-doc-at-point)))
 
 
 ;;;; Zetta-local thing: `brick'

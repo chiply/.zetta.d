@@ -46,10 +46,105 @@
   (corfu-indexed-mode 1)
   (corfu-popupinfo-mode 1)
 
-  (setq corfu-popupinfo-delay 0.25)
+  ;; no automatic info panel — summon it with M-h
+  ;; (zetta-corfu-popupinfo-toggle), which enables candidate-following
+  ;; at 0.25s until toggled off again
+  (setq corfu-popupinfo-delay nil)
+
+  ;; shared three-state cycle for both panel views (M-h docs, M-g
+  ;; location): hidden -> show this view for the CURRENT candidate;
+  ;; visible in the OTHER view -> switch to this view; visible in
+  ;; THIS view -> hide.  The panel is strictly manual: automatic
+  ;; display stays off (corfu-popupinfo-delay is nil above) and these
+  ;; commands never touch it.
+  (defun zetta-corfu--popupinfo-cycle (getter show-fn)
+    (if (and (corfu-popupinfo--visible-p)
+             (eq corfu-popupinfo--function getter))
+        (corfu-popupinfo--hide)
+      (funcall show-fn)))
+
+  (defun zetta-corfu-popupinfo-toggle ()
+    "Summon, switch to, or dismiss the documentation panel view."
+    (interactive)
+    (zetta-corfu--popupinfo-cycle #'corfu-popupinfo--get-documentation
+                                  #'corfu-popupinfo-documentation))
+
+  (defun zetta-corfu-popupinfo-location-toggle ()
+    "Summon, switch to, or dismiss the source-location panel view."
+    (interactive)
+    (zetta-corfu--popupinfo-cycle #'corfu-popupinfo--get-location
+                                  #'corfu-popupinfo-location))
 
   ;; add frame alpha to corfu--frame-parameters
   (add-to-list 'corfu--frame-parameters '(alpha . (75 . 75)))
+
+  ;; IS (intellisense) actions on the highlighted candidate — docs and
+  ;; definition WITHOUT closing the popup: the candidate is
+  ;; materialized over the completion region just long enough for the
+  ;; position-based lookup, then restored.  Net buffer text and window
+  ;; selection are unchanged by the command, and the commands are
+  ;; registered in `corfu-continue-commands', so corfu keeps the
+  ;; session open.
+  (defun zetta-corfu--IS-peek (action)
+    "Run ACTION with the highlighted candidate materialized; keep the popup."
+    (let ((cand (and corfu--candidates
+                     (nth (max corfu--index 0) corfu--candidates))))
+      (pcase completion-in-region--data
+        ((and `(,beg ,end . ,_) (guard cand))
+         (let* ((beg (if (markerp beg) (marker-position beg) beg))
+                (end (if (markerp end) (marker-position end) end))
+                (orig (buffer-substring beg end))
+                ;; LSP labels may carry the full signature
+                ;; ("foo(a, b)"); materialize only the name so the
+                ;; lookup position lands on a real symbol
+                (cand (car (split-string (substring-no-properties cand)
+                                         "(")))
+                (pt (point)))
+           (goto-char beg)
+           (delete-region beg end)
+           (insert cand)
+           (unwind-protect
+               (save-selected-window (funcall action))
+             (delete-region beg (+ beg (length cand)))
+             (goto-char beg)
+             (insert orig)
+             (goto-char pt))))
+        (_ (message "No corfu candidate to inspect")))))
+
+  (defun zetta-corfu-IS-help ()
+    "Show docs for the highlighted corfu candidate; the popup stays open."
+    (interactive)
+    (zetta-corfu--IS-peek
+     (lambda ()
+       ;; lisp-data-mode is the ancestor of all the lisp modes
+       (if (derived-mode-p 'lisp-data-mode)
+           (zetta-helpful-at-point)
+         (lsp-describe-thing-at-point-1)))))
+
+  (defun zetta-corfu-IS-find ()
+    "Show the highlighted candidate's definition; the popup stays open."
+    (interactive)
+    (zetta-corfu--IS-peek
+     (lambda ()
+       (if (derived-mode-p 'lisp-data-mode)
+           (if (fboundp 'evil-goto-definition-1)
+               (evil-goto-definition-1)
+             (xref-find-definitions (thing-at-point 'symbol t)))
+         (lsp-find-definition-1)))))
+
+  (dolist (cmd '(zetta-corfu-IS-help zetta-corfu-IS-find))
+    (add-to-list 'corfu-continue-commands cmd))
+
+  ;; corfu-popupinfo--get-location wraps the :company-location call in
+  ;; save-excursion, whose point MARKER collapses to the completion
+  ;; region start when zetta-lsp--candidate-location (lsp.el)
+  ;; temporarily rewrites that region — markers in deleted text drift.
+  ;; An integer position survives the net-zero edit; re-assert it.
+  (define-advice corfu-popupinfo--get-location
+      (:around (fn cand) zetta-keep-point)
+    (let ((pt (point)))
+      (prog1 (funcall fn cand)
+        (goto-char pt))))
 
   :brushup
 
@@ -75,7 +170,15 @@
    ;; seems counterintuitive, based on the function names, but I like
    ;; this behavior
    "C-S-j" 'corfu-popupinfo-scroll-up
-   "C-S-k" 'corfu-popupinfo-scroll-down))
+   "C-S-k" 'corfu-popupinfo-scroll-down
+   ;; hide/show the info panel views, persistently and symmetrically
+   ;; (see zetta-corfu--popupinfo-cycle)
+   "M-h" 'zetta-corfu-popupinfo-toggle
+   "M-g" 'zetta-corfu-popupinfo-location-toggle
+   ;; intellisense on the highlighted candidate (mirrors vertico-map);
+   ;; f for "find" — C-S-d belongs to windmove in the override map
+   "C-S-h" 'zetta-corfu-IS-help
+   "C-S-f" 'zetta-corfu-IS-find))
 
 (defcustom zetta-corfu-icon-height 0.8
   "Relative height for `nerd-icons-corfu' completion icons.

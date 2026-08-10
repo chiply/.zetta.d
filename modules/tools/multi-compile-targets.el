@@ -1,6 +1,15 @@
 ;;; multi-compile-targets.el --- Target detection pipeline for multi-compile -*- lexical-binding: t; -*-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; DETECTORS
+(defun zmc-python-runner (&optional dir)
+  "Project-appropriate runner prefix for python tools in DIR.
+uv projects (uv.lock) get \"uv run\", poetry projects (poetry.lock)
+get \"poetry run\"; default uv, per the uv-first setup."
+  (let ((dir (or dir default-directory)))
+    (cond ((file-exists-p (expand-file-name "uv.lock" dir)) "uv run")
+          ((file-exists-p (expand-file-name "poetry.lock" dir)) "poetry run")
+          (t "uv run"))))
+
 (defun zmc-infer-program (build-file-type)
   (cond
    ((string= build-file-type "make") "async-shell-command+")
@@ -14,8 +23,12 @@
    ((string= build-file-type "tmuxinator") "vterm")
    ((string= build-file-type "shell script") "vterm")))
 
-(defun zmc-make-template (build-file-name target)
-  (let ((build-file-type (or (bound-and-true-p build-file-type) "")))
+(defun zmc-make-template (build-file-name target &optional dir type)
+  ;; TYPE must be passed explicitly: the old dynamic `build-file-type'
+  ;; lookup sees nothing under lexical-binding (the caller's arg is
+  ;; lexical, not special), which baked nil templates into the cache
+  ;; and crashed templatel at run time ("Backtracking")
+  (let ((build-file-type (or type (bound-and-true-p build-file-type) "")))
     (cond
      ((string= build-file-type "make")
       (concat "make -f " build-file-name " " target))
@@ -28,13 +41,13 @@
      ((string= build-file-type "tmuxinator")
       (concat "tmuxinator start --suppress-tmux-version-warning -p " build-file-name))
      ((string= build-file-type "pytest")
-      (concat "poetry run pytest -vvv " target))
+      (concat (zmc-python-runner dir) " pytest -vvv " target))
      ((string= build-file-type "python-test")
-      (concat "poetry run pytest -vvv"))
+      (concat (zmc-python-runner dir) " pytest -vvv"))
      ((string= build-file-type "ipython")
-      (concat "poetry run ipython"))
+      (concat (zmc-python-runner dir) " ipython"))
      ((string= build-file-type "python")
-      (concat "poetry run python"))
+      (concat (zmc-python-runner dir) " python"))
      ((string= build-file-type "shell script")
       (concat "./" build-file-name)))))
 
@@ -55,8 +68,8 @@
   (let* ((default-directory project-path)
          (cmd (concat
                "cd " project-path " && "
-               "poetry run pytest "
-               "--co -q --disable-warnings"))
+               (zmc-python-runner project-path)
+               " pytest --co -q --disable-warnings"))
          (_ (message cmd))
          (paths (shell-command-to-string cmd))
          (_ (message paths))
@@ -160,7 +173,8 @@
                  `(,(concat dirname " > " build-file-type " > " build-file-name " > " it)
                    .
                    ,(ht-from-alist
-                     `(("template" . ,(zmc-make-template build-file-name it))
+                     `(("template" . ,(zmc-make-template build-file-name it dir
+                                                         build-file-type))
                        ("directory" . ,dir)
                        ("program" . ,(zmc-infer-program build-file-type)))))
                  subtargets)))

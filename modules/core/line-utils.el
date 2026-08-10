@@ -239,12 +239,21 @@ for empty STR."
    " "))
 
 (defun zetta-pyvenv-activate-poetry-modeline ()
-  (and (boundp 'zetta-pyvenv-virtual-env)
-       (concat "{venv:"
-               (zetta-minify-path zetta-pyvenv-virtual-env)
-               "/"
-               (car (last (split-string zetta-pyvenv-virtual-env "/")))
-               "}")))
+  ;; pyvenv activation is process-global (and must stay active while
+  ;; project buffers need lsp/dap), but display it only in buffers
+  ;; living under the venv's project — showing it in an unrelated org
+  ;; buffer reads as a lie about context.  Assumes in-project .venv
+  ;; layout (the uv convention used everywhere here).
+  (when-let* ((venv (bound-and-true-p pyvenv-virtual-env))
+              (venv (directory-file-name venv))
+              (root (file-name-directory venv)))
+    (when (string-prefix-p (expand-file-name root)
+                           (expand-file-name default-directory))
+      (concat "{venv:"
+              (zetta-minify-path venv)
+              "/"
+              (car (last (split-string venv "/")))
+              "}"))))
 
 (defun zetta-tab-bar-spot-mode-line-string ()
   (if (fboundp 'spot-mode-line-string)

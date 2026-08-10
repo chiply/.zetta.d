@@ -11,7 +11,12 @@
   ;; Variables that can be set before lsp-mode loads
   (setq
    lsp-progress-via-spinner nil
-   lsp-progress-spinner-type nil
+   ;; NOTE no `lsp-progress-spinner-type' value can work here:
+   ;; ui/spinner.el replaces `spinner-types' wholesale with custom
+   ;; animations, so stock type names resolve to zero frames and the
+   ;; spinner timer arith-errors.  The workspace-startup spinner
+   ;; (which bypasses via-spinner) is disabled outright in :config by
+   ;; overriding `lsp--spinner-start'.
    lsp-enable-completion-at-point t
    lsp-completion-provider :none
    lsp-idle-delay 0.500
@@ -24,6 +29,12 @@
    lsp-eldoc-enable-hover nil
    ;; needs to be set.  we are activating flycheck separately
    lsp-diagnostics-provider :auto ;; :none
+   ;; upstream lsp-ruff defaults lint-select to an EMPTY VECTOR and
+   ;; always sends it in initializationOptions — ruff server reads
+   ;; "select zero rules", overriding pyproject.toml, and publishes no
+   ;; diagnostics while the ruff CLI happily reports them.  nil lets
+   ;; the project config govern.
+   lsp-ruff-lint-select nil
    lsp-semantic-highlighting nil
    lsp-signature-render-documentation nil
    lsp-signature-auto-activate nil
@@ -75,6 +86,101 @@
   (defun lsp--sort-completions (completions)
     (lsp-completion--sort-completions completions))
 
+  ;; no lsp spinners at all: the startup spinner bypasses
+  ;; lsp-progress-via-spinner, and no valid type exists (see :init NOTE)
+  (advice-add 'lsp--spinner-start :override #'ignore)
+
+  ;; lsp installs the `lsp-passthrough' completion style for lsp-capf,
+  ;; delegating ALL filtering to the server — which makes the corfu
+  ;; popup static while typing (client-side re-filtering becomes a
+  ;; no-op; elisp filters fine because its capf has no such style).
+  ;; Use the regular styles; the lsp table still re-queries the server
+  ;; when its cached prefix cannot answer (e.g. on backspace).
+  (defun zetta-lsp-completion-setup ()
+    ;; client-side styles instead of lsp-passthrough (see above)
+    (setf (alist-get 'lsp-capf completion-category-defaults)
+          '((styles prescient basic)))
+    ;; and bust the capf cache when the input WIDENS: lsp's table
+    ;; serves one server response per capf call and corfu keeps the
+    ;; session's table, so a session started on a narrow prefix
+    ;; ("DataFr") could never widen on backspace.  Typing forward
+    ;; remains client-side filtered against the cached response.
+    (setq-local completion-at-point-functions
+                (cl-substitute
+                 (cape-capf-buster #'lsp-completion-at-point
+                                   #'string-prefix-p)
+                 #'lsp-completion-at-point
+                 completion-at-point-functions
+                 :test #'eq)))
+  (add-hook 'lsp-completion-mode-hook #'zetta-lsp-completion-setup)
+
+  ;; upstream bug: `lsp-completion--get-documentation' prepends
+  ;; `detail' to the docs only when detail is absent from the doc
+  ;; text, but its cond has no else branch — when detail IS mentioned
+  ;; (e.g. DataFrame's docs saying "pandas"), it falls through and
+  ;; returns nil, discarding docs the server delivered.  Recover by
+  ;; rendering the resolved docs unmodified.
+  (define-advice lsp-completion--get-documentation
+      (:around (fn item) zetta-fix-nil-doc)
+    (or (funcall fn item)
+        (when-let* ((resolved (lsp-completion--resolve item))
+                    (lsp-item (get-text-property 0 'lsp-completion-item resolved))
+                    (doc (lsp:completion-item-documentation? lsp-item))
+                    (rendered (lsp--render-element doc)))
+          (unless (string-empty-p rendered)
+            (put-text-property 0 (length item)
+                               'lsp-completion-item-doc rendered item)
+            rendered))))
+
+  ;; lsp-mode's capf provides no :company-location, so corfu's M-g
+  ;; location view had nothing to ask ("No location available").
+  ;; Supply it with the materialize-then-ask trick the IS peeks use:
+  ;; put the candidate at point, request its definition, restore.
+  (defun zetta-lsp--candidate-location (cand)
+    "Return (FILE . LINE) of CAND's definition via lsp, or nil."
+    (pcase completion-in-region--data
+      (`(,beg ,end . ,_)
+       (let* ((beg (if (markerp beg) (marker-position beg) beg))
+              (end (if (markerp end) (marker-position end) end))
+              (orig (buffer-substring beg end))
+              (name (car (split-string (substring-no-properties cand) "("))))
+         (goto-char beg)
+         (delete-region beg end)
+         (insert name)
+         (unwind-protect
+             (condition-case nil
+                 (when-let* ((locs (lsp-request "textDocument/definition"
+                                                (lsp--text-document-position-params)))
+                             (loc (cond ((lsp-location? locs) locs)
+                                        ((and (sequencep locs)
+                                              (> (length locs) 0))
+                                         (elt locs 0))))
+                             (range (if (lsp-location-link? loc)
+                                        (lsp:location-link-target-selection-range loc)
+                                      (lsp:location-range loc)))
+                             (uri (if (lsp-location-link? loc)
+                                      (lsp:location-link-target-uri loc)
+                                    (lsp:location-uri loc))))
+                   (cons (lsp--uri-to-path uri)
+                         (1+ (lsp:position-line (lsp:range-start range)))))
+               (error nil))
+           (delete-region beg (+ beg (length name)))
+           (goto-char beg)
+           (insert orig))))))
+
+  (define-advice lsp-completion-at-point (:filter-return (res) zetta-add-location)
+    (if res
+        (append res (list :company-location #'zetta-lsp--candidate-location))
+      res))
+
+  ;; the modeline already shows server attachment; keep the echo area
+  ;; quiet about routine connection status (errors still come through)
+  (define-advice lsp--info (:around (fn fmt &rest args) zetta-quiet-connect)
+    (unless (and (stringp fmt)
+                 (or (string-prefix-p "Connected to" fmt)
+                     (string-match-p "initialized successfully" fmt)))
+      (apply fn fmt args)))
+
   (defun lsp--annotate (item)
     (lsp-completion--annotate item))
 
@@ -102,30 +208,46 @@
         (lsp--info "No content at point."))))
 
   (defun lsp-find-definition-1 ()
-    "Display the type signature and documentation of the thing at point."
+    "Jump to definition, showing the target in another regular window.
+The selected window stays on the original buffer.  When no
+definition is found (lsp already messaged), do nothing further;
+same-buffer definitions are shown in the other window with point
+restored here."
     (interactive)
-    (lsp-find-definition)
-    (let ((buf (current-buffer)))
-      (bury-buffer)
-      (display-buffer-in-side-window
-       buf
-       '((side . right)
-         (window-width . 0.30)
-         (window-parameters . ((no-delete-other-windows . 1)))))))
+    (let ((orig-buf (current-buffer))
+          (orig-pt (point))
+          ;; regular windows, not side windows: reuse one already
+          ;; showing the buffer, else split; never the selected window
+          (display-action '((display-buffer-reuse-window
+                             display-buffer-pop-up-window)
+                            (inhibit-same-window . t))))
+      (lsp-find-definition)
+      (let ((def-buf (current-buffer))
+            (def-pt (point)))
+        (cond
+         ;; nothing moved: definition not found
+         ((and (eq def-buf orig-buf) (= def-pt orig-pt)) nil)
+         ;; landed in another buffer: put this window back, show def
+         ((not (eq def-buf orig-buf))
+          (bury-buffer)
+          (when-let ((win (display-buffer def-buf display-action)))
+            (set-window-point win def-pt)))
+         ;; same-buffer definition: stay put, show the location
+         (t
+          (goto-char orig-pt)
+          (when-let ((win (display-buffer def-buf display-action)))
+            (set-window-point win def-pt)))))))
 
   (with-eval-after-load 'evil
     (defun evil-goto-definition-1 ()
-      "Display the type signature and documentation of the thing at point."
+      "Jump to definition, showing the target in another regular window."
       (interactive)
       (evil-goto-definition)
       (let ((buf (current-buffer)))
         (bury-buffer)
-        (display-buffer-in-side-window
-         buf
-         '((side . right)
-           (slot . 1)
-           (window-width . 0.30)
-           (window-parameters . ((no-delete-other-windows . 1))))))))
+        (display-buffer buf '((display-buffer-reuse-window
+                               display-buffer-pop-up-window)
+                              (inhibit-same-window . t))))))
 
   (defun lsp-headerline--enable-breadcrumb-1 ()
     "Enable headerline breadcrumb mode."
@@ -156,7 +278,6 @@
 
   ;; TODO turn into a function
   (add-hook 'lsp-configure-hook (lambda()
-                                  (message "ran hook lsp-mode-hook")
                                   (lsp-headerline-breadcrumb-mode 0)
                                   (lsp-headerline-breadcrumb-mode-1 1)))
 
@@ -201,6 +322,15 @@
 
   :hook ((python-ts-mode . (lambda ()
                              (lsp-deferred)))
+         (typescript-ts-mode . (lambda ()
+                                 (lsp-deferred)))
+         (tsx-ts-mode . (lambda ()
+                          (lsp-deferred)))
+         ;; ts-ls serves javascript too
+         (js2-mode . (lambda ()
+                       (lsp-deferred)))
+         (rjsx-mode . (lambda ()
+                        (lsp-deferred)))
          ((svelte-mode . (lambda ()
                           (lsp))))
          )
@@ -212,6 +342,16 @@
   (condition-case nil
       (helpful-at-point)
     (error (lsp-describe-thing-at-point-1))))
+
+(defun zetta-doc-at-point ()
+  "Show docs for the identifier at point in a help buffer.
+Dispatches on major mode — helpful for lisps, lsp hover elsewhere —
+rather than try-and-fallback like `zetta-jump-to-doc', so a python
+`print' can never show elisp docs."
+  (interactive)
+  (if (derived-mode-p 'lisp-data-mode)
+      (zetta-helpful-at-point)
+    (lsp-describe-thing-at-point-1)))
 
 (defun zetta-side-window-p (win)
   (window-parameter win 'window-slot))
@@ -404,7 +544,11 @@
    ;;can run lsp-ui-imenu to get a sideline... bizarre, maybe the
    ;;command is falling back to builtin imenu ((python-ts-mode)
    ;;. lsp-ui-imenu-mode)
-   ((python-ts-mode) . lsp-ui-peek-mode)
+   ;; NOTE do not hook lsp-ui-peek-mode here: it is per-session
+   ;; machinery (its enable calls set-transient-map with an abort
+   ;; callback), turned on by the lsp-ui-peek-find-* commands
+   ;; themselves.  Hooking it per-buffer stacked orphaned transient
+   ;; keymaps, which made lsp-ui-peek--abort take several tries.
    ((python-ts-mode) . lsp-ui-doc-mode)
    ((after-save-hook) . (lambda ()
                           ;; if buffer *lsp-ui-imenu* is displaying, then run lsp-imenu
@@ -425,11 +569,20 @@
   :ensure nil
   :after lsp-mode
   :custom
-  (lsp-pylsp-plugins-flake8-enabled nil))
+  (lsp-pylsp-plugins-flake8-enabled nil)
+  :config
+  ;; keep the pyright client from outranking pylsp even if lsp-pyright
+  ;; gets loaded again (its client priority beats pylsp's)
+  (add-to-list 'lsp-disabled-clients 'pyright))
 
-(use-package lsp-pyright
-  :after lsp-mode
-  :custom (lsp-pyright-langserver-command "basedpyright"))
+;; NOTE disabled in favor of pylsp installed per-project by
+;; install_lsp_server (.files) — pyright/basedpyright kept getting
+;; interrupted (Cancelling textDocument/diagnostic in
+;; after-change-functions), and merely loading lsp-pyright makes it
+;; win client selection over pylsp
+;; (use-package lsp-pyright
+;;   :after lsp-mode
+;;   :custom (lsp-pyright-langserver-command "basedpyright"))
 
 ;; NOTE don't use as not all lsps provide compatibility
 ;; (lsp-capability-not-supported "foldingRangeProvider") (use-package

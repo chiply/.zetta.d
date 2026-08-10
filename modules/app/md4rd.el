@@ -232,15 +232,17 @@ convert-to-json-url helper passes through unchanged."
   (general-unbind :keymaps 'md4rd-mode :states 'normal "q")
   (general-define-key :keymaps 'md4rd-mode :states 'normal "q" 'kill-current-buffer)
 
-  ;; fixing face
-  (defface md4rd--greentext-face
-    '((((type graphic) (background dark))
-       :background unspecified :foreground "#90a959")
-      (((type graphic) (background light))
-       :background unspecified :foreground "#90a959")
-      (t :background unspecified :foreground "#90a959"))
-    "Face for rendering greentexts."
-    :group 'md4rd)
+  ;; fixing face — the package defface uses :background nil, which
+  ;; Emacs 30+ warns about on every face realization (each new child
+  ;; frame, e.g. lsp-ui doc popups).  A second defface is a no-op
+  ;; (first definition wins), so replace the registered spec instead.
+  (face-spec-set 'md4rd--greentext-face
+                 '((((type graphic) (background dark))
+                    :background unspecified :foreground "#90a959")
+                   (((type graphic) (background light))
+                    :background unspecified :foreground "#90a959")
+                   (t :background unspecified :foreground "#90a959"))
+                 'face-defface-spec)
 
   ;; NOTE buggy
   ;;(add-hook 'md4rd-mode-hook 'md4rd-indent-all-the-lines)

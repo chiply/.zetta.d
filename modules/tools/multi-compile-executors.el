@@ -1,5 +1,10 @@
 ;;; multi-compile-executors.el --- Executor system for multi-compile -*- lexical-binding: t; -*-
 
+;; NOTE detached executors removed 2026-08: upstream dormant since
+;; 2022-11, core paths crash on modern Emacs/consult.  Long-running
+;; work goes through vterm or async-shell-command+ (or tmux outside
+;; Emacs).  See modules/tools/disabled/detached.el.
+
 ;;;;;;;;;;;;;;;;;; Enhanced versions of async-shell-command and
 ;;;;;;;;;;;;;;;;;; detached-shell-command
 (defun zmc-command-sentinel (process signal)
@@ -34,27 +39,13 @@ async-shell-command"
           output-buffer)
       (message "No process running"))))
 
-(defun zmc-detached-shell-command+ (command output-buffer)
-  (let* ((detached--shell-command-buffer output-buffer)
-         (proc (progn
-                 (detached-shell-command command)
-                 (with-current-buffer output-buffer
-                   (zetta-highlight-phrases))
-                 (get-buffer-process output-buffer))))
-    (if (process-live-p proc)
-        (progn
-          (set-process-sentinel proc #'zmc-command-sentinel)
-          output-buffer)
-      (message "No process running"))))
-
 ;;;;;;;;;;;;;;;;;;;;;; EXECUTORS
 (setq default-buffer-replace-policy "default-buffer-replace-policy")
 
 (defun zmc-execute (program cmd bufnm &optional buffer-replace-policy transient-name)
   (if (not (member program
-                   '("detached" "detached+" "async-shell-command"
-                     "async-shell-command+" "vterm" "compile"
-                     "detached-compile")))
+                   '("async-shell-command"
+                     "async-shell-command+" "vterm" "compile")))
       (error "zmc-execute: program %s not supported" program))
   (let ((cmd (progn
                (when (string-match " &" cmd)
@@ -93,13 +84,10 @@ async-shell-command"
           (t (message "Buffer %s already exists" bufnm))))
   (let* ((shell-command-switch "-ic")
          (buf (cond
-               ((string= program "detached") (zmc-es-detached cmd))
-               ((string= program "detached+") (zmc-es-detached+ cmd))
                ((string= program "async-shell-command") (zmc-es-async-shell-command cmd))
                ((string= program "async-shell-command+") (zmc-es-async-shell-command+ cmd))
                ((string= program "vterm") (zmc-es-vterm cmd))
-               ((string= program "compile") (zmc-es-compile cmd))
-               ((string= program "detached-compile") (zmc-es-detached-compile cmd)))))
+               ((string= program "compile") (zmc-es-compile cmd)))))
     (save-window-excursion
       (switch-to-buffer buf)
       (set (make-local-variable 'local-transient) transient-name))
@@ -131,11 +119,6 @@ async-shell-command"
         (compile-command (or local-cmd latest-cmd)))
     (save-window-excursion (compile compile-command))))
 
-(defun zmc-es-detached-compile (cmd)
-  (let ((compilation-buffer-name-function '(lambda (_) (zmc-compute-bufnm)))
-        (compile-command (or local-cmd latest-cmd)))
-    (save-window-excursion (detached-compile compile-command))))
-
 (defun zmc-es-async-shell-command (cmd)
   (let ((bufnm (zmc-compute-bufnm))
         (process-connection-type nil))
@@ -148,18 +131,6 @@ async-shell-command"
         (zmc-async-shell-command-spinners-enable t))
     (save-window-excursion
       (zmc-async-shell-command+ cmd bufnm))))
-
-(defun zmc-es-detached (cmd)
-  (let ((bufnm (zmc-compute-bufnm)))
-    (let ((detached--shell-command-buffer bufnm))
-      (detached-shell-command cmd))
-    bufnm))
-
-(defun zmc-es-detached+ (cmd)
-  (let ((bufnm (zmc-compute-bufnm))
-        (zmc-async-shell-command-spinners-enable t))
-    (zmc-detached-shell-command+ cmd bufnm)
-    bufnm))
 
 (defun zmc-es-vterm (cmd)
   (let* ((bufnm (zmc-compute-bufnm)))

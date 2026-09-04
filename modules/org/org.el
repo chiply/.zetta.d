@@ -133,64 +133,73 @@ the live theme, which is exactly what a calendar wants."
            "DONE(d!)"
            "NOPE(n!)")))
 
-  ;; State faces: QUES in the question pen's orange family, IDEA in
-  ;; the important pen's purple family, NOPE struck through; all
-  ;; light/dark aware.  TODO and DONE keep org's stock faces.
+  ;; State faces.  A TODO keyword is a WORD -- "PROG", "WAIT", "NOPE" --
+  ;; so it already says which state it is; the colour has nothing left to
+  ;; encode but how much attention that state deserves.  Org's stock red
+  ;; TODO and green DONE were the loudest thing on the page while saying
+  ;; nothing the word did not, and they clash with any theme not built
+  ;; around red and green.  So these walk the brushup ink ladder in four
+  ;; prominence tiers, the same ladder `zetta-line-chip-ladder' and the VC
+  ;; gutter markers use: loud or quiet by how far a state sits from the
+  ;; page, never by what colour it is.  The rungs are `zetta-keyword-tiers',
+  ;; shared with hl-todo -- which is hooked into `org-mode' and paints an
+  ;; org heading's TODO on top of org's own face, so the two vocabularies
+  ;; have to agree on what a given word weighs.
+  ;;
+  ;; The defface specs are cold-start fallbacks only, before
+  ;; `zetta-org-todo-refresh-faces' has run.
   (defface zetta-org-todo-prog
-    '((((background light)) :foreground "#1F6FB2" :weight bold)
-      (t :foreground "#6FB3E0" :weight bold))
-    "Face for the PROG todo keyword."
-    :group 'org-faces)
+    '((t :inherit org-todo)) "Face for the PROG todo keyword." :group 'org-faces)
   (defface zetta-org-todo-wait
-    '((((background light)) :foreground "#8A6D3B" :weight bold)
-      (t :foreground "#C9A66B" :weight bold))
-    "Face for the WAIT todo keyword."
-    :group 'org-faces)
+    '((t :inherit org-todo)) "Face for the WAIT todo keyword." :group 'org-faces)
   (defface zetta-org-todo-ques
-    '((((background light)) :foreground "#C25E00" :weight bold)
-      (t :foreground "#E8A45C" :weight bold))
-    "Face for the QUES todo keyword."
-    :group 'org-faces)
+    '((t :inherit org-todo)) "Face for the QUES todo keyword." :group 'org-faces)
   (defface zetta-org-todo-hold
-    '((((background light)) :foreground "#767676" :weight bold)
-      (t :foreground "#9E9E9E" :weight bold))
-    "Face for the HOLD todo keyword."
-    :group 'org-faces)
+    '((t :inherit org-todo)) "Face for the HOLD todo keyword." :group 'org-faces)
   (defface zetta-org-todo-idea
-    '((((background light)) :foreground "#7B4FA6" :weight bold)
-      (t :foreground "#B08FD6" :weight bold))
-    "Face for the IDEA todo keyword."
-    :group 'org-faces)
+    '((t :inherit org-todo)) "Face for the IDEA todo keyword." :group 'org-faces)
   (defface zetta-org-todo-nope
-    '((((background light)) :foreground "#9A9A9A" :strike-through t)
-      (t :foreground "#7A7A7A" :strike-through t))
-    "Face for the NOPE todo keyword."
-    :group 'org-faces)
-  ;; The specs above are defaults only: they flip with the background but are
-  ;; otherwise fixed hues, so PROG stayed the same blue against every palette.
-  ;; Re-derive them from the theme, keeping the semantic grouping.
+    '((t :inherit org-done :strike-through t))
+    "Face for the NOPE todo keyword." :group 'org-faces)
+
+  (defvar zetta-org-todo-face-tiers
+    '((zetta-org-todo-prog . loud)
+      (org-todo            . open)
+      (zetta-org-todo-ques . open)
+      (zetta-org-todo-wait . parked)
+      (zetta-org-todo-hold . parked)
+      (zetta-org-todo-idea . parked)
+      (org-done            . closed)
+      (zetta-org-todo-nope . closed))
+    "Which prominence tier each TODO keyword face sits in.
+
+Grouped by what the state asks of you, not by how far along it is.  WAIT
+and HOLD differ in WHY nothing is happening -- blocked externally versus
+parked by choice -- but they ask the same thing of a reader scanning the
+file, which is nothing, so they share a rung and let the word carry the
+rest.  `org-todo' and `org-done' are org's own faces, restyled here so a
+keyword without an entry in `org-todo-keyword-faces' still follows the
+ladder.")
+
   (defun zetta-org-todo-refresh-faces ()
-    "Re-colour the custom org TODO keyword faces from the current theme."
-    (when (fboundp 'zetta-theme-color)
-      (dolist (spec '((zetta-org-todo-prog . accent)
-                      (zetta-org-todo-wait . warning)
-                      (zetta-org-todo-ques . warning)
-                      (zetta-org-todo-idea . accent)))
-        (when (facep (car spec))
-          (set-face-attribute (car spec) nil
-                              :foreground (zetta-theme-color (cdr spec))
-                              :weight 'bold)))
-      ;; HOLD and NOPE are "not active" rather than a state with a hue
-      (let ((muted (zetta-svg-line--dim
-                    (or (bound-and-true-p brushup-fg-3)
-                        (face-foreground 'default nil t) "#9a9a9a")
-                    0.45)))
-        (when (facep 'zetta-org-todo-hold)
-          (set-face-attribute 'zetta-org-todo-hold nil
-                              :foreground muted :weight 'bold))
-        (when (facep 'zetta-org-todo-nope)
-          (set-face-attribute 'zetta-org-todo-nope nil
-                              :foreground muted :strike-through t)))))
+    "Re-colour the org TODO keyword faces from the current theme's ink ladder."
+    (pcase-dolist (`(,face . ,tier) zetta-org-todo-face-tiers)
+      (when-let* (((facep face))
+                  ((fboundp 'zetta-tier-color))
+                  (color (zetta-tier-color tier)))
+        (set-face-attribute
+         face nil
+         :foreground color
+         ;; Weight is a second prominence axis that costs no colour: the
+         ;; states that want something from you are heavy, the ones that
+         ;; do not are not.  Org paints both `org-todo' and `org-done'
+         ;; bold by default, which is half of why a finished heading used
+         ;; to shout as loudly as an open one.
+         :weight (if (memq tier '(loud open)) 'bold 'normal)
+         ;; NOPE is the only struck state -- abandoned, not finished.
+         ;; Set explicitly on every face so a theme that strikes `org-done'
+         ;; does not leak the effect into the others.
+         :strike-through (eq face 'zetta-org-todo-nope)))))
   (zetta-org-todo-refresh-faces)
   (add-to-list 'brushup-styles '(zetta-org-todo-refresh-faces) t)
 

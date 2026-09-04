@@ -464,6 +464,35 @@ only if brushup has not defined its gradient yet."
         (alist-get (if (eq kind 'modified) 'changed kind)
                    zetta-theme-color-fallbacks))))
 
+;;; ------------------------------------------------------------------
+;;; Keyword prominence tiers
+;;; ------------------------------------------------------------------
+;; For the keyword vocabularies that appear as WORDS in a buffer: org's
+;; TODO states, hl-todo's TODO/FIXME/NOTE.  The word already says which
+;; keyword it is, so colour has nothing left to encode but how much
+;; attention the thing deserves -- which is what these four rungs of the
+;; brushup ink ladder say, on the same principle as
+;; `zetta-line-chip-ladder' and `zetta-vc-marker-ladder'.
+;;
+;; Shared so that a word painted by two packages lands in one place.
+;; hl-todo is hooked into `org-mode', so an org heading's TODO is
+;; highlighted twice and hl-todo wins; when both consult this table, that
+;; stops mattering.
+
+(defvar zetta-keyword-tiers
+  '((loud   . brushup-fg)     ; something is wrong, or in flight
+    (open   . brushup-fg-2)   ; wants you
+    (parked . brushup-fg-4)   ; context, not a call to action
+    (closed . brushup-fg-6))  ; over
+  "Ink-ladder rung for each keyword-prominence tier.")
+
+(defun zetta-tier-color (tier)
+  "Colour for keyword-prominence TIER.  See `zetta-keyword-tiers'."
+  (let ((rung (alist-get tier zetta-keyword-tiers)))
+    (or (and rung (boundp rung) (symbol-value rung))
+        (face-foreground 'default nil t)
+        "#a0a0a0")))
+
 (defconst zetta-line-chip-ladder
   '((bare   nil          nil)
     (chip   brushup-bg-2 brushup-bg-1)

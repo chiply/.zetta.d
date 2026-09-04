@@ -70,9 +70,10 @@
 
 
 ;; Every indicator below used to carry a fixed pastel, picked against one
-;; theme.  This is the same gutter information git-gutter shows, so it takes
-;; the same theme-derived hues -- `zetta-theme-color' reads them off the
-;; theme's own error/warning/success/diff faces.
+;; theme.  They now read off the theme instead: `zetta-theme-color' for the
+;; semantic ones (an error marker is the theme's error colour), and
+;; `zetta-svg-margin--vc-color' for the VC bars, which are not semantic and
+;; take the theme's syntax palette rather than the diff stoplight.
 (defun zetta-svg-margin--color (kind)
   "Theme colour for margin indicator KIND.
 KIND adds `muted' and `accent' to what `zetta-theme-color' understands."
@@ -86,6 +87,19 @@ KIND adds `muted' and `accent' to what `zetta-theme-color' understands."
     (_ (if (fboundp 'zetta-theme-color)
            (zetta-theme-color kind)
          (or (bound-and-true-p brushup-fg-3) "#9aa0a8")))))
+
+(defun zetta-svg-margin--vc-color (kind)
+  "Marker colour for VC KIND (`added', `modified' or `removed').
+
+Deliberately not `zetta-svg-margin--color'.  The rest of the margin is
+semantic -- a flycheck error marker is the theme's error colour, and
+should be -- but a VC bar carries no meaning beyond which of three
+things it is, so it borrows the theme's syntax palette instead of the
+diff stoplight -- three rungs of the ink ladder.  See
+`zetta-vc-marker-ladder'."
+  (if (fboundp 'zetta-vc-marker-color)
+      (zetta-vc-marker-color kind)
+    (zetta-svg-margin--color (if (eq kind 'modified) 'changed kind))))
 
 (defun zetta-svg-margin--goto-line (n)
   "Move point to the start of line N (absolute) in the current buffer."
@@ -177,7 +191,7 @@ one-cell column)."
                (cl-loop for ln from start to (min end (+ start 1000)) do
                         (let ((l ln) (ty type))
                           (push (list :line l :shape 'bar
-                                      :color (zetta-svg-margin--color (if (eq ty 'added) 'added 'changed))
+                                      :color (zetta-svg-margin--vc-color (if (eq ty 'added) 'added 'modified))
                                       :help (format "git: %s hunk" ty)
                                       :action-help "show hunk diff"
                                       :action (zetta-svg-margin--gg-action l #'git-gutter:popup-hunk)
@@ -185,7 +199,7 @@ one-cell column)."
                                 out))))
               ('deleted
                (let ((l start))
-                 (push (list :line l :shape 'triangle :color (zetta-svg-margin--color 'removed)
+                 (push (list :line l :shape 'triangle :color (zetta-svg-margin--vc-color 'removed)
                              :help "git: deleted hunk"
                              :action-help "show hunk diff"
                              :action (zetta-svg-margin--gg-action l #'git-gutter:popup-hunk)
@@ -461,11 +475,12 @@ the recompute yields the same hunks we skip, breaking the cycle."
 ;; and the per-package refresh triggers.
 
 ;; Keep BOTH fringes at full width.  The fringe natively hosts the per-row
-;; line-continuation / visual-line wrap arrows (redisplay draws them per screen
-;; row, for free) and yascroll's thumb -- jobs a window-anchored margin can't do.
-;; Evil marks no longer need the left fringe (the activate below turns off
-;; evil-fringe-mark; they render in the margin instead), so the left fringe stays
-;; free for those wrap indicators.
+;; line-continuation / visual-line wrap arrows -- redisplay draws them per
+;; screen row, for free, which a window-anchored margin can't do.  (It also
+;; hosted yascroll's scroll thumb until that was retired; see
+;; disabled/yascroll.el.)  Evil marks no longer need the left fringe (the
+;; activate below turns off evil-fringe-mark; they render in the margin
+;; instead), so the left fringe stays free for those wrap indicators.
 (setq svg-margin-disable-fringe nil)
 
 ;; Reserve a baseline margin width so buffer text doesn't shift as indicators
@@ -562,8 +577,8 @@ buffer text does not jitter as indicators pop in and out."
 ;; ----------------------------------------------------------------
 ;; Runs after init, once the packages svg-margin sits alongside are loaded.
 ;; This is integration with MY setup -- silencing other gutter drawers
-;; (evil-fringe-mark), keeping yascroll in the fringe, redirecting git-gutter's
-;; drawing into the margin -- plus enabling the mode and the hover highlight.
+;; (evil-fringe-mark), redirecting git-gutter's drawing into the margin --
+;; plus enabling the mode and the hover highlight.
 ;; A minimal svg-margin user needs only `(global-svg-margin-mode 1)' and, for
 ;; the hover background, `(svg-margin-hover-mode 1)'.
 
@@ -572,10 +587,6 @@ buffer text does not jitter as indicators pop in and out."
   ;; evil marks now come from the margin provider, not the fringe.
   (when (fboundp 'global-evil-fringe-mark-mode)
     (global-evil-fringe-mark-mode -1))
-  ;; yascroll draws the scrollbar thumb in the (right) fringe -- enable it
-  ;; (the margin scroll thumb that used to replace it has been removed).
-  (when (fboundp 'global-yascroll-bar-mode)
-    (global-yascroll-bar-mode 1))
   ;; Let git-gutter keep computing hunks, but stop it drawing (svg-margin draws).
   (when (and (fboundp 'git-gutter:view-diff-infos)
              (not (advice-member-p #'zetta-svg-margin--gg-feed 'git-gutter:view-diff-infos)))

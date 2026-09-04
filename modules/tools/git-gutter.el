@@ -37,16 +37,20 @@
                   (setq brushup-git-gutter-foreground brushup-bg-6
                         brushup-git-gutter-background brushup-bg)
                   ;; Added/deleted/modified were all one colour, so the gutter
-                  ;; said "something changed" but never what.  Take the hues
-                  ;; from the theme's own diff faces instead of inventing them.
+                  ;; said "something changed" but never what.  The three hues
+                  ;; come from `zetta-vc-marker-ladder' -- three rungs of the
+                  ;; theme's own ink ladder rather than the red/green/yellow
+                  ;; diff stoplight, which is three colours from outside the
+                  ;; theme run down the edge of every window to encode a
+                  ;; distinction any three shades can carry.
                   (set-face-attribute 'git-gutter:added nil
-                                      :foreground (zetta-theme-color 'added)
+                                      :foreground (zetta-vc-marker-color 'added)
                                       :background 'unspecified)
                   (set-face-attribute 'git-gutter:deleted nil
-                                      :foreground (zetta-theme-color 'removed)
+                                      :foreground (zetta-vc-marker-color 'removed)
                                       :background 'unspecified)
                   (set-face-attribute 'git-gutter:modified nil
-                                      :foreground (zetta-theme-color 'changed)
+                                      :foreground (zetta-vc-marker-color 'modified)
                                       :background 'unspecified)
                   (set-face-attribute 'git-gutter:separator nil
                                       :foreground brushup-git-gutter-foreground

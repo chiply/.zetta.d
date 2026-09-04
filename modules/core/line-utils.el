@@ -391,97 +391,221 @@ KIND is one of error, warning, success, accent, added, removed, changed."
         (lb (+ 0.05 (or (zetta-color--luminance b) 0))))
     (/ (max la lb) (min la lb))))
 
+(defcustom zetta-readable-on-threshold 7.0
+  "Contrast ratio at which a theme colour is preferred over pure black/white.
+`zetta-readable-on' hands back the theme\='s own ink whenever it clears this,
+and only reaches for absolute black or white when neither does."
+  :type 'number :group 'zetta)
+
 (defun zetta-readable-on (bg)
   "Return whichever theme colour reads best on BG.
 
 Picks by measured contrast rather than by a luminance threshold.  A
 threshold works at the extremes and fails in the middle: a mid-tone pill
 would be handed the light foreground on the strength of being \"dark\",
-landing at 2:1.  Falls back to plain white or black when neither theme
-colour clears a readable ratio."
-  (let* ((fg (or (bound-and-true-p brushup-fg) (face-foreground 'default nil t) "#ffffff"))
-         (bgc (or (bound-and-true-p brushup-bg) (face-background 'default nil t) "#000000"))
-         (best (car (sort (list fg bgc "#ffffff" "#000000")
-                          (lambda (x y) (> (zetta-contrast-ratio x bg)
-                                           (zetta-contrast-ratio y bg)))))))
-    best))
+landing at 2:1.
 
-(defun zetta-theme-pill (kind)
-  "Background/foreground pair for a KIND-coloured pill segment."
-  (let ((bg (zetta-svg-line--dim (zetta-theme-color kind) 0.45)))
-    (list :bg bg :color (zetta-readable-on bg))))
+Among the colours that DO read, the theme\='s own foreground/background win
+over absolute black/white: maximum contrast alone picks #000000 over a
+theme ink of #202020 on the strength of half a ratio point, and pure black
+label text on a chip next to #202020 buffer text is a visible mismatch.
+Falls back to plain white or black when no theme colour clears
+`zetta-readable-on-threshold\='."
+  (let* ((fg (or (bound-and-true-p brushup-fg) (face-foreground 'default nil t) "#ffffff"))
+         (bgc (or (bound-and-true-p brushup-bg) (face-background 'default nil t) "#000000")))
+    (or (car (sort (seq-filter (lambda (c) (>= (zetta-contrast-ratio c bg)
+                                               zetta-readable-on-threshold))
+                               (list fg bgc))
+                   (lambda (x y) (> (zetta-contrast-ratio x bg)
+                                    (zetta-contrast-ratio y bg)))))
+        (car (sort (list fg bgc "#ffffff" "#000000")
+                   (lambda (x y) (> (zetta-contrast-ratio x bg)
+                                    (zetta-contrast-ratio y bg))))))))
+
+;;; ------------------------------------------------------------------
+;;; VC gutter marker colours
+;;; ------------------------------------------------------------------
+;; The gutter used to take its three hues from `zetta-theme-color\='s diff
+;; kinds, which is the red/green/yellow stoplight every diff tool uses.
+;; That convention earns its keep in a diff BUFFER, where red and green
+;; are the content; in a two-pixel margin bar there is no diff to read,
+;; only "which of the three is this", and the stoplight drags three
+;; colours from outside the theme\='s palette down the edge of every window.
+;;
+;; So the markers separate by LIGHTNESS instead: three rungs of the
+;; brushup ink ladder, the same ladder `zetta-line-chip-ladder\=' uses to
+;; make a badge loud or quiet without giving it a hue.  Borrowing three
+;; separable colours from the theme\='s syntax palette was the obvious
+;; alternative and was tried; it works on a hue-diverse theme and has
+;; nothing to offer a deliberately monochrome one (doric-obsidian paints
+;; its whole font-lock palette in four greys) or a blue-heavy one, so the
+;; gutter would have changed strategy -- not just shade -- from theme to
+;; theme.  Lightness is an axis every theme has.
+;;
+;; Magit keeps the stoplight (see modules/tools/magit.el): there the
+;; colours are the content.
+
+(defvar zetta-vc-marker-ladder
+  '((added . brushup-fg) (removed . brushup-fg-3) (modified . brushup-fg-6))
+  "Ink-ladder rungs for the VC gutter markers, as kind to brushup variable.
+
+`removed\=' takes the middle rung rather than an end.  It is the one marker
+already distinguished by shape -- a triangle, where the other two are bars
+\(see `zetta-svg-margin-git-gutter\=') -- so it can afford the smaller gaps
+and leave the ladder\='s full span to the pair a reader has to tell apart on
+colour alone.")
+
+(defun zetta-vc-marker-color (kind)
+  "Colour for VC marker KIND (`added\=', `modified\=' or `removed\=').
+See `zetta-vc-marker-ladder\='.  Falls back to `zetta-theme-color-fallbacks\='
+only if brushup has not defined its gradient yet."
+  (let ((rung (alist-get kind zetta-vc-marker-ladder)))
+    (or (and rung (boundp rung) (symbol-value rung))
+        (alist-get (if (eq kind 'modified) 'changed kind)
+                   zetta-theme-color-fallbacks))))
+
+(defconst zetta-line-chip-ladder
+  '((bare   nil          nil)
+    (chip   brushup-bg-2 brushup-bg-1)
+    (mid    brushup-bg-4 brushup-bg-2)
+    (invert brushup-fg-1 brushup-bg-4))
+  "Pill backgrounds by PROMINENCE, as (TIER SELECTED-WINDOW UNSELECTED-WINDOW).
+
+The bars are transparent, so a badge cannot lean on a bar colour to be
+seen, and it should not lean on a HUE either: an accent-coloured pill is a
+blue smudge on a monochrome theme and says nothing a reader can decode.
+These four tiers encode prominence as position on the same brushup
+background ladder the tab pills use, so a badge is loud or quiet by how far
+it sits from the page, never by what colour it is:
+
+  bare    no pill at all -- the resting state, quietest
+  chip    barely lifted off the page
+  mid     a clearly present grey keycap
+  invert  near-foreground: the loudest thing the line can say
+
+Each tier names its own unselected colour one or two rungs down, so the
+whole vocabulary dims together with everything else in an unfocused
+window.  Symbols, not colours: they are resolved per call, after a theme
+change has rewritten the palette.")
+
+(defun zetta-line-chip (tier &optional inactive)
+  "Style plist (`:bg\=' + readable `:color\=') for a TIER pill, or nil for `bare\='.
+TIER is a key of `zetta-line-chip-ladder\='; INACTIVE picks its unselected
+colour.  An unselected label is additionally muted the same way the mode
+line\='s buffer chip is, so a badge never out-reads its own window."
+  (when-let* ((row (assq tier zetta-line-chip-ladder))
+              (sym (nth (if inactive 2 1) row))
+              (bg  (and (boundp sym) (symbol-value sym))))
+    (list :bg bg
+          :color (let ((c (zetta-readable-on bg)))
+                   ;; Muted TOWARD ITS OWN PILL, not toward the page: the pill
+                   ;; has already stepped down a rung or two, so blending the
+                   ;; label to the page on top of that lands each tier at a
+                   ;; different, and for `invert' an unreadable, ratio.  Against
+                   ;; its own pill every tier settles around 5:1 -- clearly
+                   ;; quieter than the ~12:1 it reads at when selected, and
+                   ;; still legible, which the ace keycap needs.
+                   (if inactive (zetta-line-blend c bg 0.3) c)))))
+
+(defconst zetta-line-modal-abbrev
+  '(("normal" . "N") ("insert" . "I") ("visual" . "V") ("replace" . "R")
+    ("operator" . "O") ("motion" . "M") ("emacs" . "E")
+    ("beacon" . "B") ("keypad" . "K"))
+  "Single-letter abbreviations for the states evil and meow report.
+The mode line has room for a letter, not a word, and the state is glanced
+at rather than read.  Any state not listed falls back to its own uppercased
+first letter, which keeps every evil/meow state distinct in practice.")
+
+(defconst zetta-line-modal-tier
+  '(("insert" . invert) ("replace" . invert)
+    ("visual" . mid) ("beacon" . mid) ("keypad" . mid)
+    ("normal" . bare) ("motion" . bare) ("operator" . bare))
+  "Prominence tier (see `zetta-line-chip-ladder\=') per modal state.
+
+The states you can leave text in by accident -- insert, replace -- invert;
+the transient selection states sit at `mid\='; normal and its navigational
+relatives are `bare\=', because the resting state should not draw the eye.
+Anything unlisted gets a faint `chip\=', so a state this table has not met
+still reads as \"not normal\".  With hue gone, this tier and the letter are
+what tell the states apart.")
 
 ;;; mode-line text segments
 (defun zetta-modeline-svg--modal ()
-  ;; show the modal STATE (normal/insert/...), styled per state:
-  ;; normal -> regular; insert -> dark bg + light fg; visual -> distinct colour.
+  "The modal state as a single letter on a monochrome pill.
+
+A letter rather than the word: `zetta-line-modal-abbrev\=' maps the state,
+and the full name stays in the tooltip.  Colour is not carrying the
+distinction any more -- green-for-insert said nothing to anyone who had not
+been told, and read as a stray hue on a monochrome theme -- so the state is
+told by its letter and by how far its pill sits off the page
+\(`zetta-line-modal-tier\='), which works on any theme, light or dark.
+
+The label is always padded to three characters so the segments after it do
+not shift as the state changes.  The modal state is global, so every window
+draws the same badge; the unselected ones step down the ladder, otherwise a
+screenful of identical pills would say nothing about where point is."
   (let* ((st (zetta-line-modal-state))
-         (style (cond
-                 ((string= st "insert")
-                  (append (zetta-theme-pill 'success) (list :weight 'bold)))
-                 ((string= st "visual")
-                  (append (zetta-theme-pill 'warning) (list :weight 'bold)))
-                 ((string= st "emacs")  (list :color (zetta-theme-color 'accent)))
-                 (t nil))))   ; normal & friends: plain foreground
-    (apply #'zetta-svg-seg st 'ml-modal
+         (letter (or (cdr (assoc st zetta-line-modal-abbrev))
+                     (and (> (length st) 0) (upcase (substring st 0 1)))
+                     "?"))
+         (tier (or (cdr (assoc st zetta-line-modal-tier)) 'chip))
+         (chip (zetta-line-chip tier (not (mode-line-window-selected-p)))))
+    (apply #'zetta-svg-seg (format " %s " letter) 'ml-modal
            (append
-            (list :help (format "modal state: %s" (string-trim (format "%s" st)))
+            (list :help (format "modal state: %s" st)
                   :action-help "show key bindings"
                   :action #'describe-bindings
                   :menu (list (cons "Describe bindings" #'describe-bindings)
                               (cons "Describe mode" #'describe-mode)
                               (cons "Command (M-x)" #'execute-extended-command)))
-            style))))
+            (and chip (append chip (list :weight 'bold)))))))
 
 (defun zetta-modeline-svg--ace ()
-  "Ace-window key for this window as a bold standout badge (dark bg, light fg)."
+  "Ace-window key for this window, as a monochrome keycap.
+
+`aw-update\=' keeps `ace-window-path\=' populated at all times (see
+ace-window.el), so this badge is permanent furniture rather than something
+that appears during a jump -- which is why it dims with its window like the
+rest of the line, and why it is a grey keycap rather than the theme accent
+it used to borrow.  It stays legible when unselected: an unselected window
+is exactly the one you are about to jump TO, so its key still has to read."
   (let ((path (window-parameter (selected-window) 'ace-window-path)))
     (and path (> (length path) 0)
          (apply #'zetta-svg-seg (format " %s " path) 'ml-ace
                 :weight 'bold
-                (append (zetta-theme-pill 'accent)
+                (append (zetta-line-chip 'mid (not (mode-line-window-selected-p)))
                         (list :help (format "ace-window key: %s" path)))))))
 
-(defvar zetta-modeline--buffer-bg-cache nil
-  "Cons (BG . LIGHTER) caching the lightened buffer-name pill background.")
 (defun zetta-modeline--lighter-bg (&optional inactive)
-  "A pill background for the buffer name, contrasting with the mode line.
+  "A chip background for the buffer name, or nil when the theme is unknown.
 
-Blends the mode-line background toward the theme FOREGROUND, not toward
-white.  Blending to white only separates the pill on a light theme; on a
-dark one it produced a near-black pill on a near-black bar, which is why
-the buffer name was hard to read in both active and inactive states.
-INACTIVE selects the inactive mode-line background."
-  (let ((bg (if inactive
-                (bound-and-true-p zetta-modeline-svg-bg-inactive)
-              (bound-and-true-p zetta-modeline-svg-bg-active))))
-    (cond ((not (stringp bg)) nil)
-          ((equal (car zetta-modeline--buffer-bg-cache) bg)
-           (cdr zetta-modeline--buffer-bg-cache))
-          (t (cdr (setq zetta-modeline--buffer-bg-cache
-                        (cons bg (ignore-errors
-                                   (require 'color)
-                                   (let ((fg (color-name-to-rgb
-                                              (or (bound-and-true-p brushup-fg)
-                                                  (face-foreground 'default nil t)
-                                                  "#ffffff"))))
-                                     (apply #'color-rgb-to-hex
-                                            (append (cl-mapcar
-                                                     (lambda (c f) (+ c (* (- f c) 0.22)))
-                                                     (color-name-to-rgb bg) fg)
-                                                    (list 2))))))))))))
+This used to blend the mode-line's own background toward the foreground,
+but the mode line has no background any more -- it is transparent, and the
+chip is one of the few pieces of material left floating on the buffer
+background.  So it is taken straight off the brushup ladder instead, the
+same ladder the tab-line pills use: one step up from the buffer background
+for the selected window, half a step for the rest.  INACTIVE picks the
+fainter chip."
+  (if inactive
+      (bound-and-true-p brushup-bg-1)
+    (bound-and-true-p brushup-bg-2)))
 
 (defun zetta-modeline-svg--buffer ()
   (let* ((buf (current-buffer))
          (n (buffer-name buf))
-         (label (if (> (length n) 40) (concat (substring n 0 39) "…") n)))
+         (label (if (> (length n) 40) (concat (substring n 0 39) "…") n))
+         ;; The chip took no notice of window selection before, so every
+         ;; window's buffer name looked equally present.  With no bar behind
+         ;; it that was the whole cue, so it now steps down with the rest.
+         (activep (mode-line-window-selected-p))
+         (chip (zetta-modeline--lighter-bg (not activep))))
     (svg-line-seg
      label
      ;; id includes the buffer so only THIS window's name boxes on hover
      :id (list 'ml-buffer buf)
-     :bg (zetta-modeline--lighter-bg)
-     :color (let ((pill (zetta-modeline--lighter-bg)))
-              (and pill (zetta-readable-on pill)))
+     :bg chip
+     :color (and chip (let ((c (zetta-readable-on chip)))
+                        (if activep c (zetta-line-blend c chip 0.3))))
      :help (format "buffer: %s" n)
      :action-help "switch buffer"
      :action #'switch-to-buffer
@@ -567,10 +691,24 @@ INACTIVE selects the inactive mode-line background."
                        (and (fboundp 'lsp-organize-imports) (cons "Organize imports" #'lsp-organize-imports))
                        (and (fboundp 'lsp-workspace-restart) (cons "Restart workspace" #'lsp-workspace-restart)))))))
 
+(defconst zetta-line-flycheck-tier
+  '((error . invert) (warning . mid) (info . chip))
+  "Prominence tier (see `zetta-line-chip-ladder\=') per worst diagnostic level.
+Checked in this order; a buffer with nothing to report gets no pill at all.")
+
 (defun zetta-modeline-svg--flycheck ()
   "Flycheck indicator: a bug glyph plus error/warning/info counts.
-Coloured red when there are errors, orange for warnings, green when clean.
-Shown whenever `flycheck-mode' is active."
+
+Severity is carried by the pill\='s PROMINENCE, not by a hue: errors invert,
+warnings sit at `mid\=', an info-only buffer gets a faint `chip\=', and a
+clean one stays `bare\=' so it does not draw the eye.  The red/amber/green
+this used to draw were the last hardcoded colours on the line -- they
+ignored the theme entirely (a fixed #f85149 on any background, light or
+dark), and the counts already spell the severity out as \"2e 1w\", so the
+colour was only repeating what the label had said.  The tier steps down in
+an unselected window like every other badge.
+
+Shown whenever `flycheck-mode\=' is active."
   (when (and (bound-and-true-p flycheck-mode) (fboundp 'flycheck-count-errors))
     (let* ((counts (flycheck-count-errors flycheck-current-errors))
            (err  (or (cdr (assq 'error counts)) 0))
@@ -582,19 +720,25 @@ Shown whenever `flycheck-mode' is active."
                                   (and (> warn 0) (format "%dw" warn))
                                   (and (> info 0) (format "%di" info)))))
            (label (concat (or bug "fc")
-                          (and parts (concat " " (string-join parts " "))))))
-      (zetta-svg-seg
-       label 'ml-flycheck
-       :color (cond ((> err 0) "#f85149") ((> warn 0) "#d29922") (t "#3fb950"))
-       :help (format "flycheck: %d error(s), %d warning(s), %d info" err warn info)
-       :action-help "list errors"
-       :action (if (fboundp 'flycheck-list-errors) #'flycheck-list-errors #'ignore)
-       :menu (delq nil
-                   (list (and (fboundp 'flycheck-list-errors) (cons "List errors" #'flycheck-list-errors))
-                         (and (fboundp 'flycheck-next-error) (cons "Next error" #'flycheck-next-error))
-                         (and (fboundp 'flycheck-previous-error) (cons "Previous error" #'flycheck-previous-error))
-                         (and (fboundp 'flycheck-buffer) (cons "Recheck buffer" #'flycheck-buffer))
-                         (and (fboundp 'flycheck-verify-setup) (cons "Verify setup" #'flycheck-verify-setup))))))))
+                          (and parts (concat " " (string-join parts " ")))))
+           (worst (cond ((> err 0) 'error) ((> warn 0) 'warning) ((> info 0) 'info)))
+           (chip (and worst
+                      (zetta-line-chip (alist-get worst zetta-line-flycheck-tier)
+                                       (not (mode-line-window-selected-p))))))
+      (apply #'zetta-svg-seg
+             (format " %s " label) 'ml-flycheck
+             (append
+              (list
+               :help (format "flycheck: %d error(s), %d warning(s), %d info" err warn info)
+               :action-help "list errors"
+               :action (if (fboundp 'flycheck-list-errors) #'flycheck-list-errors #'ignore)
+               :menu (delq nil
+                           (list (and (fboundp 'flycheck-list-errors) (cons "List errors" #'flycheck-list-errors))
+                                 (and (fboundp 'flycheck-next-error) (cons "Next error" #'flycheck-next-error))
+                                 (and (fboundp 'flycheck-previous-error) (cons "Previous error" #'flycheck-previous-error))
+                                 (and (fboundp 'flycheck-buffer) (cons "Recheck buffer" #'flycheck-buffer))
+                                 (and (fboundp 'flycheck-verify-setup) (cons "Verify setup" #'flycheck-verify-setup)))))
+              (and chip (append chip (list :weight 'bold))))))))
 
 (defun zetta-modeline-svg--indicators ()
   (let* ((flags (delq nil
@@ -795,12 +939,6 @@ the space-tree tab-bar lighter, and (visually) svg-margin's org-heading rail."
     (and (featurep 'nerd-icons)
          (zetta-line--glyph (ignore-errors (nerd-icons-octicon "nf-oct-git_branch"))))))
 
-(defun zetta-modeline-svg--file-progress ()
-  "Compact progress pie of point's position through the buffer."
-  (let* ((total (max 1 (- (point-max) (point-min))))
-         (frac (/ (float (- (point) (point-min))) total)))
-    (list :svg-pie frac "#2a4d77" "#d4dcea")))
-
 ;;; tab bar
 (defun zetta-tab-bar-file-icon ()
   "File-type glyph for the current buffer (tab bar)."
@@ -810,8 +948,7 @@ the space-tree tab-bar lighter, and (visually) svg-margin's org-heading rail."
   "Mail glyph, shown when mu4e has a non-empty modeline string."
   (when (and (fboundp 'mu4e--modeline-string)
              (let ((s (ignore-errors (mu4e--modeline-string))))
-               (and s (> (length (string-trim s)) 0))))
-    (and (featurep 'nerd-icons)
+               (and s (> (length (string-trim s)) 0)))) (and (featurep 'nerd-icons)
          (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-email_outline"))))))
 
 (defun zetta-tab-bar-mu4e-text ()
@@ -1077,7 +1214,11 @@ geometry -- keep in sync if its clock-radius/masthead formulas change."
          (masthead (if (bound-and-true-p zetta-tab-bar-svg-icon) height 0))
          (gap  (* 2 fz))                                    ; breathing room
          (ca   (max 1 (or (bound-and-true-p zetta-tab-bar-svg-char-advance) 8)))
-         (avail (- (/ width 2) r masthead gap)))
+         ;; the bar's own left inset comes off the budget too, or the left
+         ;; content is sized as though it still started at x=0 and runs that
+         ;; many pixels closer to the centred clock than intended
+         (pad  (or (bound-and-true-p zetta-tab-bar-svg-pad) 0))
+         (avail (- (/ width 2) r masthead gap pad)))
     (max 0 (floor avail ca))))
 
 (defun zetta-tab-bar-svg--spotify ()
@@ -1317,6 +1458,17 @@ Nerd Font boilerplate that every one of them repeats."
       (setq name (replace-regexp-in-string "\\`monaspace-" "mona-" name))
       name)))
 
+(defun zetta-line-blend (color toward factor)
+  "Blend COLOR TOWARD another colour by FACTOR (0.0-1.0).
+Returns COLOR unchanged if either name cannot be parsed."
+  (if-let* ((c (color-name-to-rgb color))
+            (b (color-name-to-rgb toward)))
+      (apply #'color-rgb-to-hex
+             (append (cl-mapcar (lambda (x y) (+ (* x (- 1.0 factor)) (* y factor)))
+                                c b)
+                     (list 2)))
+    color))
+
 (defun zetta-svg-line--dim (color factor)
   "Blend COLOR toward the theme background by FACTOR (0.0-1.0).
 
@@ -1324,15 +1476,9 @@ Stepping down the brushup foreground gradient is not enough for this: two
 adjacent steps differ by a few percent and read as the same colour in a
 small SVG label.  Blending toward the background gives a separation that
 holds up whatever the theme is."
-  (let ((bg (or (bound-and-true-p brushup-bg)
-                (face-background 'default nil t) "#000000")))
-    (if-let* ((c (color-name-to-rgb color))
-              (b (color-name-to-rgb bg)))
-        (apply #'color-rgb-to-hex
-               (append (cl-mapcar (lambda (x y) (+ (* x (- 1.0 factor)) (* y factor)))
-                                  c b)
-                       (list 2)))
-      color)))
+  (zetta-line-blend color (or (bound-and-true-p brushup-bg)
+                              (face-background 'default nil t) "#000000")
+                    factor))
 
 (defun zetta-tab-bar-font-preset ()
   "The active global fontaine preset, for the tab bar."
@@ -1482,6 +1628,53 @@ family `zetta-svg-line-font' currently names."
                (max 1 (round (zetta-svg-line--px-per-char
                               family (* 10 (symbol-value (cdr pair))))))))))))
 
+(defcustom zetta-svg-line-debug-tints
+  '(:tab-bar     "#f6c9c9"
+    :header-line "#c9e6c9"
+    :tab-line    "#c9d4f6"
+    :mode-line   "#f6e2b8")
+  "Per-bar backgrounds used by `zetta-svg-line-debug-backgrounds\='.
+
+Deliberately NOT derived from the theme.  Every other colour in the chrome
+is, which is the point of the debug view: these four have to stay mutually
+distinguishable and obviously foreign, so that what you are looking at is
+each bar\='s geometry rather than its styling.  Each bar\='s inactive variant,
+where it has one, is taken a step toward the background from these."
+  :type 'plist :group 'zetta)
+
+(defvar zetta-svg-line-debug-backgrounds nil
+  "Non-nil while the SVG bars are painted their `zetta-svg-line-debug-tints\='.
+Read by `zetta-svg-line-apply-brushup-palette\=', so the tints are re-applied
+on a theme change rather than being silently reset to nil by it.")
+
+(defun zetta-svg-line--bar-bg (bar)
+  "Background for BAR (`:tab-bar\=' `:header-line\=' `:tab-line\=' `:mode-line\=').
+nil unless `zetta-svg-line-debug-backgrounds\=' is on."
+  (and zetta-svg-line-debug-backgrounds
+       (plist-get zetta-svg-line-debug-tints bar)))
+
+;;;###autoload
+(defun zetta-svg-line-debug-backgrounds (&optional arg)
+  "Toggle a distinct flat background behind each SVG bar.
+
+The bars are normally transparent, which makes their EXTENTS invisible --
+you can see the content but not where the image starts and stops, so
+padding, insets and off-by-one geometry are impossible to eyeball.  This
+paints each of the tab bar, header line, tab line and mode line its own
+colour; the background rect covers the whole image, padding included, so
+what you see is the real footprint of each bar.
+
+With ARG, turn on if positive, off otherwise.  Toggle it back off when
+done -- this is a measuring tool, not a look."
+  (interactive "P")
+  (setq zetta-svg-line-debug-backgrounds
+        (if arg (> (prefix-numeric-value arg) 0)
+          (not zetta-svg-line-debug-backgrounds)))
+  (zetta-svg-line-apply-brushup-palette)
+  (force-mode-line-update t)
+  (message "svg-line debug backgrounds %s"
+           (if zetta-svg-line-debug-backgrounds "ON" "off")))
+
 (defun zetta-svg-line-apply-brushup-palette ()
   "Re-derive the SVG tab-line, tab-bar and mode-line colours from brushup.
 Registered on `brushup-styles', so it re-runs on every theme change.
@@ -1489,27 +1682,96 @@ Each assignment is guarded: the module owning the variable may not have
 loaded yet, and a missing one should simply keep its default."
   (when (boundp 'brushup-bg)
     (cl-flet ((setc (sym val) (when (boundp sym) (set sym val))))
-      ;; --- tab line: chrome in greys, selection in the fg family --------
-      (setc 'zetta-tab-line-svg-background                brushup-bg-1)
+      ;; --- tab line -----------------------------------------------------
+      ;; No bar: the strip is transparent and the `tab-line' face background
+      ;; (brushup paints it to `brushup-bg') shows through, so only the tab
+      ;; pills are visible.  That means the pills carry the entire
+      ;; selected/unselected distinction, and they are laid out on ONE
+      ;; ladder -- brushup-bg-1 .. bg-6 then fg-6 .. fg-1 run monotonically
+      ;; from "same as the buffer background" to "same as the buffer text",
+      ;; on a dark theme as on a light one.  Every unfocused element sits
+      ;; strictly lower on that ladder than its focused counterpart, so no
+      ;; unfocused window can ever read as more present than the focused one.
+      ;; The tab line is the one bar that keeps a background: a whisper of a
+      ;; tint marking where each window begins.  Same value in unselected
+      ;; windows -- it is structure, not a focus cue, and the pills already
+      ;; carry the selected/unselected distinction.  The debug tint, when on,
+      ;; overrides it.
+      (let* ((strength (or (bound-and-true-p zetta-tab-line-svg-tint) 0))
+             ;; zero means NO rect, not a rect in the page colour -- the frame
+             ;; is translucent, so the latter is a visible block
+             (faint (and (> strength 0)
+                         (zetta-line-blend brushup-bg brushup-fg strength))))
+        (setc 'zetta-tab-line-svg-background
+              (or (zetta-svg-line--bar-bg :tab-line) faint))
+        (setc 'zetta-tab-line-svg-inactive-background
+              (or (when-let* ((c (zetta-svg-line--bar-bg :tab-line)))
+                    (zetta-svg-line--dim c 0.45))
+                  faint)))
+      ;; selected window: a soft chip under ordinary tabs, dark text on it,
+      ;; and an INVERTED pill under the current tab.
+      ;; Measured against a TRANSPARENT bar.  If `zetta-tab-line-svg-tint' is
+      ;; ever turned back on, every one of these has to move up a rung: with a
+      ;; tint behind them, bg-1 pills measured 1.05:1 against the bar --
+      ;; invisible -- and the labels followed them down.
       (setc 'zetta-tab-line-svg-tab-background            brushup-bg-2)
-      ;; The selected tab is the one element that inverts, so its foreground
+      (setc 'zetta-tab-line-svg-modified-background       brushup-bg-2)
+      ;; Labels move up with the pills they sit on.  Measured on a dark theme
+      ;; after the shift: fg-3 on the old bg-2 pill read 6:1, but on bg-3 only
+      ;; 3.3 -- so the label steps too, keeping the selected window's tabs
+      ;; comfortably ahead of the unselected ones rather than both sliding
+      ;; toward mush.
+      (setc 'zetta-tab-line-svg-foreground                brushup-fg-3)
+      ;; The current tab is the one element that inverts, so its foreground
       ;; cannot be assumed to be the background colour: on a light theme with
       ;; a strongly tinted background, `brushup-bg' on `brushup-fg-1' can land
       ;; well under a readable ratio.  Ask which of fg/bg actually reads.
       (setc 'zetta-tab-line-svg-current-background        brushup-fg-1)
       (setc 'zetta-tab-line-svg-current-foreground        (zetta-readable-on brushup-fg-1))
-      ;; non-selected windows: the same scheme, flattened toward the bg
-      (setc 'zetta-tab-line-svg-inactive-background       brushup-bg)
+      ;; unselected windows: every element one or more rungs down.  Note nil
+      ;; is not available here -- svg-line reads an unset inactive colour as
+      ;; "use the active one" -- so "no chip" is expressed as the faintest
+      ;; chip the ladder has (bg-1, one step off the buffer background).
       (setc 'zetta-tab-line-svg-inactive-tab-background   brushup-bg-1)
-      (setc 'zetta-tab-line-svg-inactive-current-background brushup-bg-4)
-      (setc 'zetta-tab-line-svg-inactive-current-foreground (zetta-readable-on brushup-bg-4))
-      (setc 'zetta-tab-line-svg-inactive-foreground       brushup-fg-5)
+      (setc 'zetta-tab-line-svg-inactive-modified-background brushup-bg-1)
+      (setc 'zetta-tab-line-svg-inactive-foreground       brushup-fg-6)
+      (setc 'zetta-tab-line-svg-inactive-current-background brushup-bg-3)
+      (setc 'zetta-tab-line-svg-inactive-current-foreground
+            (zetta-svg-line--dim (zetta-readable-on brushup-bg-3) 0.2))
+      ;; The "unsaved changes" amber is the one non-grey in the tab line.
+      ;; Take it from the theme when it actually reads against the tab pill,
+      ;; so a dark theme is not left with the light-theme amber; keep the
+      ;; hardcoded default when the theme's warning colour would not.
+      (let ((warn (zetta-theme-color 'warning)))
+        (when (and (stringp warn)
+                   (> (zetta-contrast-ratio warn brushup-bg-2) 3.0))
+          (setc 'zetta-tab-line-svg-modified-foreground warn)
+          (setc 'zetta-tab-line-svg-inactive-modified-foreground
+                (zetta-svg-line--dim warn 0.4))))
       ;; --- tab bar ------------------------------------------------------
       (setc 'zetta-tab-bar-svg-icon-color                 brushup-fg-3)
       (setc 'zetta-tab-bar-calendar-color                 brushup-fg-5)
-      ;; --- mode line: active a step more present than inactive ----------
-      (setc 'zetta-modeline-svg-bg-active                 brushup-bg-2)
-      (setc 'zetta-modeline-svg-bg-inactive               brushup-bg-1))))
+      ;; --- mode line ----------------------------------------------------
+      ;; Also bar-less.  What is left to tell the windows apart is the text
+      ;; itself, so it takes the same two rungs the tab labels do; the buffer
+      ;; chip, the accent badges and the progress pie step down alongside it
+      ;; (see `zetta-modeline--lighter-bg', `zetta-line-chip-ladder' and
+      ;; `zetta-modeline-svg-spans').
+      (setc 'zetta-modeline-svg-bg-active           (zetta-svg-line--bar-bg :mode-line))
+      (setc 'zetta-modeline-svg-bg-inactive
+            (when-let* ((c (zetta-svg-line--bar-bg :mode-line)))
+              (zetta-svg-line--dim c 0.45)))
+      (setc 'zetta-header-line-svg-background       (zetta-svg-line--bar-bg :header-line))
+      (setc 'zetta-tab-bar-svg-background           (zetta-svg-line--bar-bg :tab-bar))
+      (setc 'zetta-modeline-svg-fg-active                 brushup-fg-3)
+      (setc 'zetta-modeline-svg-fg-inactive               brushup-fg-6)
+      ;; The progress pie is the one thing on the line drawn at FULL ink -- it
+      ;; is a shape rather than a word, so it can carry the theme foreground
+      ;; without competing with text the way a darker label would.  The ink is
+      ;; in the one-pixel RING, which states the shape; the wedge inside only
+      ;; has to say how far along it is, so it sits on the background ladder.
+      (setc 'zetta-modeline-svg-pie-ring                  brushup-fg)
+      (setc 'zetta-modeline-svg-pie-fill                  brushup-bg-3))))
 
 ;; Appended, not prepended: `add-to-list' pushes to the front, and
 ;; `brushup-init' -- which recomputes the palette -- already sits near the

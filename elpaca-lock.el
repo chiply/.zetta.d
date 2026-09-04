@@ -1481,6 +1481,14 @@
                        :type git :protocol https :inherit t :depth
                        treeless :ref
                        "abc572eb0dc30a26584c0058c3fe6c7273a10003"))
+ (fontaine :source "elpaca-menu-lock-file" :recipe
+           (:package "fontaine" :repo "protesilaos/fontaine" :tar
+                     "3.1.0" :host github :files
+                     ("*"
+                      (:exclude ".git" "COPYING" "doclicense.texi"))
+                     :source "GNU ELPA" :id fontaine :type git
+                     :protocol https :inherit t :depth treeless :ref
+                     "8cf9f6693e2a780b530ff5fd9920863b751d5bd5"))
  (forge :source "elpaca-menu-lock-file" :recipe
         (:package "forge" :fetcher github :repo "magit/forge" :files
                   ("lisp/*.el" "docs/*.texi" ".dir-locals.el") :source
@@ -1541,7 +1549,8 @@
           (:source "elpaca-menu-lock-file" :package "ghostel" :id
                    ghostel :host github :repo "dakra/ghostel" :type
                    git :protocol https :inherit t :depth treeless :ref
-                   "057fb1f7cc74ecb82eecd11b86be44d76d902dfc"))
+                   "057fb1f7cc74ecb82eecd11b86be44d76d902dfc" :files
+                   (:defaults "etc")))
  (ghub :source "elpaca-menu-lock-file" :recipe
        (:package "ghub" :fetcher github :repo "magit/ghub" :files
                  ("lisp/*.el" "docs/*.texi" ".dir-locals.el") :source

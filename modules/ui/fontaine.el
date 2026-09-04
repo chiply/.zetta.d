@@ -338,6 +338,40 @@ always take precedence over a generated one of the same name."
            :line-number-height 1.0)))
 
   :config
+  (defvar zetta-fontaine-default-preset 'gohufont-11-nerd-font
+    "Preset to fall back on when there is no saved state to restore.
+
+A GENERATED preset -- one per installed monospaced font -- rather than a
+curated one, so it exists only on a machine that actually has the font.
+`zetta-fontaine--apply-startup-preset' falls back to a curated preset
+where it does not.")
+
+  (defvar zetta-fontaine--startup-preset-applied nil
+    "Non-nil once the wanted startup preset has actually been applied.")
+
+  (defun zetta-fontaine--apply-startup-preset ()
+    "Apply the saved preset, or `zetta-fontaine-default-preset'.
+
+Retries until the preset it wants exists.  Generated presets are not built
+until a graphical frame has measured the installed fonts, and under the
+daemon that is long after this first runs -- `fontaine-presets' holds only
+the seven curated ones at that point.  `fontaine-set-preset' does not
+complain about a preset it cannot find: it quietly applies the `t'
+fallback, so asking for a generated preset too early leaves the frame on
+the wrong font with nothing said about it.  Apply a curated preset
+meanwhile and come back once generation has happened.
+
+One-shot by design.  It stops retrying the moment it succeeds, so a preset
+chosen by hand afterwards is never snapped back to the saved one by the
+next frame."
+    (unless zetta-fontaine--startup-preset-applied
+      (let ((wanted (or (fontaine-restore-latest-preset)
+                        zetta-fontaine-default-preset)))
+        (if (assq wanted fontaine-presets)
+            (progn (setq zetta-fontaine--startup-preset-applied t)
+                   (fontaine-set-preset wanted))
+          (fontaine-set-preset 'terminus)))))
+
   ;; Populate `fontaine-presets' from the curated list plus one preset per
   ;; installed monospaced font.  Deferred to the first graphical frame:
   ;; generation measures real font metrics, which a daemon cannot do at
@@ -346,7 +380,11 @@ always take precedence over a generated one of the same name."
       (zetta-fontaine-refresh-font-presets)
     (setq fontaine-presets zetta-fontaine-curated-presets)
     (add-hook 'server-after-make-frame-hook
-              #'zetta-fontaine-refresh-font-presets))
+              #'zetta-fontaine-refresh-font-presets)
+    ;; APPENDED, so it runs after the generation above on the same hook --
+    ;; the whole point is to get a second go once the preset exists.
+    (add-hook 'server-after-make-frame-hook
+              #'zetta-fontaine--apply-startup-preset t))
 
   (defun zetta-fontaine--sync ()
     "Carry a preset change through to the parts fontaine cannot reach.
@@ -363,7 +401,22 @@ Three things need doing that `fontaine-set-preset' does not:
 
 3. The metric corrections in core/interface.el, which are derived from
    the default font's ascent/descent and cell width and are therefore
-   wrong the moment the default font changes."
+   wrong the moment the default font changes.
+
+4. Recording the choice where fontaine will persist it."
+    ;; `fontaine-store-latest-preset' -- which `fontaine-mode' runs from
+    ;; `kill-emacs-hook' -- writes `(car fontaine-preset-history)', NOT
+    ;; `fontaine-current-preset'.  That history is only ever pushed to by
+    ;; fontaine's own interactive `completing-read', and
+    ;; `zetta-fontaine-pick-preset' reads with a history of its own and then
+    ;; calls `fontaine-set-preset' as a plain function.  So every preset
+    ;; chosen through the picker was dropped at exit and the next session
+    ;; restored whatever was last set with `M-x fontaine-set-preset' --
+    ;; which is why `fontaine-preset-history' held nothing but curated
+    ;; presets and a generated one could never become the default.
+    (when fontaine-current-preset
+      (add-to-history 'fontaine-preset-history
+                      (symbol-name fontaine-current-preset)))
     ;; Everything below measures real font metrics or touches frames, none
     ;; of which is meaningful without a graphical frame.  Under the daemon
     ;; there is none when `fontaine-mode' restores the saved preset at
@@ -430,7 +483,7 @@ Three things need doing that `fontaine-set-preset' does not:
   ;; Persists the chosen preset and re-applies it for new frames (which
   ;; matters under the daemon).
   (fontaine-mode 1)
-  (fontaine-set-preset (or (fontaine-restore-latest-preset) 'terminus)))
+  (zetta-fontaine--apply-startup-preset))
 ;;; fontaine.el ends here
 
 ;;; ------------------------------------------------------------------
@@ -450,18 +503,25 @@ Three things need doing that `fontaine-set-preset' does not:
 (defvar zetta-fontaine-buffer-presets
   '((org-mode    . org-wild)
     ;; before prog-mode, which it derives from
-    (sql-mode     . monaspace-mixed)
-    (prog-mode    . terminus)
-    ;; Dense, column-aligned UIs that are not prog-mode derivatives.  magit
-    ;; and dired in particular line up columns by character count, so they
-    ;; want the same fixed cell code buffers get.
-    (magit-mode   . terminus)
-    (dired-mode   . terminus)
-    (ibuffer-mode . terminus)
-    (tabulated-list-mode . terminus))
+    (sql-mode     . monaspace-mixed))
   "Alist of major mode -> fontaine preset, applied buffer-locally.
 Matched with `derived-mode-p', so a derived mode inherits its parent's
-entry unless it has one of its own.")
+entry unless it has one of its own.
+
+Deliberately short.  Every entry here is a buffer whose font DIFFERS from
+the global preset, and consult previews those buffers in-window while you
+are still moving through candidates -- so each one is a font that visibly
+swaps in and out mid-completion, taking the line height with it.  That is
+worth paying for org prose, which is a genuinely different kind of text.
+It was not worth paying for prog-mode, magit, dired, ibuffer and
+tabulated-list, which all wanted \"a fixed cell\" and were pinned to
+terminus to get it -- something any monospaced global preset already
+gives them.
+
+The cost was invisible while the global preset WAS terminus:
+`zetta-fontaine-apply-buffer-preset' skips a remap when the mapped preset
+already matches the global one, so the entries did nothing until the
+global preset moved off terminus.")
 
 (defvar zetta-fontaine-buffer-exclude
   '(ghostel-mode vterm-mode term-mode eat-mode)

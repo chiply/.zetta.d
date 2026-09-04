@@ -151,6 +151,49 @@
   (when (featurep 'mcp)
     (zetta-mcp-setup-gptel))
 
+  ;; ── Response notifications ────────────────────────────────────────
+  ;; Routed through `zetta-notify' (tools/alert.el), the same entry
+  ;; point Claude Code's hooks call over emacsclient, so both agents
+  ;; share one notification stack -- and the same "tell me about
+  ;; everything" policy, so the duration gate is open by default.
+
+  (defvar zetta-gptel-notify-min-seconds 0
+    "Only notify for gptel responses that took at least this many seconds.
+0 notifies for every response; raise it to hear only about slow ones.")
+
+  (defvar zetta-gptel--request-start nil
+    "`float-time' when the most recent gptel request was sent.
+Set buffer-locally for the common case where a request and its response
+share a buffer, and globally to cover the ones where they do not
+(rewrites, `gptel-quick').  A buffer-local value shadows the global, so
+reading the variable picks the right start time either way.")
+
+  (defun zetta-gptel-mark-request ()
+    "Record when a gptel request went out."
+    (setq-local zetta-gptel--request-start (float-time))
+    (setq-default zetta-gptel--request-start (float-time)))
+
+  (defun zetta-gptel-notify-response (beg end)
+    "Notify when a slow gptel response lands in the current buffer.
+BEG and END bound the inserted text.  gptel passes them equal when the
+request failed, which is worth hearing about however long it took."
+    (let ((started zetta-gptel--request-start))
+      (setq-local zetta-gptel--request-start nil)
+      (setq-default zetta-gptel--request-start nil)
+      (cond
+       ((= beg end)
+        (zetta-notify (format "Request failed in %s" (buffer-name))
+                      "gptel" 'high))
+       ((and started
+             (>= (- (float-time) started) zetta-gptel-notify-min-seconds))
+        (zetta-notify (format "%s — %.0fs, %d chars"
+                              (buffer-name) (- (float-time) started)
+                              (- end beg))
+                      "gptel")))))
+
+  (add-hook 'gptel-post-request-hook #'zetta-gptel-mark-request)
+  (add-hook 'gptel-post-response-functions #'zetta-gptel-notify-response)
+
   :general
   (
    :keymaps 'override

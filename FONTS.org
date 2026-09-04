@@ -1,0 +1,307 @@
+#+title: Fonts, Metrics, and Why Switching Them Breaks Things
+#+author: Charlie Holland
+#+startup: overview
+
+# Written after a long session of chasing clipped terminal output and
+# misaligned SVG chrome across a font change. Everything here was measured,
+# not assumed — several of the "obvious" fixes are in the Dead Ends section
+# precisely because they were tried first and do not work.
+#
+# Read "The two constraints" and "The uniform-advance rule" before changing
+# any font. The rest is reference.
+
+* TL;DR
+
+If you are adding a font or a =fontaine= preset, only two things can bite you:
+
+1. A fallback font whose *ascent or descent* exceeds the default font's makes
+   its rows taller, which clips the bottom of terminal buffers.
+2. A font whose *advance* does not match the cell shifts everything after it
+   on the line, which breaks box-drawing tables and the SVG chrome.
+
+Both are derived automatically now. The one rule the code cannot derive for
+you is the [[*The uniform-advance rule (the easy one to forget)][uniform-advance rule]] for the chrome font.
+
+* Commands
+
+Everything below is derived automatically — at startup, and on every
+=fontaine= preset switch. These are the manual entry points.
+
+** =M-x zetta-font-apply-metric-corrections=
+
+Re-derives *all* the metric corrections for whatever the default font
+currently is: the rescale factors, the glyph substitutions, and the display
+table in every live terminal buffer.
+
+Run it when something looks wrong and you have not switched presets:
+
+- after installing or removing fonts — a new family can change which font
+  the fontset picks for a fallback glyph
+- if terminal output starts clipping a few rows short of the window bottom
+- if box-drawing tables stop lining up
+- after anything else that alters the fallback chain
+
+*Gotcha:* it early-outs when the font signature — =(default-family,
+default-height, svg-line-font)= — is unchanged, because the derivation
+clears the face cache and re-running it for an unchanged font is pure waste.
+So if you run it after installing fonts and nothing happens, that is why.
+Force it with:
+
+#+begin_src emacs-lisp
+(setq zetta-font--last-signature nil)
+(zetta-font-apply-metric-corrections)
+#+end_src
+
+Note it does *not* re-derive =:char-advance= for the SVG chrome; that is
+=zetta-svg-line-derive-char-advance=, which the preset sync calls alongside
+it. Run both if you changed the chrome font by hand.
+
+** =M-x fontaine-set-preset= / =M-x fontaine-toggle-preset=
+
+Switch fonts. The sync hook (=zetta-fontaine--sync=) carries the change
+through to the frame font, the chrome font, =:char-advance=, the metric
+corrections, and the brushup palette.
+
+** =M-x zetta-font-list-installed=
+
+Every installed family, each name rendered in its own font, with its
+per-character advance and — for families carrying Nerd glyphs — whether
+text and icons advance identically. That last column is what decides
+whether a family can serve as the chrome font. Prefix argument prompts for
+a regexp filter.
+
+** =M-x zetta-font-specimen=
+
+Every family × weight × slant of the Monaspace superfamily, plus ligature
+and texture-healing sections that demonstrate what this build cannot do.
+=C-u= prompts for a point size. Family list is
+=zetta-font-specimen-families=, so it works for any superfamily.
+
+** Testing a chrome candidate
+
+#+begin_src emacs-lisp
+(zetta-svg-line--uniform-advance-p "Some Nerd Font")  ; t = safe for the chrome
+#+end_src
+
+* The two constraints
+
+** Row height: ascent and descent are independent
+
+Emacs sizes a display row as =max(ascent) + max(descent)= across the fonts on
+that row, computed *independently* — not =max(ascent + descent)=. A fallback
+therefore fits only if *both* its ascent and its descent are inside the
+default font's.
+
+This bites hardest in a terminal emulator. =ghostel= sizes the PTY from
+=window-body-height= (rows × =default-line-height=), so a handful of taller
+rows push the last rows below the window with nowhere to scroll — it looks
+like a scrolling bug and is not one.
+
+Worked example, measured with Terminus (13/4 = 17px) as the default:
+
+| font          | ascent | descent | row it produces |
+|---------------+--------+---------+-----------------|
+| Terminus      |     13 |       4 | 17              |
+| STIX Two Math |     12 |       8 | 13 + 8 = *21*   |
+| Terminess NF  |     14 |       3 | 14 + 4 = *18*   |
+| all three     |        |         | 14 + 8 = *22*   |
+
+Note STIX has a *smaller* total (20) than Terminus's row (17) yet still
+produces a 21px row, because only its descent matters.
+
+** Advance: one cell per column
+
+A glyph must advance exactly =frame-char-width= per cell it occupies, or the
+rest of the row shifts. Wide characters (=char-width= 2, e.g. ✅) must advance
+two cells.
+
+* The uniform-advance rule (the easy one to forget)
+
+*The SVG chrome font must advance icons and text identically.*
+
+=modeline-svg=, =tab-line-svg=, =tab-bar-svg= and =header-line-svg= lay icons
+and text on *one* fixed pixels-per-character grid (=:char-advance=). There is
+no second value for icons. So a font whose Nerd glyphs sit on a different
+advance than its letters cannot be laid out correctly at any single setting.
+
+Measured at face height 150:
+
+| family                     | text | icons | uniform |
+|----------------------------+------+-------+---------|
+| Terminus (TTF)             |  8.0 |   8.0 | yes     |
+| Terminess Nerd Font Mono   |  8.0 |   8.0 | yes     |
+| Monaspace Neon NF          |  9.0 |   8.0 | *no*    |
+| MonaspiceNe Nerd Font Mono |  9.0 |   8.0 | *no*    |
+
+Nerd Font glyphs are drawn on a fixed 8px design grid. Terminus-derived fonts
+satisfy the rule *only because their text also happens to be 8px* — it is a
+coincidence, not a property of the font being good.
+
+Consequences worth writing down:
+
+- *No Monaspace-derived build is uniform*, including the Nerd Fonts project's
+  ="Mono"= variant (=font-monaspice-nerd-font=). "Mono" forces icons to one
+  cell of the *icon* grid, not of the base font's.
+- Therefore =:svg-line-family= stays on =Terminess Nerd Font Mono= in every
+  preset, even when buffers are Monaspace. The chrome not matching the buffer
+  font is a deliberate compromise, not an oversight.
+- =zetta-svg-line--uniform-advance-p= enforces this: a non-uniform chrome font
+  is rejected at runtime and falls back with a message.
+
+Symptom when it is violated: icons overlap adjacent text, tab labels clip
+mid-word, and the right end of the mode line runs past its edge.
+
+* What the code derives, and where
+
+| file                          | what it owns                                       |
+|-------------------------------+----------------------------------------------------|
+| =modules/ui/fontaine.el=      | presets, and the sync hook that ties everything together |
+| =modules/core/interface.el=   | rescale factors, glyph substitutions, fontset routing |
+| =modules/core/line-utils.el=  | =:char-advance= derivation + the uniformity guard   |
+| =modules/ui/*-svg.el=         | the four renderers that consume =:char-advance=     |
+
+** Derived per font, never hardcoded
+
+- =face-font-rescale-alist= — shrinks each borrowed family until it fits the
+  default font's ascent/descent box, then a measured pass fixes advance.
+- =zetta-terminal-display-table= — substitutes glyphs the default font lacks
+  with ones it has at exactly one cell (=⏺→●=, =✅→✓+space=). Only applied
+  where the default font actually lacks the glyph: Monaspace covers =⏺ ❯ ✳
+  ⏵ ⏸= natively, so the substitution list shrinks from 8 glyphs to 3.
+- =zetta-*-svg-char-advance= (×4) — measured from the chrome font. Was
+  hardcoded to =8=, which is Terminus's advance and nothing else's.
+
+** Borrowed families are discovered, not listed
+
+=zetta-font--borrowed-families= asks the fontset which families are *actually*
+serving each probe glyph, via =font-at= on a string object. A hardcoded list
+silently misses things: =U+23BF= arrives from ="Hiragino Maru Gothic ProN"=
+while the list named ="Hiragino Sans"=, so it got no correction at all.
+
+Generic fallbacks (=Helvetica=, =Monospace=, =Sans Serif=) are excluded — if
+one appears in the borrowed list, a measurement went wrong somewhere.
+
+* Gotchas that cost real time
+
+** Measurement must be pinned to one frame
+
+=frame-char-width=, =string-pixel-width= and =font-at= all answer for the
+*selected* frame. Under the daemon that is whatever happens to be current,
+including corfu's child frame with a different default font. Measuring a glyph
+against one frame and its cell width against another produces nonsense —
+box drawing was once attributed to Helvetica at an 8px cell while the real
+frame was Monaspace at 11px. =zetta-font--measurement-frame= picks the largest
+graphical frame and the derivation holds it throughout.
+
+** clear-face-cache reverts the font unless fontaine's theme is enabled
+
+=fontaine= installs its faces with =custom-theme-set-faces= under a theme it
+does *not* enable. That applies them once, but any later =clear-face-cache=
+re-realizes faces from their *specs*, and with the theme disabled fontaine's
+spec is not consulted — so =default= falls back to the generic sans
+(Helvetica). Since the metric derivation clears the cache, this silently
+undid the font on every run. The sync hook now calls =(enable-theme 'fontaine)=
+and asserts the frame font *after* the derivation, not before.
+
+** A daemon has no graphical frame at startup
+
+=fontaine-mode= restores the saved preset before any GUI frame exists, and
+=(display-graphic-p)= with no argument asks the *selected* frame. Anything
+frame-dependent must check =(seq-some #'display-graphic-p (frame-list))= and
+re-arm on =server-after-make-frame-hook= rather than silently skipping — the
+symptom was a preset whose chrome font switched while the buffer font did not.
+
+** Preset switching is expensive; keep it idempotent
+
+Each switch can call =set-frame-font= (which resizes frames) and
+=clear-face-cache= (which rebuilds every realized face). Guards in place: a
+font signature early-out, a conditional cache clear, and per-frame font
+assertion only where the family is actually wrong. Do not add an unbounded
+refinement loop here — an earlier version ran up to 8 cache-clearing rounds
+and made Emacs appear to hang.
+
+* Dead ends (do not re-try these)
+
+| approach                            | why it fails                                            |
+|-------------------------------------+---------------------------------------------------------|
+| =line-height= text property         | can only *grow* a row, never cap it                     |
+| =line-spacing=                      | additive, not a floor: 882px → 1074px, disparity kept    |
+| rescaling to fix width only         | height and width scale together; solving one breaks the other |
+| =query-font= for advance            | reports the *widest* glyph in the font; over-shrinks badly |
+| guessing the serving family by list | first family that *can* render ≠ the one that *does*     |
+| Monaspace for the SVG chrome        | text 9.0 / icons 8.0 — see the uniform-advance rule      |
+
+* Build constraint: no ligatures on this Emacs
+
+=system-configuration-features= has no =HARFBUZZ= — emacs-plus builds the
+Cocoa port, which shapes through Core Text via =macfont.m=. Ligatures and
+=calt= (hence Monaspace's *texture healing*) are shaping operations and do not
+apply. This is not a build flag that is missing; it is a different port.
+
+- =emacs-plus --with-x11= would get HarfBuzz, at the cost of the native Mac
+  port and =XWIDGETS=.
+- =emacs-mac= (already built at =~/Applications/EmacsMac.app=, profile
+  =zetta-mac=) does Core Text ligatures via
+  =mac-auto-operator-composition-mode= — but its character set is punctuation
+  only, so operator ligatures work and texture healing (which acts on *letter*
+  pairs) still does not.
+- =ghostel= inherits Emacs's shaping, not Ghostty's, so ligatures do not appear
+  there either.
+
+* Checklist: adding a preset or changing a font
+
+1. Add the preset to =fontaine-presets= naming *every* family it cares about.
+   Fontaine leaves unmentioned attributes alone, so a partial preset strands
+   the previous one's fonts when you switch back.
+2. Leave =:svg-line-family= on a uniform-advance font. Check first:
+   =(zetta-svg-line--uniform-advance-p "Your Font")=.
+3. Switch to it and confirm:
+   - terminal buffers are not clipped at the bottom
+   - box-drawing tables line up
+   - the masthead, tab line and mode line icons do not overlap
+4. If something is off, measure rather than guess:
+   #+begin_src emacs-lisp
+   (with-selected-frame (zetta-font--measurement-frame)
+     (list :cell (frame-char-width)
+           :rescale face-font-rescale-alist
+           :advances (list zetta-tab-bar-svg-char-advance
+                           zetta-tab-line-svg-char-advance
+                           zetta-modeline-svg-char-advance
+                           zetta-header-line-svg-char-advance)
+           :bad (delq nil (mapcar (lambda (ch)
+                                    (let ((d (zetta-font--width-delta ch)))
+                                      (unless (= d 0) (cons (string ch) d))))
+                                  zetta-font-probe-glyphs))))
+   #+end_src
+
+* Reference: a known-good state
+
+Preset =monaspace-mixed=, verified:
+
+#+begin_example
+buffer font   Monaspace Neon NF     cell 11   line-height 21
+chrome font   Terminess Nerd Font Mono        uniform: t
+advances      (8 8 8 8)             matching the chrome font, not the buffer font
+substituted   ✅ ❌ ✻               (⏺ ❯ ✳ ⏵ ⏸ are native to Monaspace)
+rescale       Hiragino Sans 0.66  Apple Color Emoji 0.73  Arial Unicode MS 0.84
+              STIX Two Math 0.66  JetBrainsMono NF 0.91   Terminess NF Mono 1.0
+#+end_example
+
+Note the advances follow the *chrome* font (8), not the buffer font (11) —
+that is correct, because the SVG lines are drawn in the chrome font.
+
+* Inventory
+
+- Terminus TTF 4.49.3 — =~/Library/Fonts= (hand-installed 2023), plus a
+  Homebrew cask =font-terminus= registered later for the same version.
+- Terminess Nerd Font (NF / Mono / Propo) — the chrome font.
+- Monaspace NF 1.400, upstream build, normal width only, 5 families × 7
+  weights × roman/italic = 70 files. The release also ships SemiWide and Wide
+  (210 files total); those were deliberately skipped.
+- =font-monaspice-nerd-font= — the Nerd Fonts project's Monaspace build.
+  Installed while testing the uniform-advance question; *not used by this
+  config*. Uninstall unless you want it for Ghostty.
+
+Specimen: =M-x zetta-font-specimen= (=tools/font-specimen.el=) renders every
+family × weight × slant, plus ligature and texture-healing sections that
+demonstrate what this build cannot do.

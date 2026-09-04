@@ -36,14 +36,14 @@ text) raise this; if it sits too far right (a gap before the text) lower it."
   "Pixels of inset kept between right-aligned text and the window edge."
   :type 'integer :group 'zetta)
 
-(defcustom zetta-modeline-svg-bg-active "#e7edf6"
+(defcustom zetta-modeline-svg-bg-active "#dddddd"
   "Background of the SVG mode line in the SELECTED window.  nil = transparent.
-A subtle, light blue-tinted shade; distinct from (and slightly more
+A subtle neutral shade; distinct from (and slightly more
 present than) `zetta-modeline-svg-bg-inactive' to recreate Emacs's
 active/inactive mode-line distinction."
   :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
 
-(defcustom zetta-modeline-svg-bg-inactive "#f3f6fb"
+(defcustom zetta-modeline-svg-bg-inactive "#eeeeee"
   "Background of the SVG mode line in NON-selected windows.  nil = transparent.
 A barely-there light tint."
   :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
@@ -78,7 +78,11 @@ A barely-there light tint."
   "Centred overlay for the SVG mode line: a progress pie spanning both rows."
   (let* ((total (max 1 (- (point-max) (point-min))))
          (frac (/ (float (- (point) (point-min))) total)))
-    (list (list :pie '(0 . 1) frac "#2a4d77" "#d4dcea"))))
+    ;; Track the theme rather than staying blue on a dark background --
+    ;; same brushup pairing the :foreground below already uses.
+    (list (list :pie '(0 . 1) frac
+                (or (bound-and-true-p brushup-fg-3) "#57707d")
+                (or (bound-and-true-p brushup-bg-3) "#cacaca")))))
 
 (svg-line-define 'zetta-mode-line
   :target 'mode-line

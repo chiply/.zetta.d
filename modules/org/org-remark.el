@@ -334,15 +334,31 @@ Gmail moves around), so they make a durable source identity."
   ;; "important" separates truly-important highlights from the routine
   ;; ones (light purple).  Both carry the same date-link property as
   ;; the default pen.
+  ;; Defaults only.  The light/dark pair flips with the background but is
+  ;; otherwise fixed, so the pens stayed orange-and-purple against any
+  ;; palette.  `zetta-org-remark-refresh-pens' recomputes them as faint
+  ;; washes of the theme's own warning and accent colours.
   (defface zetta-org-remark-question-face
     '((((background light)) :background "#FFE9D2")
       (t :background "#4A3A28"))
-    "Faint orange highlight for the org-remark question pen.")
+    "Highlight for the org-remark question pen.")
 
   (defface zetta-org-remark-important-face
     '((((background light)) :background "#EFE3F8")
       (t :background "#403354"))
-    "Light purple highlight for the org-remark important pen.")
+    "Highlight for the org-remark important pen.")
+
+  (defun zetta-org-remark-refresh-pens ()
+    "Re-tint the org-remark pen faces from the current theme."
+    (when (fboundp 'zetta-svg-line--dim)
+      (dolist (spec '((zetta-org-remark-question-face  . warning)
+                      (zetta-org-remark-important-face . accent)))
+        (when (facep (car spec))
+          (set-face-attribute
+           (car spec) nil
+           ;; mostly background, with just enough hue to read as a pen
+           :background (zetta-svg-line--dim (zetta-theme-color (cdr spec)) 0.78))))))
+  (zetta-org-remark-refresh-pens)
 
   (org-remark-create "question"
                      'zetta-org-remark-question-face
@@ -353,6 +369,7 @@ Gmail moves around), so they make a durable source identity."
                      'zetta-org-remark-important-face
                      `(CATEGORY "important"
                        org-remark-highlight-date ,(my/org-remark-get-date)))
+
 
   ;; Re-pen the highlight at point: prompts with the OTHER pens only
   ;; (upstream org-remark-change includes the current one and offers

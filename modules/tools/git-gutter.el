@@ -36,14 +36,17 @@
                '(progn
                   (setq brushup-git-gutter-foreground brushup-bg-6
                         brushup-git-gutter-background brushup-bg)
+                  ;; Added/deleted/modified were all one colour, so the gutter
+                  ;; said "something changed" but never what.  Take the hues
+                  ;; from the theme's own diff faces instead of inventing them.
                   (set-face-attribute 'git-gutter:added nil
-                                      :foreground brushup-git-gutter-foreground
+                                      :foreground (zetta-theme-color 'added)
                                       :background 'unspecified)
                   (set-face-attribute 'git-gutter:deleted nil
-                                      :foreground brushup-git-gutter-foreground
+                                      :foreground (zetta-theme-color 'removed)
                                       :background 'unspecified)
                   (set-face-attribute 'git-gutter:modified nil
-                                      :foreground brushup-git-gutter-foreground
+                                      :foreground (zetta-theme-color 'changed)
                                       :background 'unspecified)
                   (set-face-attribute 'git-gutter:separator nil
                                       :foreground brushup-git-gutter-foreground

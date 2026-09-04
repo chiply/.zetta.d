@@ -29,13 +29,18 @@
   "Font size (px) for SVG header-line text." :type 'integer :group 'zetta)
 (defcustom zetta-header-line-svg-line-pad 4
   "Extra vertical padding (px) per SVG header-line row." :type 'integer :group 'zetta)
+(defcustom zetta-header-line-svg-char-advance 8
+  "Pixels per character used to lay out SVG header-line text.
+Derived from the live font by `zetta-svg-line-derive-char-advance'; the
+default only stands in before that runs." :type 'integer :group 'zetta)
 
 ;;; ------------------------------------------------------------------
 ;;; Content -- two left-aligned breadcrumb rows.
 ;;; ------------------------------------------------------------------
 (defun zetta-header-line-svg-lines ()
   "Return the header line as a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS)."
-  (list (cons '(zetta-header-line-svg--line1) nil)
+  (list (cons '(zetta-header-line-svg--line1)
+              '(zetta-header-line-font-preset))
         (cons '(zetta-header-line-svg--line2) nil)))
 
 (svg-line-define 'zetta-header-line
@@ -48,7 +53,7 @@
   :line-pad (lambda () zetta-header-line-svg-line-pad)
   ;; breadcrumb rows are laid out by run (clickable crumb segments), so match
   ;; the glyph width like the other bars (see `zetta-modeline-svg-char-advance')
-  :char-advance 8
+  :char-advance (lambda () zetta-header-line-svg-char-advance)
   :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
                              (face-foreground 'default nil t) "#cccccc")))
 

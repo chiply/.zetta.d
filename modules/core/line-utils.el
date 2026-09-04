@@ -337,15 +337,91 @@ up far to the left of the actual key/command.  Returns nil when idle."
 ;; otherwise prefix keys won't show up
 (add-hook 'prefix-command-echo-keystrokes-functions 'force-mode-line-update)
 
+
+;;; ------------------------------------------------------------------
+;;; Theme-derived colours for the SVG lines
+;;; ------------------------------------------------------------------
+;; The segments below used to carry hardcoded hexes -- a green insert pill, a
+;; blue ace badge, a purple space marker.  Those were picked against one light
+;; theme and look wrong everywhere else.
+;;
+;; brushup supplies foreground/background gradients but no HUES, so semantic
+;; colour has to come from the theme's own faces.  Every theme defines `error',
+;; `warning', `success', `link' and the diff faces, which is exactly the
+;; vocabulary these indicators need.
+
+(defvar zetta-theme-color-fallbacks
+  '((error . "#d75f5f") (warning . "#d7af5f") (success . "#87af5f")
+    (accent . "#5f87d7") (added . "#87af5f") (removed . "#d75f5f")
+    (changed . "#d7af5f"))
+  "Last-resort colours when the theme defines none of the candidate faces.")
+
+(defun zetta-theme-color (kind)
+  "A colour for KIND taken from the current theme.
+KIND is one of error, warning, success, accent, added, removed, changed."
+  (let ((faces (pcase kind
+                 ('error   '(error compilation-error))
+                 ('warning '(warning compilation-warning))
+                 ('success '(success compilation-info))
+                 ('accent  '(link font-lock-keyword-face))
+                 ('added   '(diff-added magit-diff-added-highlight success))
+                 ('removed '(diff-removed magit-diff-removed-highlight error))
+                 ('changed '(diff-changed warning))
+                 (_        '(default)))))
+    (or (seq-some (lambda (f)
+                    (and (facep f)
+                         (let ((c (face-foreground f nil t)))
+                           (and (stringp c) (color-name-to-rgb c) c))))
+                  faces)
+        (alist-get kind zetta-theme-color-fallbacks))))
+
+(defun zetta-color--luminance (color)
+  "WCAG relative luminance of COLOR, or nil."
+  (when-let* ((rgb (color-name-to-rgb color)))
+    (apply #'+ (cl-mapcar #'*
+                          '(0.2126 0.7152 0.0722)
+                          (mapcar (lambda (c)
+                                    (if (<= c 0.03928) (/ c 12.92)
+                                      (expt (/ (+ c 0.055) 1.055) 2.4)))
+                                  rgb)))))
+
+(defun zetta-contrast-ratio (a b)
+  "WCAG contrast ratio between colours A and B."
+  (let ((la (+ 0.05 (or (zetta-color--luminance a) 0)))
+        (lb (+ 0.05 (or (zetta-color--luminance b) 0))))
+    (/ (max la lb) (min la lb))))
+
+(defun zetta-readable-on (bg)
+  "Return whichever theme colour reads best on BG.
+
+Picks by measured contrast rather than by a luminance threshold.  A
+threshold works at the extremes and fails in the middle: a mid-tone pill
+would be handed the light foreground on the strength of being \"dark\",
+landing at 2:1.  Falls back to plain white or black when neither theme
+colour clears a readable ratio."
+  (let* ((fg (or (bound-and-true-p brushup-fg) (face-foreground 'default nil t) "#ffffff"))
+         (bgc (or (bound-and-true-p brushup-bg) (face-background 'default nil t) "#000000"))
+         (best (car (sort (list fg bgc "#ffffff" "#000000")
+                          (lambda (x y) (> (zetta-contrast-ratio x bg)
+                                           (zetta-contrast-ratio y bg)))))))
+    best))
+
+(defun zetta-theme-pill (kind)
+  "Background/foreground pair for a KIND-coloured pill segment."
+  (let ((bg (zetta-svg-line--dim (zetta-theme-color kind) 0.45)))
+    (list :bg bg :color (zetta-readable-on bg))))
+
 ;;; mode-line text segments
 (defun zetta-modeline-svg--modal ()
   ;; show the modal STATE (normal/insert/...), styled per state:
   ;; normal -> regular; insert -> dark bg + light fg; visual -> distinct colour.
   (let* ((st (zetta-line-modal-state))
          (style (cond
-                 ((string= st "insert") (list :bg "#33503f" :color "#dcecdf" :weight 'bold))
-                 ((string= st "visual") (list :bg "#5c3733" :color "#f0dcd8" :weight 'bold))
-                 ((string= st "emacs")  (list :color "#6aa0c8"))
+                 ((string= st "insert")
+                  (append (zetta-theme-pill 'success) (list :weight 'bold)))
+                 ((string= st "visual")
+                  (append (zetta-theme-pill 'warning) (list :weight 'bold)))
+                 ((string= st "emacs")  (list :color (zetta-theme-color 'accent)))
                  (t nil))))   ; normal & friends: plain foreground
     (apply #'zetta-svg-seg st 'ml-modal
            (append
@@ -361,26 +437,39 @@ up far to the left of the actual key/command.  Returns nil when idle."
   "Ace-window key for this window as a bold standout badge (dark bg, light fg)."
   (let ((path (window-parameter (selected-window) 'ace-window-path)))
     (and path (> (length path) 0)
-         (zetta-svg-seg (format " %s " path) 'ml-ace
-                        :bg "#aab4c4" :color "#262c38" :weight 'bold
-                        :help (format "ace-window key: %s" path)))))
+         (apply #'zetta-svg-seg (format " %s " path) 'ml-ace
+                :weight 'bold
+                (append (zetta-theme-pill 'accent)
+                        (list :help (format "ace-window key: %s" path)))))))
 
 (defvar zetta-modeline--buffer-bg-cache nil
   "Cons (BG . LIGHTER) caching the lightened buffer-name pill background.")
-(defun zetta-modeline--lighter-bg ()
-  "The modeline active background blended ~halfway to white, as #rrggbb.
-Gives the buffer name a subtle, slightly-lighter pill so it stands out."
-  (let ((bg (bound-and-true-p zetta-modeline-svg-bg-active)))
+(defun zetta-modeline--lighter-bg (&optional inactive)
+  "A pill background for the buffer name, contrasting with the mode line.
+
+Blends the mode-line background toward the theme FOREGROUND, not toward
+white.  Blending to white only separates the pill on a light theme; on a
+dark one it produced a near-black pill on a near-black bar, which is why
+the buffer name was hard to read in both active and inactive states.
+INACTIVE selects the inactive mode-line background."
+  (let ((bg (if inactive
+                (bound-and-true-p zetta-modeline-svg-bg-inactive)
+              (bound-and-true-p zetta-modeline-svg-bg-active))))
     (cond ((not (stringp bg)) nil)
           ((equal (car zetta-modeline--buffer-bg-cache) bg)
            (cdr zetta-modeline--buffer-bg-cache))
           (t (cdr (setq zetta-modeline--buffer-bg-cache
                         (cons bg (ignore-errors
                                    (require 'color)
-                                   (apply #'color-rgb-to-hex
-                                          (append (mapcar (lambda (c) (+ c (* (- 1.0 c) 0.5)))
-                                                          (color-name-to-rgb bg))
-                                                  (list 2)))))))))))
+                                   (let ((fg (color-name-to-rgb
+                                              (or (bound-and-true-p brushup-fg)
+                                                  (face-foreground 'default nil t)
+                                                  "#ffffff"))))
+                                     (apply #'color-rgb-to-hex
+                                            (append (cl-mapcar
+                                                     (lambda (c f) (+ c (* (- f c) 0.22)))
+                                                     (color-name-to-rgb bg) fg)
+                                                    (list 2))))))))))))
 
 (defun zetta-modeline-svg--buffer ()
   (let* ((buf (current-buffer))
@@ -391,6 +480,8 @@ Gives the buffer name a subtle, slightly-lighter pill so it stands out."
      ;; id includes the buffer so only THIS window's name boxes on hover
      :id (list 'ml-buffer buf)
      :bg (zetta-modeline--lighter-bg)
+     :color (let ((pill (zetta-modeline--lighter-bg)))
+              (and pill (zetta-readable-on pill)))
      :help (format "buffer: %s" n)
      :action-help "switch buffer"
      :action #'switch-to-buffer
@@ -827,10 +918,10 @@ A pull that added nothing leaves the previous +N (entries you've not seen)."
   "At or below this battery percentage the indicator is drawn orange (red wins
 below `zetta-tab-bar-battery-low'); above it the indicator is green."
   :type 'integer :group 'zetta)
-(defcustom zetta-tab-bar-battery-colors '((low . "#a85949")
-                                          (medium . "#a8843f")
-                                          (full . "#6f8a55"))
-  "Colours for low / medium / full battery levels (muted earth tones)."
+(defcustom zetta-tab-bar-battery-colors nil
+  "Explicit battery colours as an alist of (low medium full).
+nil -- the default -- derives them from the theme's `error', `warning' and
+`success' faces instead, so the indicator tracks whatever theme is loaded."
   :type '(alist :key-type symbol :value-type color) :group 'zetta)
 
 (defvar zetta-tab-bar--battery-cache nil
@@ -867,11 +958,16 @@ inside redisplay, so the status is polled here at most once a minute;
                               (nerd-icons-faicon (format "nf-fa-battery_%d" n)))))))
 
 (defun zetta-tab-bar--battery-color (pct)
-  "Return the level colour (red/orange/green) for PCT."
-  (cdr (assq (cond ((<= pct zetta-tab-bar-battery-low) 'low)
-                   ((<= pct zetta-tab-bar-battery-medium) 'medium)
-                   (t 'full))
-             zetta-tab-bar-battery-colors)))
+  "Return the level colour for PCT.
+Honours `zetta-tab-bar-battery-colors' when set; otherwise takes the
+theme's own error/warning/success colours, so the indicator tracks the
+theme rather than staying red-orange-green from a fixed palette."
+  (let ((level (cond ((<= pct zetta-tab-bar-battery-low) 'low)
+                     ((<= pct zetta-tab-bar-battery-medium) 'medium)
+                     (t 'full))))
+    (or (cdr (assq level zetta-tab-bar-battery-colors))
+        (zetta-theme-color (pcase level
+                             ('low 'error) ('medium 'warning) (_ 'success))))))
 
 (defun zetta-tab-bar-workspace-lighter ()
   "The space-tree lighter string, or nil.
@@ -1110,16 +1206,17 @@ the full battery status."
              :menu (list (cons "Battery status" #'battery)
                          (cons "Toggle battery display" #'display-battery-mode)))))))))
 
-(defcustom zetta-tab-bar-svg-active-space-color "#6c4dab"
+(defcustom zetta-tab-bar-svg-active-space-color nil
   "Colour for the active (selected) space-tree space in the tab-bar workspace.
-Replaces space-tree's trailing-apostrophe marker; matches the masthead
-Emacs-icon purple (`zetta-tab-bar-svg-icon-color')."
+Replaces space-tree's trailing-apostrophe marker.  nil -- the default --
+uses the theme's accent colour instead of a fixed purple."
   :type 'color :group 'zetta)
 
-(defcustom zetta-tab-bar-svg-inactive-space-color "#b0b5be"
+(defcustom zetta-tab-bar-svg-inactive-space-color nil
   "Colour for the non-active tokens (spaces, braces, level bars) of the
-tab-bar workspace cluster.  A light gray that recedes against the white bar so
-the active space (`zetta-tab-bar-svg-active-space-color') stands out."
+tab-bar workspace cluster.  nil -- the default -- dims the theme foreground
+toward the background, so it recedes on light AND dark themes rather than
+only against a white bar."
   :type 'color :group 'zetta)
 
 (defun zetta-tab-bar-svg--workspace ()
@@ -1172,9 +1269,261 @@ cluster still behaves as one clickable unit."
           (let ((active (string-suffix-p "'" tok)))
             (push (funcall mkseg (if active (substring tok 0 -1) tok)
                            (if active
-                               zetta-tab-bar-svg-active-space-color
-                             zetta-tab-bar-svg-inactive-space-color))
+                               (or zetta-tab-bar-svg-active-space-color
+                                   (zetta-theme-color 'accent))
+                             (or zetta-tab-bar-svg-inactive-space-color
+                                 (zetta-svg-line--dim
+                                  (or (bound-and-true-p brushup-fg-3)
+                                      (face-foreground 'default nil t) "#cccccc")
+                                  0.5))))
                   items)))
         (apply #'svg-line-segs (nreverse (delq nil items)))))))
+
+
+;;; ------------------------------------------------------------------
+;;; SVG line palette -- derived from the live theme via brushup
+;;; ------------------------------------------------------------------
+;; The tab line, tab bar and mode line shipped a fixed purple/lavender
+;; palette.  Those hexes only read on a light theme: on a dark one the SVG
+;; furniture stayed pale and glowed against the buffer.  Derive them from
+;; brushup instead, which tracks the live theme's foreground/background, so
+;; the same relationships hold in either direction.
+;;
+;; Two families, used deliberately:
+;;
+;;   brushup-bg-1..6  step from the background toward the foreground.  With
+;;                    a neutral theme background these are true greys, so
+;;                    they carry the chrome (strips, inactive tabs).
+;;   brushup-fg-1..6  step from the foreground toward the background, and
+;;                    therefore invert with the theme.  Used only where an
+;;                    element must read as "selected" -- dark on a light
+;;                    theme, light on a dark one -- which is what the purple
+;;                    was doing.
+;;
+;; No colour conversion is needed here: svg-line pushes every colour through
+;; `svg-line--color', which normalizes brushup's 48-bit values
+;; ("#57c071477e0a") down to the "#rrggbb" an SVG can parse.
+;;
+;; The amber "modified" markers are deliberately left alone.  They are the
+;; only accent in the design and they carry meaning rather than decoration.
+
+(defun zetta-fontaine--short-name (preset)
+  "PRESET as a compact label.
+Generated presets are named after their family and get long -- trim the
+Nerd Font boilerplate that every one of them repeats."
+  (when preset
+    (let ((name (symbol-name preset)))
+      (setq name (replace-regexp-in-string "-nerd-font\\(-mono\\|-propo\\)?\\'" "" name))
+      (setq name (replace-regexp-in-string "\\`monaspace-" "mona-" name))
+      name)))
+
+(defun zetta-svg-line--dim (color factor)
+  "Blend COLOR toward the theme background by FACTOR (0.0-1.0).
+
+Stepping down the brushup foreground gradient is not enough for this: two
+adjacent steps differ by a few percent and read as the same colour in a
+small SVG label.  Blending toward the background gives a separation that
+holds up whatever the theme is."
+  (let ((bg (or (bound-and-true-p brushup-bg)
+                (face-background 'default nil t) "#000000")))
+    (if-let* ((c (color-name-to-rgb color))
+              (b (color-name-to-rgb bg)))
+        (apply #'color-rgb-to-hex
+               (append (cl-mapcar (lambda (x y) (+ (* x (- 1.0 factor)) (* y factor)))
+                                  c b)
+                       (list 2)))
+      color)))
+
+(defun zetta-tab-bar-font-preset ()
+  "The active global fontaine preset, for the tab bar."
+  (when-let* ((preset (bound-and-true-p fontaine-current-preset)))
+    (svg-line-seg
+     (concat "6 " (zetta-fontaine--short-name preset))
+     :id 'zetta-font-preset-global
+     :help (format "Global font preset: %s" preset)
+     :action (and (fboundp 'zetta-fontaine-pick-preset)
+                  #'zetta-fontaine-pick-preset)
+     :action-help "click to change the font preset")))
+(defun zetta-header-line-font-preset ()
+  "The font preset in force for this buffer, for the right of the header line.
+
+Always shows something, so a blank right-hand side never has to be
+interpreted -- it would otherwise be ambiguous between \"this buffer follows
+the global preset\" and \"the segment is broken\".
+
+A buffer-local override is drawn in the normal foreground; an inherited
+global preset is dimmed, so the distinction that actually matters -- is this
+buffer doing something different? -- still reads at a glance.  Click either
+to change it."
+  (let* ((local (bound-and-true-p zetta-fontaine--buffer-preset))
+         (preset (or local (bound-and-true-p fontaine-current-preset))))
+    (when preset
+      (svg-line-seg
+       (concat "6 " (zetta-fontaine--short-name preset))
+       :id 'zetta-font-preset
+       :color (unless local
+                (zetta-svg-line--dim
+                 (or (bound-and-true-p brushup-fg-3)
+                     (face-foreground 'default nil t) "#cccccc")
+                 0.55))
+       :help (if local
+                 (format "Buffer-local font preset: %s" preset)
+               (format "Following the global preset: %s" preset))
+       :action (and (fboundp 'zetta-fontaine-pick-preset)
+                    #'zetta-fontaine-pick-preset)
+       :action-help "click to change the font preset"))))
+(defun zetta-svg-line--px-per-char (family height)
+  "Advance of FAMILY at face HEIGHT, in pixels per character.
+
+Divides out any `face-font-rescale-alist' entry for FAMILY.  That matters
+because the two consumers disagree: the SVG chrome is drawn by librsvg via
+fontconfig, which never sees `face-font-rescale-alist', while
+`string-pixel-width' measures Emacs rendering, which does.  The chrome font
+is usually also a buffer fallback and therefore rescaled -- Terminess sat
+at 0.87 to fit inside Monaspace's box -- so measuring it naively reported
+7px/char when librsvg was still drawing it at 8, and every SVG line was
+laid out one pixel per character too narrow."
+  (let* ((probe (make-string 20 ?M))
+         (measured (/ (float (string-pixel-width
+                              (propertize probe 'face (list :family family :height height))))
+                      20))
+         (scale (or (cdr (assoc family face-font-rescale-alist)) 1.0)))
+    (if (> scale 0) (/ measured scale) measured)))
+
+(defvar zetta-svg-line-uniform-fallback "Terminess Nerd Font Mono"
+  "Chrome font used when the requested one advances icons and text differently.")
+
+(defvar zetta-svg-line-icon-probes
+  '(#xE0A0    ; Powerline branch
+    #xE5FF    ; Seti-UI
+    #xF00C    ; Font Awesome
+    #xF07C9   ; folder
+    #xF0614)  ; Material Design -- the tmux status bar and masthead icons
+  "Nerd Font codepoints spanning the ranges the SVG chrome actually draws.
+A chrome font must contain all of them.")
+
+(defun zetta-svg-line--has-icons-p (family)
+  "Non-nil when FAMILY itself contains every glyph in `zetta-svg-line-icon-probes'.
+
+Measuring advance alone is not enough.  A font with NO Nerd glyphs still
+measures \"uniform\", because the probe falls through to whatever the
+fontset substitutes and that font\='s advance may coincidentally match the
+text -- which is how the Ark Pixel families were being offered as chrome
+fonts despite carrying no icons at all.  They do have U+E0A0, so one probe
+was not enough either; the set spans several ranges."
+  (ignore-errors
+    (when-let* ((spec (find-font (font-spec :family family :size 15)))
+                (obj (open-font spec)))
+      (seq-every-p (lambda (cp) (font-has-char-p obj cp))
+                   zetta-svg-line-icon-probes))))
+
+(defun zetta-svg-line--uniform-advance-p (family)
+  "Non-nil when FAMILY can drive the SVG chrome.
+
+Two conditions, and both matter:
+
+1. FAMILY must actually CONTAIN the Nerd glyphs.  Advance alone is not
+   enough -- a font with no icons still measures \"uniform\", because the
+   probe falls through to whatever the fontset substitutes and that
+   font\='s advance may coincidentally match.  That is how the Ark Pixel
+   families were being offered as chrome fonts while carrying none of
+   the icons the tab bar draws.
+
+2. It must advance those icons exactly as it advances text.  The SVG
+   renderers place both on ONE grid, so a font whose icons sit on a
+   different advance cannot be laid out correctly at any single value.
+
+The rescale factor is divided out of BOTH measurements; correcting only
+the text advance makes any rescaled family read as a false negative."
+  (and
+   (zetta-svg-line--has-icons-p family)
+   (let* ((scale (or (cdr (assoc family face-font-rescale-alist)) 1.0))
+          (scale (if (> scale 0) scale 1.0))
+          (tx (zetta-svg-line--px-per-char family 150))
+          (ic (/ (/ (float (string-pixel-width
+                            (propertize (make-string 10 #xF0614) 'face
+                                        (list :family family :height 150))))
+                    10)
+                 scale)))
+     (= (round tx) (round ic)))))
+
+(defun zetta-svg-line-derive-char-advance ()
+  "Set each SVG line's :char-advance from the font it actually draws with.
+
+The renderers lay text out on a fixed pixels-per-character grid.  That
+number was hardcoded to 8 in all four of them, and 8 is Terminus's
+advance -- measured, at face height 150, Terminus and Terminess come to
+exactly 8.00 px/char while every Monaspace family is 9.00.  So under any
+other font the computed boxes are too narrow and the tab line, tab bar,
+mode line and masthead clip and overlap.
+
+The SVG `font-size' is in px and corresponds to a face height ten times
+larger, so the advance is measured at (* 10 font-size) for whichever
+family `zetta-svg-line-font' currently names."
+  (let ((family (or (bound-and-true-p zetta-svg-line-font)
+                    (face-attribute 'default :family nil 'default))))
+    ;; Refuse a chrome font whose icons and text disagree -- see
+    ;; `zetta-svg-line--uniform-advance-p'.
+    (when (and family (seq-some #'display-graphic-p (frame-list))
+               (not (zetta-svg-line--uniform-advance-p family)))
+      (message "zetta: %s advances icons and text differently; chrome font -> %s"
+               family zetta-svg-line-uniform-fallback)
+      (setq family zetta-svg-line-uniform-fallback
+            zetta-svg-line-font zetta-svg-line-uniform-fallback))
+    ;; `display-graphic-p' with no argument asks the SELECTED frame, which
+    ;; is not graphical in a daemon at startup -- check the frame list.
+    (when (and family (seq-some #'display-graphic-p (frame-list)))
+      (dolist (pair '((zetta-tab-bar-svg-char-advance      . zetta-tab-bar-svg-font-size)
+                      (zetta-tab-line-svg-char-advance     . zetta-tab-line-svg-font-size)
+                      (zetta-modeline-svg-char-advance     . zetta-modeline-svg-font-size)
+                      (zetta-header-line-svg-char-advance  . zetta-header-line-svg-font-size)))
+        (when (and (boundp (car pair)) (boundp (cdr pair)))
+          (set (car pair)
+               (max 1 (round (zetta-svg-line--px-per-char
+                              family (* 10 (symbol-value (cdr pair))))))))))))
+
+(defun zetta-svg-line-apply-brushup-palette ()
+  "Re-derive the SVG tab-line, tab-bar and mode-line colours from brushup.
+Registered on `brushup-styles', so it re-runs on every theme change.
+Each assignment is guarded: the module owning the variable may not have
+loaded yet, and a missing one should simply keep its default."
+  (when (boundp 'brushup-bg)
+    (cl-flet ((setc (sym val) (when (boundp sym) (set sym val))))
+      ;; --- tab line: chrome in greys, selection in the fg family --------
+      (setc 'zetta-tab-line-svg-background                brushup-bg-1)
+      (setc 'zetta-tab-line-svg-tab-background            brushup-bg-2)
+      ;; The selected tab is the one element that inverts, so its foreground
+      ;; cannot be assumed to be the background colour: on a light theme with
+      ;; a strongly tinted background, `brushup-bg' on `brushup-fg-1' can land
+      ;; well under a readable ratio.  Ask which of fg/bg actually reads.
+      (setc 'zetta-tab-line-svg-current-background        brushup-fg-1)
+      (setc 'zetta-tab-line-svg-current-foreground        (zetta-readable-on brushup-fg-1))
+      ;; non-selected windows: the same scheme, flattened toward the bg
+      (setc 'zetta-tab-line-svg-inactive-background       brushup-bg)
+      (setc 'zetta-tab-line-svg-inactive-tab-background   brushup-bg-1)
+      (setc 'zetta-tab-line-svg-inactive-current-background brushup-bg-4)
+      (setc 'zetta-tab-line-svg-inactive-current-foreground (zetta-readable-on brushup-bg-4))
+      (setc 'zetta-tab-line-svg-inactive-foreground       brushup-fg-5)
+      ;; --- tab bar ------------------------------------------------------
+      (setc 'zetta-tab-bar-svg-icon-color                 brushup-fg-3)
+      (setc 'zetta-tab-bar-calendar-color                 brushup-fg-5)
+      ;; --- mode line: active a step more present than inactive ----------
+      (setc 'zetta-modeline-svg-bg-active                 brushup-bg-2)
+      (setc 'zetta-modeline-svg-bg-inactive               brushup-bg-1))))
+
+;; Appended, not prepended: `add-to-list' pushes to the front, and
+;; `brushup-init' -- which recomputes the palette -- already sits near the
+;; end of `brushup-styles'.  A prepended style would therefore read the
+;; PREVIOUS theme's colours and land one theme change behind.
+(with-eval-after-load 'brushup
+  (add-to-list 'brushup-styles '(zetta-svg-line-apply-brushup-palette) t))
+
+;; brushup-mode runs `brushup' from the bootstrap, before these modules are
+;; loaded, so the registration above misses that first pass.  Apply once
+;; more after startup settles.
+(add-hook (if (boundp 'elpaca-after-init-hook) 'elpaca-after-init-hook 'after-init-hook)
+          #'zetta-svg-line-apply-brushup-palette)
+(add-hook (if (boundp 'elpaca-after-init-hook) 'elpaca-after-init-hook 'after-init-hook)
+          #'zetta-svg-line-derive-char-advance)
 
 ;;; line-utils.el ends here

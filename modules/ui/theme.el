@@ -26,6 +26,9 @@
 ;;(use-package chocolate-theme)
 
 (custom-set-faces
- '(cursor ((t (:background "gray"))))
+ ;; `cursor' is deliberately NOT set here.  `custom-set-faces' writes into
+ ;; the `user' theme, which outranks every loaded theme -- so pinning it to
+ ;; "gray" masked the cursor colour every Prot theme already defines
+ ;; (doric-plum sets #c070d0, for instance).  Leave it to the theme.
  '(header-line-inactive ((t (:background unspecified :foreground unspecified :inherit header-line)))))
 ;;; theme.el ends here

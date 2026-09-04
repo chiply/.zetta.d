@@ -184,14 +184,16 @@ Once there are enough tabs to wrap onto a second row they revert to the
 normal flush-left flow."
   :type 'boolean :group 'zetta)
 
-(defcustom zetta-tab-line-svg-background "#ece4f6"
-  "Light purple background for the SVG tab line (selected window).
+(defcustom zetta-tab-line-svg-background "#eeeeee"
+  "Background strip for the SVG tab line (selected window).
+Overridden at runtime from the theme; this default only applies
+when brushup is unavailable.
 Distinguishes the tab line from the tab-bar and header-line, and is the colour
 the inactive tabs sit just slightly darker than.  nil = transparent."
   :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
 
-(defcustom zetta-tab-line-svg-current-background "#4b2e83"
-  "Dark-purple highlight drawn behind the current (active) tab.  nil = none.
+(defcustom zetta-tab-line-svg-current-background "#3c3c3c"
+  "Highlight drawn behind the current (active) tab.  nil = none.
 Chosen to sit in the same purple family as the lavender tab-line background
 while staying dark enough for the white current-tab label to read."
   :type '(choice (const :tag "None" nil) color) :group 'zetta)
@@ -200,7 +202,7 @@ while staying dark enough for the white current-tab label to read."
   "Foreground for the current tab's label (light, to read on the dark box)."
   :type 'color :group 'zetta)
 
-(defcustom zetta-tab-line-svg-tab-background "#e4dbf2"
+(defcustom zetta-tab-line-svg-tab-background "#dddddd"
   "Background box drawn behind each ordinary (inactive) tab to delineate it,
 the way the built-in tab line distinguishes inactive tabs.  Just a touch darker
 than `zetta-tab-line-svg-background' -- the delineation is meant to be subtle, so
@@ -221,19 +223,19 @@ Empty by default -- the modified colour alone marks unsaved tabs."
 ;;; Inactive palette -- used when the tab line's window is NOT selected,
 ;;; the way the mode line dims in unfocused windows.  Each falls back to
 ;;; its active counterpart when nil.
-(defcustom zetta-tab-line-svg-inactive-background "#f5f1fb"
-  "SVG tab-line background in NON-selected windows (lighter purple than active)."
+(defcustom zetta-tab-line-svg-inactive-background "#f7f7f7"
+  "SVG tab-line background in NON-selected windows (flatter than active)."
   :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
 
 (defcustom zetta-tab-line-svg-inactive-foreground "#aab2bd"
   "Foreground for ordinary tabs in NON-selected windows (dimmed)."
   :type 'color :group 'zetta)
 
-(defcustom zetta-tab-line-svg-inactive-current-background "#b0a3cf"
-  "Highlight behind the current tab in NON-selected windows (muted purple)."
+(defcustom zetta-tab-line-svg-inactive-current-background "#b5b5b5"
+  "Highlight behind the current tab in NON-selected windows (muted grey)."
   :type '(choice (const :tag "None" nil) color) :group 'zetta)
 
-(defcustom zetta-tab-line-svg-inactive-tab-background "#ede6f5"
+(defcustom zetta-tab-line-svg-inactive-tab-background "#ededed"
   "Background box behind ordinary tabs in NON-selected windows: just a touch
 darker than `zetta-tab-line-svg-inactive-background', a subtle delineation."
   :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)

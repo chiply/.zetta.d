@@ -37,8 +37,9 @@ its text.  Plain all-text rows use exact font anchoring and ignore this."
   "When non-nil, draw a full-height major-mode-icon masthead at the left of the tab bar."
   :type 'boolean :group 'zetta)
 
-(defcustom zetta-tab-bar-svg-icon-color "#6c4dab"
-  "Fill colour for the tab-bar masthead major-mode icon (a purple that fits the theme)."
+(defcustom zetta-tab-bar-svg-icon-color "#57707d"
+  "Fill colour for the tab-bar masthead major-mode icon.
+Overridden at runtime from the theme."
   :type 'color :group 'zetta)
 
 (defcustom zetta-tab-bar-svg-icon-width 'square
@@ -104,7 +105,8 @@ jitters as keycast changes width."
                  zetta-gptel-processes
                  blinker-tab-bar)
          :center nil
-         :right '(zetta-tab-bar-svg--elfeed "  " zetta-tab-bar-svg--mu4e))
+         :right '(zetta-tab-bar-font-preset "  "
+                  zetta-tab-bar-svg--elfeed "  " zetta-tab-bar-svg--mu4e))
    ;; line 3 -- Spotify left; clock centre (it spans all 3 rows); battery/prefix/space-tree right
    (list :left '(zetta-tab-bar-svg--spotify)
          :center nil

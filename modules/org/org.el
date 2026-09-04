@@ -35,22 +35,24 @@ TYPE is a character: ?a alphabetic, ?t timestamp, ?p priority, ?o TODO order."
 (add-hook 'calendar-mode-hook (lambda () (setq truncate-lines t)))
 
 (defun zetta-calendar-grayscale-faces ()
-  "Set calendar faces to grayscale, adapting to light/dark background."
-  (let ((dark-p (eq (frame-parameter nil 'background-mode) 'dark)))
+  "Set calendar faces from the brushup gradient.
+
+Previously six hardcoded greys behind an (if dark-p ...) test.  That flips
+with the background but ignores the theme entirely -- #aaaaaa is the same
+grey whatever palette is loaded.  The brushup foreground gradient already
+expresses \"progressively less prominent than the body text\" in terms of
+the live theme, which is exactly what a calendar wants."
+  (let ((fg   (or (bound-and-true-p brushup-fg) (face-foreground 'default nil t)))
+        (fg-3 (or (bound-and-true-p brushup-fg-3) (face-foreground 'shadow nil t)))
+        (fg-5 (or (bound-and-true-p brushup-fg-5) (face-foreground 'shadow nil t)))
+        (bg-2 (or (bound-and-true-p brushup-bg-2) (face-background 'default nil t))))
     (set-face-attribute 'calendar-today nil
-                        :foreground (if dark-p "#ffffff" "#000000")
-                        :weight 'bold
-                        :underline t)
-    (set-face-attribute 'calendar-weekday-header nil
-                        :foreground (if dark-p "#aaaaaa" "#555555"))
-    (set-face-attribute 'calendar-weekend-header nil
-                        :foreground (if dark-p "#666666" "#999999"))
-    (set-face-attribute 'holiday nil
-                        :foreground (if dark-p "#ffffff" "#000000")
-                        :background (if dark-p "#333333" "#e0e0e0"))
+                        :foreground fg :weight 'bold :underline t)
+    (set-face-attribute 'calendar-weekday-header nil :foreground fg-3)
+    (set-face-attribute 'calendar-weekend-header nil :foreground fg-5)
+    (set-face-attribute 'holiday nil :foreground fg :background bg-2)
     (set-face-attribute 'calendar-month-header nil
-                        :foreground (if dark-p "#cccccc" "#333333")
-                        :weight 'bold)))
+                        :foreground fg-3 :weight 'bold)))
 
 (add-hook 'calendar-mode-hook #'zetta-calendar-grayscale-faces)
 
@@ -86,6 +88,11 @@ TYPE is a character: ?a alphabetic, ?t timestamp, ?p priority, ?o TODO order."
                                user-emacs-directory)
         org-startup-folded (quote nofold)
         org-startup-indented t
+        ;; Wrap #+begin_quote / #+begin_verse contents in the `org-quote' and
+        ;; `org-verse' faces.  Off by default, which means that text carries
+        ;; NO face at all and simply inherits `default' -- so any styling
+        ;; aimed at `org-quote' silently does nothing.
+        org-fontify-quote-and-verse-blocks t
         org-refile-use-outline-path 'file
         org-log-refile 'time
         org-log-redeadline 'time
@@ -159,6 +166,34 @@ TYPE is a character: ?a alphabetic, ?t timestamp, ?p priority, ?o TODO order."
       (t :foreground "#7A7A7A" :strike-through t))
     "Face for the NOPE todo keyword."
     :group 'org-faces)
+  ;; The specs above are defaults only: they flip with the background but are
+  ;; otherwise fixed hues, so PROG stayed the same blue against every palette.
+  ;; Re-derive them from the theme, keeping the semantic grouping.
+  (defun zetta-org-todo-refresh-faces ()
+    "Re-colour the custom org TODO keyword faces from the current theme."
+    (when (fboundp 'zetta-theme-color)
+      (dolist (spec '((zetta-org-todo-prog . accent)
+                      (zetta-org-todo-wait . warning)
+                      (zetta-org-todo-ques . warning)
+                      (zetta-org-todo-idea . accent)))
+        (when (facep (car spec))
+          (set-face-attribute (car spec) nil
+                              :foreground (zetta-theme-color (cdr spec))
+                              :weight 'bold)))
+      ;; HOLD and NOPE are "not active" rather than a state with a hue
+      (let ((muted (zetta-svg-line--dim
+                    (or (bound-and-true-p brushup-fg-3)
+                        (face-foreground 'default nil t) "#9a9a9a")
+                    0.45)))
+        (when (facep 'zetta-org-todo-hold)
+          (set-face-attribute 'zetta-org-todo-hold nil
+                              :foreground muted :weight 'bold))
+        (when (facep 'zetta-org-todo-nope)
+          (set-face-attribute 'zetta-org-todo-nope nil
+                              :foreground muted :strike-through t)))))
+  (zetta-org-todo-refresh-faces)
+  (add-to-list 'brushup-styles '(zetta-org-todo-refresh-faces) t)
+
   (setq org-todo-keyword-faces
         '(("PROG" . zetta-org-todo-prog)
           ("WAIT" . zetta-org-todo-wait)

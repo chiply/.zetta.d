@@ -14,34 +14,9 @@
   :brushup
   (add-to-list 'brushup-styles
                '(progn
-                  ;; `:inherit default' is what makes line numbers scale with
-                  ;; `text-scale-mode', and it has to be restated here on every
-                  ;; theme change.  `line-number' ships as `:inherit (shadow
-                  ;; default)', but `face-spec-recalc' skips the defface spec
-                  ;; entirely once ANY theme sets the face -- and nearly every
-                  ;; theme sets a line-number foreground.  The face was landing
-                  ;; with no inherit at all, so it took its size from the
-                  ;; FRAME's default face, which text-scale never touches.
-                  ;;
-                  ;; Two symptoms, one cause: the numbers stayed put while the
-                  ;; text moved, and shrinking appeared to hit a floor -- a row
-                  ;; is as tall as its tallest glyph, so full-size digits pin
-                  ;; the line height and scaling down past a point bought only
-                  ;; wider gaps, no density.
-                  ;;
-                  ;; Inheriting is the whole fix; do NOT also remap these faces
-                  ;; from `text-scale-mode-hook'.  Remapping is RELATIVE and
-                  ;; buffer-local face remapping propagates through `:inherit',
-                  ;; so a remap on top of the inherit squares the factor:
-                  ;; measured at 79px against a 38px default one step up, and
-                  ;; at four steps down the doubly-shrunk size fell below what
-                  ;; the font could render and snapped back up to 14px.
-                  ;;
-                  ;; `shadow' is dropped from the stock inherit list on
-                  ;; purpose: it is there for the muted foreground, which the
-                  ;; line below sets from the palette anyway.
+                  ;; Colours only -- the `:inherit' that makes these scale
+                  ;; lives in an override spec below, which needs no re-running.
                   (set-face-attribute 'line-number nil
-                                      :inherit 'default
                                       :foreground brushup-bg-5
                                       :background brushup-bg)
                   (set-face-attribute 'line-number-current-line nil
@@ -64,6 +39,45 @@
 
   :hook (((vterm-mode) . (lambda () (display-line-numbers-mode -1)))
          ((pdf-view-mode) . (lambda () (display-line-numbers-mode -1)))))
+
+;; `:inherit' is what makes line numbers scale with `text-scale-mode':
+;; buffer-local face remapping propagates through it, so inheriting `default'
+;; means inheriting the remapped size.  `line-number' ships as
+;; `:inherit (shadow default)' and the stock behaviour is correct.
+;;
+;; Keeping it is the hard part.  `face-spec-recalc' skips the defface spec
+;; entirely once ANY theme sets the face, and TWO things here do: nearly every
+;; theme sets a line-number foreground, and fontaine writes its presets as a
+;; `fontaine' theme carrying `:line-number-family'.  Either one lands the face
+;; with no inherit at all, so it sizes from the FRAME's default face, which
+;; text-scale never touches.  Restating it with `set-face-attribute' from
+;; `brushup-styles' is not enough either: that only re-runs on a theme change,
+;; and a fontaine PRESET change wipes it again -- which is exactly how this
+;; came back the moment a gohufont preset was selected.
+;;
+;; `face-override-spec' is applied last by `face-spec-recalc', after every
+;; theme spec, so it survives a theme change, a preset change and new frames
+;; alike, and never needs re-running.
+;;
+;; Two symptoms, one cause: the numbers stayed put while the text moved, and
+;; shrinking appeared to hit a floor -- a row is as tall as its tallest glyph,
+;; so full-size digits pin the line height and scaling down past a point
+;; bought only wider gaps, no density.
+;;
+;; Inheriting is the WHOLE fix.  Do NOT also remap these faces from
+;; `text-scale-mode-hook': remapping is relative and propagates through the
+;; inherit too, so it squares the factor -- measured at 79px against a 38px
+;; default one step up, and four steps down the doubly-shrunk size fell below
+;; what the font could render and snapped back up to 14px.
+;;
+;; `shadow' is dropped from the stock inherit list on purpose: it is there for
+;; the muted foreground, which the brushup style above sets from the palette.
+(dolist (spec '((line-number              . default)
+                (line-number-current-line . line-number)
+                (line-number-major-tick   . line-number)
+                (line-number-minor-tick   . line-number)))
+  (when (facep (car spec))
+    (face-spec-set (car spec) `((t :inherit ,(cdr spec))) 'face-override-spec)))
 
 ;; `global-display-line-numbers-mode' turns numbers on from
 ;; `after-change-major-mode-hook', which runs AFTER a major mode's own

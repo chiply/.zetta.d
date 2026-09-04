@@ -144,9 +144,19 @@ and `warning' or `accent' is what moves when a palette has to give."
            :foreground (if (fboundp 'zetta-readable-on)
                            (zetta-readable-on wash)
                          'unspecified))))))))
+;; This file loads BEFORE core/line-utils.el (see source/init-data/init-data.el,
+;; where core/utility.el is tenth and core/line-utils.el twenty-eighth), so
+;; `zetta-hue-wash' does not exist yet and the call below is a guarded no-op on
+;; the first pass.  Registering on `brushup-styles' is not enough to recover:
+;; `brushup-mode' runs `brushup' from the bootstrap, before any module loads,
+;; so the first pass is already gone by the time the entry is added and the
+;; faces would sit on their cold-start `highlight' inherit until the next theme
+;; change.  Same after-init catch-up line-utils.el uses for the same reason.
 (zetta-highlight-refresh-faces)
 (with-eval-after-load 'brushup
   (add-to-list 'brushup-styles '(zetta-highlight-refresh-faces) t))
+(add-hook (if (boundp 'elpaca-after-init-hook) 'elpaca-after-init-hook 'after-init-hook)
+          #'zetta-highlight-refresh-faces)
 
 (defvar zetta-highlight-phrase-alist
   '(;; failures

@@ -14,7 +14,34 @@
   :brushup
   (add-to-list 'brushup-styles
                '(progn
+                  ;; `:inherit default' is what makes line numbers scale with
+                  ;; `text-scale-mode', and it has to be restated here on every
+                  ;; theme change.  `line-number' ships as `:inherit (shadow
+                  ;; default)', but `face-spec-recalc' skips the defface spec
+                  ;; entirely once ANY theme sets the face -- and nearly every
+                  ;; theme sets a line-number foreground.  The face was landing
+                  ;; with no inherit at all, so it took its size from the
+                  ;; FRAME's default face, which text-scale never touches.
+                  ;;
+                  ;; Two symptoms, one cause: the numbers stayed put while the
+                  ;; text moved, and shrinking appeared to hit a floor -- a row
+                  ;; is as tall as its tallest glyph, so full-size digits pin
+                  ;; the line height and scaling down past a point bought only
+                  ;; wider gaps, no density.
+                  ;;
+                  ;; Inheriting is the whole fix; do NOT also remap these faces
+                  ;; from `text-scale-mode-hook'.  Remapping is RELATIVE and
+                  ;; buffer-local face remapping propagates through `:inherit',
+                  ;; so a remap on top of the inherit squares the factor:
+                  ;; measured at 79px against a 38px default one step up, and
+                  ;; at four steps down the doubly-shrunk size fell below what
+                  ;; the font could render and snapped back up to 14px.
+                  ;;
+                  ;; `shadow' is dropped from the stock inherit list on
+                  ;; purpose: it is there for the muted foreground, which the
+                  ;; line below sets from the palette anyway.
                   (set-face-attribute 'line-number nil
+                                      :inherit 'default
                                       :foreground brushup-bg-5
                                       :background brushup-bg)
                   (set-face-attribute 'line-number-current-line nil

@@ -224,6 +224,25 @@ over, never visibility."
   (advice-add 'ghostel--redraw :after
               #'zetta-ghostel--restore-cursor-column)
 
+  ;; Item 5 -- let space-tree's navigation keys through.
+  ;; `modules/ui/spacetree.el' binds M-<tab> (go-to-last-space),
+  ;; M-S-<tab> (switch-space-by-name) and C-M-<tab> (go-right) globally,
+  ;; but ghostel's special-keys loop binds every <tab> variant across the
+  ;; mods `S- C- M- C-S- M-S- C-M-', so in a ghostel buffer they were
+  ;; reaching `ghostel--send-event' instead.  That loop -- unlike the
+  ;; C-<letter> and M-<letter> loops right beside it -- never consults
+  ;; `ghostel-keymap-exceptions', so there is no supported opt-out.
+  ;; vterm never bound these at all, which is why it worked there.
+  ;;
+  ;; Unbind rather than re-bind to the space-tree commands: lookup then
+  ;; falls through to whatever is global, so this survives any remap in
+  ;; spacetree.el.  C-M-S-<tab> (go-left) is absent from ghostel's mod
+  ;; list and already reached Emacs, so it is not listed here.
+  ;; To send a literal M-TAB to the program, use C-c C-q
+  ;; (`ghostel-send-next-key').
+  (dolist (key '("M-<tab>" "M-S-<tab>" "C-M-<tab>"))
+    (keymap-unset ghostel-mode-map key t))
+
   :general
   (
    :states '(insert)

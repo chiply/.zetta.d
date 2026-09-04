@@ -1,5 +1,8 @@
 ;;; line-utils.el --- Configure line utilities -*- lexical-binding: t; -*-
 
+;; `zetta-hue-wash' works in HSL; nothing else here pulls color.el in.
+(require 'color)
+
 ;;;;;; Utils
 (defvar ml-selected-window nil)
 
@@ -463,6 +466,100 @@ only if brushup has not defined its gradient yet."
     (or (and rung (boundp rung) (symbol-value rung))
         (alist-get (if (eq kind 'modified) 'changed kind)
                    zetta-theme-color-fallbacks))))
+
+;;; ------------------------------------------------------------------
+;;; Hue washes
+;;; ------------------------------------------------------------------
+;; For anything painting a theme colour BEHIND text that has to stay
+;; readable through it: the org-remark pens, the log highlighters in
+;; modules/core/utility.el.
+
+(defun zetta-hue-wash (hue anchor sat)
+  "HUE re-lit to weigh the same against the page as ANCHOR does.
+
+Hue and saturation come from HUE, saturation clamped into SAT (a
+`(min . max)\=' pair).  Lightness is searched for rather than taken from
+HUE, so the result lands on ANCHOR\='s relative luminance -- ANCHOR being a
+step of the brushup gradient, which is already the theme\='s own answer to
+\"how far off the page is a faint wash\".
+
+Matching luminance rather than HSL lightness is the whole point.  A shared
+lightness is not a shared weight: blue at L 0.5 carries about a seventh of
+the luminance of yellow at L 0.5, which is how the org-remark important pen came out
+a near-black smudge on a dark page while the question pen read fine.
+Luminance climbs monotonically with lightness at a fixed hue and
+saturation, so a bisection finds the lightness that lands on ANCHOR."
+  (if-let* ((rgb (color-name-to-rgb hue))
+            (goal (zetta-color--luminance anchor)))
+      (let* ((hsl (apply #'color-rgb-to-hsl rgb))
+             (h (nth 0 hsl))
+             ;; A theme colour that is genuinely achromatic is left
+             ;; alone: forcing it up to the saturation floor would pick
+             ;; hue 0 and silently turn a grey pen red.
+             (s (if (< (nth 1 hsl) 0.05)
+                    (nth 1 hsl)
+                  (min (cdr sat) (max (car sat) (nth 1 hsl)))))
+             (lo 0.0) (hi 1.0) (l 0.5) (hex hue))
+        (dotimes (_ 14)
+          (setq l (/ (+ lo hi) 2.0)
+                hex (apply #'color-rgb-to-hex
+                           (append (color-hsl-to-rgb h s l) '(2))))
+          (if (< (zetta-color--luminance hex) goal)
+              (setq lo l)
+            (setq hi l)))
+        hex)
+    hue))
+
+(defun zetta-hue-of (color)
+  "Hue of COLOR as a turn in [0,1), or nil if it cannot be parsed."
+  (when-let* ((rgb (color-name-to-rgb color)))
+    (car (apply #'color-rgb-to-hsl rgb))))
+
+(defun zetta-with-hue (color hue)
+  "COLOR rotated to HUE (a turn in [0,1)), keeping its saturation and value."
+  (if-let* ((rgb (color-name-to-rgb color)))
+      (let ((hsl (apply #'color-rgb-to-hsl rgb)))
+        (apply #'color-rgb-to-hex
+               (append (color-hsl-to-rgb hue (nth 1 hsl) (nth 2 hsl)) '(2))))
+    color))
+
+(defun zetta-hue--clear-p (hue taken min-sep)
+  "Non-nil if HUE sits at least MIN-SEP turns from every hue in TAKEN."
+  (cl-every (lambda (other)
+              (let ((d (abs (- hue other))))
+                ;; the wheel wraps: 0.98 and 0.02 are 0.04 apart, not 0.96
+                (>= (min d (- 1.0 d)) min-sep)))
+            taken))
+
+(defun zetta-hue-separate (hues min-sep)
+  "HUES rotated apart so no two sit closer than MIN-SEP turns on the wheel.
+
+Earlier entries keep their hue outright; a later one that crowds an
+earlier one is moved to the NEAREST angle that clears everything already
+placed, searching outward in both directions -- the smallest lie that
+works, so a theme whose colours are already spread is left untouched and
+one that bunches them is bent no further than it has to be.
+
+Needed because a palette is under no obligation to supply four separable
+hues.  ef-light paints `error' crimson and `warning' rust, two steps
+apart on the wheel; doric-obsidian paints `warning' tan and `link' brown,
+which wash to the same colour outright.  Where hue is decoration this
+does not matter and the answer is to drop hue altogether (see
+`zetta-vc-marker-ladder').  Where hue is the CONTENT, it has to be made
+to separate."
+  (let (taken out)
+    (dolist (h hues (nreverse out))
+      (let ((pick (if (or (null h) (zetta-hue--clear-p h taken min-sep))
+                      h
+                    (cl-loop for step from 0.01 to 0.5 by 0.01
+                             for up = (mod (+ h step) 1.0)
+                             for down = (mod (- h step) 1.0)
+                             if (zetta-hue--clear-p up taken min-sep) return up
+                             else if (zetta-hue--clear-p down taken min-sep)
+                             return down
+                             finally return h))))
+        (when pick (push pick taken))
+        (push pick out)))))
 
 ;;; ------------------------------------------------------------------
 ;;; Keyword prominence tiers

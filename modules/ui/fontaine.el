@@ -270,9 +270,10 @@ always take precedence over a generated one of the same name."
           ;; variety costs nothing: tables and blocks still line up with the
           ;; prose around them.
           ;;
-          ;;   Radon    handwriting -- body prose, emphasis, comments in code
+          ;;   Radon    handwriting -- document title, body prose, emphasis,
+          ;;                           comments in code
           ;;   Argon    humanist    -- quotes: another voice, set in print
-          ;;   Xenon    slab serif  -- document title, H1/H3/H5
+          ;;   Xenon    slab serif  -- H1/H3/H5
           ;;   Krypton  mechanical  -- code, H2/H4/H6, bold, chrome
           ;;   Neon     grotesque   -- structure: tables, drawers, keywords,
           ;;                           links, dates, tags
@@ -312,7 +313,9 @@ always take precedence over a generated one of the same name."
            ;; except comments and docstrings, which are prose inside code
            :comment-family "Monaspace Radon NF"
            :extra-faces
-           ((org-document-title . "Monaspace Xenon NF")
+           ;; The title is the note speaking in its own voice, so it takes
+           ;; the body face rather than the slab the headings use.
+           ((org-document-title . "Monaspace Radon NF")
             (org-property-value . "Monaspace Neon NF")
             (org-level-1        . "Monaspace Xenon NF")
             (org-level-2        . "Monaspace Krypton NF")

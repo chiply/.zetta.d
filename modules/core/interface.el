@@ -288,15 +288,53 @@ order is preserved."
       (append (nreverse plain)
               (sort folded (lambda (a b) (string< (car a) (car b))))))))
 
+(defcustom zetta-font-excluded-script-samples
+  '((cjk    . "漢日本語中文")
+    (hangul . "가한"))
+  "Scripts whose fonts are left out of the family listings.
+
+Each entry is a label and a handful of characters; a family covering EVERY
+character of any entry is hidden.  Nil, or an empty list, hides nothing.
+
+Detected by coverage rather than by name.  Name matching looked tempting
+and is a trap: case-folded \" KR\" matches Monaspace KRypton, \"SC\" matches
+Fragment Mono SC where it means small caps, and \"Han\" matches
+ComicSHANnsMono -- while genuinely CJK families called HackGen, D2Coding,
+goorm Sans Code and Guguru Sans Code match none of the obvious patterns.
+
+The point is duplication, not the scripts themselves.  A CJK build ships
+once per region -- Noto Sans Mono CJK in HK, JP, KR, SC and TC, Ark Pixel
+in seven -- and for someone writing English they are the same Latin design
+listed five or seven times over.  Set this to nil to see them."
+  :type '(alist :key-type symbol :value-type string) :group 'zetta)
+
+(defun zetta-font--excluded-script-p (family &optional frame)
+  "Non-nil if FAMILY covers a whole script in `zetta-font-excluded-script-samples'."
+  (when-let* ((entity (ignore-errors
+                        (find-font (font-spec :family family)
+                                   (or frame (zetta-font--measurement-frame))))))
+    (seq-some (lambda (entry)
+                (seq-every-p (lambda (ch) (font-has-char-p entity ch))
+                             (string-to-list (cdr entry))))
+              zetta-font-excluded-script-samples)))
+
 (defun zetta-font-monospaced-families (&optional frame)
   "Every installed family that has a grid, as (FAMILY . SIGNATURE).
-Collapsed to one entry per Nerd Font patch unless
-`zetta-font-collapse-nerd-variants' is nil."
+
+Filtered twice for noise, both switchable: one entry per Nerd Font patch
+\\(`zetta-font-collapse-nerd-variants'), and nothing covering a script in
+`zetta-font-excluded-script-samples'.
+
+Only the LISTING is filtered.  `zetta-font-metric-signature' and
+`zetta-font-mixable-with' still answer for any family by name, so a preset
+naming a hidden one keeps working."
   (let* ((frame (or frame (zetta-font--measurement-frame)))
          (cells (delq nil
                       (mapcar (lambda (family)
                                 (when-let* ((sig (zetta-font-metric-signature
-                                                  family frame)))
+                                                  family frame))
+                                            ((not (zetta-font--excluded-script-p
+                                                   family frame))))
                                   (cons family sig)))
                               (font-family-list frame)))))
     (if zetta-font-collapse-nerd-variants

@@ -670,14 +670,20 @@ preset switch, and a missing font must never be able to break either."
 ;; Prefer Terminess (the Nerd-Font patch of Terminus, hence metric-matched)
 ;; for the symbol blocks terminal UIs use.  Emacs falls through to the next
 ;; font for any codepoint it lacks, so these are safe to prepend.
-(dolist (range '((#x2300 . #x23ff)    ; Misc Technical   -- Claude Code ⏺ ⎿
-                 (#x2500 . #x257f)    ; Box Drawing
-                 (#x2580 . #x259f)    ; Block Elements
-                 (#x25a0 . #x25ff)    ; Geometric Shapes
-                 (#x2600 . #x26ff)    ; Misc Symbols     -- ✳
-                 (#x2700 . #x27bf)    ; Dingbats         -- ❯ ✚
-                 (#x2800 . #x28ff)))  ; Braille          -- btop graphs
-  (set-fontset-font t range "Terminess Nerd Font Mono" nil 'prepend))
+;;
+;; `fboundp' rather than `display-graphic-p': the CI runners' Emacs has no
+;; window system at all, where this is void and aborts the whole module load.
+;; `display-graphic-p' would also be nil in a daemon before its first frame
+;; exists, which would silently skip the fontset on every daemon start.
+(when (fboundp 'set-fontset-font)
+  (dolist (range '((#x2300 . #x23ff)    ; Misc Technical   -- Claude Code ⏺ ⎿
+                   (#x2500 . #x257f)    ; Box Drawing
+                   (#x2580 . #x259f)    ; Block Elements
+                   (#x25a0 . #x25ff)    ; Geometric Shapes
+                   (#x2600 . #x26ff)    ; Misc Symbols     -- ✳
+                   (#x2700 . #x27bf)    ; Dingbats         -- ❯ ✚
+                   (#x2800 . #x28ff)))  ; Braille          -- btop graphs
+    (set-fontset-font t range "Terminess Nerd Font Mono" nil 'prepend)))
 
 (add-hook 'ghostel-mode-hook #'zetta-use-terminal-display-table)
 (add-hook 'vterm-mode-hook   #'zetta-use-terminal-display-table)

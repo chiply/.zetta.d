@@ -273,10 +273,12 @@ always take precedence over a generated one of the same name."
           ;;   Radon    handwriting -- document title, body prose, emphasis,
           ;;                           comments in code
           ;;   Argon    humanist    -- quotes: another voice, set in print
-          ;;   Xenon    slab serif  -- H1/H3/H5
-          ;;   Krypton  mechanical  -- code, H2/H4/H6, bold, chrome
-          ;;   Neon     grotesque   -- structure: tables, drawers, keywords,
-          ;;                           links, dates, tags
+          ;;   Xenon    slab serif  -- metadata VALUES: property values,
+          ;;                           document info, drawers, meta lines
+          ;;   Krypton  mechanical  -- code, metadata NAMES, tags, todo
+          ;;                           keywords, bold, chrome
+          ;;   Neon     grotesque   -- headings, links, dates, tables,
+          ;;                           checkboxes
           ;;
           ;; Body prose is the handwriting face, so the ordinary text of a
           ;; note reads as something written rather than something typeset,
@@ -316,17 +318,35 @@ always take precedence over a generated one of the same name."
            ;; The title is the note speaking in its own voice, so it takes
            ;; the body face rather than the slab the headings use.
            ((org-document-title . "Monaspace Radon NF")
-            (org-property-value . "Monaspace Neon NF")
-            (org-level-1        . "Monaspace Xenon NF")
-            (org-level-2        . "Monaspace Krypton NF")
-            (org-level-3        . "Monaspace Xenon NF")
-            (org-level-4        . "Monaspace Krypton NF")
-            (org-level-5        . "Monaspace Xenon NF")
-            (org-level-6        . "Monaspace Krypton NF")
+            ;; Headings are one face at every level -- the outline depth is
+            ;; already carried by size and colour, so family has nothing left
+            ;; to say and Neon lets the words read as words.
+            (org-level-1        . "Monaspace Neon NF")
+            (org-level-2        . "Monaspace Neon NF")
+            (org-level-3        . "Monaspace Neon NF")
+            (org-level-4        . "Monaspace Neon NF")
+            (org-level-5        . "Monaspace Neon NF")
+            (org-level-6        . "Monaspace Neon NF")
+            ;; Metadata reads as name/value: the mechanical face for what a
+            ;; thing is CALLED, the slab for what it SAYS.  Verified against
+            ;; a real buffer for which face lands where -- `#+TITLE:' and
+            ;; `#+AUTHOR:' are org-document-info-keyword, their values are
+            ;; org-document-title and org-document-info, a drawer key is
+            ;; org-special-keyword and its value org-property-value.
+            (org-document-info-keyword . "Monaspace Krypton NF")
+            (org-document-info  . "Monaspace Xenon NF")
+            (org-special-keyword . "Monaspace Krypton NF")
+            (org-property-value . "Monaspace Xenon NF")
+            (org-drawer         . "Monaspace Xenon NF")
+            ;; No split available here: a generic `#+FILETAGS: :x:' line is
+            ;; org-meta-line end to end, key and value alike, so it takes the
+            ;; value face for the whole line.  It also covers `#+begin_src',
+            ;; which is metadata about a block rather than code.
+            (org-meta-line      . "Monaspace Xenon NF")
             (org-quote          . "Monaspace Argon NF")
             (org-link           . "Monaspace Neon NF")
             (org-date           . "Monaspace Neon NF")
-            (org-tag            . "Monaspace Neon NF")
+            (org-tag            . "Monaspace Krypton NF")
             (org-todo           . "Monaspace Krypton NF")
             (org-done           . "Monaspace Krypton NF")
             ;; Code takes Krypton, the mechanical face: src blocks, ~code~
@@ -344,9 +364,6 @@ always take precedence over a generated one of the same name."
             ;; Metrically it makes no difference -- the five Monaspace
             ;; faces share a cell -- so this is purely about texture.
             (org-table          . "Monaspace Neon NF")
-            (org-drawer         . "Monaspace Neon NF")
-            (org-special-keyword . "Monaspace Neon NF")
-            (org-meta-line      . "Monaspace Neon NF")
             (org-checkbox       . "Monaspace Neon NF")))
 
           ;; One font everywhere, via the helper.  JetBrainsMono is one of

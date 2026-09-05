@@ -366,6 +366,74 @@ always take precedence over a generated one of the same name."
             (org-table          . "Monaspace Neon NF")
             (org-checkbox       . "Monaspace Neon NF")))
 
+          ;; The same idea run on Iosevka instead, and pushed as far as it
+          ;; goes.  Where Monaspace offers five textures, this build offers
+          ;; 80 families on a single 9px advance -- base, Curly, Slab, their
+          ;; combinations, Protesilaos's Comfy cuts, and stylistic sets SS01
+          ;; through SS18, each of which is Iosevka wearing another classic
+          ;; monospace's clothes.  Measured: 24 of the 25 families below come
+          ;; out at exactly (9 9) for `i' and `M'.
+          ;;
+          ;; The SS descriptions come from upstream's stylistic-set table, so
+          ;; treat them as labels rather than gospel; what matters here is
+          ;; that they are visibly different from each other.
+          ;;
+          ;; Iosevka Etoile is the one exception to the grid, used for the
+          ;; document title alone.  It is quasi-proportional -- (7 14) rather
+          ;; than (9 9) -- but it shares Iosevka's vertical metrics exactly
+          ;; (h15 ascent 12 descent 3), so it cannot change a row's height,
+          ;; and a title is a single line with nothing aligned to it.
+          ;;
+          ;; Unlike every other preset here, the chrome is Iosevka's own:
+          ;; "Iosevka Nerd Font Mono" advances its Nerd icons at 9px, the
+          ;; same as its text, which is the requirement `:svg-line-family'
+          ;; has and the reason the others fall back to Terminess.
+          (iosevka-wild
+           :default-family "Iosevka Comfy"
+           :default-height 170
+           :fixed-pitch-family "Iosevka Fixed"
+           :variable-pitch-family "Iosevka Comfy"
+           :variable-pitch-height 1.0
+           :header-line-family "Iosevka Slab"
+           :mode-line-active-family "Iosevka Curly"
+           :mode-line-inactive-family "Iosevka Curly"
+           :tab-bar-family "Iosevka Curly"
+           :tab-line-family "Iosevka Curly"
+           :line-number-family "Iosevka SS11"        ; X Windows Fixed
+           :italic-family "Iosevka Comfy Motion"
+           :bold-family "Iosevka Slab"
+           :svg-line-family "Iosevka Nerd Font Mono"
+           :code-family "Iosevka SS14"               ; JetBrains Mono
+           :comment-family "Iosevka Comfy Motion"
+           :extra-faces
+           ((org-document-title . "Iosevka Etoile")
+            ;; every heading level its own face -- the point of this preset
+            (org-level-1        . "Iosevka Slab")
+            (org-level-2        . "Iosevka Curly Slab")
+            (org-level-3        . "Iosevka Curly")
+            (org-level-4        . "Iosevka SS03")    ; Consolas
+            (org-level-5        . "Iosevka SS07")    ; Monaco
+            (org-level-6        . "Iosevka SS12")    ; Ubuntu Mono
+            ;; metadata keeps the name/value split org-wild uses
+            (org-document-info-keyword . "Iosevka SS01") ; Andale Mono
+            (org-document-info  . "Iosevka SS13")    ; Lucida
+            (org-special-keyword . "Iosevka SS01")
+            (org-property-value . "Iosevka SS13")
+            (org-drawer         . "Iosevka SS10")    ; Envy Code R
+            (org-meta-line      . "Iosevka SS17")    ; Recursive Mono
+            (org-quote          . "Iosevka Comfy Motion")
+            (org-link           . "Iosevka SS09")    ; Source Code Pro
+            (org-date           . "Iosevka SS16")    ; PT Mono
+            (org-tag            . "Iosevka SS05")    ; Fira Mono
+            (org-todo           . "Iosevka SS08")    ; Pragmata Pro
+            (org-done           . "Iosevka SS06")    ; Liberation Mono
+            (org-block          . "Iosevka SS14")
+            (org-inline-src-block . "Iosevka SS14")
+            (org-code           . "Iosevka SS02")    ; Anonymous Pro
+            (org-verbatim       . "Iosevka SS15")    ; IBM Plex Mono
+            (org-table          . "Iosevka Term")
+            (org-checkbox       . "Iosevka SS11")))
+
           ;; One font everywhere, via the helper.  JetBrainsMono is one of
           ;; the few families whose Nerd icons advance like its text, so it
           ;; can serve as its own chrome font.
@@ -547,14 +615,23 @@ Three things need doing that `fontaine-set-preset' does not:
 ;; breaks C-x C-+ in the buffer.  Cookies are kept so the remap can be undone.
 
 (defvar zetta-fontaine-buffer-presets
-  '((org-mode    . org-wild)
+  '((org-mode    org-wild iosevka-wild monaspace-prose)
     ;; before prog-mode, which it derives from
-    (sql-mode     . monaspace-mixed))
-  "Alist of major mode -> fontaine preset, applied buffer-locally.
-Matched with `derived-mode-p', so a derived mode inherits its parent's
-entry unless it has one of its own.
+    (sql-mode     monaspace-mixed))
+  "Alist of major mode -> the presets offered for it, best first.
 
-Deliberately short.  Every entry here is a buffer whose font DIFFERS from
+Matched with `derived-mode-p', so a derived mode inherits its parent's
+entry unless it has one of its own.  The FIRST preset is the default; a
+mode with more than one is offered as a menu by
+`zetta-fontaine-pick-mode-preset', and whatever is picked is remembered
+in `zetta-fontaine-mode-preset-file' across sessions.
+
+Offer only CURATED presets here.  The generated ones -- one per installed
+font -- do not exist until a graphical frame has measured the fonts, and a
+buffer can have its mode set before that under the daemon; a preset that
+is not there yet resolves to fontaine's `t' fallback without complaint.
+
+Deliberately short.  Every mode here is a buffer whose font DIFFERS from
 the global preset, and consult previews those buffers in-window while you
 are still moving through candidates -- so each one is a font that visibly
 swaps in and out mid-completion, taking the line height with it.  That is
@@ -673,14 +750,93 @@ by nature anyway.")
               zetta-fontaine--buffer-cookies))))
   (setq zetta-fontaine--buffer-preset preset))
 
+(defcustom zetta-fontaine-mode-preset-file
+  (locate-user-emacs-file "zetta-fontaine-mode-presets.eld")
+  "Where per-mode preset choices are remembered between sessions."
+  :type 'file :group 'zetta)
+
+(defvar zetta-fontaine-mode-preset-choices nil
+  "Alist of MODE -> chosen preset, overriding that mode's default.
+Keyed by the mode named in `zetta-fontaine-buffer-presets', not by the
+buffer's own `major-mode', so a choice made in an org-journal buffer
+applies to every buffer the `org-mode' entry governs.")
+
+(defun zetta-fontaine--mode-entry ()
+  "The `zetta-fontaine-buffer-presets' entry governing this buffer, or nil."
+  (seq-find (lambda (cell) (derived-mode-p (car cell)))
+            zetta-fontaine-buffer-presets))
+
+(defun zetta-fontaine--mode-preset (entry)
+  "The preset in force for ENTRY: the remembered choice, else the first offered.
+A remembered choice that is no longer on the offer list is ignored rather
+than applied, so editing `zetta-fontaine-buffer-presets' cannot strand a
+buffer on a preset it is no longer meant to have."
+  (let ((choice (alist-get (car entry) zetta-fontaine-mode-preset-choices)))
+    (if (memq choice (cdr entry)) choice (cadr entry))))
+
+(defun zetta-fontaine-load-mode-presets ()
+  "Read remembered per-mode preset choices from disk."
+  (when (file-readable-p zetta-fontaine-mode-preset-file)
+    (setq zetta-fontaine-mode-preset-choices
+          (ignore-errors
+            (with-temp-buffer
+              (insert-file-contents zetta-fontaine-mode-preset-file)
+              (read (current-buffer)))))))
+
+(defun zetta-fontaine-store-mode-presets ()
+  "Write remembered per-mode preset choices to disk."
+  (with-temp-file zetta-fontaine-mode-preset-file
+    (insert ";; Auto-generated file; don't edit -*- lisp-data -*-\n")
+    (pp zetta-fontaine-mode-preset-choices (current-buffer))))
+
+(zetta-fontaine-load-mode-presets)
+
+;;;###autoload
+(defun zetta-fontaine-pick-mode-preset ()
+  "Choose which font preset this buffer's major mode uses, and remember it.
+
+Separate from `zetta-fontaine-pick-preset', which sets the GLOBAL preset.
+This one only moves the mode the current buffer belongs to, offering the
+presets `zetta-fontaine-buffer-presets' lists for it, and the choice
+survives a restart.  Candidates render in the font they select."
+  (interactive)
+  (let ((entry (zetta-fontaine--mode-entry)))
+    (unless entry
+      (user-error "No font presets offered for %s -- add it to `zetta-fontaine-buffer-presets'"
+                  major-mode))
+    (let* ((mode (car entry))
+           (current (zetta-fontaine--mode-preset entry))
+           (cands (mapcar (lambda (preset)
+                            (let ((name (symbol-name preset))
+                                  (family (zetta-fontaine--preset-family preset)))
+                              (if family
+                                  (propertize name 'face (list :family family))
+                                name)))
+                          (cdr entry)))
+           (choice (consult--read
+                    cands
+                    :prompt (format "Font preset for %s: " mode)
+                    :category 'fontaine-preset
+                    :require-match t
+                    :sort nil
+                    :default (symbol-name current)
+                    :annotate #'zetta-fontaine-annotate
+                    :preview-key zetta-fontaine-preview-key
+                    :state (and zetta-fontaine-preview-key
+                                (zetta-fontaine--preview)))))
+      (setf (alist-get mode zetta-fontaine-mode-preset-choices) (intern choice))
+      (zetta-fontaine-store-mode-presets)
+      ;; every buffer the entry governs, not just this one
+      (zetta-fontaine-refresh-buffer-presets)
+      (message "%s font preset: %s" mode choice))))
+
 (defun zetta-fontaine-apply-buffer-preset ()
-  "Apply the preset `zetta-fontaine-buffer-presets' maps this mode to.
-Does nothing for excluded modes, or when the mapped preset is already the
-global one -- remapping to what is already active only costs redisplay."
+  "Apply the preset in force for this buffer's mode.
+Does nothing for excluded modes, or when that preset is already the global
+one -- remapping to what is already active only costs redisplay."
   (unless (apply #'derived-mode-p zetta-fontaine-buffer-exclude)
-    (when-let* ((entry (seq-find (lambda (cell) (derived-mode-p (car cell)))
-                                 zetta-fontaine-buffer-presets))
-                (preset (cdr entry)))
+    (when-let* ((entry (zetta-fontaine--mode-entry))
+                (preset (zetta-fontaine--mode-preset entry)))
       (unless (or (eq preset fontaine-current-preset)
                   (eq preset zetta-fontaine--buffer-preset))
         (zetta-fontaine-set-preset-locally preset)))))

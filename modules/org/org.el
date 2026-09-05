@@ -181,6 +181,52 @@ rest.  `org-todo' and `org-done' are org's own faces, restyled here so a
 keyword without an entry in `org-todo-keyword-faces' still follows the
 ladder.")
 
+  ;; One size for the whole document.  Themes scale org's structural faces
+  ;; -- ef-fig routes the headings through `modus-themes-heading-N', 0.9x
+  ;; for every level and 1.44x for the title, and scales the block
+  ;; delimiters separately again.  Measured in a live buffer beforehand: a
+  ;; 20-character probe came out 160px in body text, 140px in a heading and
+  ;; 240px in the title.
+  ;;
+  ;; Reasonable on its own terms, and the one thing that stops a wild
+  ;; preset from being checkable.  Families are mixable because they share
+  ;; an advance AT A GIVEN SIZE; scale one and it leaves the grid, so a
+  ;; heading could never line up with the prose beneath it however careful
+  ;; the preset was.  Hierarchy is still carried -- by family, weight and
+  ;; colour; see the `:extra-faces' tables in modules/ui/fontaine.el.
+  (defvar zetta-org-unscaled-faces
+    '(org-document-title
+      org-level-1 org-level-2 org-level-3 org-level-4
+      org-level-5 org-level-6 org-level-7 org-level-8
+      org-block-begin-line org-block-end-line)
+    "Org faces pinned to the buffer's own height.
+Everything a theme is liable to scale.  Add to this rather than fighting
+one particular theme.")
+
+  ;; Inline literals are not emphasis.  `=verbatim=' and `~code~' come out
+  ;; italic because the theme says so -- doric-water sets both to
+  ;; `:inherit italic', and it is far from the only one -- which reads as
+  ;; stress on a fragment that is being quoted exactly, not stressed.  It
+  ;; also fights the body face wherever prose is set in a handwriting cut:
+  ;; slanted handwriting next to upright handwriting is noise, not a
+  ;; distinction.  The family already sets these apart (see
+  ;; modules/ui/fontaine.el).
+  ;;
+  ;; Both of these use `face-override-spec' rather than
+  ;; `set-face-attribute': the height and the slant come from THEME specs,
+  ;; and `face-spec-recalc' rebuilds a face from its specs on every theme
+  ;; change and every fontaine preset switch, dropping plain attribute
+  ;; overrides.  The override spec is applied last, so it survives both --
+  ;; the same mechanism as the line-number inherit in
+  ;; modules/ui/display-line-numbers.el.
+  (dolist (spec (append
+                 (mapcar (lambda (f) (cons f '(:height 1.0)))
+                         zetta-org-unscaled-faces)
+                 '((org-verbatim :slant normal)
+                   (org-code     :slant normal))))
+    (when (facep (car spec))
+      (face-spec-set (car spec) `((t ,@(cdr spec))) 'face-override-spec)))
+
   (defun zetta-org-todo-refresh-faces ()
     "Re-colour the org TODO keyword faces from the current theme's ink ladder."
     (pcase-dolist (`(,face . ,tier) zetta-org-todo-face-tiers)

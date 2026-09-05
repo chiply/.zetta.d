@@ -243,14 +243,65 @@ advance, so it has no grid to share and is simply not a candidate."
             (puthash key (or sig 'none) zetta-font-metric-signature-cache)
             sig))))))
 
+(defcustom zetta-font-collapse-nerd-variants t
+  "Whether to show one family per Nerd Font patch rather than three.
+
+Nerd Fonts ships each patched family three times -- \"X Nerd Font\",
+\"X Nerd Font Mono\" and \"X Nerd Font Propo\" -- which triples the length of
+every report for no information.  The three differ only in how ICONS are
+spaced; their letters are identical, so they always land in the same grid
+group anyway.
+
+Measured across 1307 icon codepoints in Hurmit: Mono and the plain variant
+differ at NONE of them, both advancing every icon at the text width, while
+Propo differs at 1259.  The one real distinction is what the font declares
+itself to be -- fontconfig reports spacing=100 and an XLFD of `m' for
+Mono, against spacing=0 and `p' for the other two -- so Mono is the only
+one that answers \"is this monospaced?\" correctly, and the one kept."
+  :type 'boolean :group 'zetta)
+
+(defconst zetta-font--nerd-variant-rank
+  '(("Mono" . 0) (nil . 1) ("Propo" . 2))
+  "Which Nerd Font packaging variant to keep, lowest first.")
+
+(defun zetta-font--nerd-parts (family)
+  "(BASE . VARIANT) if FAMILY is a Nerd Font packaging variant, else nil.
+VARIANT is \"Mono\", \"Propo\", or nil for the unsuffixed one."
+  (when (string-match "\\`\\(.+\\) Nerd Font\\(?: \\(Mono\\|Propo\\)\\)?\\'" family)
+    (cons (match-string 1 family) (match-string 2 family))))
+
+(defun zetta-font--collapse-nerd (cells)
+  "Keep one entry per Nerd Font base family in CELLS.
+Families that are not Nerd Font patches pass through untouched, and their
+order is preserved."
+  (let ((best (make-hash-table :test 'equal))
+        (plain nil))
+    (pcase-dolist (`(,family . ,sig) cells)
+      (if-let* ((parts (zetta-font--nerd-parts family)))
+          (let* ((rank (or (cdr (assoc (cdr parts) zetta-font--nerd-variant-rank)) 3))
+                 (current (gethash (car parts) best)))
+            (when (or (null current) (< rank (car current)))
+              (puthash (car parts) (cons rank (cons family sig)) best)))
+        (push (cons family sig) plain)))
+    (let (folded)
+      (maphash (lambda (_ v) (push (cdr v) folded)) best)
+      (append (nreverse plain)
+              (sort folded (lambda (a b) (string< (car a) (car b))))))))
+
 (defun zetta-font-monospaced-families (&optional frame)
-  "Every installed family that has a grid, as (FAMILY . SIGNATURE)."
-  (let ((frame (or frame (zetta-font--measurement-frame))))
-    (delq nil
-          (mapcar (lambda (family)
-                    (when-let* ((sig (zetta-font-metric-signature family frame)))
-                      (cons family sig)))
-                  (font-family-list frame)))))
+  "Every installed family that has a grid, as (FAMILY . SIGNATURE).
+Collapsed to one entry per Nerd Font patch unless
+`zetta-font-collapse-nerd-variants' is nil."
+  (let* ((frame (or frame (zetta-font--measurement-frame)))
+         (cells (delq nil
+                      (mapcar (lambda (family)
+                                (when-let* ((sig (zetta-font-metric-signature
+                                                  family frame)))
+                                  (cons family sig)))
+                              (font-family-list frame)))))
+    (if zetta-font-collapse-nerd-variants
+        (zetta-font--collapse-nerd cells)
+      cells)))
 
 (defun zetta-font-mixable-groups (&optional frame)
   "Every set of installed families that share a grid outright.
@@ -402,8 +453,10 @@ once and far too slow for an annotation function."
 (defun zetta-font--render-groups ()
   "Insert every mixable group into the current buffer."
   (let ((groups (zetta-font-mixable-groups)))
-    (insert (format "%d mixable groups, probed at %s\n\n"
-                    (length groups) zetta-font-metric-probe-sizes))
+    (insert (format "%d mixable groups, probed at %s%s\n\n"
+                    (length groups) zetta-font-metric-probe-sizes
+                    (if zetta-font-collapse-nerd-variants
+                        "; one entry per Nerd Font patch (Mono kept)" "")))
     (pcase-dolist (`(,sig . ,fams) groups)
       (insert (format "%S  -- %d families\n" sig (length fams)))
       (dolist (f fams)

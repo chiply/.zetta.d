@@ -306,6 +306,7 @@ otherwise appear as a bogus `zsh#...' completion candidate."
   (setq hyrolo-file-list '("~/.rolo.org" "~/kb/notes/" "~/kb/wiki/"
                            "~/kb/todo/" "~/kb/inbox.org"
                            "~/kb/readwise/"
+                           "~/kb/org-remark/"
                            ))
   ;; Make the consult-driven grep commands resolve their matched files
   ;; correctly (see `zetta-hyrolo-fix-consult-handoff' above).

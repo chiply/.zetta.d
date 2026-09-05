@@ -248,14 +248,6 @@ always take precedence over a generated one of the same name."
           ;; on `fixed-pitch' so source blocks and tables keep the same
           ;; texture as code buffers.  Both are Monaspace, so they are
           ;; metrically compatible and tables still line up.
-          ;;
-          ;; Every grid role here used to be "Terminus (TTF)", which is what
-          ;; the paragraph above was already describing as Neon -- the values
-          ;; had drifted from the rationale.  Terminus is not metrically
-          ;; compatible with Monaspace at all: measured at size 17 the five
-          ;; Monaspace faces are identical (h15 asc11 desc4, 7px cell) while
-          ;; Terminus is h13 asc10 desc3 on a 6px cell, so a table or src
-          ;; block sat on a different grid from the prose around it.
           (monaspace-prose
            :default-family "Monaspace Argon NF"
            :default-height 170
@@ -273,21 +265,38 @@ always take precedence over a generated one of the same name."
            :svg-line-family "Terminess Nerd Font Mono")
 
           ;; Deliberately loud: as much of the Monaspace superfamily as one
-          ;; buffer can show, with Terminus for anything that is code.  All
-          ;; five families are metrically compatible, so tables and blocks
-          ;; still line up despite the variety.
+          ;; buffer can show.  All five are metrically identical -- measured
+          ;; at size 17, h15 ascent 11 descent 4 on a 7px cell -- so the
+          ;; variety costs nothing: tables and blocks still line up with the
+          ;; prose around them.
           ;;
-          ;;   Argon    humanist    -- body prose
+          ;;   Radon    handwriting -- body prose, emphasis, comments in code
+          ;;   Argon    humanist    -- quotes: another voice, set in print
           ;;   Xenon    slab serif  -- document title, H1/H3/H5
-          ;;   Krypton  mechanical  -- H2/H4/H6, bold, drawers, metadata
-          ;;   Radon    handwriting -- italic, quotes
-          ;;   Neon     grotesque   -- links, dates, tags
-          ;;   Terminus              -- code: blocks, tables, verbatim
+          ;;   Krypton  mechanical  -- code, H2/H4/H6, bold, chrome
+          ;;   Neon     grotesque   -- structure: tables, drawers, keywords,
+          ;;                           links, dates, tags
+          ;;
+          ;; Body prose is the handwriting face, so the ordinary text of a
+          ;; note reads as something written rather than something typeset,
+          ;; and everything mechanical about the document -- code, headings,
+          ;; structure -- steps away from it.  Quotes invert that: they are
+          ;; someone else's words, so they go back into print.
+          ;;
+          ;; `:italic-family' matching the body is deliberate now.  Radon was
+          ;; the emphasis face while the body was Argon, back when family was
+          ;; the only axis available; with the body itself in Radon, emphasis
+          ;; is carried by its genuine italic cut instead.
+          ;;
+          ;; The grid roles were "Terminus (TTF)" until 2026-09-05.  Terminus
+          ;; is not metrically compatible with Monaspace -- h13 ascent 10
+          ;; descent 3 on a 6px cell -- so a table or src block sat one pixel
+          ;; per column off the prose it was embedded in.
           (org-wild
-           :default-family "Monaspace Argon NF"
+           :default-family "Monaspace Radon NF"
            :default-height 170
            :fixed-pitch-family "Monaspace Neon NF"
-           :variable-pitch-family "Monaspace Argon NF"
+           :variable-pitch-family "Monaspace Radon NF"
            :variable-pitch-height 1.0
            :header-line-family "Monaspace Xenon NF"
            :mode-line-active-family "Monaspace Krypton NF"
@@ -311,7 +320,7 @@ always take precedence over a generated one of the same name."
             (org-level-4        . "Monaspace Krypton NF")
             (org-level-5        . "Monaspace Xenon NF")
             (org-level-6        . "Monaspace Krypton NF")
-            (org-quote          . "Monaspace Radon NF")
+            (org-quote          . "Monaspace Argon NF")
             (org-link           . "Monaspace Neon NF")
             (org-date           . "Monaspace Neon NF")
             (org-tag            . "Monaspace Neon NF")

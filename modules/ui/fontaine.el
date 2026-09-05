@@ -248,6 +248,14 @@ always take precedence over a generated one of the same name."
           ;; on `fixed-pitch' so source blocks and tables keep the same
           ;; texture as code buffers.  Both are Monaspace, so they are
           ;; metrically compatible and tables still line up.
+          ;;
+          ;; Every grid role here used to be "Terminus (TTF)", which is what
+          ;; the paragraph above was already describing as Neon -- the values
+          ;; had drifted from the rationale.  Terminus is not metrically
+          ;; compatible with Monaspace at all: measured at size 17 the five
+          ;; Monaspace faces are identical (h15 asc11 desc4, 7px cell) while
+          ;; Terminus is h13 asc10 desc3 on a 6px cell, so a table or src
+          ;; block sat on a different grid from the prose around it.
           (monaspace-prose
            :default-family "Monaspace Argon NF"
            :default-height 170
@@ -278,7 +286,7 @@ always take precedence over a generated one of the same name."
           (org-wild
            :default-family "Monaspace Argon NF"
            :default-height 170
-           :fixed-pitch-family "Terminus (TTF)"
+           :fixed-pitch-family "Monaspace Neon NF"
            :variable-pitch-family "Monaspace Argon NF"
            :variable-pitch-height 1.0
            :header-line-family "Monaspace Xenon NF"
@@ -286,17 +294,17 @@ always take precedence over a generated one of the same name."
            :mode-line-inactive-family "Monaspace Krypton NF"
            :tab-bar-family "Monaspace Krypton NF"
            :tab-line-family "Monaspace Krypton NF"
-           :line-number-family "Terminus (TTF)"
+           :line-number-family "Monaspace Neon NF"
            :italic-family "Monaspace Radon NF"
            :bold-family "Monaspace Krypton NF"
            :svg-line-family "Terminess Nerd Font Mono"
            ;; everything font-lock touches -- i.e. the inside of src blocks
-           :code-family "Terminus (TTF)"
+           :code-family "Monaspace Neon NF"
            ;; except comments and docstrings, which are prose inside code
            :comment-family "Monaspace Radon NF"
            :extra-faces
            ((org-document-title . "Monaspace Xenon NF")
-            (org-property-value . "Terminus (TTF)")
+            (org-property-value . "Monaspace Neon NF")
             (org-level-1        . "Monaspace Xenon NF")
             (org-level-2        . "Monaspace Krypton NF")
             (org-level-3        . "Monaspace Xenon NF")
@@ -309,16 +317,18 @@ always take precedence over a generated one of the same name."
             (org-tag            . "Monaspace Neon NF")
             (org-todo           . "Monaspace Krypton NF")
             (org-done           . "Monaspace Krypton NF")
-            ;; code and anything on a grid stays Terminus
-            (org-block          . "Terminus (TTF)")
-            (org-code           . "Terminus (TTF)")
-            (org-verbatim       . "Terminus (TTF)")
-            (org-table          . "Terminus (TTF)")
-            (org-inline-src-block . "Terminus (TTF)")
-            (org-drawer         . "Terminus (TTF)")
-            (org-special-keyword . "Terminus (TTF)")
-            (org-meta-line      . "Terminus (TTF)")
-            (org-checkbox       . "Terminus (TTF)")))
+            ;; Code and anything on a grid takes Neon -- the plainest of
+            ;; the five, and metrically identical to the Argon the prose
+            ;; is set in, so a table lines up with the text around it.
+            (org-block          . "Monaspace Neon NF")
+            (org-code           . "Monaspace Neon NF")
+            (org-verbatim       . "Monaspace Neon NF")
+            (org-table          . "Monaspace Neon NF")
+            (org-inline-src-block . "Monaspace Neon NF")
+            (org-drawer         . "Monaspace Neon NF")
+            (org-special-keyword . "Monaspace Neon NF")
+            (org-meta-line      . "Monaspace Neon NF")
+            (org-checkbox       . "Monaspace Neon NF")))
 
           ;; One font everywhere, via the helper.  JetBrainsMono is one of
           ;; the few families whose Nerd icons advance like its text, so it

@@ -151,6 +151,194 @@ frequently not the one that does -- which shrinks the wrong font."
               (family (font-get font :family)))
     (format "%s" family)))
 
+;;; ------------------------------------------------------------------
+;;; Which families share a grid
+;;; ------------------------------------------------------------------
+;; Monaspace's five faces can be mixed inside one buffer because they agree
+;; on advance, ascent and descent at every size -- that is the whole trick
+;; of a monospace superfamily.  Nothing stops other families from happening
+;; to agree too, and on a machine with 700-odd installed there is no way to
+;; know by eye which.  These measure it.
+;;
+;; Two relations, because two different things can go wrong.  Sharing an
+;; ADVANCE keeps columns aligned; a font that advances differently shifts
+;; everything after it on the row.  Fitting inside the reference's ASCENT
+;; and DESCENT keeps rows the same height, because Emacs sizes a row as
+;; max(ascent) + max(descent) taken independently per font -- see
+;; `zetta-font-derive-rescale'.  So:
+;;
+;;   strict   same advance, same ascent, same descent.  Symmetric: any
+;;            member of the group can be the reference.
+;;   fits     same advance, ascent and descent no GREATER than the
+;;            reference's.  Asymmetric, and that asymmetry is real -- a
+;;            shorter face drops into a taller face's grid, but not the
+;;            reverse, where it would grow every row it touched.
+;;
+;; Measured at several sizes on purpose.  Two fonts whose proportions
+;; differ can still round to the same pixel at one size; agreeing at 14, 17
+;; and 24 means they agree by design rather than by luck.
+
+(defcustom zetta-font-metric-probe-sizes '(14 17 24)
+  "Point sizes at which `zetta-font-metric-signature' measures a family.
+More sizes is a stricter test and a slower scan.  One size is not enough:
+rounding makes unrelated fonts agree."
+  :type '(repeat integer) :group 'zetta)
+
+(defcustom zetta-font-metric-probe-chars '(?i ?M ?.)
+  "Characters compared to decide whether a family is monospaced.
+A narrow letter, a wide one and a punctuation mark.  All three must
+advance identically."
+  :type '(repeat character) :group 'zetta)
+
+(defvar zetta-font-metric-signature-cache (make-hash-table :test 'equal)
+  "Memo for `zetta-font-metric-signature'.
+Opening and querying every installed family is slow enough to be worth
+caching, and the answer only changes when fonts are installed or removed.
+`zetta-font-forget-metrics' clears it.")
+
+(defun zetta-font-forget-metrics ()
+  "Drop the memo behind `zetta-font-metric-signature'.
+Run after installing or removing fonts."
+  (interactive)
+  (clrhash zetta-font-metric-signature-cache))
+
+(defun zetta-font-metric-signature (family &optional frame)
+  "Grid signature of FAMILY: one (ADVANCE ASCENT DESCENT) per probe size.
+
+Returns nil unless FAMILY is monospaced -- every character in
+`zetta-font-metric-probe-chars' advancing identically -- at every size in
+`zetta-font-metric-probe-sizes'.  A proportional family has no single
+advance, so it has no grid to share and is simply not a candidate."
+  (let ((key (list family (or frame (zetta-font--measurement-frame))
+                   zetta-font-metric-probe-sizes zetta-font-metric-probe-chars)))
+    (if (eq 'none (gethash key zetta-font-metric-signature-cache 'miss))
+        nil
+      (let ((hit (gethash key zetta-font-metric-signature-cache 'miss)))
+        (if (not (eq hit 'miss))
+            hit
+          (let* ((frame (or frame (zetta-font--measurement-frame)))
+                 (entity (and frame (ignore-errors
+                                      (find-font (font-spec :family family) frame))))
+                 (sig nil)
+                 (mono (and entity t)))
+            (when mono
+              (dolist (size zetta-font-metric-probe-sizes)
+                (let* ((obj (and mono (ignore-errors (open-font entity size frame))))
+                       (info (and obj (ignore-errors (query-font obj))))
+                       (widths (and info
+                                    (mapcar
+                                     (lambda (ch)
+                                       (ignore-errors
+                                         (aref (aref (font-get-glyphs
+                                                      obj 0 1 (string ch))
+                                                     0)
+                                               4)))
+                                     zetta-font-metric-probe-chars))))
+                  (if (and widths (car widths) (not (memq nil widths))
+                           (apply #'= widths))
+                      (push (list (car widths) (aref info 4) (aref info 5)) sig)
+                    (setq mono nil)))))
+            (setq sig (and mono (= (length sig) (length zetta-font-metric-probe-sizes))
+                           (nreverse sig)))
+            (puthash key (or sig 'none) zetta-font-metric-signature-cache)
+            sig))))))
+
+(defun zetta-font-monospaced-families (&optional frame)
+  "Every installed family that has a grid, as (FAMILY . SIGNATURE)."
+  (let ((frame (or frame (zetta-font--measurement-frame))))
+    (delq nil
+          (mapcar (lambda (family)
+                    (when-let* ((sig (zetta-font-metric-signature family frame)))
+                      (cons family sig)))
+                  (font-family-list frame)))))
+
+(defun zetta-font-mixable-groups (&optional frame)
+  "Every set of installed families that share a grid outright.
+
+Returns ((SIGNATURE FAMILY...) ...), largest set first, singletons
+dropped -- a family that matches nothing is not a superfamily.  Each set
+is mixable in any combination and in any direction, so this is the list to
+build presets from."
+  (let ((groups nil))
+    (pcase-dolist (`(,family . ,sig) (zetta-font-monospaced-families frame))
+      (push family (alist-get sig groups nil nil #'equal)))
+    (sort (delq nil
+                (mapcar (lambda (g)
+                          (when (cdr (cdr g))
+                            (cons (car g) (sort (cdr g) #'string<))))
+                        groups))
+          (lambda (a b) (> (length (cdr a)) (length (cdr b)))))))
+
+(defun zetta-font-mixable-with (family &optional frame)
+  "How FAMILY can be mixed, as a plist.
+
+  :signature  FAMILY's own grid signature, nil if it has none
+  :strict     families agreeing exactly -- interchangeable with it
+  :fits       families that can be dropped INTO its grid: same advance,
+              never taller.  A superset of :strict.
+
+Both lists exclude FAMILY itself."
+  (let* ((frame (or frame (zetta-font--measurement-frame)))
+         (target (zetta-font-metric-signature family frame))
+         (strict nil) (fits nil))
+    (when target
+      (pcase-dolist (`(,other . ,sig) (zetta-font-monospaced-families frame))
+        (unless (equal other family)
+          (when (cl-every (lambda (a b)
+                            (and (=  (nth 0 a) (nth 0 b))
+                                 (<= (nth 1 a) (nth 1 b))
+                                 (<= (nth 2 a) (nth 2 b))))
+                          sig target)
+            (push other fits)
+            (when (equal sig target) (push other strict))))))
+    (list :signature target
+          :strict (sort strict #'string<)
+          :fits (sort fits #'string<))))
+
+;;;###autoload
+(defun zetta-font-list-mixable (&optional family)
+  "Report which installed families share a grid with FAMILY.
+
+With no FAMILY, report every mixable group on the machine instead.  Called
+from Lisp the underlying data comes from `zetta-font-mixable-groups' and
+`zetta-font-mixable-with', which return plain lists meant to be consumed
+by preset-building code; this command only renders them."
+  (interactive
+   (list (when current-prefix-arg
+           (completing-read "Mixable with family: "
+                            (mapcar #'car (zetta-font-monospaced-families))
+                            nil t nil nil
+                            (face-attribute 'default :family nil 'default)))))
+  (let ((standard-output (get-buffer-create "*font grids*")))
+    (with-current-buffer standard-output
+      (let ((inhibit-read-only t)) (erase-buffer))
+      (special-mode)
+      (let ((inhibit-read-only t))
+        (if family
+            (let* ((r (zetta-font-mixable-with family))
+                   (sig (plist-get r :signature)))
+              (princ (format "%s\n  signature (advance ascent descent) at %s: %S\n\n"
+                             family zetta-font-metric-probe-sizes sig))
+              (unless sig
+                (princ "  not monospaced -- no grid to share\n"))
+              (when sig
+                (princ (format "  interchangeable (%d):\n" (length (plist-get r :strict))))
+                (dolist (f (plist-get r :strict)) (princ (format "    %s\n" f)))
+                (let ((only (seq-difference (plist-get r :fits) (plist-get r :strict))))
+                  (princ (format "\n  fits inside, shorter (%d):\n" (length only)))
+                  (dolist (f only)
+                    (princ (format "    %-38s %S\n"
+                                   f (zetta-font-metric-signature f)))))))
+          (let ((groups (zetta-font-mixable-groups)))
+            (princ (format "%d mixable groups, probed at %s\n\n"
+                           (length groups) zetta-font-metric-probe-sizes))
+            (pcase-dolist (`(,sig . ,fams) groups)
+              (princ (format "%S  -- %d families\n" sig (length fams)))
+              (dolist (f fams) (princ (format "    %s\n" f)))
+              (princ "\n"))))
+        (goto-char (point-min))))
+    (display-buffer standard-output)))
+
 (defun zetta-font-derive-rescale ()
   "Rescale the families the fontset borrows, to fit the default font's cell.
 

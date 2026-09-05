@@ -85,7 +85,6 @@
    "ui/minimap.el"
    "ui/unicode-fonts.el"
    "ui/spinner.el"
-   "ui/yascroll.el"
    "ui/nyan-mode.el"
    "ui/popper.el"
    "ui/window.el"

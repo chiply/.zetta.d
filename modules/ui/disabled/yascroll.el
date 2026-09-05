@@ -1,5 +1,20 @@
 ;;; yascroll.el --- Configure yascroll -*- lexical-binding: t; -*-
 
+;; PARKED (not loaded).  yascroll drew the vertical scroll thumb in the right
+;; fringe -- the only scroll bar in this config, since the built-in ones are
+;; off (`scroll-bar-mode' nil, no `vertical-scroll-bars' frame parameter).
+;; Retired on request: with the chrome pared back to floating pills, a
+;; permanent bar down the window edge was the last always-on furniture, and
+;; the mode line already reports position (line:col, a percentage and the
+;; progress pie).
+;;
+;; NOTE if you restore this: `zetta-svg-margin-activate' in ../svg-margin.el
+;; used to re-enable `global-yascroll-bar-mode' AFTER init, so the mode came
+;; back even with this module unloaded.  That call was removed alongside this
+;; move -- put it back too, or the thumb will not appear.
+;;
+;; To restore: mv this file (and its .elc) up to modules/ui/ and restart.
+
 ;; A scroll thumb should be findable when you look for it and invisible when
 ;; you are not.  The thumb faces were pinned to #ece4f6 -- a light lavender
 ;; from the old fixed palette -- which measures 13.65:1 against a dark

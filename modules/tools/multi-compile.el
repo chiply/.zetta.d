@@ -109,17 +109,21 @@ CACHE: 1. latest/local transient 2. ~/.zmc-cache)"
         (execute-kbd-macro (kbd "<return>")))))
    (t (let* ((targets
               (if (and (not (equal arg '(64)))
-                       (file-exists-p "~/.zmc-cache.yaml"))
+                       (file-exists-p "~/.zmc-cache.yaml")
+                       (or zmc-cache
+                           (setq zmc-cache
+                                 (condition-case nil
+                                     (yaml-parse-string
+                                      (with-temp-buffer
+                                        (insert-file-contents "~/.zmc-cache.yaml")
+                                        (buffer-string))
+                                      :object-key-type 'string)
+                                   ;; a corrupt cache falls through to a
+                                   ;; refresh instead of bricking zmc
+                                   (error (message "zmc cache unparsable; refreshing") nil)))))
                   (progn
                     (message "using cache")
-                    (if zmc-cache
-                        zmc-cache
-                      (setq zmc-cache
-                            (yaml-parse-string
-                             (with-temp-buffer
-                               (insert-file-contents "~/.zmc-cache.yaml")
-                               (buffer-string))
-                             :object-key-type 'string))))
+                    zmc-cache)
                 (let* ((_ (message "refreshing cache targets"))
                        (detected-targets (eval (append
                                                 '(ht-merge)

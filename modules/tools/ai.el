@@ -113,8 +113,89 @@
   :config
   (gptel-make-anthropic "Claude" :stream t :key gptel-api-key)
   (gptel-make-openai "OpenAI" :stream t :key openai-api-key)
-  (setq gptel-backend (cdr (assoc "OpenAI" gptel--known-backends))
-        gptel-model   'gpt-4o)
+
+  ;; ── OpenRouter ────────────────────────────────────────────────────
+  (defvar zetta-openrouter-models-cache-file
+    (expand-file-name "openrouter-models-cache.eld" user-emacs-directory)
+    "Last fetched OpenRouter catalog, so the full list survives restarts.")
+
+  (defvar zetta-openrouter-seed-models
+    '(anthropic/claude-sonnet-5
+      openai/gpt-5.6-luna
+      deepseek/deepseek-v4-pro
+      deepseek/deepseek-v4-flash
+      z-ai/glm-5.3
+      qwen/qwen3.8-max
+      meta/muse-glimmer-30b
+      meta/muse-spark-1.2)
+    "Fallback model list until `zetta-openrouter-refresh-models' has run once.")
+
+  (defun zetta-openrouter-api-key ()
+    "OpenRouter key from the 1Password cache, else ~/source_code/my-ai/.env.
+The op-secrets template has no OPENROUTER_API_KEY entry yet; adding one
+there makes the 1Password path win automatically."
+    (or (and (boundp 'zetta-op--cache)
+             (gethash "OPENROUTER_API_KEY" zetta-op--cache))
+        (let ((env (expand-file-name "~/source_code/my-ai/.env")))
+          (when (file-readable-p env)
+            (with-temp-buffer
+              (insert-file-contents env)
+              (when (re-search-forward
+                     "^OPENROUTER_API_KEY=\"?\\([^\"\n]+?\\)\"?$" nil t)
+                (match-string 1)))))
+        (user-error "No OpenRouter key in 1Password cache or my-ai/.env")))
+
+  (defvar zetta-openrouter-backend
+    (gptel-make-openai "OpenRouter"
+      :host "openrouter.ai"
+      :endpoint "/api/v1/chat/completions"
+      :stream t
+      :key #'zetta-openrouter-api-key
+      :models (or (and (file-readable-p zetta-openrouter-models-cache-file)
+                       (with-temp-buffer
+                         (insert-file-contents zetta-openrouter-models-cache-file)
+                         (ignore-errors (read (current-buffer)))))
+                  zetta-openrouter-seed-models)))
+
+  (defvar url-http-end-of-headers)
+  (defun zetta-openrouter-refresh-models ()
+    "Fetch the full OpenRouter model catalog into the OpenRouter backend."
+    (interactive)
+    (url-retrieve
+     "https://openrouter.ai/api/v1/models"
+     (lambda (status)
+       (unwind-protect
+           (if (plist-get status :error)
+               (message "OpenRouter: catalog fetch failed: %s"
+                        (plist-get status :error))
+             (goto-char url-http-end-of-headers)
+             (let ((models (sort (mapcar (lambda (m) (intern (gethash "id" m)))
+                                         (gethash "data" (json-parse-buffer)))
+                                 #'string-lessp)))
+               (when models
+                 (setf (gptel-backend-models zetta-openrouter-backend) models)
+                 (with-temp-file zetta-openrouter-models-cache-file
+                   (prin1 models (current-buffer)))
+                 (message "OpenRouter: %d models available" (length models)))))
+         (kill-buffer (current-buffer))))
+     nil t))
+  ;; async + idle so a dead network can't slow startup
+  (run-with-idle-timer 10 nil #'zetta-openrouter-refresh-models)
+
+  ;; my-ai router proxy (~/source_code/my-ai): classifies difficulty
+  ;; locally via Ollama, then forwards to the cheapest OpenRouter model
+  ;; clearing the quality floor.  The key is a placeholder the proxy
+  ;; ignores; gptel requires it non-empty.
+  (gptel-make-openai "LLM-Router"
+    :host "localhost:8765"
+    :protocol "http"
+    :endpoint "/v1/chat/completions"
+    :stream t
+    :key "sk-llm-router-local-proxy-no-auth-needed"
+    :models '(llm-router))
+
+  (setq gptel-backend zetta-openrouter-backend
+        gptel-model   'deepseek/deepseek-v4-pro)
   (when (featurep 'mcp)
     (require 'gptel-integrations))
   (setq gptel-confirm-tool-calls nil)

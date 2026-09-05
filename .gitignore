@@ -6,6 +6,7 @@ source/**/*.elc
 
 # Runtime caches
 nano-mu4e-preview-cache.eld
+openrouter-models-cache.eld
 
 # Package manager caches
 elpaca/builds/

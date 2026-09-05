@@ -106,9 +106,32 @@ the whole derivation."
   (max 1 (round (/ (face-attribute 'default :height nil 'default) 10.0))))
 
 (defvar zetta-font-probe-glyphs
-  '(?⏺ ?⎿ ?❯ ?✳ ?✚ ?✅ ?❌ ?─ ?│ ?┼ ?⣿ ?✻ ?⏵ ?⏸)
-  "Glyphs terminal UIs actually put on screen.
-Used to measure whether a fallback advances the right number of cells.")
+  '(;; what terminal UIs put on screen -- box drawing, Nerd PUA, status marks
+    ?⏺ ?⎿ ?❯ ?✳ ?✚ ?✅ ?❌ ?─ ?│ ?┼ ?⣿ ?✻ ?⏵ ?⏸
+    ;; what ordinary buffer and minibuffer text puts on screen.  These are
+    ;; here for the HEIGHT pass, not the width one: this list is also what
+    ;; `zetta-font--borrowed-families' probes to find out which families the
+    ;; fontset actually borrows, and a family it never asks about gets no
+    ;; correction at all.  Seeded only with terminal glyphs it found six
+    ;; families and missed six more -- GohuFont 11 covers 9 of these 26
+    ;; characters where Terminus covers 21, so on a sparse default font the
+    ;; borrowing is constant and every uncapped family is a row 2-3px taller
+    ;; than its neighbours.  `…' is the one that gives it away: vertico-flat
+    ;; appends it as its overflow marker, so the minibuffer changed height by
+    ;; two pixels every time the match count crossed the fits/does-not-fit
+    ;; line.
+    ?→ ?… ?• ?✓ ?✗ ?≠ ?≤ ?∞ ?λ ?π ?— ?“ ?” ?′)
+  "Glyphs to measure fallback families against.
+
+Serves two passes.  The WIDTH pass asks whether a borrowed family advances
+the right number of cells; the HEIGHT pass asks whether its ascent and
+descent fit the default font's box.  Both only ever see families that
+serve a glyph on this list, so a character missing here is a family that
+silently keeps its own metrics.
+
+Deliberately no CJK.  Those fonts are double-width by design and belong in
+a taller box; squeezing one into an 11px cell would make it unreadable,
+which is a worse trade than a slightly tall row.")
 
 (defun zetta-font--width-delta (char)
   "Pixels CHAR renders wider than the cells it occupies.  Negative = narrow."

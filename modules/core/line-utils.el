@@ -1641,9 +1641,20 @@ to change it."
        :help (if local
                  (format "Buffer-local font preset: %s" preset)
                (format "Following the global preset: %s" preset))
-       :action (and (fboundp 'zetta-fontaine-pick-preset)
-                    #'zetta-fontaine-pick-preset)
-       :action-help "click to change the font preset"))))
+       ;; This segment is per-BUFFER, so it opens the per-mode picker when
+       ;; the mode has presets offered for it, and only falls back to the
+       ;; global one when it does not.  The tab-bar twin stays global --
+       ;; that is the frame-wide reading of the same information.
+       :action (if (and (fboundp 'zetta-fontaine-pick-mode-preset)
+                        (fboundp 'zetta-fontaine--mode-entry)
+                        (zetta-fontaine--mode-entry))
+                   #'zetta-fontaine-pick-mode-preset
+                 (and (fboundp 'zetta-fontaine-pick-preset)
+                      #'zetta-fontaine-pick-preset))
+       :action-help (if (and (fboundp 'zetta-fontaine--mode-entry)
+                             (zetta-fontaine--mode-entry))
+                        "click to change this mode's font preset"
+                      "click to change the font preset")))))
 (defun zetta-svg-line--px-per-char (family height)
   "Advance of FAMILY at face HEIGHT, in pixels per character.
 

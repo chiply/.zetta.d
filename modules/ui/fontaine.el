@@ -86,10 +86,30 @@ to Terminess, because the SVG chrome cannot be laid out on a font whose
 icons sit on a different advance -- see FONTS.org.
 
 Skips names already taken by `zetta-fontaine-curated-presets\=', so a
-hand-tuned preset always wins over a generated one."
+hand-tuned preset always wins over a generated one.
+
+Also skips the plain and Propo cuts of a Nerd Font patch wherever the Mono
+cut is installed, unless `zetta-font-collapse-nerd-variants\=' is nil.  The
+three are one typeface packaged three ways, and three presets apiece is
+what took this list past five hundred entries.  Mono is the one kept
+because it is the only one that declares itself monospaced -- see that
+option for the measurements."
   (let ((taken (mapcar #'car zetta-fontaine-curated-presets))
+        (families (font-family-list))
         (result nil))
-    (dolist (family (font-family-list))
+    (when (bound-and-true-p zetta-font-collapse-nerd-variants)
+      (setq families
+            (seq-remove
+             ;; drop a family when it is a non-Mono cut of a Nerd Font
+             ;; patch whose Mono cut is also installed
+             (lambda (family)
+               (when-let* ((parts (and (fboundp 'zetta-font--nerd-parts)
+                                       (zetta-font--nerd-parts family))))
+                 (and (not (equal (cdr parts) "Mono"))
+                      (member (concat (car parts) " Nerd Font Mono") families)
+                      t)))
+             families)))
+    (dolist (family families)
       (let ((name (zetta-fontaine--preset-name family)))
         (when (and (not (memq name taken))
                    (not (assq name result))
@@ -456,7 +476,7 @@ always take precedence over a generated one of the same name."
            :line-number-height 1.0)))
 
   :config
-  (defvar zetta-fontaine-default-preset 'gohufont-11-nerd-font
+  (defvar zetta-fontaine-default-preset 'gohufont-11-nerd-font-mono
     "Preset to fall back on when there is no saved state to restore.
 
 A GENERATED preset -- one per installed monospaced font -- rather than a
@@ -483,8 +503,19 @@ One-shot by design.  It stops retrying the moment it succeeds, so a preset
 chosen by hand afterwards is never snapped back to the saved one by the
 next frame."
     (unless zetta-fontaine--startup-preset-applied
-      (let ((wanted (or (fontaine-restore-latest-preset)
-                        zetta-fontaine-default-preset)))
+      (let* ((wanted (or (fontaine-restore-latest-preset)
+                         zetta-fontaine-default-preset))
+             ;; A saved preset can name a Nerd Font cut that is no longer
+             ;; generated, because the plain and Propo cuts are dropped
+             ;; wherever Mono exists.  Reach for the Mono sibling before
+             ;; giving up -- otherwise every session that had been running
+             ;; on a plain cut would silently land on terminus instead.
+             (wanted (if (or (assq wanted fontaine-presets)
+                             (not (string-suffix-p "-nerd-font"
+                                                   (symbol-name wanted))))
+                         wanted
+                       (let ((mono (intern (concat (symbol-name wanted) "-mono"))))
+                         (if (assq mono fontaine-presets) mono wanted)))))
         (if (assq wanted fontaine-presets)
             (progn (setq zetta-fontaine--startup-preset-applied t)
                    (fontaine-set-preset wanted))

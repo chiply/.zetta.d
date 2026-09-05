@@ -821,7 +821,7 @@
                                             "tests.el" "*-test.el"
                                             "*-tests.el" "LICENSE"
                                             "README*" "*-pkg.el"))
-                                 :source "MELPA" :id
+                                 :source "elpaca-menu-lock-file" :id
                                  cyberpunk-2019-theme :type git
                                  :protocol https :inherit t :depth
                                  treeless :ref
@@ -838,9 +838,9 @@
                                        "tests.el" "*-test.el"
                                        "*-tests.el" "LICENSE"
                                        "README*" "*-pkg.el"))
-                            :source "MELPA" :id cyberpunk-theme :type
-                            git :protocol https :inherit t :depth
-                            treeless :ref
+                            :source "elpaca-menu-lock-file" :id
+                            cyberpunk-theme :type git :protocol https
+                            :inherit t :depth treeless :ref
                             "1fd5350ddfc53c30e6eef82af77c62d7c825df3c"))
  (dap-mode :source "elpaca-menu-lock-file" :recipe
            (:package "dap-mode" :repo "emacs-lsp/dap-mode" :fetcher
@@ -2114,9 +2114,10 @@
                       (:exclude ".dir-locals.el" "test.el" "tests.el"
                                 "*-test.el" "*-tests.el" "LICENSE"
                                 "README*" "*-pkg.el"))
-                     :source "MELPA" :id ligature :type git :host
-                     github :protocol https :inherit t :depth treeless
-                     :ref "e0bc07ec41203b72386a2b878b6c8a65c28f4ced"))
+                     :source "elpaca-menu-lock-file" :id ligature
+                     :type git :host github :protocol https :inherit t
+                     :depth treeless :ref
+                     "e0bc07ec41203b72386a2b878b6c8a65c28f4ced"))
  (list-utils :source "elpaca-menu-lock-file" :recipe
              (:package "list-utils" :repo "rolandwalker/list-utils"
                        :fetcher github :files
@@ -2577,8 +2578,9 @@
                         (:exclude ".dir-locals.el" "test.el"
                                   "tests.el" "*-test.el" "*-tests.el"
                                   "LICENSE" "README*" "*-pkg.el"))
-                       :source "MELPA" :id nord-theme :type git
-                       :protocol https :inherit t :depth treeless :ref
+                       :source "elpaca-menu-lock-file" :id nord-theme
+                       :type git :protocol https :inherit t :depth
+                       treeless :ref
                        "551b2b8a0751c0a22e5c5daa6958152f208e668f"))
  (nov :source "elpaca-menu-lock-file" :recipe
       (:package "nov" :fetcher git :url
@@ -3214,9 +3216,9 @@
                                      "tests.el" "*-test.el"
                                      "*-tests.el" "LICENSE" "README*"
                                      "*-pkg.el"))
-                          :source "MELPA" :id rebecca-theme :type git
-                          :protocol https :inherit t :depth treeless
-                          :ref
+                          :source "elpaca-menu-lock-file" :id
+                          rebecca-theme :type git :protocol https
+                          :inherit t :depth treeless :ref
                           "feca16a9387247d8a1a0f5069148150cd1d9e258"))
  (recursion-indicator :source "elpaca-menu-lock-file" :recipe
                       (:package "recursion-indicator" :repo
@@ -4115,7 +4117,7 @@
                                      "tests.el" "*-test.el"
                                      "*-tests.el" "LICENSE" "README*"
                                      "*-pkg.el"))
-                          :source "MELPA" :id zenburn-theme :type git
-                          :protocol https :inherit t :depth treeless
-                          :ref
+                          :source "elpaca-menu-lock-file" :id
+                          zenburn-theme :type git :protocol https
+                          :inherit t :depth treeless :ref
                           "d9557cf5ab9c03dc70693e3892f5ffdc5d345d22")))

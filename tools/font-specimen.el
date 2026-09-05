@@ -8,11 +8,12 @@
 ;;   M-x zetta-font-specimen
 ;;   C-u M-x zetta-font-specimen   prompt for the point size
 ;;
-;; Note what this does NOT show: Emacs's NS build has no HARFBUZZ, so
-;; ligatures and `calt' texture healing are not applied.  The ligature and
-;; texture sections below are there precisely so you can see that -- they
-;; render as separate glyphs here and would compose in a browser or a
-;; shaping-capable build.
+;; The ligature and texture sections below DO compose: this build has no
+;; HARFBUZZ, but `mac-ct' shapes through Core Text, which applies a font's
+;; default `calt'/`liga' anyway.  See FONTS.org.  Judge them by eye here,
+;; not by glyph count -- these fonts substitute in place, so a ligature
+;; keeps one glyph per character.  Monaspace's arrows are the one gap: they
+;; live in stylistic set `ss03', which Emacs has no way to request.
 
 ;;; Code:
 
@@ -97,7 +98,7 @@ With prefix ARG, prompt for the point size (in 1/10 pt, e.g. 160)."
                         (face-attribute 'default :family)
                         (face-attribute 'default :height)
                         height))
-        (insert "no HARFBUZZ in this build: ligatures and texture healing are NOT applied\n")
+        (insert "shaping: mac-ct via Core Text -- ligatures and texture healing DO apply\n")
 
         (dolist (entry zetta-font-specimen-families)
           (zetta-font-specimen--family (car entry) (cdr entry) height))

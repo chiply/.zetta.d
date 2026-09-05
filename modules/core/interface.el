@@ -314,6 +314,28 @@ The family lists exclude FAMILY itself."
 (defvar zetta-font--family-history nil
   "Completion history for `zetta-font-pick-mixable'.")
 
+(defcustom zetta-font-specimen-text
+  (concat "ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz "
+          "0123456789 !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")
+  "Text the grid reports print in each family, before its name.
+
+Long on purpose.  The point is not to admire the letterforms but to check
+the arithmetic by eye: every family in a group is set at the same size in
+the same characters, so if they really share an advance their names line
+up in a column, and a family that drifts shows it further along a longer
+line."
+  :type 'string :group 'zetta)
+
+(defun zetta-font--specimen (family &optional suffix)
+  "`zetta-font-specimen-text' set in FAMILY, then FAMILY, then SUFFIX.
+
+A character FAMILY does not have is served by a fallback, so a specimen
+can show more than one font at once -- which is worth knowing about a
+family before building a preset on it."
+  (concat (propertize zetta-font-specimen-text 'face (list :family family))
+          "  " family
+          (if suffix (concat "  " suffix) "")))
+
 (defun zetta-font-read-monospaced-family (&optional prompt)
   "Read the name of a family that has a grid, rendered in its own font.
 
@@ -349,38 +371,44 @@ once and far too slow for an annotation function."
                          (face-attribute 'default :family nil 'default))))))
 
 (defun zetta-font--render-family (family)
-  "Print the grid report for FAMILY to `standard-output'."
+  "Insert the grid report for FAMILY into the current buffer."
   (let* ((report (zetta-font-mixable-with family))
          (sig (plist-get report :signature)))
-    (princ (format "%s\n  signature (advance ascent descent) at %s: %S\n\n"
-                   family zetta-font-metric-probe-sizes sig))
+    (insert (format "%s\n  signature (advance ascent descent) at %s: %S\n\n"
+                    family zetta-font-metric-probe-sizes sig))
     (if (not sig)
-        (princ "  not monospaced -- no grid to share\n")
+        (insert "  not monospaced -- no grid to share\n")
       (let ((strict (plist-get report :strict))
             (joins (plist-get report :joins)))
-        (princ (format "  its own grid -- interchangeable, either direction (%d):\n"
-                       (length strict)))
-        (dolist (f strict) (princ (format "    %s\n" f)))
+        (insert (format "  its own grid -- interchangeable, either direction (%d):\n"
+                        (length strict)))
+        (dolist (f (cons family strict))
+          (insert "    " (zetta-font--specimen f) "\n"))
         (let ((only (seq-difference (plist-get report :fits) strict)))
-          (princ (format "\n  fits INTO this grid -- shorter, safe to add (%d):\n"
-                         (length only)))
+          (insert (format "\n  fits INTO this grid -- shorter, safe to add (%d):\n"
+                          (length only)))
           (dolist (f only)
-            (princ (format "    %-38s %S\n" f (zetta-font-metric-signature f)))))
-        (princ (format "\n  %s can JOIN these grids -- taller, so it never grows a row (%d):\n"
-                       family (length joins)))
+            (insert "    "
+                    (zetta-font--specimen
+                     f (format "%S" (zetta-font-metric-signature f)))
+                    "\n")))
+        (insert (format "\n  %s can JOIN these grids -- taller, so it never grows a row (%d):\n"
+                        family (length joins)))
         (pcase-dolist (`(,gsig . ,fams) joins)
-          (princ (format "    %S  %d families\n" gsig (length fams)))
-          (dolist (f fams) (princ (format "      %s\n" f))))))))
+          (insert (format "    %S  %d families\n" gsig (length fams)))
+          (dolist (f fams)
+            (insert "      " (zetta-font--specimen f) "\n")))))))
 
 (defun zetta-font--render-groups ()
-  "Print every mixable group to `standard-output'."
+  "Insert every mixable group into the current buffer."
   (let ((groups (zetta-font-mixable-groups)))
-    (princ (format "%d mixable groups, probed at %s\n\n"
-                   (length groups) zetta-font-metric-probe-sizes))
+    (insert (format "%d mixable groups, probed at %s\n\n"
+                    (length groups) zetta-font-metric-probe-sizes))
     (pcase-dolist (`(,sig . ,fams) groups)
-      (princ (format "%S  -- %d families\n" sig (length fams)))
-      (dolist (f fams) (princ (format "    %s\n" f)))
-      (princ "\n"))))
+      (insert (format "%S  -- %d families\n" sig (length fams)))
+      (dolist (f fams)
+        (insert "    " (zetta-font--specimen f) "\n"))
+      (insert "\n"))))
 
 (defun zetta-font--report (renderer)
   "Run RENDERER into the *font grids* buffer and show it."
@@ -388,9 +416,13 @@ once and far too slow for an annotation function."
     (with-current-buffer buffer
       (let ((inhibit-read-only t))
         (erase-buffer)
-        (let ((standard-output buffer)) (funcall renderer))
+        (funcall renderer)
         (goto-char (point-min)))
-      (special-mode))
+      (special-mode)
+      ;; The specimens only prove anything while they stay on one row: a
+      ;; wrapped line puts the family names at different columns and the
+      ;; alignment that is being checked disappears.
+      (setq truncate-lines t))
     (display-buffer buffer)
     buffer))
 

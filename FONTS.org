@@ -73,7 +73,8 @@ a regexp filter.
 ** =M-x zetta-font-specimen=
 
 Every family × weight × slant of the Monaspace superfamily, plus ligature
-and texture-healing sections that demonstrate what this build cannot do.
+and texture-healing sections.  Both compose here -- see the ligature
+section above; Monaspace's arrows are the exception (ss03).
 =C-u= prompts for a point size. Family list is
 =zetta-font-specimen-families=, so it works for any superfamily.
 
@@ -231,22 +232,85 @@ and made Emacs appear to hang.
 | guessing the serving family by list | first family that *can* render ≠ the one that *does*     |
 | Monaspace for the SVG chrome        | text 9.0 / icons 8.0 — see the uniform-advance rule      |
 
-* Build constraint: no ligatures on this Emacs
+* Ligatures and texture healing: both work (corrected 2026-09-05)
 
-=system-configuration-features= has no =HARFBUZZ= — emacs-plus builds the
-Cocoa port, which shapes through Core Text via =macfont.m=. Ligatures and
-=calt= (hence Monaspace's *texture healing*) are shaping operations and do not
-apply. This is not a build flag that is missing; it is a different port.
+This section used to say the opposite — "no ligatures on this Emacs" — and
+that was wrong. The premise was true and the conclusion did not follow.
 
-- =emacs-plus --with-x11= would get HarfBuzz, at the cost of the native Mac
-  port and =XWIDGETS=.
-- =emacs-mac= (already built at =~/Applications/EmacsMac.app=, profile
-  =zetta-mac=) does Core Text ligatures via
-  =mac-auto-operator-composition-mode= — but its character set is punctuation
-  only, so operator ligatures work and texture healing (which acts on *letter*
-  pairs) still does not.
-- =ghostel= inherits Emacs's shaping, not Ghostty's, so ligatures do not appear
-  there either.
+True: =system-configuration-features= has no =HARFBUZZ=, and it never will.
+=configure.ac= gates =HAVE_HARFBUZZ= on X11+FreeType, pgtk, w32, Android or
+Haiku; =NS= appears in none of those branches, so it is not a flag that is
+missing.
+
+False: that this costs us shaping. The =mac-ct= backend shapes through Core
+Text, and Core Text applies a font's default =calt=/=liga= perfectly well.
+Measured with =font-shape-gstring= — Emacs's own shaper:
+
+#+begin_example
+JetBrainsMono NF   "->"    12137 11919          solo:  -  17,  >  34
+                   "==="   12137 12137 12020    solo:  =  33
+Monaspace Neon NF  "mil"     869   838   491    solo:  m 504, i 464, l 491
+#+end_example
+
+Both are the feature working, end to end, confirmed through real redisplay
+with =find-composition=.
+
+** Why it looked broken for so long
+
+Two traps, and the first one is the reason this note was wrong:
+
+1. *Glyph count is not the test.* These fonts implement ligatures as
+   same-count contextual substitutions — leading cells become a spacer glyph,
+   the last cell carries a wide glyph with negative bearing. =->= stays two
+   glyphs whether it ligates or not. Counting glyphs reports a false negative
+   every time. Compare glyph *codes* against the solo baselines.
+2. *Nothing was asking for it.* Emacs only calls the shaper across a run where
+   =composition-function-table= has a rule, and nothing installed any. The
+   shaper was never the problem; the trigger was missing.
+
+Use =M-x zetta-font-shape-report= rather than reasoning about it. That is the
+whole point of it existing — this entry became folklore once already.
+
+** What is set up now
+
+=modules/ui/ligature.el=:
+
+- =ligature.el= for operator sequences, =prog-mode=, global.
+- =zetta-texture-healing-mode= composes runs of ASCII letters so contextual
+  alternates fire. It enables itself only for fonts that measurably heal, and
+  re-checks on =fontaine-set-preset-hook= — healing is per-font and presets
+  change the family underneath it.
+
+Measured cost of the letter rules: ~5% on a worst case (400 lines of
+never-before-seen identifier-dense code, cold composition cache, ten
+scroll-and-redisplay cycles). Cached text costs nothing.
+
+** The one real limit
+
+Monaspace keeps its arrow ligatures in stylistic set =ss03= — verified by
+enumerating ss01–ss09, only ss03 moves =->= off its plain glyphs — and
+=macfont.m= has no OpenType feature plumbing at all: no
+=kCTFontFeatureSettingsAttribute=, no =:otf=. So Emacs cannot ask for it.
+
+Under Monaspace you get texture healing plus the default-=calt= ligatures
+(=!== and friends), but not the arrows. Fonts shipping ligatures in default
+=calt= — JetBrains Mono, Fira Code — ligate in full. Escaping that needs the
+font patched with =fonttools= (not installed) to promote ss03, or a patch to
+=macfont.m=. It does not need a different port.
+
+** Ports, for the record
+
+- =emacs-plus --with-x11= would get HarfBuzz via XQuartz, at the cost of
+  HiDPI — which every pixel-measured SVG chrome module depends on — plus
+  fontconfig family renaming that invalidates the measurements in this file,
+  Apple Color Emoji, and =XWIDGETS=. It would buy nothing we do not have.
+- =emacs-mac= (=~/Applications/EmacsMac.app=, profile =zetta-mac=) reaches the
+  same Core Text shaping by a different route:
+  =mac-auto-operator-composition-mode= is a *Lisp* layer over the identical
+  =mac_font_shape= C code, restricted to punctuation. No advantage here.
+- Images are *not* NS-based and never were. =nsimage.m= claims SVG and WebP
+  only =#ifndef HAVE_RSVG= / =#ifndef HAVE_WEBP=, and this build has both,
+  plus PNG/JPEG/GIF/TIFF. HEIC is the only genuinely NS-only format.
 
 * Checklist: adding a preset or changing a font
 
@@ -303,5 +367,5 @@ that is correct, because the SVG lines are drawn in the chrome font.
   config*. Uninstall unless you want it for Ghostty.
 
 Specimen: =M-x zetta-font-specimen= (=tools/font-specimen.el=) renders every
-family × weight × slant, plus ligature and texture-healing sections that
-demonstrate what this build cannot do.
+family × weight × slant, plus ligature and texture-healing sections.
+Both compose on this build; Monaspace's arrows are the exception (ss03).

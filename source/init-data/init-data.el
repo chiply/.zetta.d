@@ -189,6 +189,7 @@
    "tools/dired-ranger.el"
    "tools/tokei.el"
    "tools/lsp.el"
+   "tools/sql.el"
    "tools/lark.el"
    "tools/apheleia.el"
    "tools/flycheck.el"

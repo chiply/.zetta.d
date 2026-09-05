@@ -299,7 +299,7 @@ always take precedence over a generated one of the same name."
            :bold-family "Monaspace Krypton NF"
            :svg-line-family "Terminess Nerd Font Mono"
            ;; everything font-lock touches -- i.e. the inside of src blocks
-           :code-family "Monaspace Neon NF"
+           :code-family "Monaspace Krypton NF"
            ;; except comments and docstrings, which are prose inside code
            :comment-family "Monaspace Radon NF"
            :extra-faces
@@ -317,14 +317,21 @@ always take precedence over a generated one of the same name."
             (org-tag            . "Monaspace Neon NF")
             (org-todo           . "Monaspace Krypton NF")
             (org-done           . "Monaspace Krypton NF")
-            ;; Code and anything on a grid takes Neon -- the plainest of
-            ;; the five, and metrically identical to the Argon the prose
-            ;; is set in, so a table lines up with the text around it.
-            (org-block          . "Monaspace Neon NF")
-            (org-code           . "Monaspace Neon NF")
-            (org-verbatim       . "Monaspace Neon NF")
+            ;; Code takes Krypton, the mechanical face: src blocks, ~code~
+            ;; and =verbatim= read as machine text against the humanist
+            ;; Argon around them.  The structural furniture -- tables,
+            ;; drawers, keywords, checkboxes -- stays on Neon, the plainest
+            ;; of the five, so it recedes rather than competing with the
+            ;; code it sits next to.  All five share a cell, so none of
+            ;; this moves the grid.
+            (org-block          . "Monaspace Krypton NF")
+            (org-code           . "Monaspace Krypton NF")
+            (org-verbatim       . "Monaspace Krypton NF")
+            (org-inline-src-block . "Monaspace Krypton NF")
+            ;; Tables are structure rather than code, and stay on Neon.
+            ;; Metrically it makes no difference -- the five Monaspace
+            ;; faces share a cell -- so this is purely about texture.
             (org-table          . "Monaspace Neon NF")
-            (org-inline-src-block . "Monaspace Neon NF")
             (org-drawer         . "Monaspace Neon NF")
             (org-special-keyword . "Monaspace Neon NF")
             (org-meta-line      . "Monaspace Neon NF")

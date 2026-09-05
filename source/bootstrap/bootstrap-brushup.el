@@ -41,18 +41,25 @@
                                         (color-lighten-name brushup-fg -60)
                                       brushup-bg-3)
                         :foreground 'unspecified)
+    ;; The mode line is drawn as a TRANSPARENT SVG image (modeline-svg.el):
+    ;; nothing is painted behind it, so whatever these faces carry is what
+    ;; shows through.  They are therefore the plain buffer background --
+    ;; the bar disappears and only the line's material floats on the page.
+    ;; The foregrounds still matter for the non-SVG fallback
+    ;; (telephone-line, `emacs -Q'-ish frames) and for anything that
+    ;; inherits from these faces.
     (set-face-attribute 'mode-line nil
-                        :background brushup-bg-1_0
+                        :background brushup-bg
                         :foreground 'unspecified
                         :box nil :underline nil :overline nil)
     (when (facep 'mode-line-active)
       (set-face-attribute 'mode-line-active nil
-                          :background brushup-bg-1_0
+                          :background brushup-bg
                           :foreground 'unspecified
                           :box nil :underline nil :overline nil))
     (set-face-attribute 'mode-line-inactive nil
                         :foreground (if brushup-dark-p brushup-bg-6 brushup-fg-4)
-                        :background brushup-bg-1_0
+                        :background brushup-bg
                         :underline nil :box nil)
     (set-face-attribute 'header-line nil
                         :background brushup-bg

@@ -116,6 +116,10 @@ always take precedence over a generated one of the same name."
   ;; dropped, and `clear-font-cache' is not a command -- so do it here and
   ;; make this the one thing to run after installing fonts.
   (clear-font-cache)
+  ;; The grid signatures in core/interface.el are memoised per family, and
+  ;; a font that has just appeared or vanished invalidates them.
+  (when (fboundp 'zetta-font-forget-metrics)
+    (zetta-font-forget-metrics))
   (setq zetta-fontaine-generated-presets (zetta-fontaine-generate-font-presets))
   ;; the `t' entry is fontaine's fallback and must come last
   (let* ((fallback (assq t zetta-fontaine-curated-presets))

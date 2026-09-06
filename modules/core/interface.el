@@ -45,15 +45,51 @@ enough -- the real fallback shifts with the default font and the fontset,
 and a family missing from it silently gets no correction (U+23BF arrived
 from \"Hiragino Maru Gothic ProN\" while this list named \"Hiragino Sans\").")
 
+(defun zetta-font--own-families ()
+  "Families some buffer renders its own text in, rather than borrowing from.
+
+The default family, plus the `:default-family' of every per-mode preset in
+`zetta-fontaine-mode-preset-choices'.  A per-mode preset makes its family
+the buffer font for that mode exactly the way the global preset does for
+everything else, so both have to be off limits to the rescaler.
+
+Only presets actually CHOSEN are consulted, not all of `fontaine-presets':
+that list carries one generated preset per installed monospaced font, and
+excluding every family named there would leave nothing to rescale."
+  (let ((fams (list (face-attribute 'default :family nil 'default))))
+    (dolist (choice (bound-and-true-p zetta-fontaine-mode-preset-choices))
+      (when-let* ((preset (cdr choice))
+                  (fam (and (fboundp 'fontaine--get-preset-property)
+                            (ignore-errors
+                              (fontaine--get-preset-property preset :default-family)))))
+        (push fam fams)))
+    (delete-dups (delq nil fams))))
+
 (defun zetta-font--borrowed-families ()
   "Families the fontset actually borrows for `zetta-font-probe-glyphs'.
-Excludes the default family: rescaling the font the buffer is set in
-would shrink everything, not just the borrowed glyphs."
-  (let ((own (face-attribute 'default :family nil 'default)))
+
+Excludes every family from `zetta-font--own-families': rescaling a font a
+buffer is set in shrinks all of that buffer, not just borrowed glyphs.
+`face-font-rescale-alist' is keyed by family and applies globally, so one
+bad factor reaches every buffer using that family.
+
+Matching is by SUBSTRING, not equality, because `face-font-rescale-alist'
+keys are regexps: an entry for \"Iosevka\" also matches \"Iosevka Comfy\",
+\"Iosevka Term\" and every other cut of the family.  Excluding only exact
+names would leave a donor entry quietly rescaling a buffer font whose name
+merely starts the same way.
+
+That is not hypothetical.  With the global preset on gohufont-11 and org
+on the iosevka-wild per-mode preset (family \"Iosevka Comfy\"), the donor
+family \"Iosevka\" was rescaled to fit GohuFont\='s much narrower cell and
+landed at 0.3 -- whereupon its regexp matched the org buffer\='s font too
+and org rendered at a third size.  The height pass alone gives 0.91 and is
+floored at 0.5; the width refinement has no floor."
+  (let ((own (zetta-font--own-families)))
     (seq-remove
      (lambda (fam)
        (or (null fam)
-           (equal fam own)
+           (seq-some (lambda (o) (string-match-p (regexp-quote fam) o)) own)
            ;; Never rescale the generic sans/mono Emacs falls back to when a
            ;; face has no family: shrinking it would shrink unrelated text,
            ;; and its appearing here at all means a measurement went wrong.

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.5](https://github.com/chiply/.zetta.d/compare/v0.2.4...v0.2.5) (2026-09-06)
+
+
+### Features
+
+* notification stack, font/preset system, and org-wild typography ([#138](https://github.com/chiply/.zetta.d/issues/138)) ([a59d592](https://github.com/chiply/.zetta.d/commit/a59d59225badcfe38d8188971faad6e5784b8850))
+
 ## [0.2.4](https://github.com/chiply/.zetta.d/compare/v0.2.3...v0.2.4) (2026-08-10)
 
 

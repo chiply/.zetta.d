@@ -99,9 +99,9 @@
 
 (defvar zetta-highlight-saturation '(0.35 . 0.70)
   "Saturation floor and ceiling for a highlighter wash.
-Louder than the org-remark pens, which sit inside prose and should stay
-quiet -- these sit in a wall of log output and have to be spotted from
-across the buffer.  Raising the ceiling further buys very little: the four
+Louder than a wash sitting inside prose, which should stay quiet enough to
+read through -- these sit in a wall of log output and have to be spotted
+from across the buffer.  Raising the ceiling further buys very little: the four
 washes are held to a common luminance, so they separate on chroma alone
 and that curve flattens fast.")
 

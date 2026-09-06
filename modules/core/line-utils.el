@@ -471,8 +471,8 @@ only if brushup has not defined its gradient yet."
 ;;; Hue washes
 ;;; ------------------------------------------------------------------
 ;; For anything painting a theme colour BEHIND text that has to stay
-;; readable through it: the org-remark pens, the log highlighters in
-;; modules/core/utility.el.
+;; readable through it -- these days just the log highlighters in
+;; modules/core/utility.el, the org-remark pens having gone monochrome.
 
 (defun zetta-hue-wash (hue anchor sat)
   "HUE re-lit to weigh the same against the page as ANCHOR does.
@@ -485,8 +485,9 @@ step of the brushup gradient, which is already the theme\='s own answer to
 
 Matching luminance rather than HSL lightness is the whole point.  A shared
 lightness is not a shared weight: blue at L 0.5 carries about a seventh of
-the luminance of yellow at L 0.5, which is how the org-remark important pen came out
-a near-black smudge on a dark page while the question pen read fine.
+the luminance of yellow at L 0.5, which is how the org-remark important pen -- back
+when the pens were hue washes -- came out a near-black smudge on a dark page
+while the question pen read fine.
 Luminance climbs monotonically with lightness at a fixed hue and
 saturation, so a bisection finds the lightness that lands on ANCHOR."
   (if-let* ((rgb (color-name-to-rgb hue))

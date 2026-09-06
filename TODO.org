@@ -1,0 +1,166 @@
+#+title: Zetta TODO
+#+startup: showall
+
+Known issues and deferred work.  One heading per item; keep the evidence
+with the item so the next person to look does not have to re-derive it.
+
+* TODO Chrome font: gohu leaks into the mode line on a GUI launch under Emacs 32
+:PROPERTIES:
+:FOUND:    [2026-09-06]
+:MODULES:  modules/ui/fontaine.el, modules/core/interface.el
+:END:
+
+Launched as a GUI, the from-source Emacs 32 build lets the =gohufont= preset
+take the mode line, tab bar and the other SVG chromes.  They should stay on
+Terminess, which is what the preset's =:svg-line-family= pins them to.
+
+Not reproducible on emacs-plus 31, and *not* reproducible under the Emacs 32
+daemon either -- =emacs-src-latest --zetta-src --daemon= renders the chrome
+correctly.  So this is a startup-timing difference, not a missing feature in
+Emacs 32 and not a problem with the source build itself.
+
+** Where it comes from
+
+Both =modules/ui/fontaine.el= and =modules/core/interface.el= branch on
+whether a graphical frame exists when their =:config= runs:
+
+#+begin_src emacs-lisp
+(if (seq-some #'display-graphic-p (frame-list))
+    (zetta-fontaine-refresh-font-presets)          ; GUI: inline, mid-startup
+  (setq fontaine-presets zetta-fontaine-curated-presets)
+  (add-hook 'server-after-make-frame-hook #'zetta-fontaine-refresh-font-presets)
+  (add-hook 'server-after-make-frame-hook #'zetta-fontaine--apply-startup-preset t))
+#+end_src
+
+- *Daemon* -- no frame at init, so both preset generation and
+  =zetta-fontaine--apply-startup-preset= defer to
+  =server-after-make-frame-hook= and run against a fully realised client
+  frame.  Correct.
+- *GUI* -- the initial frame already exists, so generation and
+  =--apply-startup-preset= (fontaine.el:635) run inline during startup,
+  against a frame that is only partly set up.
+
+Preset generation *measures real font metrics*.  A frame that is not ready
+yields bad measurements, and a generated =gohufont= preset whose
+=:svg-line-family= is wrong or missing is exactly what would let gohu into
+the chrome.  Emacs 31 evidently tolerated the early call; 32 does not.
+
+That last paragraph is a hypothesis, not a finding -- it has not been
+confirmed.
+
+** Probe that would settle it
+
+Run in a failing GUI session and in a working daemon, then diff:
+
+#+begin_src emacs-lisp
+(list :preset          fontaine-current-preset
+      :preset-svg      (fontaine--get-preset-property fontaine-current-preset :svg-line-family)
+      :svg-line-font   (bound-and-true-p zetta-svg-line-font)
+      :modeline-family (face-attribute 'mode-line :family)
+      :generated-count (length fontaine-presets))
+#+end_src
+
+- =:preset-svg= right but =:svg-line-font= wrong -> generation was fine, the
+  sync did not land (or landed and was clobbered).
+- =:preset-svg= wrong or nil -> generation itself built a bad preset from a
+  frame that was not ready.
+
+** Likely fix
+
+Make the GUI path defer the way the daemon path already does -- run
+generation from =window-setup-hook=, or gate on frame *readiness* rather
+than mere existence -- so both paths take the code that demonstrably works.
+
+** Workaround
+
+Run the daemon: =emacs-src-latest --zetta --daemon= then =ecs -c=.  Faster
+startup anyway.
+
+* TODO Five packages are referenced by the config but never built
+:PROPERTIES:
+:FOUND:    [2026-09-05]
+:END:
+
+=corfu-prescient=, =vertico-prescient=, =consult-gh-embark=,
+=consult-gh-forge= and =treemacs-magit= fail to load on every Emacs, and
+have no elpaca build directory in any config tree.  Confirmed pre-existing
+rather than version-specific: the same five appear in CI logs on the Linux
+runners.
+
+First thing to check: =~/source_code/prescient.el= is a local checkout and
+may be shadowing the recipe that would otherwise supply the
+=corfu-prescient= / =vertico-prescient= extension files.  The =consult-gh-*=
+and =treemacs-magit= recipes look like they were simply never declared.
+
+Note the distinction from ordinary startup noise: a =Cannot load X= for a
+file *inside* a built parent (=dired-subtree= in =dired-hacks=, =lsp-pylsp=
+in =lsp-mode=) is only a =--batch -l init.el= artifact, because elpaca has
+not put the build directories on =load-path= yet.  At real interactive
+startup there are zero such messages.  These five are different -- no build
+directory exists anywhere.
+
+* TODO dimmer fails to install on a cold clone
+:PROPERTIES:
+:FOUND:    [2026-09-05]
+:END:
+
+The weekly cold-install CI rehearsal has failed since [2026-08-10] on:
+
+#+begin_example
+FAILED: dimmer |   	openspec/specs
+FAILED: dimmer |   Aborting
+#+end_example
+
+That is git refusing to lose untracked content in a directory
+(/"Updating the following directories would lose untracked files in them"/),
+at the =elpaca-git--checkout-ref= step.
+
+Upstream =gonewest818/dimmer.el= has been restructured and now carries
+=openspec/=, =.opencode/=, =Eask= and =test/=.  The pinned ref
+=a5b697580e5aed6168b571ae3d925753428284f8= is from *2022-08-17* and is 40
+commits behind, so checking it out has to delete that directory.
+
+Not reproducible by hand: a clean full clone plus checkout of that ref
+succeeds (git 2.52 locally; CI runs 2.55).  Best guess is elpaca's reclone
+path -- =elpaca-git--clone= skips cloning when the repo directory already
+exists, so a partial tree from a failed first clone would leave untracked
+files that the retry never cleans.  Unproven.
+
+** Fix
+
+Bump the pin to current upstream HEAD (=bbab62f=, [2026-06-18]).  The
+checkout then becomes a no-op against the freshly cloned default branch and
+the conflict cannot arise.
+
+Verified API-safe: every upstream symbol =modules/ui/dimmer.el= uses still
+exists at HEAD.  The three that look missing --
+=dimmer-configure-corfu=, =dimmer-configure-lsp-doc=,
+=dimmer-configure-minimap= -- are defined by our own module
+(dimmer.el:18,28,38), not upstream, at either version.
+
+*A PR run cannot validate this*: PR CI restores a warm elpaca cache and
+skips the install path entirely.  Only the Monday cron or a manual
+=workflow_dispatch= exercises the cold clone.
+
+* TODO zetta's error detector cannot see failures inside use-package
+:PROPERTIES:
+:FOUND:    [2026-09-05]
+:MODULES:  bin/zetta
+:END:
+
+=cmd_ci_test= and =cmd_test= filter their error scan:
+
+#+begin_src bash
+errors=$(grep -iE "void-function|wrong-type-argument|debug-early" "$logfile" \
+    | grep -v "use-package" \
+    | grep -v "elpaca")
+#+end_src
+
+Anything failing inside a =:config= block is reported as
+=Error (use-package): <pkg>/:config: ...= and is therefore dropped.  That is
+how =set-fontset-font= went on erroring in CI for weeks unnoticed, until the
+same call at top level in =core/interface.el= finally surfaced it.
+
+The exclusions exist to suppress benign noise, so the fix is to narrow them
+rather than remove them -- match the noise precisely instead of discarding
+every line that mentions use-package.

@@ -524,13 +524,14 @@ saturation, so a bisection finds the lightness that lands on ANCHOR."
                (append (color-hsl-to-rgb hue (nth 1 hsl) (nth 2 hsl)) '(2))))
     color))
 
+(defun zetta-hue-distance (a b)
+  "Distance between hues A and B, in turns (0 to 0.5).
+The wheel wraps, so 0.98 and 0.02 are 0.04 apart rather than 0.96."
+  (let ((d (abs (- a b)))) (min d (- 1.0 d))))
+
 (defun zetta-hue--clear-p (hue taken min-sep)
   "Non-nil if HUE sits at least MIN-SEP turns from every hue in TAKEN."
-  (cl-every (lambda (other)
-              (let ((d (abs (- hue other))))
-                ;; the wheel wraps: 0.98 and 0.02 are 0.04 apart, not 0.96
-                (>= (min d (- 1.0 d)) min-sep)))
-            taken))
+  (cl-every (lambda (other) (>= (zetta-hue-distance hue other) min-sep)) taken))
 
 (defun zetta-hue-separate (hues min-sep)
   "HUES rotated apart so no two sit closer than MIN-SEP turns on the wheel.
@@ -561,6 +562,147 @@ to separate."
                              finally return h))))
         (when pick (push pick taken))
         (push pick out)))))
+
+;;; ------------------------------------------------------------------
+;;; Icon palette
+;;; ------------------------------------------------------------------
+;; File-type icons arrive with a colour vocabulary of their own: both
+;; all-the-icons and nerd-icons ship some forty fixed hexes -- a Base16
+;; palette, in all-the-icons\' case -- that no theme has any say over.
+;;
+;; Colour is doing a different job here than anywhere else in this file.
+;; A gutter marker has its shape and a modal badge its letter, so their
+;; colour is free to carry prominence instead; an icon\'s colour is part
+;; of how a reader tells a .py from a .org without stopping to look, and
+;; flattening the lot to one ink would throw that away.  So the icons
+;; keep their variety and give up their palette: each stock colour is
+;; remapped to the nearest hue among the theme\'s own strongest colours.
+;;
+;; Strongest is measured, not declared.  The candidates are sampled off
+;; the live theme, and a colour earns its place by being chromatic enough
+;; to read as a colour at all and by clearing a contrast floor against
+;; the page.  A deliberately monochrome theme yields an empty palette,
+;; which is the honest answer -- the caller falls back to ink.
+
+(defvar zetta-icon-palette-faces
+  '(font-lock-keyword-face font-lock-function-name-face font-lock-string-face
+    font-lock-type-face font-lock-constant-face font-lock-builtin-face
+    font-lock-variable-name-face font-lock-preprocessor-face
+    link error warning success)
+  "Faces sampled for the theme\'s strongest colours.
+Syntax faces first: a theme paints its palette there whether or not it
+defines anything else, and they are the colours the reader is looking at
+all day anyway.  The semantic four come last, so a theme too plain to
+have much of a syntax palette can still contribute something.")
+
+(defvar zetta-icon-palette-min-chroma 0.12
+  "Least chroma for a theme colour to join the icon palette.
+Below this it reads as grey, and an icon painted in it tells the reader
+nothing its neighbours do not.
+
+Chroma rather than HSL saturation, which is a bad judge of how colourful
+a colour looks at the ends of its range: doric-water paints
+`font-lock-constant-face\=' #edf0f8, a near-white that HSL calls 44%
+saturated and this calls 0.04 -- and it is the second reading that
+matches what the eye does with a 16-pixel icon.")
+
+(defvar zetta-icon-stock-min-chroma 0.08
+  "Least chroma for an icon\'s own colour to be treated as coloured at all.
+The grey rungs of an icon vocabulary -- silver, grey, and their light and
+dark shades -- have no hue to match, so matching them by hue lands them
+on whatever the wheel happens to be nearest.  Below this they are handed
+back as nil and the caller inks them instead.")
+
+(defun zetta-color-chroma (color)
+  "Chroma of COLOR in 0.0-1.0, or nil if it cannot be parsed.
+The plain HSL kind: the spread between its strongest and weakest
+channel, which is 0 for any grey and 1 for a primary."
+  (when-let* ((rgb (color-name-to-rgb color)))
+    (- (apply #'max rgb) (apply #'min rgb))))
+
+(defvar zetta-icon-palette-min-contrast 3.0
+  "Least contrast against the page for a theme colour to join the palette.
+3:1 is the WCAG floor for non-text graphics, and about where a small
+solid glyph stops being a smudge.")
+
+(defvar zetta-icon-palette-hue-spacing 0.05
+  "Least distance, in turns, between two colours in the icon palette.
+Themes routinely paint several syntax faces the same hue; without this
+the palette fills with one colour repeated and every icon lands on it.")
+
+(defun zetta-icon-line-height ()
+  "Pixel height of one text line in the current buffer.
+
+The size an icon has to be drawn at to sit on a line without making it
+taller.  Computed rather than read off the face, because the face cannot
+answer: `text-scale-mode\=' works by remapping `default\=' buffer-locally, so
+the global face an icon package consults knows nothing about it, and an
+icon sized that way stays full height in a shrunken buffer -- which is
+what put a floor under the row height in treemacs (text-scale -2) and in
+any zoomed-out buffer.  `frame-char-height\=' carries the global size, the
+`text-scale\=' factor carries the local one."
+  (max 4 (round (* (frame-char-height)
+                   (expt (if (boundp 'text-scale-mode-step) text-scale-mode-step 1.2)
+                         (or (bound-and-true-p text-scale-mode-amount) 0))))))
+
+(defun zetta-icon-palette ()
+  "The theme\'s strongest colours, as an alist of (HUE . COLOUR).
+
+Most chromatic first, thinned so that no two entries sit within
+`zetta-icon-palette-hue-spacing\=' of each other.  Empty on a monochrome
+theme, which is the point: there is nothing there to borrow."
+  (let ((bg (or (bound-and-true-p brushup-bg)
+                (face-background 'default nil t) "#000000"))
+        (found nil) (kept nil))
+    (dolist (face zetta-icon-palette-faces)
+      (when (facep face)
+        (when-let* ((c (face-foreground face nil t))
+                    (rgb (and (stringp c) (color-name-to-rgb c)))
+                    (chroma (zetta-color-chroma c)))
+          (when (and (>= chroma zetta-icon-palette-min-chroma)
+                     (>= (zetta-contrast-ratio c bg)
+                         zetta-icon-palette-min-contrast))
+            (push (list (car (apply #'color-rgb-to-hsl rgb)) c chroma) found)))))
+    (dolist (e (sort (nreverse found) (lambda (a b) (> (nth 2 a) (nth 2 b))))
+               (nreverse kept))
+      (unless (seq-some (lambda (k) (< (zetta-hue-distance (car e) (car k))
+                                       zetta-icon-palette-hue-spacing))
+                        kept)
+        (push (cons (nth 0 e) (nth 1 e)) kept)))))
+
+(defun zetta-icon-color (stock &optional variant)
+  "The theme colour nearest STOCK in hue.
+
+Nil when there is nothing to match: a monochrome theme offers no palette,
+and a grey STOCK has no hue worth matching (`zetta-icon-stock-min-chroma\=').
+Either way the caller is expected to fall back to ink.
+
+VARIANT `light\=' or `dark\=' nudges the result away from or toward the page,
+so that a vocabulary\'s light, medium and dark shades of one colour stay
+apart after all three have been remapped onto the same palette entry.
+
+Away-from and toward-the-page, note -- not toward white and black.
+Absolute lightness is exactly what broke these icons in the first place:
+a fixed dark blue is invisible on a dark theme however well it reads on a
+light one.  The nudge is dropped if it would push the colour past
+`zetta-icon-palette-min-contrast\=' into the page."
+  (when-let* ((rgb (and (stringp stock) (color-name-to-rgb stock)))
+              (_ (>= (zetta-color-chroma stock) zetta-icon-stock-min-chroma))
+              (palette (zetta-icon-palette)))
+    (let* ((hue (car (apply #'color-rgb-to-hsl rgb)))
+           (pick (cdr (car (sort (copy-sequence palette)
+                                 (lambda (a b)
+                                   (< (zetta-hue-distance hue (car a))
+                                      (zetta-hue-distance hue (car b))))))))
+           (bg (or (bound-and-true-p brushup-bg) (face-background 'default nil t)))
+           (fg (or (bound-and-true-p brushup-fg) (face-foreground 'default nil t)))
+           (nudged (pcase variant
+                     ('light (and fg (zetta-line-blend pick fg 0.3)))
+                     ('dark (and bg (zetta-line-blend pick bg 0.3))))))
+      (if (and nudged bg (>= (zetta-contrast-ratio nudged bg)
+                             zetta-icon-palette-min-contrast))
+          nudged
+        pick))))
 
 ;;; ------------------------------------------------------------------
 ;;; Keyword prominence tiers

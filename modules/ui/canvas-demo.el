@@ -39,15 +39,17 @@
   "Canvas height in pixels."
   :type 'natnum)
 
-(defcustom canvas-demo-fps 30
-  "Target frames per second."
+(defcustom canvas-demo-fps 60
+  "Target frames per second.
+
+60 because screen recordings commonly are: at 30 every second frame of a
+60fps source is simply dropped.  The decoder is bounded and the render loop
+takes the newest frame available, so asking for more than the source
+provides costs nothing."
   :type 'number)
 
 (defvar-local canvas-demo--timer nil
   "Animation timer for this buffer, so a second demo cannot orphan the first.")
-
-(defvar-local canvas-demo--video nil
-  "Handle of the video playing in this buffer, if any.")
 
 ;;;; Pixels
 
@@ -145,12 +147,7 @@ Stop it with \\[canvas-demo-stop]."
   (interactive)
   (when (timerp canvas-demo--timer)
     (cancel-timer canvas-demo--timer))
-  (setq canvas-demo--timer nil)
-  ;; Also reap the decoder: without this the ffmpeg process survives the
-  ;; timer and keeps decoding into a channel nobody drains.
-  (when (and canvas-demo--video (fboundp 'canvas-rs-video-close))
-    (canvas-rs-video-close canvas-demo--video)
-    (setq canvas-demo--video nil)))
+  (setq canvas-demo--timer nil))
 
 ;;;###autoload
 (defun canvas-demo-benchmark (&optional width height frames)
@@ -224,17 +221,39 @@ A dynamic module writing `canvas_data' directly deletes both."
   "Drive an animation with RENDER, a function of the frame number.
 RENDER holds its own canvas reference and refreshes it; this only
 schedules the calls."
-  (let ((frame 0) (buf (current-buffer)))
-    (canvas-demo-stop)
-    (setq canvas-demo--timer
+  (let ((frame 0) (buf (current-buffer)) (timer nil))
+    ;; Cancel only a previous TIMER here, not the whole demo.  Calling
+    ;; `canvas-demo-stop' would also reap the decoder -- and a video caller
+    ;; has already recorded its ffmpeg handle in `canvas-demo--video' by this
+    ;; point, so starting the animation would kill the process it had just
+    ;; opened.  Stopping the previous demo is the caller's job, before it
+    ;; opens anything new.
+    (when (timerp canvas-demo--timer)
+      (cancel-timer canvas-demo--timer))
+    ;; The timer object is captured lexically rather than read back from
+    ;; `canvas-demo--timer'.  That variable is buffer-local, and a timer
+    ;; function runs in whatever buffer happens to be current when it fires --
+    ;; so the closure saw the global value, nil, and `cancel-timer' failed
+    ;; with (wrong-type-argument timerp nil).  Because the cancel failed the
+    ;; timer was never removed, so a demo whose buffer had been killed kept
+    ;; firing and erroring thirty times a second forever.
+    (setq timer
           (run-at-time
            0 (/ 1.0 canvas-demo-fps)
            (lambda ()
              (if (not (buffer-live-p buf))
-                 (cancel-timer canvas-demo--timer)
+                 (cancel-timer timer)
                (with-current-buffer buf
                  (funcall render frame)
-                 (setq frame (1+ frame)))))))))
+                 (setq frame (1+ frame))
+                 ;; `canvas-refresh' deliberately does not flip the double
+                 ;; buffer -- it leaves that to the next `redisplay'.  From a
+                 ;; plain Lisp timer Emacs supplies one implicitly, but when
+                 ;; the refresh is issued by a dynamic module through funcall
+                 ;; that does not happen, and the canvas stays blank while the
+                 ;; pixel buffer fills up perfectly well behind it.
+                 (redisplay))))))
+    (setq canvas-demo--timer timer)))
 
 ;;;###autoload
 (defun canvas-demo-rust-insert (&optional width height)
@@ -269,65 +288,6 @@ pixel, which in Emacs Lisp allocates a heap object per operation."
            (canvas-rs-mandelbrot img w h 200 zoom)
            (setq zoom (if (> zoom 500000000) 1000 (/ (* zoom 104) 100)))))
     (message "canvas-demo: Rust Mandelbrot zoom %dx%d -- M-x canvas-demo-stop" w h)))
-
-
-;;;; Video
-;;
-;; ffmpeg is asked for `-pix_fmt bgra', whose byte order B,G,R,A read back as
-;; a little-endian u32 is exactly the ARGB32 the canvas wants -- so a frame is
-;; a straight memcpy into the pixel buffer with no per-pixel work at all.  The
-;; module owns a reader thread for the pipe and never calls into Emacs from
-;; it; `canvas-rs-video-step' runs on this timer, takes the newest frame and
-;; drops any backlog, so a slow redisplay loses frames rather than drifting.
-
-(declare-function canvas-rs-video-open "canvas-rs" (path width height))
-(declare-function canvas-rs-video-step "canvas-rs" (handle canvas))
-(declare-function canvas-rs-video-close "canvas-rs" (handle))
-
-(defcustom canvas-demo-video-directory (expand-file-name "~/Movies")
-  "Directory `canvas-demo-play-video' completes over."
-  :type 'directory)
-
-(defcustom canvas-demo-video-extensions '("mp4" "mov" "mkv" "webm" "avi" "m4v")
-  "Video extensions offered for completion."
-  :type '(repeat string))
-
-(defun canvas-demo--videos ()
-  "Video files in `canvas-demo-video-directory', newest first."
-  (let ((re (concat "\\." (regexp-opt canvas-demo-video-extensions) "\\'")))
-    (sort (directory-files canvas-demo-video-directory t re t)
-          (lambda (a b) (time-less-p
-                         (file-attribute-modification-time (file-attributes b))
-                         (file-attribute-modification-time (file-attributes a)))))))
-
-;;;###autoload
-(defun canvas-demo-play-video (file &optional width height)
-  "Play FILE in a canvas, decoded by ffmpeg through the Rust module."
-  (interactive
-   (list (completing-read "Video: "
-                          (mapcar (lambda (f) (cons (file-name-nondirectory f) f))
-                                  (canvas-demo--videos))
-                          nil t)))
-  (canvas-demo--ensure-module)
-  (unless (executable-find "ffmpeg")
-    (user-error "ffmpeg not found on PATH"))
-  (let* ((path (if (file-exists-p file) file
-                 (expand-file-name file canvas-demo-video-directory)))
-         (w (or width 640)) (h (or height 360))
-         (buf (get-buffer-create "*canvas-video*")))
-    (unless (file-exists-p path) (user-error "No such video: %s" path))
-    (switch-to-buffer buf)
-    (canvas-demo-stop)
-    (let ((inhibit-read-only t)) (erase-buffer))
-    (let* ((img (car (canvas-demo--make w h)))
-           (handle (canvas-rs-video-open path w h)))
-      (unless handle (user-error "Could not start ffmpeg for %s" path))
-      (insert (propertize "#" 'display img 'canvas-demo t) "\n")
-      (setq canvas-demo--video handle)
-      (canvas-demo--animate
-       (lambda (_frame) (canvas-rs-video-step handle img)))
-      (message "canvas: %s at %dx%d -- M-x canvas-demo-stop"
-               (file-name-nondirectory path) w h))))
 
 (provide 'canvas-demo)
 ;;; canvas-demo.el ends here

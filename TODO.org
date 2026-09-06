@@ -76,6 +76,51 @@ than mere existence -- so both paths take the code that demonstrably works.
 Run the daemon: =emacs-src-latest --zetta --daemon= then =ecs -c=.  Faster
 startup anyway.
 
+* TODO The whole config loads interpreted, not compiled
+:PROPERTIES:
+:FOUND:    [2026-09-06]
+:MODULES:  source/bootstrap/bootstrap-modules.el
+:END:
+
+=zetta-load-config-file= ends in =(load-file sourcefile-path)=, and
+=load-file= takes an *exact filename*.  Handed a =.el= it loads that file
+interpreted, even with a fresh =.elc= and =.eln= beside it.  So every
+module runs interpreted and the compiled artefacts are never loaded:
+
+#+begin_example
+zetta-font-apply-metric-corrections = INTERPRETED
+zetta-font-derive-rescale           = INTERPRETED
+canvas-demo--plasma                 = INTERPRETED
+#+end_example
+
+That is not just slower.  Interpreted =defsubst= stops inlining, so helper
+calls in hot loops become real calls and the evaluator allocates argument
+lists for each -- measured at ~20 conses per pixel in the canvas work,
+enough to trigger a garbage collection every second at ~155 ms a time.  It
+is a plausible contributor to the general startup and redisplay jitter.
+
+** The obvious fix does not work
+
+Dropping the extension so =load= prefers =.eln= then =.elc= then =.el= does
+fix the symptom -- modules come back as BYTECODE -- but *breaks startup*.
+Measured A/B on the same tree: with the change the module sequence stops at
+=org/org.el= and the remaining 16 modules are silently never loaded, and
+the daemon fails with "server did not start correctly".  No error is
+logged.
+
+So some module -- =org/org.el= or something it pulls in -- depends on
+interpreted load semantics.  Finding out which, and why, is the actual
+work.  Reverted for now; the comment in =bootstrap-modules.el= records it.
+
+** Related trap
+
+=load-prefer-newer= is nil, so a stale =.elc= silently wins over an edited
+=.el=.  This bit during the investigation: an edit to
+=bootstrap-modules.el= appeared to do nothing because a =.elc= from two
+hours earlier was being loaded instead.  =source/bootstrap/= is excluded
+from compile-angel precisely because of this, so its =.elc= files are only
+refreshed by =zetta sync=/=install=.
+
 * TODO Five packages are referenced by the config but never built
 :PROPERTIES:
 :FOUND:    [2026-09-05]

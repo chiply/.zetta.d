@@ -259,21 +259,56 @@ Examples:
 
 ;;; Init-critical utility functions
 
+(defvar zetta-module-conditions
+  '(("ui/canvas-demo.el" . (lambda () (image-type-available-p 'canvas))))
+  "Alist of (MODULE-FILE . PREDICATE) for conditionally loaded modules.
+
+MODULE-FILE is the same \"category/file.el\" string used in `user-files'.
+PREDICATE is called with no arguments; the module is loaded only when it
+returns non-nil, and skipped silently otherwise.
+
+This exists because some modules need a capability the running Emacs may
+not have.  Guarding inside the file itself is the obvious alternative and
+is wrong here: wrapping a file of definitions in `(when ...)' makes them
+non-top-level, at which point `defsubst' stops inlining and
+`defvar-local' warns -- and a pixel loop whose helpers stopped inlining
+allocates per call, which is exactly the garbage-collection stall the
+canvas work went to some trouble to remove.
+
+Test the capability, not `emacs-major-version': it is what actually
+decides, it stays correct for a backport, and it needs no revisiting when
+the version number moves on.")
+
+(defun zetta-module-supported-p (file)
+  "Non-nil if module FILE should be loaded on this Emacs."
+  (let ((pred (alist-get file zetta-module-conditions nil nil #'equal)))
+    (or (null pred) (funcall pred))))
+
 (defun zetta-load-config-file (file)
   "Load a module FILE relative to `zetta-modules-dir'."
   (interactive)
-  (message file)
-  (let* ((emacsdir (expand-file-name user-emacs-directory))
-         (sourcefile-path (format "%smodules/%s" emacsdir file))
-         (file-extension (file-name-extension file))
-         (root (file-name-sans-extension file)))
-    (cond
-     ((string= "el" file-extension)
-      (load-file sourcefile-path))
-     ((string= "org" file-extension)
-      (let* ((tanglefile-path (format "%smodules/tangled/%s.el" emacsdir root)))
-        (org-babel-tangle-file sourcefile-path tanglefile-path)
-        (load-file tanglefile-path))))))
+  (if (not (zetta-module-supported-p file))
+      (message "%s (skipped: unsupported on Emacs %s)" file emacs-version)
+    (message file)
+    (let* ((emacsdir (expand-file-name user-emacs-directory))
+           (sourcefile-path (format "%smodules/%s" emacsdir file))
+           (file-extension (file-name-extension file))
+           (root (file-name-sans-extension file)))
+      (cond
+       ((string= "el" file-extension)
+        (load-file sourcefile-path))
+       ((string= "org" file-extension)
+        (let* ((tanglefile-path (format "%smodules/tangled/%s.el" emacsdir root)))
+          (org-babel-tangle-file sourcefile-path tanglefile-path)
+          (load-file tanglefile-path)))))))
+
+;; NOTE: `load-file' takes an exact filename, so this loads every module
+;; INTERPRETED even though a fresh .elc and .eln sit beside it -- the whole
+;; config runs interpreted, and its compiled artefacts go unused.  Switching to
+;; extensionless `load' was measured to fix that (modules come back as
+;; BYTECODE) but breaks startup: loading org/org.el compiled stops the module
+;; sequence there and silently drops the remaining 16 modules.  Worth fixing
+;; properly, but it is not a one-line change.  See TODO.org.
 
 (defun zetta-touch-maybe (path)
   "Create file or directory at PATH if it doesn't already exist.

@@ -46,6 +46,9 @@
 (defvar-local canvas-demo--timer nil
   "Animation timer for this buffer, so a second demo cannot orphan the first.")
 
+(defvar-local canvas-demo--video nil
+  "Handle of the video playing in this buffer, if any.")
+
 ;;;; Pixels
 
 ;; ARGB32, most significant byte first, identical on every platform -- the
@@ -142,7 +145,12 @@ Stop it with \\[canvas-demo-stop]."
   (interactive)
   (when (timerp canvas-demo--timer)
     (cancel-timer canvas-demo--timer))
-  (setq canvas-demo--timer nil))
+  (setq canvas-demo--timer nil)
+  ;; Also reap the decoder: without this the ffmpeg process survives the
+  ;; timer and keeps decoding into a channel nobody drains.
+  (when (and canvas-demo--video (fboundp 'canvas-rs-video-close))
+    (canvas-rs-video-close canvas-demo--video)
+    (setq canvas-demo--video nil)))
 
 ;;;###autoload
 (defun canvas-demo-benchmark (&optional width height frames)
@@ -261,6 +269,65 @@ pixel, which in Emacs Lisp allocates a heap object per operation."
            (canvas-rs-mandelbrot img w h 200 zoom)
            (setq zoom (if (> zoom 500000000) 1000 (/ (* zoom 104) 100)))))
     (message "canvas-demo: Rust Mandelbrot zoom %dx%d -- M-x canvas-demo-stop" w h)))
+
+
+;;;; Video
+;;
+;; ffmpeg is asked for `-pix_fmt bgra', whose byte order B,G,R,A read back as
+;; a little-endian u32 is exactly the ARGB32 the canvas wants -- so a frame is
+;; a straight memcpy into the pixel buffer with no per-pixel work at all.  The
+;; module owns a reader thread for the pipe and never calls into Emacs from
+;; it; `canvas-rs-video-step' runs on this timer, takes the newest frame and
+;; drops any backlog, so a slow redisplay loses frames rather than drifting.
+
+(declare-function canvas-rs-video-open "canvas-rs" (path width height))
+(declare-function canvas-rs-video-step "canvas-rs" (handle canvas))
+(declare-function canvas-rs-video-close "canvas-rs" (handle))
+
+(defcustom canvas-demo-video-directory (expand-file-name "~/Movies")
+  "Directory `canvas-demo-play-video' completes over."
+  :type 'directory)
+
+(defcustom canvas-demo-video-extensions '("mp4" "mov" "mkv" "webm" "avi" "m4v")
+  "Video extensions offered for completion."
+  :type '(repeat string))
+
+(defun canvas-demo--videos ()
+  "Video files in `canvas-demo-video-directory', newest first."
+  (let ((re (concat "\\." (regexp-opt canvas-demo-video-extensions) "\\'")))
+    (sort (directory-files canvas-demo-video-directory t re t)
+          (lambda (a b) (time-less-p
+                         (file-attribute-modification-time (file-attributes b))
+                         (file-attribute-modification-time (file-attributes a)))))))
+
+;;;###autoload
+(defun canvas-demo-play-video (file &optional width height)
+  "Play FILE in a canvas, decoded by ffmpeg through the Rust module."
+  (interactive
+   (list (completing-read "Video: "
+                          (mapcar (lambda (f) (cons (file-name-nondirectory f) f))
+                                  (canvas-demo--videos))
+                          nil t)))
+  (canvas-demo--ensure-module)
+  (unless (executable-find "ffmpeg")
+    (user-error "ffmpeg not found on PATH"))
+  (let* ((path (if (file-exists-p file) file
+                 (expand-file-name file canvas-demo-video-directory)))
+         (w (or width 640)) (h (or height 360))
+         (buf (get-buffer-create "*canvas-video*")))
+    (unless (file-exists-p path) (user-error "No such video: %s" path))
+    (switch-to-buffer buf)
+    (canvas-demo-stop)
+    (let ((inhibit-read-only t)) (erase-buffer))
+    (let* ((img (car (canvas-demo--make w h)))
+           (handle (canvas-rs-video-open path w h)))
+      (unless handle (user-error "Could not start ffmpeg for %s" path))
+      (insert (propertize "#" 'display img 'canvas-demo t) "\n")
+      (setq canvas-demo--video handle)
+      (canvas-demo--animate
+       (lambda (_frame) (canvas-rs-video-step handle img)))
+      (message "canvas: %s at %dx%d -- M-x canvas-demo-stop"
+               (file-name-nondirectory path) w h))))
 
 (provide 'canvas-demo)
 ;;; canvas-demo.el ends here

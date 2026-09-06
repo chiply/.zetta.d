@@ -26,6 +26,58 @@
   "Extra vertical padding (px) added to each SVG tab-bar line."
   :type 'integer :group 'zetta)
 
+(defcustom zetta-tab-bar-svg-background nil
+  "Background painted behind the whole SVG tab-bar image, or nil for none.
+nil -- the default -- paints nothing: the `tab-bar\=' face background shows
+through (brushup paints it to `brushup-bg\='), so the bar is invisible apart
+from its content.  The rect covers the FULL image, padding included, which
+is what lets `zetta-svg-line-debug-backgrounds\=' show where each bar\='s
+extents actually fall."
+  :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
+
+(defcustom zetta-tab-bar-svg-pad-y 0
+  "Clear space INSIDE the tab bar's background, above the first row
+and below the last.  Either a number for both ends or a cons (TOP . BOTTOM).
+
+Zero, because `zetta-tab-bar-svg-background\=' paints nothing: padding inside
+a background nobody draws is just dead height.  All the tab bar's real
+spacing lives in `zetta-tab-bar-svg-margin-y\=', which is outside the (absent)
+rect and so still separates the bar from the frame edge above and the tab
+line below.  Give this a value only if you turn a background on."
+  :type '(choice (integer :tag "Both ends")
+                 (cons :tag "Uneven" (integer :tag "Top") (integer :tag "Bottom")))
+  :group 'zetta)
+
+(defcustom zetta-tab-bar-svg-pad 6
+  "Pixels of inset between tab-bar content and the LEFT window edge.
+Part of the frame-wide padding pass (see `zetta-frame-internal-border\='):
+the bar draws itself, so its padding belongs to the renderer rather than to
+a `:box\=' on the face around it -- a box would eat horizontal space the SVG,
+sized to the full window width, does not know about."
+  :type 'integer :group 'zetta)
+
+(defcustom zetta-tab-bar-svg-margin-y '(9 . 0)
+  "Clear space ABOVE and BELOW the tab bar, in pixels.
+Either a number for both ends or a cons (TOP . BOTTOM).
+
+Margin, not padding: it sits OUTSIDE the background, so it separates the tab
+bar from its neighbours rather than enlarging it.  Nor is it
+`zetta-tab-bar-svg-line-pad\=', which grows the space below EACH ROW.
+
+Uneven: above the tab bar is the frame\='s internal border, which already
+supplies a good deal of room, so the top keeps the full gap.  Below is ZERO
+because the tab line supplies that side itself -- its overline sits at the
+very top of its own area and `zetta-tab-line-svg-margin-y\=' holds the pills
+clear of it, so a gap here as well would only be spacing the same boundary
+twice."
+  :type '(choice (integer :tag "Both ends")
+                 (cons :tag "Uneven" (integer :tag "Top") (integer :tag "Bottom")))
+  :group 'zetta)
+
+(defcustom zetta-tab-bar-svg-right-margin 8
+  "Pixels of inset between right-aligned content and the right window edge."
+  :type 'integer :group 'zetta)
+
 (defcustom zetta-tab-bar-svg-char-advance 8
   "Per-character advance (px) used to lay out rows containing pies/bars/segments.
 Match it to the monospace SVG font's glyph width as librsvg renders it (~8 for
@@ -37,8 +89,9 @@ its text.  Plain all-text rows use exact font anchoring and ignore this."
   "When non-nil, draw a full-height major-mode-icon masthead at the left of the tab bar."
   :type 'boolean :group 'zetta)
 
-(defcustom zetta-tab-bar-svg-icon-color "#6c4dab"
-  "Fill colour for the tab-bar masthead major-mode icon (a purple that fits the theme)."
+(defcustom zetta-tab-bar-svg-icon-color "#57707d"
+  "Fill colour for the tab-bar masthead major-mode icon.
+Overridden at runtime from the theme."
   :type 'color :group 'zetta)
 
 (defcustom zetta-tab-bar-svg-icon-width 'square
@@ -104,7 +157,8 @@ jitters as keycast changes width."
                  zetta-gptel-processes
                  blinker-tab-bar)
          :center nil
-         :right '(zetta-tab-bar-svg--elfeed "  " zetta-tab-bar-svg--mu4e))
+         :right '(zetta-tab-bar-font-preset "  "
+                  zetta-tab-bar-svg--elfeed "  " zetta-tab-bar-svg--mu4e))
    ;; line 3 -- Spotify left; clock centre (it spans all 3 rows); battery/prefix/space-tree right
    (list :left '(zetta-tab-bar-svg--spotify)
          :center nil
@@ -164,6 +218,11 @@ The sunrise/sunset flank and the date/moon-phase widget were removed."
                  :font (lambda () zetta-svg-line-font)
                  :font-size (lambda () zetta-tab-bar-svg-font-size)
                  :line-pad (lambda () zetta-tab-bar-svg-line-pad)
+                 :background (lambda () zetta-tab-bar-svg-background)
+                 :pad (lambda () zetta-tab-bar-svg-pad)
+                 :pad-y (lambda () zetta-tab-bar-svg-pad-y)
+                 :margin-y (lambda () zetta-tab-bar-svg-margin-y)
+                 :right-margin (lambda () zetta-tab-bar-svg-right-margin)
                  :char-advance (lambda () zetta-tab-bar-svg-char-advance)
                  :icon (lambda () (and zetta-tab-bar-svg-icon
                                        (fboundp 'zetta-tab-bar-mode-icon)
@@ -208,9 +267,36 @@ The sunrise/sunset flank and the date/moon-phase widget were removed."
           space-tree-modeline-lighter
           )))
 
-(add-to-list 'brushup-styles
-             '(set-face-attribute 'tab-bar nil :box nil :inherit nil :background brushup-bg)
-             )
+(defcustom zetta-tab-bar-svg-overline nil
+  "When non-nil, draw a hairline rule along the TOP of the tab bar.
+
+Drawn with the `tab-bar\=' face\='s `:overline\=', not inside the SVG: an overline
+is a single-sided rule by construction, costs the image nothing, and needs
+no engine support.  Off by default: the tab bar is frame-level, so a rule here frames the whole
+UI but says nothing about WINDOWS.  `zetta-tab-line-svg-overline\=' is the one
+that delineates them, the tab line being per-window.
+
+Colour comes from `zetta-tab-bar-svg-overline-strength\='."
+  :type 'boolean :group 'zetta)
+
+(defcustom zetta-tab-bar-svg-overline-strength 0.22
+  "How far the tab-bar overline is blended from the page toward the ink.
+Matches `zetta-window-divider-rule-strength\=' so the two rules read as one
+system rather than as two unrelated lines."
+  :type 'number :group 'zetta)
+
+(defun zetta-tab-bar-svg-face ()
+  "Style the `tab-bar\=' face the SVG image sits on."
+  (set-face-attribute 'tab-bar nil :box nil :inherit nil
+                      :background brushup-bg
+                      :overline (and zetta-tab-bar-svg-overline
+                                     (zetta-line-blend brushup-bg brushup-fg
+                                                       zetta-tab-bar-svg-overline-strength))))
+
+;; Appended: `brushup-init' recomputes the palette near the END of
+;; `brushup-styles', so a prepended entry would read the PREVIOUS theme's
+;; colours and land one theme change behind.
+(add-to-list 'brushup-styles '(zetta-tab-bar-svg-face) t)
 
 ;;; ------------------------------------------------------------------
 ;;; Activation -- delegate rendering to svg-line, and additionally

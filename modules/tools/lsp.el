@@ -73,8 +73,8 @@
 
   (setq lsp-terraform-ls-prefill-required-fields t)
 
-  (setq lsp-sqls-server (expand-file-name "~/go/bin/sqls"))
-  ;; lsp-sqls-connections set in ~/.private.el
+  ;; sqls (SQL language server) config lives in tools/sql.el;
+  ;; lsp-sqls-connections entries come from ~/.private.el
 
   :config
   ;; Add ignored directories

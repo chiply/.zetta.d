@@ -11,6 +11,20 @@
 ;; - s-x prefix bindings for the top-level fold commands.
 
 (use-package tap-fold
+  :brushup
+  ;; `tap-fold-preview-face' ships a fixed light/dark pair (#fff3b0 / #3a2a00).
+  ;; That flips with the background but is otherwise a fixed yellow, so the
+  ;; consult preview highlight clashed with any themed palette.  Re-tint it
+  ;; as a faint wash of the theme's warning colour.
+  (add-to-list
+   'brushup-styles
+   '(when (and (facep 'tap-fold-preview-face)
+               (fboundp 'zetta-svg-line--dim))
+      (set-face-attribute 'tap-fold-preview-face nil
+                          :background (zetta-svg-line--dim
+                                       (zetta-theme-color 'warning) 0.78)))
+   t)
+
   :ensure nil
   :load-path "source/zettapkg/tap-fold"
   :config

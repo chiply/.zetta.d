@@ -16,7 +16,10 @@
   (setq shr-width 0)
   (setq shr-discard-aria-hidden t)
   (setq shr-cookie-policy nil)
-  (set-face-attribute 'shr-text nil :family "Terminus (TTF)")
+  ;; Inherit `variable-pitch' rather than pinning Terminus.  fontaine sets
+  ;; that face per preset, so a hard family here meant web pages stayed
+  ;; Terminus no matter which preset was active.
+  (set-face-attribute 'shr-text nil :family 'unspecified :inherit 'variable-pitch)
 
   (setopt eww-search-prefix "https://lite.duckduckgo.com/lite/?q=")
 

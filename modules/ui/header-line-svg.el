@@ -29,13 +29,77 @@
   "Font size (px) for SVG header-line text." :type 'integer :group 'zetta)
 (defcustom zetta-header-line-svg-line-pad 4
   "Extra vertical padding (px) per SVG header-line row." :type 'integer :group 'zetta)
+(defcustom zetta-header-line-svg-background nil
+  "Background painted behind the whole SVG header-line image, or nil for none.
+nil -- the default -- paints nothing: the `header-line\=' face background shows
+through (brushup paints it to `brushup-bg\='), so the bar is invisible apart
+from its content.  The rect covers the FULL image, padding included, which
+is what lets `zetta-svg-line-debug-backgrounds\=' show where each bar\='s
+extents actually fall."
+  :type '(choice (const :tag "Transparent" nil) color) :group 'zetta)
+
+(defcustom zetta-header-line-svg-pad-y 5
+  "Clear space INSIDE the header line's background, above the first row
+and below the last.  Either a number for both ends or a cons (TOP . BOTTOM).
+
+Padding, not margin: it sits within the painted background, so the content
+reads as CENTRED IN a bar rather than as filling one -- the same relation
+the tab line's pills have to their container.  Only visible when a
+background is actually painted; see `zetta-svg-line-debug-backgrounds\='.
+
+Symmetric is right for most content: the `lines\=' layout already leaves
+`-line-pad\=' of slack below the last row and none above the first, which
+roughly cancels the ascent gap over the first row's capitals.  A last row
+ending in descenders can read a touch high -- that is what the cons form is
+for."
+  :type '(choice (integer :tag "Both ends")
+                 (cons :tag "Uneven" (integer :tag "Top") (integer :tag "Bottom")))
+  :group 'zetta)
+
+(defcustom zetta-header-line-svg-pad 6
+  "Pixels of inset between header-line content and the LEFT window edge.
+Part of the frame-wide padding pass (see `zetta-frame-internal-border\='):
+the bar draws itself, so its padding belongs to the renderer rather than to
+a `:box\=' on the face around it -- a box would eat horizontal space the SVG,
+sized to the full window width, does not know about."
+  :type 'integer :group 'zetta)
+
+(defcustom zetta-header-line-svg-margin-y '(0 . 8)
+  "Inset above the first row and below the last, in pixels.
+Either a number for both ends or a cons (TOP . BOTTOM).
+
+Margin, not padding: it sits OUTSIDE the background, so it separates the
+header line from its neighbours rather than enlarging it.  Nor is it
+`zetta-header-line-svg-line-pad\=', which grows the space below EACH ROW.
+
+Zero above: the tab line sits flush on top of this bar, the two being told
+apart by the tab line's narrower background rather than by a gap.  The
+bottom margin still carries the whole gap down to the buffer text, which has
+no padding of its own to meet it halfway.
+
+Bottom-heavy because the header line is the last chrome before the BUFFER
+TEXT, which has no top padding of its own to meet it halfway -- unlike the
+tab line above, whose own bottom inset pairs with the top one here."
+  :type '(choice (integer :tag "Both ends")
+                 (cons :tag "Uneven" (integer :tag "Top") (integer :tag "Bottom")))
+  :group 'zetta)
+
+(defcustom zetta-header-line-svg-right-margin 8
+  "Pixels of inset between right-aligned content and the right window edge."
+  :type 'integer :group 'zetta)
+
+(defcustom zetta-header-line-svg-char-advance 8
+  "Pixels per character used to lay out SVG header-line text.
+Derived from the live font by `zetta-svg-line-derive-char-advance'; the
+default only stands in before that runs." :type 'integer :group 'zetta)
 
 ;;; ------------------------------------------------------------------
 ;;; Content -- two left-aligned breadcrumb rows.
 ;;; ------------------------------------------------------------------
 (defun zetta-header-line-svg-lines ()
   "Return the header line as a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS)."
-  (list (cons '(zetta-header-line-svg--line1) nil)
+  (list (cons '(zetta-header-line-svg--line1)
+              '(zetta-header-line-font-preset))
         (cons '(zetta-header-line-svg--line2) nil)))
 
 (svg-line-define 'zetta-header-line
@@ -46,9 +110,14 @@
   :font (lambda () zetta-svg-line-font)
   :font-size (lambda () zetta-header-line-svg-font-size)
   :line-pad (lambda () zetta-header-line-svg-line-pad)
+  :background (lambda () zetta-header-line-svg-background)
+  :pad (lambda () zetta-header-line-svg-pad)
+  :pad-y (lambda () zetta-header-line-svg-pad-y)
+  :margin-y (lambda () zetta-header-line-svg-margin-y)
+  :right-margin (lambda () zetta-header-line-svg-right-margin)
   ;; breadcrumb rows are laid out by run (clickable crumb segments), so match
   ;; the glyph width like the other bars (see `zetta-modeline-svg-char-advance')
-  :char-advance 8
+  :char-advance (lambda () zetta-header-line-svg-char-advance)
   :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
                              (face-foreground 'default nil t) "#cccccc")))
 

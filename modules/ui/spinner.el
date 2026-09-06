@@ -48,8 +48,13 @@
   ;; NOTE not setting as when you set the size, they don't scale with font size.
   ;; drawback is that these are larger then the termius text, not a
   ;; big usse as I rarely if ever use these in buffers
-  (set-fontset-font t 'unicode "Apple Color Emoji" nil 'prepend)
-  (set-fontset-font t 'unicode "Arial Unicode MS 10" nil 'prepend)
+  ;; Guarded for the same reason as the ranges in core/interface.el: void on
+  ;; a no-window-system Emacs.  This one has been erroring in CI unnoticed --
+  ;; `zetta''s error detector drops any line mentioning use-package, so a
+  ;; failure inside a `:config' block never surfaced.
+  (when (fboundp 'set-fontset-font)
+    (set-fontset-font t 'unicode "Apple Color Emoji" nil 'prepend)
+    (set-fontset-font t 'unicode "Arial Unicode MS 10" nil 'prepend))
 
   ;; Starting commenting out spinners that cause issues with the mode
   ;; or headerline

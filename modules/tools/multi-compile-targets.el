@@ -123,7 +123,11 @@ get \"poetry run\"; default uv, per the uv-first setup."
               (setq cmd (concat (substring cmd 0 -1) " " next-line))))
           (push cmd commands)))
       (seq-filter
-       (lambda (cmd) (not (string-prefix-p "dtach" cmd)))
+       (lambda (cmd)
+         (not (or (string-prefix-p "dtach" cmd)
+                  ;; yaml-encode emits backslashes and control chars raw,
+                  ;; making ~/.zmc-cache.yaml unparseable on reload
+                  (string-match-p "[\\[:cntrl:]]" cmd))))
        (nreverse commands)))))
 
 (defun zmc-make-alist (project-path build-file-name build-file-type)
@@ -138,6 +142,9 @@ get \"poetry run\"; default uv, per the uv-first setup."
                       ((string= build-file-type "history")
                        (parse-zsh-history fname))
                       ((string= build-file-type "make")
+                       ;; lazy-loaded via projection, so not guaranteed
+                       ;; present when the zmc refresh path runs
+                       (require 'projection-multi-make)
                        (projection-multi-make--targets-from-file2 fname))
                       ((string= build-file-type "nx")
                        (zmc-parse-nx-targets fname))

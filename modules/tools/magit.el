@@ -11,6 +11,33 @@
   )
 
 (use-package magit
+  :brushup
+  ;; Magit ships its own green/red, picked for its own palette -- against a
+  ;; strong theme they read as foreign.  Derive the hues from the theme's diff
+  ;; faces and the backgrounds from the brushup gradient, so a diff sits in
+  ;; the buffer rather than on top of it.
+  (add-to-list
+   'brushup-styles
+   '(progn
+      (dolist (spec (list (list 'magit-diff-added        'added   brushup-bg-1)
+                          (list 'magit-diff-added-highlight   'added   brushup-bg-2)
+                          (list 'magit-diff-removed      'removed brushup-bg-1)
+                          (list 'magit-diff-removed-highlight 'removed brushup-bg-2)
+                          (list 'magit-diff-base         'changed brushup-bg-1)
+                          (list 'magit-diff-base-highlight    'changed brushup-bg-2)))
+        (when (facep (nth 0 spec))
+          (set-face-attribute (nth 0 spec) nil
+                              :foreground (zetta-theme-color (nth 1 spec))
+                              :background (nth 2 spec))))
+      ;; context and hunk chrome follow the gradient, not a fixed grey
+      (dolist (spec (list (cons 'magit-diff-context brushup-bg)
+                          (cons 'magit-diff-context-highlight brushup-bg-1)
+                          (cons 'magit-diff-hunk-heading brushup-bg-2)
+                          (cons 'magit-diff-hunk-heading-highlight brushup-bg-3)))
+        (when (facep (car spec))
+          (set-face-attribute (car spec) nil
+                              :background (cdr spec)
+                              :foreground 'unspecified)))))
   ;;:ensure (magit :type git :host github :repo "magit/magit" :tag "v4.1.1")
   :commands (magit-status magit-blame magit-log magit-branch magit-commit
              magit-push magit-pull magit-fetch magit-stage magit-stage-modified

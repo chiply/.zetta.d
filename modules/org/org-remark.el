@@ -281,13 +281,6 @@ Gmail moves around), so they make a durable source identity."
                                     :v-adjust 0.0
                                     :height 1.0)))
 
-  (add-to-list 'brushup-styles
-               '(set-face-attribute
-                 'org-remark-highlighter nil
-                 :background brushup-bg-1
-                 :underline brushup-bg-3
-                 ))
-
   ;; symbol-overlay's overlays sit at priority 90 (set in
   ;; modules/ui/symbol-overlay.el), while org-remark's carry none —
   ;; so symbol highlights painted over remark highlights.  The remark
@@ -330,19 +323,79 @@ Gmail moves around), so they make a durable source identity."
                        org-remark-highlight-date ,(my/org-remark-get-date)))
 
   ;; Semantic pens beyond the generic default.  "question" marks
-  ;; brush-up-on-this-later passages in study guides (faint orange);
-  ;; "important" separates truly-important highlights from the routine
-  ;; ones (light purple).  Both carry the same date-link property as
-  ;; the default pen.
+  ;; brush-up-on-this-later passages in study guides; "important"
+  ;; separates truly-important highlights from the routine ones.  Both
+  ;; carry the same date-link property as the default pen.
+  ;;
+  ;; The defface specs below are a cold-start fallback only -- the live
+  ;; colours come from `zetta-org-remark-refresh-pens', off the theme's
+  ;; own palette.
   (defface zetta-org-remark-question-face
     '((((background light)) :background "#FFE9D2")
       (t :background "#4A3A28"))
-    "Faint orange highlight for the org-remark question pen.")
+    "Highlight for the org-remark question pen.")
 
   (defface zetta-org-remark-important-face
     '((((background light)) :background "#EFE3F8")
       (t :background "#403354"))
-    "Light purple highlight for the org-remark important pen.")
+    "Highlight for the org-remark important pen.")
+
+  (defvar zetta-org-remark-pen-hues
+    '((zetta-org-remark-question-face  . warning)
+      (zetta-org-remark-important-face . accent))
+    "Pen face -> `zetta-theme-color' key.  The default pen stays hueless.")
+
+  (defvar zetta-org-remark-pen-fill-saturation '(0.28 . 0.52)
+    "Saturation floor and ceiling for a pen fill, as a `(min . max)\=' pair.
+Clamped at both ends because the hue is whatever the theme hands back.  A
+theme that leaves `warning\=' at the Emacs default gives raw `yellow\=';
+unclamped that paints a block of primary colour over the text instead of
+tinting the page under it.  A muted theme can go the other way and hand
+back something near enough to grey that the pen stops reading as coloured
+at all.")
+
+  (defvar zetta-org-remark-pen-edge-saturation '(0.45 . 0.85)
+    "Saturation floor and ceiling for a pen underline.
+Higher than the fill: the fills all weigh the same by construction, so the
+underline is the part carrying the hue.")
+
+  (defun zetta-org-remark-refresh-pens ()
+    "Re-tint every org-remark pen face from the current theme.
+
+All three pens are built on the same two gradient steps -- `brushup-bg-2\='
+for the fill, `brushup-bg-4\=' for the underline -- so they weigh the same
+as each other on any theme and differ only in hue.  The default pen takes
+those steps literally and stays hueless: it is the one in constant use,
+and a page of neutral marks with two coloured pens standing out of it
+reads better than three tints competing for the same attention.  It sits
+a step down the gradient from `symbol-overlay-default-face\=' (see
+modules/ui/symbol-overlay.el), the other faint wash that turns up in the
+same buffers."
+    (when (fboundp 'zetta-color--luminance)
+      (when (facep 'org-remark-highlighter)
+        (set-face-attribute 'org-remark-highlighter nil
+                            :background brushup-bg-2
+                            :underline `(:color ,brushup-bg-4)))
+      (pcase-dolist (`(,face . ,kind) zetta-org-remark-pen-hues)
+        (when (facep face)
+          (let ((hue (zetta-theme-color kind)))
+            (set-face-attribute
+             face nil
+             :background (zetta-hue-wash
+                          hue brushup-bg-2 zetta-org-remark-pen-fill-saturation)
+             :underline `(:color ,(zetta-hue-wash
+                                   hue brushup-bg-4
+                                   zetta-org-remark-pen-edge-saturation))))))))
+
+  ;; APPENDED, not prepended.  `brushup-init\=' -- which recomputes
+  ;; brushup-bg and the gradient from the newly enabled theme -- sits
+  ;; near the END of `brushup-styles\=', so a prepended entry reads the
+  ;; PREVIOUS theme\='s palette.  Registering it at all is the fix for the
+  ;; pens being tinted exactly once, at load: a session that started on
+  ;; a dark theme and switched to a light one was left painting dark
+  ;; teal and olive washes across a white page.
+  (add-to-list 'brushup-styles '(zetta-org-remark-refresh-pens) t)
+  (zetta-org-remark-refresh-pens)
 
   (org-remark-create "question"
                      'zetta-org-remark-question-face
@@ -353,6 +406,7 @@ Gmail moves around), so they make a durable source identity."
                      'zetta-org-remark-important-face
                      `(CATEGORY "important"
                        org-remark-highlight-date ,(my/org-remark-get-date)))
+
 
   ;; Re-pen the highlight at point: prompts with the OTHER pens only
   ;; (upstream org-remark-change includes the current one and offers

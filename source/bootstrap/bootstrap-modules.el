@@ -260,7 +260,9 @@ Examples:
 ;;; Init-critical utility functions
 
 (defvar zetta-module-conditions
-  '(("ui/canvas-demo.el" . (lambda () (image-type-available-p 'canvas))))
+  ;; Example of the intended shape, for when one is next needed:
+  ;;   '(("ui/canvas-demo.el" . (lambda () (image-type-available-p 'canvas))))
+  nil
   "Alist of (MODULE-FILE . PREDICATE) for conditionally loaded modules.
 
 MODULE-FILE is the same \"category/file.el\" string used in `user-files'.

@@ -109,7 +109,6 @@
    "ui/blinker.el"
    ;;"ui/lolipop.el" ;; disabled: upstream implementation incomplete
    "ui/spacetree.el"
-   "ui/canvas-demo.el"
 
    ;; editor
    "editor/super-save.el"

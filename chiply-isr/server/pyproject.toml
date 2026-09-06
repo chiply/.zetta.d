@@ -37,13 +37,13 @@ dependencies = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
     "sentence-transformers>=2.2.0",
-    "transformers>=4.35.0",
+    "transformers>=5.0.0rc3",
     "torch>=2.1.0",
-    "pillow>=10.0.0",
+    "pillow>=12.2.0",
     "numpy>=1.24.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.0.0",
-    "python-multipart>=0.0.6",
+    "python-multipart>=0.0.27",
     "sse-starlette>=1.8.2",
     "pymupdf4llm>=0.0.5",
     "python-docx>=1.0.0",
@@ -55,7 +55,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.4.0",
+    "pytest>=9.0.3",
     "pytest-asyncio>=0.21.0",
     "httpx>=0.25.0",
 ]
@@ -66,7 +66,7 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 dev-dependencies = [
-    "pytest>=7.4.0",
+    "pytest>=9.0.3",
     "pytest-asyncio>=0.21.0",
     "httpx>=0.25.0",
 ]

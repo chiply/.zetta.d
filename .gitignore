@@ -6,6 +6,7 @@ source/**/*.elc
 
 # Runtime caches
 nano-mu4e-preview-cache.eld
+openrouter-models-cache.eld
 
 # Package manager caches
 elpaca/builds/
@@ -103,3 +104,8 @@ touchtype/
 chiply-isr/server/.venv/
 chiply-isr/server/**/__pycache__/
 chiply-isr/db/
+
+# elfeed-score writes its stats to tmpXXXXXX here, then renames over
+# elfeed.stats (elfeed-score-rule-stats.el).  Killing Emacs between the
+# two orphans the temp file.
+/tmp??????

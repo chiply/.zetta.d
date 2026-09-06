@@ -16,8 +16,18 @@
         (remove-hook 'minibuffer-exit-hook #'keycast--minibuffer-exit))))
 
   ;; Remove the box from keycast-key so it doesn't exceed tab-bar height.
-  (set-face-attribute 'keycast-key nil :inherit nil :box nil :overline nil :underline nil :background 'unspecified :foreground brushup-fg)
-  (set-face-attribute 'keycast-command nil :inherit nil :box nil :overline nil :underline nil :background 'unspecified :foreground brushup-fg)
+  ;; Registered on `brushup-styles' rather than applied once here: these read
+  ;; `brushup-fg', which changes with the theme, so a one-shot call left the
+  ;; keycast faces on the PREVIOUS theme's foreground after every switch.
+  (add-to-list
+   'brushup-styles
+   '(dolist (face '(keycast-key keycast-command))
+      (when (facep face)
+        (set-face-attribute face nil
+                            :inherit nil :box nil :overline nil :underline nil
+                            :background 'unspecified
+                            :foreground brushup-fg)))
+   t)
 
   (zetta-keycast-mode)
 

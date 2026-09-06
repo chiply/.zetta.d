@@ -59,77 +59,177 @@
   "Face for links."
   :group 'basic-faces)
 
+;;; ------------------------------------------------------------------
+;;; Log-output highlighters
+;;; ------------------------------------------------------------------
+;; `zetta-highlight-phrases' used to name modus-themes faces --
+;; `modus-themes-subtle-red' and friends.  Those were removed in
+;; modus-themes 5.0.0 (`define-obsolete-face-alias ... nil'), so every
+;; phrase mapped to one has been painting nothing at all, on modus as much
+;; as on any other theme.  A face symbol that names no face is not an
+;; error, it is simply no attributes, which is why this failed silently.
+;;
+;; The replacement is four hues -- the only four EVERY theme reliably
+;; defines, via `zetta-theme-color' -- at two strengths each.  Strength is
+;; the gradient step the wash is weighted against, so a strong wash is
+;; further off the page than a subtle one on a light theme and a dark one
+;; alike.  Eight slots covers the vocabulary below with room spare, and
+;; every slot is separable: hues by colour, strengths by lightness.
+;;
+;; This is not the same call as the VC gutter or the TODO keywords, which
+;; deliberately carry no hue (see `zetta-vc-marker-ladder').  There the
+;; marker names itself and colour had nothing left to encode.  Here the
+;; point is to see at a glance that the bottom of a 2000-line test run has
+;; gone red without reading a word of it, so hue IS the content.
+(defvar zetta-highlight-slots
+  '((zetta-highlight-bad         error   . brushup-bg-2)
+    (zetta-highlight-bad-strong  error   . brushup-bg-4)
+    (zetta-highlight-warn        warning . brushup-bg-2)
+    (zetta-highlight-warn-strong warning . brushup-bg-4)
+    (zetta-highlight-good        success . brushup-bg-2)
+    (zetta-highlight-good-strong success . brushup-bg-4)
+    (zetta-highlight-info        accent  . brushup-bg-2)
+    (zetta-highlight-info-strong accent  . brushup-bg-4))
+  "Log highlighter faces as (FACE THEME-COLOUR-KIND . WEIGHT-ANCHOR).")
+
+(dolist (slot zetta-highlight-slots)
+  (custom-declare-face
+   (car slot) '((t :inherit highlight))
+   (format "Log highlighter: %s." (car slot)) :group 'zetta))
+
+(defvar zetta-highlight-saturation '(0.35 . 0.70)
+  "Saturation floor and ceiling for a highlighter wash.
+Louder than the org-remark pens, which sit inside prose and should stay
+quiet -- these sit in a wall of log output and have to be spotted from
+across the buffer.  Raising the ceiling further buys very little: the four
+washes are held to a common luminance, so they separate on chroma alone
+and that curve flattens fast.")
+
+(defvar zetta-highlight-hue-separation 0.13
+  "Least distance, in turns of the colour wheel, between two highlighter hues.
+0.13 is a little under 50 degrees; four hues have 0.25 to play with, so this
+leaves a theme most of its own character and only bends a genuine collision.")
+
+(defun zetta-highlight-hues ()
+  "The four highlighter hues, spread apart wherever the theme crowds them.
+Ordered so `error' and `success' keep their own hue outright -- red for
+broken and green for fine are the two a reader decodes without thinking --
+and `warning' or `accent' is what moves when a palette has to give."
+  (let* ((kinds '(error success warning accent))
+         (colors (mapcar #'zetta-theme-color kinds))
+         (hues (zetta-hue-separate (mapcar #'zetta-hue-of colors)
+                                   zetta-highlight-hue-separation)))
+    (cl-mapcar (lambda (kind color hue)
+                 (cons kind (if hue (zetta-with-hue color hue) color)))
+               kinds colors hues)))
+
+(defun zetta-highlight-refresh-faces ()
+  "Re-tint the log highlighter faces from the current theme."
+  (when (fboundp 'zetta-hue-wash)
+    (let ((hues (zetta-highlight-hues)))
+      (pcase-dolist (`(,face ,kind . ,anchor) zetta-highlight-slots)
+      (when (and (facep face) (boundp anchor))
+        (let ((wash (zetta-hue-wash (alist-get kind hues)
+                                    (symbol-value anchor)
+                                    zetta-highlight-saturation)))
+          (set-face-attribute
+           face nil
+           :background wash
+           ;; Log output arrives pre-coloured -- ANSI escapes in a terminal
+           ;; buffer, compilation faces in a compile buffer -- and none of
+           ;; it was picked to sit on a wash.  `zetta-readable-on' hands
+           ;; back the theme's own ink whenever it reads, so on the subtle
+           ;; slots this changes nothing; it only bites on a strong wash
+           ;; that the buffer's own foreground would have drowned in.
+           :foreground (if (fboundp 'zetta-readable-on)
+                           (zetta-readable-on wash)
+                         'unspecified))))))))
+;; This file loads BEFORE core/line-utils.el (see source/init-data/init-data.el,
+;; where core/utility.el is tenth and core/line-utils.el twenty-eighth), so
+;; `zetta-hue-wash' does not exist yet and the call below is a guarded no-op on
+;; the first pass.  Registering on `brushup-styles' is not enough to recover:
+;; `brushup-mode' runs `brushup' from the bootstrap, before any module loads,
+;; so the first pass is already gone by the time the entry is added and the
+;; faces would sit on their cold-start `highlight' inherit until the next theme
+;; change.  Same after-init catch-up line-utils.el uses for the same reason.
+(zetta-highlight-refresh-faces)
+(with-eval-after-load 'brushup
+  (add-to-list 'brushup-styles '(zetta-highlight-refresh-faces) t))
+(add-hook (if (boundp 'elpaca-after-init-hook) 'elpaca-after-init-hook 'after-init-hook)
+          #'zetta-highlight-refresh-faces)
+
+(defvar zetta-highlight-phrase-alist
+  '(;; failures
+    ("error"             . zetta-highlight-bad-strong)
+    ("failed"            . zetta-highlight-bad)
+    ("HOOK_ERRORED"      . zetta-highlight-bad)
+    ("ROLLBACK"          . zetta-highlight-bad)
+    ("500"               . zetta-highlight-bad-strong)
+    ("400"               . zetta-highlight-bad)
+    ("401"               . zetta-highlight-bad)
+    ("402"               . zetta-highlight-bad)
+    ("404"               . zetta-highlight-bad)
+    ;; cautions
+    ("warning"           . zetta-highlight-warn-strong)
+    ("debug"             . zetta-highlight-warn)
+    ("422"               . zetta-highlight-warn)
+    ;; successes
+    ("PIPELINE_SUCCESS"  . zetta-highlight-good-strong)
+    ("STEP_SUCCESS"      . zetta-highlight-good)
+    ("200"               . zetta-highlight-good)
+    ("201"               . zetta-highlight-good)
+    ("Captured stdout call" . zetta-highlight-good)
+    ;; mutations -- notable rather than good, but they are the writes, so
+    ;; they take the strong end of the hue the reads sit on
+    ("COMMIT"            . zetta-highlight-info-strong)
+    ("INSERT"            . zetta-highlight-info-strong)
+    ("UPDATE"            . zetta-highlight-info-strong)
+
+    ("DELETE"            . zetta-highlight-info-strong)
+    ;; reads, identifiers, flow
+    ("SELECT"            . zetta-highlight-info)
+    ("New Records"       . zetta-highlight-info)
+    ("token"             . zetta-highlight-info)
+    ("Starting workflow" . zetta-highlight-info)
+    ("-->"               . zetta-highlight-info)
+    ("!="                . zetta-highlight-info))
+  "Literal phrases to highlight in log output, and the slot each takes.
+
+Capitalisation here is not cosmetic, it is the case-sensitivity switch.
+`highlight-phrase' matches smart-case: an all-lowercase phrase folds case
+and catches every spelling, while a phrase carrying any capital matches
+exactly.  So \"error\" is one entry that finds ERROR, Error and error,
+where the old ERROR/Error/error trio laid up to three overlays on the same
+word at two different strengths and left which one you saw to overlay
+order.  The SQL keywords go the other way on purpose: \"SELECT\" stays
+upper case so it does not light up the word select in ordinary prose.
+
+A phrase still matches inside a longer word -- error within HOOK_ERRORED,
+which has an entry of its own.  Wrap an entry in \\_< \\_> if that matters."
+  )
+
+(defvar zetta-highlight-regexp-alist
+  '(;; a diff + / - with exactly one space either side
+    (" \\+ " . zetta-highlight-good)
+    (" - "   . zetta-highlight-bad)
+    ;; [a-fA-F], not [a-f]: this moved from `highlight-phrase' -- which
+    ;; folds case -- to `highlight-regexp', which does not, and an
+    ;; uppercase uuid would otherwise have gone quietly unmatched
+    ("[a-fA-F0-9]\\{8\\}-[a-fA-F0-9]\\{4\\}-[a-fA-F0-9]\\{4\\}-[a-fA-F0-9]\\{4\\}-[a-fA-F0-9]\\{12\\}"
+     . zetta-highlight-info)
+    ;; paths and urls keep the link faces: they are not a log CATEGORY,
+    ;; they are things you click
+    ("\\(/\\|~\\)[^ ]+\\.[a-zA-Z0-9]+" . zetta-link-face)
+    ("http\\(s\\)?://[^ ]+" . link))
+  "Regexps to highlight in log output, and the face each takes.")
+
 (defun zetta-highlight-phrases ()
+  "Highlight the phrases and patterns worth spotting in log output."
   (interactive)
-
-  ;; SQLALCHEMY Logs
-  (highlight-phrase "WARNING" 'modus-themes-intense-yellow)
-  (highlight-phrase "STEP_SUCCESS" 'modus-themes-subtle-green)
-  (highlight-phrase "PIPELINE_SUCCESS" 'modus-themes-intense-green)
-  (highlight-phrase "ERROR" 'error)
-  (highlight-phrase "HOOK_ERRORED" 'modus-themes-subtle-red)
-  (highlight-phrase "New Records" 'modus-themes-subtle-blue)
-
-  (highlight-phrase "COMMIT" 'modus-themes-subtle-red)
-  (highlight-phrase "ROLLBACK" 'modus-themes-red-nuanced)
-  (highlight-phrase "SELECT" 'modus-themes-subtle-blue)
-
-  (highlight-phrase "INSERT" 'modus-themes-subtle-green)
-  (highlight-phrase "UPDATE" 'modus-themes-subtle-green)
-  (highlight-phrase "DELETE" 'modus-themes-subtle-green)
-
-  ;; pytest
-  (highlight-phrase "Error" 'modus-themes-subtle-red)
-  (highlight-phrase "error" 'modus-themes-subtle-red)
-  (highlight-phrase "ERROR" 'modus-themes-subtle-red)
-
-  (highlight-phrase "Warning" 'modus-themes-subtle-yellow)
-  (highlight-phrase "warning" 'modus-themes-subtle-yellow)
-  (highlight-phrase "WARNING" 'modus-themes-subtle-yellow)
-
-  (highlight-phrase "Failed" 'modus-themes-subtle-yellow)
-  (highlight-phrase "failed" 'modus-themes-subtle-yellow)
-  (highlight-phrase "FAILED" 'modus-themes-subtle-yellow)
-
-  (highlight-phrase "Captured stdout call" 'modus-themes-subtle-green)
-
-  ;; regex should match exactly 1 space either side of the + sign
-  (highlight-regexp " \\+ " 'modus-themes-subtle-green)
-  ;; regex should match exactly 1 space either side of the - sign
-  (highlight-regexp " - " 'modus-themes-subtle-red)
-  (highlight-phrase "!=" 'modus-themes-subtle-cyan)
-
-  (highlight-phrase "debug" 'modus-themes-subtle-yellow)
-
-  ;; http
-  (highlight-phrase "400" 'modus-themes-subtle-red)
-  (highlight-phrase "401" 'modus-themes-subtle-red)
-  (highlight-phrase "402" 'modus-themes-subtle-red)
-  (highlight-phrase "404" 'modus-themes-subtle-red)
-  (highlight-phrase "500" 'modus-themes-intense-red)
-
-  (highlight-phrase "422" 'modus-themes-subtle-magenta)
-
-  (highlight-phrase "200" 'modus-themes-subtle-green)
-  (highlight-phrase "201" 'modus-themes-subtle-green)
-
-  ;; highlight uuids
-  (highlight-phrase "[a-f0-9]\\{8\\}-[a-f0-9]\\{4\\}-[a-f0-9]\\{4\\}-[a-f0-9]\\{4\\}-[a-f0-9]\\{12\\}" 'modus-themes-subtle-blue)
-
-  ;; -->
-  (highlight-phrase "-->" 'modus-themes-subtle-green)
-
-  ;; temporal
-  (highlight-phrase "Starting workflow" 'modus-themes-subtle-cyan)
-
-  ;; paths
-  (highlight-regexp "\\(/\\|~\\)[^ ]+\\.[a-zA-Z0-9]+" 'zetta-link-face)
-
-  ;; urls
-  (highlight-regexp "http\\(s\\)?://[^ ]+" 'link)
-
-  ;; highlight case insensitive occurrences of "token"
-  (highlight-phrase "token" 'modus-themes-subtle-blue))
+  (pcase-dolist (`(,phrase . ,face) zetta-highlight-phrase-alist)
+    (highlight-phrase phrase face))
+  (pcase-dolist (`(,re . ,face) zetta-highlight-regexp-alist)
+    (highlight-regexp re face)))
 
 (defun zetta-minify-path (path)
   "Abbreviate PATH, keeping only first 2 chars of each component except the last directory."

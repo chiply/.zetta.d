@@ -35,22 +35,24 @@ TYPE is a character: ?a alphabetic, ?t timestamp, ?p priority, ?o TODO order."
 (add-hook 'calendar-mode-hook (lambda () (setq truncate-lines t)))
 
 (defun zetta-calendar-grayscale-faces ()
-  "Set calendar faces to grayscale, adapting to light/dark background."
-  (let ((dark-p (eq (frame-parameter nil 'background-mode) 'dark)))
+  "Set calendar faces from the brushup gradient.
+
+Previously six hardcoded greys behind an (if dark-p ...) test.  That flips
+with the background but ignores the theme entirely -- #aaaaaa is the same
+grey whatever palette is loaded.  The brushup foreground gradient already
+expresses \"progressively less prominent than the body text\" in terms of
+the live theme, which is exactly what a calendar wants."
+  (let ((fg   (or (bound-and-true-p brushup-fg) (face-foreground 'default nil t)))
+        (fg-3 (or (bound-and-true-p brushup-fg-3) (face-foreground 'shadow nil t)))
+        (fg-5 (or (bound-and-true-p brushup-fg-5) (face-foreground 'shadow nil t)))
+        (bg-2 (or (bound-and-true-p brushup-bg-2) (face-background 'default nil t))))
     (set-face-attribute 'calendar-today nil
-                        :foreground (if dark-p "#ffffff" "#000000")
-                        :weight 'bold
-                        :underline t)
-    (set-face-attribute 'calendar-weekday-header nil
-                        :foreground (if dark-p "#aaaaaa" "#555555"))
-    (set-face-attribute 'calendar-weekend-header nil
-                        :foreground (if dark-p "#666666" "#999999"))
-    (set-face-attribute 'holiday nil
-                        :foreground (if dark-p "#ffffff" "#000000")
-                        :background (if dark-p "#333333" "#e0e0e0"))
+                        :foreground fg :weight 'bold :underline t)
+    (set-face-attribute 'calendar-weekday-header nil :foreground fg-3)
+    (set-face-attribute 'calendar-weekend-header nil :foreground fg-5)
+    (set-face-attribute 'holiday nil :foreground fg :background bg-2)
     (set-face-attribute 'calendar-month-header nil
-                        :foreground (if dark-p "#cccccc" "#333333")
-                        :weight 'bold)))
+                        :foreground fg-3 :weight 'bold)))
 
 (add-hook 'calendar-mode-hook #'zetta-calendar-grayscale-faces)
 
@@ -86,6 +88,11 @@ TYPE is a character: ?a alphabetic, ?t timestamp, ?p priority, ?o TODO order."
                                user-emacs-directory)
         org-startup-folded (quote nofold)
         org-startup-indented t
+        ;; Wrap #+begin_quote / #+begin_verse contents in the `org-quote' and
+        ;; `org-verse' faces.  Off by default, which means that text carries
+        ;; NO face at all and simply inherits `default' -- so any styling
+        ;; aimed at `org-quote' silently does nothing.
+        org-fontify-quote-and-verse-blocks t
         org-refile-use-outline-path 'file
         org-log-refile 'time
         org-log-redeadline 'time
@@ -126,39 +133,122 @@ TYPE is a character: ?a alphabetic, ?t timestamp, ?p priority, ?o TODO order."
            "DONE(d!)"
            "NOPE(n!)")))
 
-  ;; State faces: QUES in the question pen's orange family, IDEA in
-  ;; the important pen's purple family, NOPE struck through; all
-  ;; light/dark aware.  TODO and DONE keep org's stock faces.
+  ;; State faces.  A TODO keyword is a WORD -- "PROG", "WAIT", "NOPE" --
+  ;; so it already says which state it is; the colour has nothing left to
+  ;; encode but how much attention that state deserves.  Org's stock red
+  ;; TODO and green DONE were the loudest thing on the page while saying
+  ;; nothing the word did not, and they clash with any theme not built
+  ;; around red and green.  So these walk the brushup ink ladder in four
+  ;; prominence tiers, the same ladder `zetta-line-chip-ladder' and the VC
+  ;; gutter markers use: loud or quiet by how far a state sits from the
+  ;; page, never by what colour it is.  The rungs are `zetta-keyword-tiers',
+  ;; shared with hl-todo -- which is hooked into `org-mode' and paints an
+  ;; org heading's TODO on top of org's own face, so the two vocabularies
+  ;; have to agree on what a given word weighs.
+  ;;
+  ;; The defface specs are cold-start fallbacks only, before
+  ;; `zetta-org-todo-refresh-faces' has run.
   (defface zetta-org-todo-prog
-    '((((background light)) :foreground "#1F6FB2" :weight bold)
-      (t :foreground "#6FB3E0" :weight bold))
-    "Face for the PROG todo keyword."
-    :group 'org-faces)
+    '((t :inherit org-todo)) "Face for the PROG todo keyword." :group 'org-faces)
   (defface zetta-org-todo-wait
-    '((((background light)) :foreground "#8A6D3B" :weight bold)
-      (t :foreground "#C9A66B" :weight bold))
-    "Face for the WAIT todo keyword."
-    :group 'org-faces)
+    '((t :inherit org-todo)) "Face for the WAIT todo keyword." :group 'org-faces)
   (defface zetta-org-todo-ques
-    '((((background light)) :foreground "#C25E00" :weight bold)
-      (t :foreground "#E8A45C" :weight bold))
-    "Face for the QUES todo keyword."
-    :group 'org-faces)
+    '((t :inherit org-todo)) "Face for the QUES todo keyword." :group 'org-faces)
   (defface zetta-org-todo-hold
-    '((((background light)) :foreground "#767676" :weight bold)
-      (t :foreground "#9E9E9E" :weight bold))
-    "Face for the HOLD todo keyword."
-    :group 'org-faces)
+    '((t :inherit org-todo)) "Face for the HOLD todo keyword." :group 'org-faces)
   (defface zetta-org-todo-idea
-    '((((background light)) :foreground "#7B4FA6" :weight bold)
-      (t :foreground "#B08FD6" :weight bold))
-    "Face for the IDEA todo keyword."
-    :group 'org-faces)
+    '((t :inherit org-todo)) "Face for the IDEA todo keyword." :group 'org-faces)
   (defface zetta-org-todo-nope
-    '((((background light)) :foreground "#9A9A9A" :strike-through t)
-      (t :foreground "#7A7A7A" :strike-through t))
-    "Face for the NOPE todo keyword."
-    :group 'org-faces)
+    '((t :inherit org-done :strike-through t))
+    "Face for the NOPE todo keyword." :group 'org-faces)
+
+  (defvar zetta-org-todo-face-tiers
+    '((zetta-org-todo-prog . loud)
+      (org-todo            . open)
+      (zetta-org-todo-ques . open)
+      (zetta-org-todo-wait . parked)
+      (zetta-org-todo-hold . parked)
+      (zetta-org-todo-idea . parked)
+      (org-done            . closed)
+      (zetta-org-todo-nope . closed))
+    "Which prominence tier each TODO keyword face sits in.
+
+Grouped by what the state asks of you, not by how far along it is.  WAIT
+and HOLD differ in WHY nothing is happening -- blocked externally versus
+parked by choice -- but they ask the same thing of a reader scanning the
+file, which is nothing, so they share a rung and let the word carry the
+rest.  `org-todo' and `org-done' are org's own faces, restyled here so a
+keyword without an entry in `org-todo-keyword-faces' still follows the
+ladder.")
+
+  ;; One size for the whole document.  Themes scale org's structural faces
+  ;; -- ef-fig routes the headings through `modus-themes-heading-N', 0.9x
+  ;; for every level and 1.44x for the title, and scales the block
+  ;; delimiters separately again.  Measured in a live buffer beforehand: a
+  ;; 20-character probe came out 160px in body text, 140px in a heading and
+  ;; 240px in the title.
+  ;;
+  ;; Reasonable on its own terms, and the one thing that stops a wild
+  ;; preset from being checkable.  Families are mixable because they share
+  ;; an advance AT A GIVEN SIZE; scale one and it leaves the grid, so a
+  ;; heading could never line up with the prose beneath it however careful
+  ;; the preset was.  Hierarchy is still carried -- by family, weight and
+  ;; colour; see the `:extra-faces' tables in modules/ui/fontaine.el.
+  (defvar zetta-org-unscaled-faces
+    '(org-document-title
+      org-level-1 org-level-2 org-level-3 org-level-4
+      org-level-5 org-level-6 org-level-7 org-level-8
+      org-block-begin-line org-block-end-line)
+    "Org faces pinned to the buffer's own height.
+Everything a theme is liable to scale.  Add to this rather than fighting
+one particular theme.")
+
+  ;; Inline literals are not emphasis.  `=verbatim=' and `~code~' come out
+  ;; italic because the theme says so -- doric-water sets both to
+  ;; `:inherit italic', and it is far from the only one -- which reads as
+  ;; stress on a fragment that is being quoted exactly, not stressed.  It
+  ;; also fights the body face wherever prose is set in a handwriting cut:
+  ;; slanted handwriting next to upright handwriting is noise, not a
+  ;; distinction.  The family already sets these apart (see
+  ;; modules/ui/fontaine.el).
+  ;;
+  ;; Both of these use `face-override-spec' rather than
+  ;; `set-face-attribute': the height and the slant come from THEME specs,
+  ;; and `face-spec-recalc' rebuilds a face from its specs on every theme
+  ;; change and every fontaine preset switch, dropping plain attribute
+  ;; overrides.  The override spec is applied last, so it survives both --
+  ;; the same mechanism as the line-number inherit in
+  ;; modules/ui/display-line-numbers.el.
+  (dolist (spec (append
+                 (mapcar (lambda (f) (cons f '(:height 1.0)))
+                         zetta-org-unscaled-faces)
+                 '((org-verbatim :slant normal)
+                   (org-code     :slant normal))))
+    (when (facep (car spec))
+      (face-spec-set (car spec) `((t ,@(cdr spec))) 'face-override-spec)))
+
+  (defun zetta-org-todo-refresh-faces ()
+    "Re-colour the org TODO keyword faces from the current theme's ink ladder."
+    (pcase-dolist (`(,face . ,tier) zetta-org-todo-face-tiers)
+      (when-let* (((facep face))
+                  ((fboundp 'zetta-tier-color))
+                  (color (zetta-tier-color tier)))
+        (set-face-attribute
+         face nil
+         :foreground color
+         ;; Weight is a second prominence axis that costs no colour: the
+         ;; states that want something from you are heavy, the ones that
+         ;; do not are not.  Org paints both `org-todo' and `org-done'
+         ;; bold by default, which is half of why a finished heading used
+         ;; to shout as loudly as an open one.
+         :weight (if (memq tier '(loud open)) 'bold 'normal)
+         ;; NOPE is the only struck state -- abandoned, not finished.
+         ;; Set explicitly on every face so a theme that strikes `org-done'
+         ;; does not leak the effect into the others.
+         :strike-through (eq face 'zetta-org-todo-nope)))))
+  (zetta-org-todo-refresh-faces)
+  (add-to-list 'brushup-styles '(zetta-org-todo-refresh-faces) t)
+
   (setq org-todo-keyword-faces
         '(("PROG" . zetta-org-todo-prog)
           ("WAIT" . zetta-org-todo-wait)

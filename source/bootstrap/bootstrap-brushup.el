@@ -41,18 +41,25 @@
                                         (color-lighten-name brushup-fg -60)
                                       brushup-bg-3)
                         :foreground 'unspecified)
+    ;; The mode line is drawn as a TRANSPARENT SVG image (modeline-svg.el):
+    ;; nothing is painted behind it, so whatever these faces carry is what
+    ;; shows through.  They are therefore the plain buffer background --
+    ;; the bar disappears and only the line's material floats on the page.
+    ;; The foregrounds still matter for the non-SVG fallback
+    ;; (telephone-line, `emacs -Q'-ish frames) and for anything that
+    ;; inherits from these faces.
     (set-face-attribute 'mode-line nil
-                        :background brushup-bg-1_0
+                        :background brushup-bg
                         :foreground 'unspecified
                         :box nil :underline nil :overline nil)
     (when (facep 'mode-line-active)
       (set-face-attribute 'mode-line-active nil
-                          :background brushup-bg-1_0
+                          :background brushup-bg
                           :foreground 'unspecified
                           :box nil :underline nil :overline nil))
     (set-face-attribute 'mode-line-inactive nil
                         :foreground (if brushup-dark-p brushup-bg-6 brushup-fg-4)
-                        :background brushup-bg-1_0
+                        :background brushup-bg
                         :underline nil :box nil)
     (set-face-attribute 'header-line nil
                         :background brushup-bg
@@ -75,6 +82,31 @@
     (set-face-background 'fringe brushup-bg)))
 
 (add-to-list 'brushup-styles '(zetta-brushup-base-faces))
+
+;; Genuine italics.
+;;
+;; brushup registers `brushup--normalize-fonts', which walks every face and
+;; rewrites :slant italic/oblique to normal.  That is why org emphasis, doc
+;; strings and comments render upright: what looked like italics was the
+;; FAMILY changing (fontaine points `italic' at Monaspace Radon, a script
+;; face), never a slant.
+;;
+;; It only ever stripped slant -- weight was untouched, so bold has always
+;; been real.  Every installed family ships true italic and bold cuts, so
+;; there is nothing to synthesise.
+;;
+;; Removed rather than patched in brushup itself, which stays generic.  To
+;; go back to upright text, re-add the entry:
+;;   (add-to-list 'brushup-styles '(brushup--normalize-fonts))
+(setq brushup-styles (delete '(brushup--normalize-fonts) brushup-styles))
+
+;; The stripper already flattened faces realized before this point, and
+;; removing it from the list does not undo that.  Restore the slant on the
+;; face `italic' itself; `fontaine' re-asserts it from :italic-slant on
+;; every preset change thereafter.
+(with-eval-after-load 'fontaine
+  (when (facep 'italic)
+    (set-face-attribute 'italic nil :slant 'italic)))
 
 
 (provide 'bootstrap-brushup)

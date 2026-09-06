@@ -21,14 +21,19 @@
   "Directory where .apkg archives are extracted, one subdir per deck.")
 
 (defun zetta-anki--emacsql-shim ()
-  "Provide the emacsql-sqlite library anki.el requires.
-emacsql 4.x (installed for forge) dropped emacsql-sqlite.el; the
-built-in-sqlite backend has the same constructor signature, so alias
-it and mark the feature as provided."
-  (unless (featurep 'emacsql-sqlite)
-    (require 'emacsql-sqlite-builtin)
-    (defalias 'emacsql-sqlite #'emacsql-sqlite-builtin)
-    (provide 'emacsql-sqlite)))
+  "Give anki.el the `emacsql-sqlite' constructor it calls.
+In emacsql 4.x (installed for forge) the feature `emacsql-sqlite'
+still exists — so guard on `fboundp', not `featurep'; forge loads
+the feature long before this module runs — but the file defines
+`emacsql-sqlite-open' instead of a function named `emacsql-sqlite'.
+Alias whichever modern constructor is available."
+  (unless (fboundp 'emacsql-sqlite)
+    (if (require 'emacsql-sqlite nil t)
+        (defalias 'emacsql-sqlite #'emacsql-sqlite-open)
+      ;; emacsql 4.0 shipped no emacsql-sqlite.el at all.
+      (require 'emacsql-sqlite-builtin)
+      (defalias 'emacsql-sqlite #'emacsql-sqlite-builtin)
+      (provide 'emacsql-sqlite))))
 
 (defun zetta-anki--repair-media (db-file media-dir)
   "Localize remote card images in DB-FILE into MEDIA-DIR.
@@ -139,6 +144,32 @@ separate collection; run this command again to switch decks."
   (evil-set-initial-state 'anki-mode 'emacs)
   (evil-set-initial-state 'anki-card-mode 'emacs)
   (evil-set-initial-state 'anki-search-mode 'emacs))
+
+(with-eval-after-load 'anki-core
+  ;; anki-core-query shells out to the sqlite3 CLI, but sqlite3 >= 3.41
+  ;; caret-escapes control characters in its output (terminal-injection
+  ;; defense), so the 0x1f field separators inside `flds' arrive as the
+  ;; two literal characters "^_".  anki.el then can't split front from
+  ;; back and renders the whole note as the question.  Query through the
+  ;; built-in sqlite instead, emitting the same separator/newline-
+  ;; delimited text the parser expects, with control bytes intact.
+  (defun zetta-anki--core-query (sql-query)
+    "Run SQL-QUERY on the collection via built-in sqlite."
+    (let ((file (expand-file-name "collection.anki2" anki-collection-dir)))
+      (when (file-exists-p file)
+        (let ((db (sqlite-open file)))
+          (unwind-protect
+              (mapconcat
+               (lambda (row)
+                 (mapconcat (lambda (col)
+                              (cond ((null col) "")
+                                    ((numberp col) (number-to-string col))
+                                    (t col)))
+                            row anki-core-sql-separator))
+               (sqlite-select db sql-query)
+               anki-core-sql-newline)
+            (sqlite-close db))))))
+  (advice-add 'anki-core-query :override #'zetta-anki--core-query))
 
 (with-eval-after-load 'anki-card
   ;; Upstream bug: anki-render-img funcalls this for external image

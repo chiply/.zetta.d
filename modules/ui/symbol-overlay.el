@@ -48,9 +48,10 @@
   (global-set-key (kbd "s-.") 'symbol-overlay-transient)
 
   ;; The auto-highlight face's stock #f0f0f0 is indistinguishable from
-  ;; the org-remark default highlighter (brushup-bg-1) — use the
-  ;; half-step between pure background and bg-1: visibly lighter than
-  ;; a remark highlight, still detectable, theme-adaptive.
+  ;; the org-remark default highlighter (brushup-bg-2, see
+  ;; modules/org/org-remark.el) — use the half-step between pure
+  ;; background and bg-1: visibly lighter than a remark highlight,
+  ;; still detectable, theme-adaptive.
   (add-to-list 'brushup-styles
                '(set-face-attribute
                  'symbol-overlay-default-face nil

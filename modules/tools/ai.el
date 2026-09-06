@@ -113,8 +113,89 @@
   :config
   (gptel-make-anthropic "Claude" :stream t :key gptel-api-key)
   (gptel-make-openai "OpenAI" :stream t :key openai-api-key)
-  (setq gptel-backend (cdr (assoc "OpenAI" gptel--known-backends))
-        gptel-model   'gpt-4o)
+
+  ;; ── OpenRouter ────────────────────────────────────────────────────
+  (defvar zetta-openrouter-models-cache-file
+    (expand-file-name "openrouter-models-cache.eld" user-emacs-directory)
+    "Last fetched OpenRouter catalog, so the full list survives restarts.")
+
+  (defvar zetta-openrouter-seed-models
+    '(anthropic/claude-sonnet-5
+      openai/gpt-5.6-luna
+      deepseek/deepseek-v4-pro
+      deepseek/deepseek-v4-flash
+      z-ai/glm-5.3
+      qwen/qwen3.8-max
+      meta/muse-glimmer-30b
+      meta/muse-spark-1.2)
+    "Fallback model list until `zetta-openrouter-refresh-models' has run once.")
+
+  (defun zetta-openrouter-api-key ()
+    "OpenRouter key from the 1Password cache, else ~/source_code/my-ai/.env.
+The op-secrets template has no OPENROUTER_API_KEY entry yet; adding one
+there makes the 1Password path win automatically."
+    (or (and (boundp 'zetta-op--cache)
+             (gethash "OPENROUTER_API_KEY" zetta-op--cache))
+        (let ((env (expand-file-name "~/source_code/my-ai/.env")))
+          (when (file-readable-p env)
+            (with-temp-buffer
+              (insert-file-contents env)
+              (when (re-search-forward
+                     "^OPENROUTER_API_KEY=\"?\\([^\"\n]+?\\)\"?$" nil t)
+                (match-string 1)))))
+        (user-error "No OpenRouter key in 1Password cache or my-ai/.env")))
+
+  (defvar zetta-openrouter-backend
+    (gptel-make-openai "OpenRouter"
+      :host "openrouter.ai"
+      :endpoint "/api/v1/chat/completions"
+      :stream t
+      :key #'zetta-openrouter-api-key
+      :models (or (and (file-readable-p zetta-openrouter-models-cache-file)
+                       (with-temp-buffer
+                         (insert-file-contents zetta-openrouter-models-cache-file)
+                         (ignore-errors (read (current-buffer)))))
+                  zetta-openrouter-seed-models)))
+
+  (defvar url-http-end-of-headers)
+  (defun zetta-openrouter-refresh-models ()
+    "Fetch the full OpenRouter model catalog into the OpenRouter backend."
+    (interactive)
+    (url-retrieve
+     "https://openrouter.ai/api/v1/models"
+     (lambda (status)
+       (unwind-protect
+           (if (plist-get status :error)
+               (message "OpenRouter: catalog fetch failed: %s"
+                        (plist-get status :error))
+             (goto-char url-http-end-of-headers)
+             (let ((models (sort (mapcar (lambda (m) (intern (gethash "id" m)))
+                                         (gethash "data" (json-parse-buffer)))
+                                 #'string-lessp)))
+               (when models
+                 (setf (gptel-backend-models zetta-openrouter-backend) models)
+                 (with-temp-file zetta-openrouter-models-cache-file
+                   (prin1 models (current-buffer)))
+                 (message "OpenRouter: %d models available" (length models)))))
+         (kill-buffer (current-buffer))))
+     nil t))
+  ;; async + idle so a dead network can't slow startup
+  (run-with-idle-timer 10 nil #'zetta-openrouter-refresh-models)
+
+  ;; my-ai router proxy (~/source_code/my-ai): classifies difficulty
+  ;; locally via Ollama, then forwards to the cheapest OpenRouter model
+  ;; clearing the quality floor.  The key is a placeholder the proxy
+  ;; ignores; gptel requires it non-empty.
+  (gptel-make-openai "LLM-Router"
+    :host "localhost:8765"
+    :protocol "http"
+    :endpoint "/v1/chat/completions"
+    :stream t
+    :key "sk-llm-router-local-proxy-no-auth-needed"
+    :models '(llm-router))
+
+  (setq gptel-backend zetta-openrouter-backend
+        gptel-model   'deepseek/deepseek-v4-pro)
   (when (featurep 'mcp)
     (require 'gptel-integrations))
   (setq gptel-confirm-tool-calls nil)
@@ -150,6 +231,49 @@
 
   (when (featurep 'mcp)
     (zetta-mcp-setup-gptel))
+
+  ;; ── Response notifications ────────────────────────────────────────
+  ;; Routed through `zetta-notify' (tools/alert.el), the same entry
+  ;; point Claude Code's hooks call over emacsclient, so both agents
+  ;; share one notification stack -- and the same "tell me about
+  ;; everything" policy, so the duration gate is open by default.
+
+  (defvar zetta-gptel-notify-min-seconds 0
+    "Only notify for gptel responses that took at least this many seconds.
+0 notifies for every response; raise it to hear only about slow ones.")
+
+  (defvar zetta-gptel--request-start nil
+    "`float-time' when the most recent gptel request was sent.
+Set buffer-locally for the common case where a request and its response
+share a buffer, and globally to cover the ones where they do not
+(rewrites, `gptel-quick').  A buffer-local value shadows the global, so
+reading the variable picks the right start time either way.")
+
+  (defun zetta-gptel-mark-request ()
+    "Record when a gptel request went out."
+    (setq-local zetta-gptel--request-start (float-time))
+    (setq-default zetta-gptel--request-start (float-time)))
+
+  (defun zetta-gptel-notify-response (beg end)
+    "Notify when a slow gptel response lands in the current buffer.
+BEG and END bound the inserted text.  gptel passes them equal when the
+request failed, which is worth hearing about however long it took."
+    (let ((started zetta-gptel--request-start))
+      (setq-local zetta-gptel--request-start nil)
+      (setq-default zetta-gptel--request-start nil)
+      (cond
+       ((= beg end)
+        (zetta-notify (format "Request failed in %s" (buffer-name))
+                      "gptel" 'high))
+       ((and started
+             (>= (- (float-time) started) zetta-gptel-notify-min-seconds))
+        (zetta-notify (format "%s — %.0fs, %d chars"
+                              (buffer-name) (- (float-time) started)
+                              (- end beg))
+                      "gptel")))))
+
+  (add-hook 'gptel-post-request-hook #'zetta-gptel-mark-request)
+  (add-hook 'gptel-post-response-functions #'zetta-gptel-notify-response)
 
   :general
   (

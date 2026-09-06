@@ -1175,16 +1175,18 @@ A pull that added nothing leaves the previous +N (entries you've not seen)."
   (when (boundp 'display-time-string) (string-trim (or display-time-string ""))))
 
 (defcustom zetta-tab-bar-battery-low 20
-  "At or below this battery percentage the indicator is drawn red."
+  "At or below this battery percentage the indicator is drawn at its loudest.
+See `zetta-tab-bar-battery-ladder'."
   :type 'integer :group 'zetta)
 (defcustom zetta-tab-bar-battery-medium 50
-  "At or below this battery percentage the indicator is drawn orange (red wins
-below `zetta-tab-bar-battery-low'); above it the indicator is green."
+  "At or below this battery percentage the indicator steps up the ink ladder
+\(`zetta-tab-bar-battery-low' wins below it); above it the indicator recedes."
   :type 'integer :group 'zetta)
 (defcustom zetta-tab-bar-battery-colors nil
-  "Explicit battery colours as an alist of (low medium full).
-nil -- the default -- derives them from the theme's `error', `warning' and
-`success' faces instead, so the indicator tracks whatever theme is loaded."
+  "Explicit battery colours as an alist of (LEVEL . COLOUR).
+LEVEL is `low', `medium' or `full'.  nil -- the default -- takes the colour
+from `zetta-tab-bar-battery-ladder' instead, so the indicator tracks
+whatever theme is loaded."
   :type '(alist :key-type symbol :value-type color) :group 'zetta)
 
 (defvar zetta-tab-bar--battery-cache nil
@@ -1220,17 +1222,46 @@ inside redisplay, so the status is polled here at most once a minute;
          (zetta-line--glyph (ignore-errors
                               (nerd-icons-faicon (format "nf-fa-battery_%d" n)))))))
 
-(defun zetta-tab-bar--battery-color (pct)
-  "Return the level colour for PCT.
-Honours `zetta-tab-bar-battery-colors' when set; otherwise takes the
-theme's own error/warning/success colours, so the indicator tracks the
-theme rather than staying red-orange-green from a fixed palette."
-  (let ((level (cond ((<= pct zetta-tab-bar-battery-low) 'low)
-                     ((<= pct zetta-tab-bar-battery-medium) 'medium)
-                     (t 'full))))
+;; The battery used to take red/orange/green from the theme's error,
+;; warning and success faces.  Reading them off the theme kept the hues
+;; in the family, but it was still the stoplight: a colour vocabulary the
+;; reader has to be told, and one that says nothing on a deliberately
+;; monochrome theme.  Here it was not even carrying the message -- the
+;; Font-Awesome glyph already draws five fill levels and the percentage
+;; is spelled out beside it, so the colour only repeated what the label
+;; had said.
+;;
+;; With the level already legible, colour has prominence left to encode
+;; and nothing else, so the cluster climbs the brushup ink ladder as the
+;; charge falls: below the bar's resting ink (`brushup-fg-3') while there
+;; is nothing to do about it, up to full foreground when there is.  Same
+;; move as `zetta-vc-marker-ladder' in the gutter and
+;; `zetta-line-modal-tier' on the mode line.
+
+(defvar zetta-tab-bar-battery-ladder
+  '((low    brushup-fg   brushup-fg-3)
+    (medium brushup-fg-2 brushup-fg-4)
+    (full   brushup-fg-5 brushup-fg-6))
+  "Ink-ladder rungs per battery level, as (LEVEL ON-BATTERY PLUGGED-IN).
+
+Plugged in, every level steps down a couple of rungs: a charging battery
+is not a call to action, and 15% on the charger should not shout the way
+15% off it should.  Symbols, not colours: they are resolved per call,
+after a theme change has rewritten the palette.")
+
+(defun zetta-tab-bar--battery-color (pct &optional plugged)
+  "Return the ink colour for charge PCT, quieter when PLUGGED.
+Honours `zetta-tab-bar-battery-colors' when set; otherwise reads
+`zetta-tab-bar-battery-ladder', falling back to the default foreground
+only if brushup has not defined its gradient yet."
+  (let* ((level (cond ((<= pct zetta-tab-bar-battery-low) 'low)
+                      ((<= pct zetta-tab-bar-battery-medium) 'medium)
+                      (t 'full)))
+         (rung (nth (if plugged 2 1) (assq level zetta-tab-bar-battery-ladder))))
     (or (cdr (assq level zetta-tab-bar-battery-colors))
-        (zetta-theme-color (pcase level
-                             ('low 'error) ('medium 'warning) (_ 'success))))))
+        (and rung (boundp rung) (symbol-value rung))
+        (face-foreground 'default nil t)
+        "#a0a0a0")))
 
 (defun zetta-tab-bar-workspace-lighter ()
   "The space-tree lighter string, or nil.
@@ -1450,9 +1481,10 @@ Hidden until elfeed loads (the count cache is nil); the count comes from
                          (and (fboundp 'org-agenda) (cons "Agenda" #'org-agenda))))))))
 
 (defun zetta-tab-bar-svg--battery ()
-  "Clickable battery cluster: a Font-Awesome battery glyph coloured by level
-\(red/orange/green), a plug glyph when on AC, and the percentage.  Click shows
-the full battery status."
+  "Clickable battery cluster: a Font-Awesome battery glyph, a plug glyph when
+on AC, and the percentage.  The cluster is drawn in one ink whose prominence
+tracks the charge (see `zetta-tab-bar-battery-ladder') rather than in a
+red/orange/green stoplight.  Click shows the full battery status."
   (when (bound-and-true-p display-battery-mode)
     (let ((d (zetta-tab-bar--battery-data)))
       (when d
@@ -1466,7 +1498,7 @@ the full battery status."
           (when (> (length (string-trim label)) 0)
             (zetta-svg-seg
              label 'tb-battery
-             :color (zetta-tab-bar--battery-color pct)
+             :color (zetta-tab-bar--battery-color pct plugged)
              :help (format "battery: %d%%%s" pct (if plugged " (plugged in)" ""))
              :action-help "battery status"
              :action #'battery

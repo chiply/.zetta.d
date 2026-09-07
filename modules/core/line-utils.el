@@ -555,7 +555,32 @@ The wheel wraps, so 0.98 and 0.02 are 0.04 apart rather than 0.96."
   "Non-nil if HUE sits at least MIN-SEP turns from every hue in TAKEN."
   (cl-every (lambda (other) (>= (zetta-hue-distance hue other) min-sep)) taken))
 
-(defun zetta-hue-separate (hues min-sep)
+(defun zetta-hue--gap (hue taken)
+  "Distance from HUE to the nearest hue in TAKEN, in turns.
+1.0 when nothing is placed yet -- an empty wheel is maximally clear."
+  (if taken
+      (cl-loop for other in taken minimize (zetta-hue-distance hue other))
+    1.0))
+
+(defun zetta-hue--separate-one (hue taken min-sep max-rot)
+  "HUE moved as little as possible to clear MIN-SEP turns from TAKEN.
+Searches outward in both directions, up to MAX-ROT turns, preferring the
+first angle that clears outright.  When nothing within MAX-ROT clears,
+returns the angle in reach whose nearest neighbour is furthest away --
+the most separation the cap allows, rather than none."
+  (cl-block zetta-hue--pick
+    (let ((best hue) (best-gap (zetta-hue--gap hue taken)))
+      (cl-loop for step from 0.01 to max-rot by 0.01 do
+               (dolist (cand (list (mod (+ hue step) 1.0)
+                                   (mod (- hue step) 1.0)))
+                 (let ((gap (zetta-hue--gap cand taken)))
+                   (when (>= gap min-sep)
+                     (cl-return-from zetta-hue--pick cand))
+                   (when (> gap best-gap)
+                     (setq best cand best-gap gap)))))
+      best)))
+
+(defun zetta-hue-separate (hues min-sep &optional max-rot)
   "HUES rotated apart so no two sit closer than MIN-SEP turns on the wheel.
 
 Earlier entries keep their hue outright; a later one that crowds an
@@ -565,23 +590,28 @@ works, so a theme whose colours are already spread is left untouched and
 one that bunches them is bent no further than it has to be.
 
 Needed because a palette is under no obligation to supply four separable
-hues.  ef-light paints `error' crimson and `warning' rust, two steps
-apart on the wheel; doric-obsidian paints `warning' tan and `link' brown,
+hues.  ef-light paints `error\=' crimson and `warning\=' rust, two steps
+apart on the wheel; doric-obsidian paints `warning\=' tan and `link\=' brown,
 which wash to the same colour outright.  Where hue is decoration this
 does not matter and the answer is to drop hue altogether (see
-`zetta-vc-marker-ladder').  Where hue is the CONTENT, it has to be made
-to separate."
+`zetta-vc-marker-ladder\=').  Where hue is the CONTENT, it has to be made
+to separate.
+
+MAX-ROT caps how far, in turns, any one hue may be moved; nil lets it go
+anywhere on the wheel.  The cap is what stops separation from INVENTING a
+colour.  Asked for four hues 47 degrees apart, doric-earth -- which paints
+`error\=' at 0, `warning\=' at 23 and `accent\=' at 32, a warm theme all the
+way through -- has no room, and the nearest clear angle for `accent\=' is 79
+degrees away at magenta, which appears nowhere in that theme.  A wash in a
+hue the theme never uses is the same complaint as a wash more saturated
+than the theme ever paints: it reads as pasted on.  Capped, `accent\=' stays
+gold, and the four come out a warm ramp plus green -- less separation than
+was asked for, but all of it the theme\='s own."
   (let (taken out)
     (dolist (h hues (nreverse out))
       (let ((pick (if (or (null h) (zetta-hue--clear-p h taken min-sep))
                       h
-                    (cl-loop for step from 0.01 to 0.5 by 0.01
-                             for up = (mod (+ h step) 1.0)
-                             for down = (mod (- h step) 1.0)
-                             if (zetta-hue--clear-p up taken min-sep) return up
-                             else if (zetta-hue--clear-p down taken min-sep)
-                             return down
-                             finally return h))))
+                    (zetta-hue--separate-one h taken min-sep (or max-rot 0.5)))))
         (when pick (push pick taken))
         (push pick out)))))
 

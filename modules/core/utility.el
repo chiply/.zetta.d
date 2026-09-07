@@ -85,7 +85,8 @@ not also need to be carried by hue."
 ;; the gradient step the wash is weighted against, so a strong wash is
 ;; further off the page than a subtle one on a light theme and a dark one
 ;; alike.  Eight slots covers the vocabulary below with room spare, and
-;; every slot is separable: hues by colour, strengths by lightness.
+;; every slot is separable: hues by colour, strengths by lightness AND
+;; chroma, both of which now come from that gradient step.
 ;;
 ;; This is not the same call as the VC gutter or the TODO keywords, which
 ;; deliberately carry no hue (see `zetta-vc-marker-ladder').  There the
@@ -108,13 +109,19 @@ not also need to be carried by hue."
    (car slot) '((t :inherit highlight))
    (format "Log highlighter: %s." (car slot)) :group 'zetta))
 
-(defvar zetta-highlight-saturation '(0.35 . 0.70)
-  "Saturation floor and ceiling for a highlighter wash.
-Louder than a wash sitting inside prose, which should stay quiet enough to
-read through -- these sit in a wall of log output and have to be spotted
-from across the buffer.  Raising the ceiling further buys very little: the four
-washes are held to a common luminance, so they separate on chroma alone
-and that curve flattens fast.")
+;; There is no saturation knob here any more.  There used to be an HSL
+;; floor-and-ceiling pair, on the reasoning that log washes should sit
+;; louder than a wash inside prose, and it did not do what it said: HSL
+;; saturation is not an amount of colour, so a single clamp put the four
+;; washes between chroma 15 and chroma 61 on doric-earth -- warning over
+;; four times as saturated as the page, red half as saturated as green at
+;; the same nominal strength.  That spread was the clash.
+;;
+;; `zetta-hue-wash' now takes both lightness and chroma from the anchor, so
+;; how loud a wash is is decided in exactly one place: which gradient step
+;; a slot names below.  Want them louder?  Move a slot from `brushup-bg-2'
+;; to `brushup-bg-4'.  Want the whole family louder?  That is a question
+;; about the theme's gradient, which is the right place for it to be asked.
 
 (defvar zetta-highlight-hue-separation 0.13
   "Least distance, in turns of the colour wheel, between two highlighter hues.
@@ -141,8 +148,7 @@ and `warning' or `accent' is what moves when a palette has to give."
       (pcase-dolist (`(,face ,kind . ,anchor) zetta-highlight-slots)
       (when (and (facep face) (boundp anchor))
         (let ((wash (zetta-hue-wash (alist-get kind hues)
-                                    (symbol-value anchor)
-                                    zetta-highlight-saturation)))
+                                    (symbol-value anchor))))
           (set-face-attribute
            face nil
            :background wash

@@ -1,6 +1,6 @@
 ;;; line-utils.el --- Configure line utilities -*- lexical-binding: t; -*-
 
-;; `zetta-hue-wash' works in HSL; nothing else here pulls color.el in.
+;; `zetta-hue-wash' and the LCH helpers below need color.el; nothing else here does.
 (require 'color)
 
 ;;;;;; Utils
@@ -388,6 +388,28 @@ KIND is one of error, warning, success, accent, added, removed, changed."
                                       (expt (/ (+ c 0.055) 1.055) 2.4)))
                                   rgb)))))
 
+(defun zetta-color--lch (color)
+  "COLOR as a list (L* C h), or nil if it names nothing.
+L* is CIE lightness, which is a function of relative luminance alone --
+which is why `zetta-hue-wash' can match a weight by copying L* instead of
+searching for it."
+  (when-let* ((rgb (color-name-to-rgb color)))
+    (apply #'color-lab-to-lch (apply #'color-srgb-to-lab rgb))))
+
+(defun zetta-color--render (l c h)
+  "Render lightness L, chroma C and hue H as \"#rrggbb\", clamped into sRGB.
+Chroma that will not fit the gamut at L is clipped, which costs a little
+saturation at the extremes and never shifts the hue."
+  (apply #'color-rgb-to-hex
+         (append (mapcar (lambda (v) (max 0.0 (min 1.0 v)))
+                         (apply #'color-lab-to-srgb (color-lch-to-lab l c h)))
+                 '(2))))
+
+(defconst zetta-color-grey-chroma 2.0
+  "Chroma below which a colour is treated as carrying no hue at all.
+Matches the threshold `zetta-ghostel--tint-to-page' uses for the same
+judgement: under it, an angle is rounding error rather than a direction.")
+
 (defun zetta-contrast-ratio (a b)
   "WCAG contrast ratio between colours A and B."
   (let ((la (+ 0.05 (or (zetta-color--luminance a) 0)))
@@ -474,41 +496,41 @@ only if brushup has not defined its gradient yet."
 ;; readable through it -- these days just the log highlighters in
 ;; modules/core/utility.el, the org-remark pens having gone monochrome.
 
-(defun zetta-hue-wash (hue anchor sat)
-  "HUE re-lit to weigh the same against the page as ANCHOR does.
+(defun zetta-hue-wash (hue anchor)
+  "HUE painted at ANCHOR\='s weight: ANCHOR\='s lightness and chroma, HUE\='s hue.
 
-Hue and saturation come from HUE, saturation clamped into SAT (a
-`(min . max)\=' pair).  Lightness is searched for rather than taken from
-HUE, so the result lands on ANCHOR\='s relative luminance -- ANCHOR being a
-step of the brushup gradient, which is already the theme\='s own answer to
-\"how far off the page is a faint wash\".
+ANCHOR is a step of the brushup gradient, which is the theme\='s own answer
+to \"how far off the page does a wash sit\" -- and it answers in BOTH
+channels, not just one.  Taking only its luminance and letting saturation
+fall out of the hue is what made these clash: a fixed HSL saturation is not
+a fixed amount of colour, because sRGB holds far more chroma at yellow and
+green than at red or magenta.  On doric-earth that put the four washes
+between chroma 15 and chroma 61 against a page of chroma 14 -- the warning
+wash over four times as saturated as anything the theme paints, and red
+half as saturated as green at the same nominal strength.
 
-Matching luminance rather than HSL lightness is the whole point.  A shared
-lightness is not a shared weight: blue at L 0.5 carries about a seventh of
-the luminance of yellow at L 0.5, which is how the org-remark important pen -- back
-when the pens were hue washes -- came out a near-black smudge on a dark page
-while the question pen read fine.
-Luminance climbs monotonically with lightness at a fixed hue and
-saturation, so a bisection finds the lightness that lands on ANCHOR."
-  (if-let* ((rgb (color-name-to-rgb hue))
-            (goal (zetta-color--luminance anchor)))
-      (let* ((hsl (apply #'color-rgb-to-hsl rgb))
-             (h (nth 0 hsl))
-             ;; A theme colour that is genuinely achromatic is left
-             ;; alone: forcing it up to the saturation floor would pick
-             ;; hue 0 and silently turn a grey pen red.
-             (s (if (< (nth 1 hsl) 0.05)
-                    (nth 1 hsl)
-                  (min (cdr sat) (max (car sat) (nth 1 hsl)))))
-             (lo 0.0) (hi 1.0) (l 0.5) (hex hue))
-        (dotimes (_ 14)
-          (setq l (/ (+ lo hi) 2.0)
-                hex (apply #'color-rgb-to-hex
-                           (append (color-hsl-to-rgb h s l) '(2))))
-          (if (< (zetta-color--luminance hex) goal)
-              (setq lo l)
-            (setq hi l)))
-        hex)
+Copying the anchor\='s chroma instead lands all four within a few points of
+each other and inside the theme\='s own range, so they read as the theme\='s
+washes in four hues rather than as four arbitrary colours.
+
+Lightness is copied rather than searched for.  L* is defined from relative
+luminance alone, so matching L* IS matching weight, whatever the hue -- the
+bisection this function used to run was converging on exactly the anchor\='s
+L* every time.  That is still the point worth keeping: a shared HSL
+lightness is not a shared weight, since blue at L 0.5 carries about a
+seventh of the luminance of yellow at L 0.5.
+
+A theme colour that is genuinely achromatic is left grey rather than pushed
+up to the anchor\='s chroma, because forcing chroma onto a hueless colour
+picks an angle out of rounding error and silently invents a colour the
+theme never chose."
+  (if-let* ((hl (zetta-color--lch hue))
+            (al (zetta-color--lch anchor)))
+      (zetta-color--render (nth 0 al)
+                           (if (< (nth 1 hl) zetta-color-grey-chroma)
+                               (nth 1 hl)
+                             (nth 1 al))
+                           (nth 2 hl))
     hue))
 
 (defun zetta-hue-of (color)

@@ -24,7 +24,14 @@
            :repo "domtronn/all-the-icons.el"
            :branch "svg"
            :files (:defaults "svg"))
-  :if (display-graphic-p)
+  ;; NO `:if (display-graphic-p)' here.  Under a daemon the startup frame is
+  ;; a terminal one, so that test is nil at init and use-package skips this
+  ;; whole `:config' -- including the `currentColor' fill advice below, which
+  ;; is the ONLY thing giving these SVGs a colour.  Every icon then renders
+  ;; at the SVG default, black, in the graphical frames the daemon opens
+  ;; later.  Nothing here needs a display: it is advice, alist edits and face
+  ;; colours, all of which are fine to set up in a tty and are waiting,
+  ;; correct, whenever a graphical frame does arrive.
   :config
   ;;(use-package octicons)
   (setq all-the-icons-color-icons t)

@@ -88,10 +88,13 @@ tab line above, whose own bottom inset pairs with the top one here."
   "Pixels of inset between right-aligned content and the right window edge."
   :type 'integer :group 'zetta)
 
-(defcustom zetta-header-line-svg-char-advance 8
-  "Pixels per character used to lay out SVG header-line text.
-Derived from the live font by `zetta-svg-line-derive-char-advance'; the
-default only stands in before that runs." :type 'integer :group 'zetta)
+(defcustom zetta-header-line-svg-char-advance-ratio 0.5
+  "Per-character advance, as a fraction of the font size, for header-line text.
+Derived from the bar's own font by `zetta-svg-line-derive-char-advance'; the
+default only stands in before that runs." :type 'number :group 'zetta)
+
+(define-obsolete-variable-alias 'zetta-header-line-svg-char-advance
+  'zetta-header-line-svg-char-advance-ratio "2026-09-07")
 
 ;;; ------------------------------------------------------------------
 ;;; Content -- two left-aligned breadcrumb rows.
@@ -107,7 +110,7 @@ default only stands in before that runs." :type 'integer :group 'zetta)
   :layout 'lines
   :width 'window
   :content #'zetta-header-line-svg-lines
-  :font (lambda () zetta-svg-line-font)
+  :font (lambda () (zetta-svg-line-font-for :header-line))
   :font-size (lambda () zetta-header-line-svg-font-size)
   :line-pad (lambda () zetta-header-line-svg-line-pad)
   :background (lambda () zetta-header-line-svg-background)
@@ -116,8 +119,9 @@ default only stands in before that runs." :type 'integer :group 'zetta)
   :margin-y (lambda () zetta-header-line-svg-margin-y)
   :right-margin (lambda () zetta-header-line-svg-right-margin)
   ;; breadcrumb rows are laid out by run (clickable crumb segments), so match
-  ;; the glyph width like the other bars (see `zetta-modeline-svg-char-advance')
-  :char-advance (lambda () zetta-header-line-svg-char-advance)
+  ;; the glyph width like the other bars (see
+  ;; `zetta-modeline-svg-char-advance-ratio')
+  :char-advance-ratio (lambda () zetta-header-line-svg-char-advance-ratio)
   :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
                              (face-foreground 'default nil t) "#cccccc")))
 
@@ -134,7 +138,7 @@ default only stands in before that runs." :type 'integer :group 'zetta)
   ;; SAME bar with one row instead of two: a spinner that changed size or
   ;; tone between buffers would read as a different kind of window rather
   ;; than a quieter one -- the argument `zetta-mode-line-bare' makes.
-  :font (lambda () zetta-svg-line-font)
+  :font (lambda () (zetta-svg-line-font-for :header-line))
   :font-size (lambda () zetta-header-line-svg-font-size)
   :line-pad (lambda () zetta-header-line-svg-line-pad)
   :background (lambda () zetta-header-line-svg-background)
@@ -142,7 +146,7 @@ default only stands in before that runs." :type 'integer :group 'zetta)
   :pad-y (lambda () zetta-header-line-svg-pad-y)
   :margin-y (lambda () zetta-header-line-svg-margin-y)
   :right-margin (lambda () zetta-header-line-svg-right-margin)
-  :char-advance (lambda () zetta-header-line-svg-char-advance)
+  :char-advance-ratio (lambda () zetta-header-line-svg-char-advance-ratio)
   :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
                              (face-foreground 'default nil t) "#cccccc")))
 

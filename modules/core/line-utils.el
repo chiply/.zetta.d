@@ -2,6 +2,7 @@
 
 ;; `zetta-hue-wash' and the LCH helpers below need color.el; nothing else here does.
 (require 'color)
+(require 'xml)                          ; `xml-escape-string', for the SVG probes
 
 ;;;;;; Utils
 (defvar ml-selected-window nil)
@@ -131,6 +132,29 @@ returned; BRANCH-NAME is a string."
 (declare-function svg-line-segs "svg-line")
 (declare-function svg-line-map-string-regions "svg-line")
 
+(defcustom zetta-svg-seg-fonts
+  '(:script "Monaspace Radon NF"
+    :prose  "Monaspace Argon NF"
+    :chrome "Monaspace Krypton NF")
+  "Families for individual chrome segments, keyed by the ROLE they play.
+
+A segment may name its own font (svg-line lays it out at that family's own
+advance, so the families need not be metrically related).  Naming them by
+role rather than in place means retuning the look is one edit here instead
+of one per segment:
+
+  `:script'  a handwriting cut -- for the transient and the incidental
+  `:prose'   a humanist cut -- for text that is read rather than scanned
+  `:chrome'  a mechanical cut -- for instrumentation
+
+A nil value for a role leaves those segments in the bar's own font."
+  :type '(plist :key-type symbol :value-type (choice (const nil) string))
+  :group 'zetta)
+
+(defun zetta-svg-seg-font (role)
+  "Font family for segment ROLE, per `zetta-svg-seg-fonts', or nil."
+  (plist-get zetta-svg-seg-fonts role))
+
 (defun zetta-svg-seg (text key &rest plist)
   "Return an interactive svg-line segment for TEXT, keyed by KEY.
 The hover/identity id is (KEY . current-buffer) so a per-window bar only
@@ -252,11 +276,14 @@ for empty STR."
               (root (file-name-directory venv)))
     (when (string-prefix-p (expand-file-name root)
                            (expand-file-name default-directory))
-      (concat "{venv:"
-              (zetta-minify-path venv)
-              "/"
-              (car (last (split-string venv "/")))
-              "}"))))
+      (zetta-svg-seg
+       (concat "{venv:"
+               (zetta-minify-path venv)
+               "/"
+               (car (last (split-string venv "/")))
+               "}")
+       'tb-venv
+       :font (zetta-svg-seg-font :chrome)))))
 
 (defun zetta-tab-bar-spot-mode-line-string ()
   (if (fboundp 'spot-mode-line-string)
@@ -319,7 +346,15 @@ up far to the left of the actual key/command.  Returns nil when idle."
     (when (> (length str) 0)
       (let ((icon (and (featurep 'nerd-icons)
                        (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-keyboard_caps"))))))
-        (concat (and icon (concat icon " ")) str)))))
+        ;; A segment rather than a bare string, so it can carry its own font.
+        ;; That does move this side of the row from exact text anchoring onto
+        ;; the char-advance grid -- which is only safe because the grid is now
+        ;; measured from the font rather than assumed (see
+        ;; `zetta-svg-line-em-ratio'); it used to be an estimate, and keycast
+        ;; changing width under an estimate is exactly what jittered.
+        (zetta-svg-seg (concat (and icon (concat icon " ")) str)
+                       'tb-keycast
+                       :font (zetta-svg-seg-font :script))))))
 
 (defun zetta-tab-bar-recursion-icon ()
   "Type-hierarchy glyph shown to the left of the recursion-depth indicator."
@@ -327,6 +362,8 @@ up far to the left of the actual key/command.  Returns nil when idle."
        (zetta-line--glyph (ignore-errors (nerd-icons-codicon "nf-cod-type_hierarchy_sub")))))
 
 (defun zetta-current-prefix ()
+  "The prefix keys in progress, as a segment in the `:script' font.
+Empty for a mouse event, which is not a keystroke anyone is tracking."
   (let ((descr (key-description
                 (or
                  (and
@@ -335,7 +372,8 @@ up far to the left of the actual key/command.  Returns nil when idle."
                  (this-command-keys-vector)))))
     (if (string-match-p "mouse" descr)
         ""
-      descr)))
+      (zetta-svg-seg descr 'tb-prefix
+                     :font (zetta-svg-seg-font :script)))))
 
 ;; otherwise prefix keys won't show up
 (add-hook 'prefix-command-echo-keystrokes-functions 'force-mode-line-update)
@@ -1286,7 +1324,32 @@ possible; without it this can only fall back to the idle label."
 A single-width Nerd Font carrying the icon glyphs, so icons render inline
 as ordinary text.  Terminess is the Nerd-patched Terminus, keeping that
 look; any Nerd Font works (e.g. \"JetBrainsMono Nerd Font Mono\").  Buffers
-keep their own font (`zetta-font').")
+keep their own font (`zetta-font').
+
+`zetta-svg-line-fonts' overrides this per bar.")
+
+(defcustom zetta-svg-line-fonts nil
+  "Per-bar overrides of `zetta-svg-line-font', a plist keyed by bar.
+
+Keys are `:tab-bar', `:tab-line', `:mode-line' and `:header-line'; each
+value is a font family, or nil to fall back to `zetta-svg-line-font'.
+
+  (setq zetta-svg-line-fonts \='(:tab-bar \"Monaspace Krypton NF\"))
+
+Mixing families is safe because nothing is shared between bars: each one's
+layout grid is derived from the family IT draws with, by
+`zetta-svg-line-derive-char-advance'.  Two bars in fonts of different width
+therefore need not agree about anything -- which they could not do before,
+when one advance was measured once and handed to all four."
+  :type '(plist :key-type symbol :value-type (choice (const :tag "Default" nil)
+                                                     (string :tag "Family")))
+  :group 'zetta)
+
+(defun zetta-svg-line-font-for (bar)
+  "Font family BAR is drawn in.
+BAR is `:tab-bar', `:tab-line', `:mode-line' or `:header-line'; the answer
+is its `zetta-svg-line-fonts' entry, or `zetta-svg-line-font'."
+  (or (plist-get zetta-svg-line-fonts bar) zetta-svg-line-font))
 
 (defun zetta-line--glyph (s)
   "Return nerd-icons glyph string S without text properties, or nil if empty."
@@ -1609,6 +1672,7 @@ recolours it via `zetta-tab-bar-svg-icon-color', so the raw glyph is returned."
   "Clickable tab-bar buffer name (switch buffer; menu of buffer/file actions)."
   (zetta-svg-seg
    (zetta-buffer-name) 'tb-buffer
+   :font (zetta-svg-seg-font :prose)
    :help (format "buffer: %s" (buffer-name))
    :action-help "switch buffer"
    :action (if (fboundp 'consult-buffer) #'consult-buffer #'switch-to-buffer)
@@ -1649,18 +1713,28 @@ Derived from the LIVE frame width and the tab bar's own geometry, so it
 adapts to any screen width: the clock spans all three rows, centred at
 WIDTH/2 with radius ~0.86*(3*LH)/2; the left content starts past the square
 masthead (width = bar height); inline-segment rows lay out at
-`zetta-tab-bar-svg-char-advance' px/char.  These mirror `svg-line''s internal
-geometry -- keep in sync if its clock-radius/masthead formulas change."
+`zetta-tab-bar-svg-char-advance-ratio' of the font size per character.
+
+The clock only bounds this while it is CENTRED: moved to the edge it takes
+its room out of the right margin instead (see
+`zetta-tab-bar-svg--right-margin'), and the left content is then free of it.
+
+These mirror `svg-line''s internal geometry -- keep in sync if its
+clock-radius/masthead formulas change."
   (let* ((width (frame-inner-width))
          (fz   (or (bound-and-true-p zetta-tab-bar-svg-font-size) 15))
          (lp   (or (bound-and-true-p zetta-tab-bar-svg-line-pad) 4))
          (lh   (+ fz lp))
          (rows 3)
          (height (* lh rows))                              ; full bar height
-         (r    (round (* 0.86 (/ (float height) 2))))      ; clock radius
+         ;; only a CENTRED clock eats into the left half
+         (r    (if (eq (bound-and-true-p zetta-tab-bar-svg-clock-align) 'right)
+                   0
+                 (round (* 0.86 (/ (float height) 2)))))
          (masthead (if (bound-and-true-p zetta-tab-bar-svg-icon) height 0))
          (gap  (* 2 fz))                                    ; breathing room
-         (ca   (max 1 (or (bound-and-true-p zetta-tab-bar-svg-char-advance) 8)))
+         (ca   (max 1.0 (* fz (or (bound-and-true-p zetta-tab-bar-svg-char-advance-ratio)
+                                  0.6))))
          ;; the bar's own left inset comes off the budget too, or the left
          ;; content is sized as though it still started at x=0 and runs that
          ;; many pixels closer to the centred clock than intended
@@ -1684,6 +1758,7 @@ at any frame width (see `zetta-tab-bar--left-of-clock-chars')."
          (label (concat prefix txt)))
     (zetta-svg-seg
      label 'tb-spotify
+     :font (zetta-svg-seg-font :script)
      :help "Spotify"
      :action-help "pause/play"
      :action (cond ((fboundp 'spot-player-pause) #'spot-player-pause)
@@ -1788,6 +1863,7 @@ red/orange/green stoplight.  Click shows the full battery status."
           (when (> (length (string-trim label)) 0)
             (zetta-svg-seg
              label 'tb-battery
+             :font (zetta-svg-seg-font :chrome)
              :color (zetta-tab-bar--battery-color pct plugged)
              :help (format "battery: %d%%%s" pct (if plugged " (plugged in)" ""))
              :action-help "battery status"
@@ -1977,23 +2053,92 @@ to change it."
                              (zetta-fontaine--mode-entry))
                         "click to change this mode's font preset"
                       "click to change the font preset")))))
-(defun zetta-svg-line--px-per-char (family height)
-  "Advance of FAMILY at face HEIGHT, in pixels per character.
+(defvar zetta-svg-line--em-cache (make-hash-table :test 'equal)
+  "Cache of (FAMILY . CHAR) -> em advance, as measured through librsvg.")
 
-Divides out any `face-font-rescale-alist' entry for FAMILY.  That matters
-because the two consumers disagree: the SVG chrome is drawn by librsvg via
-fontconfig, which never sees `face-font-rescale-alist', while
-`string-pixel-width' measures Emacs rendering, which does.  The chrome font
-is usually also a buffer fallback and therefore rescaled -- Terminess sat
-at 0.87 to fit inside Monaspace's box -- so measuring it naively reported
-7px/char when librsvg was still drawing it at 8, and every SVG line was
-laid out one pixel per character too narrow."
-  (let* ((probe (make-string 20 ?M))
-         (measured (/ (float (string-pixel-width
-                              (propertize probe 'face (list :family family :height height))))
-                      20))
-         (scale (or (cdr (assoc family face-font-rescale-alist)) 1.0)))
-    (if (> scale 0) (/ measured scale) measured)))
+(defconst zetta-svg-line--em-probe-size 60
+  "Font size, in px, at which `zetta-svg-line-em-ratio' renders its probes.
+Large enough that rounding the rendered width to a whole pixel is noise
+against a twenty-character span, small enough that the throwaway raster
+stays under a megapixel.")
+
+;;;###autoload
+(defun zetta-svg-line-forget-em-ratios ()
+  "Drop the cached librsvg advance measurements.
+Run after installing, removing or replacing a font file."
+  (interactive)
+  (clrhash zetta-svg-line--em-cache))
+
+(defun zetta-svg-line--render-width (family char n size)
+  "Ink width in px of N copies of CHAR drawn in FAMILY at SIZE, per librsvg.
+
+An SVG carrying no width/height renders at its content's bounding box, so
+the image Emacs hands back is exactly as wide as the text librsvg drew.
+That is the whole trick: it turns a librsvg metric, which the renderer
+otherwise never reports, into a number Lisp can read.
+
+`image-scaling-factor' is pinned because the answer is wanted in the SVG's
+own coordinates -- the same ones the chrome is laid out in -- not in
+whatever the display would blow them up to."
+  (let ((image-scaling-factor 1.0))
+    (car (image-size
+          (create-image
+           (format (concat "<svg xmlns=\"http://www.w3.org/2000/svg\">"
+                           "<text x=\"0\" y=\"%d\" font-family=\"%s\" font-size=\"%d\""
+                           " xml:space=\"preserve\">%s</text></svg>")
+                   (* 2 size) (xml-escape-string family) size
+                   (xml-escape-string (make-string n char)))
+           'svg t)
+          t))))
+
+(defun zetta-svg-line-em-ratio (family &optional char)
+  "Advance of CHAR (default ?M) in FAMILY as a fraction of the font size.
+
+Measured through LIBRSVG -- the engine that actually draws the SVG chrome --
+rather than through Emacs.  That distinction is the whole point of this
+function, because the two disagree, and not slightly: Monaspace declares
+2000 units per em in `head' while its CFF `FontMatrix' implies about 1596,
+and FreeType (librsvg) believes the matrix where CoreText (Emacs) believes
+`head'.  So `string-pixel-width' reports Monaspace at 0.62 em while librsvg
+draws it at 0.7775 -- a 25% error, and the reason every previous attempt to
+put Monaspace in the chrome came out overlapping.  Terminess is off by a
+smaller margin in the other direction: measured 8px/char, really 7.5.
+
+Two lengths are rendered and subtracted so the glyph's side bearings cancel
+and only the advance survives.  Cached; `zetta-svg-line-forget-em-ratios'
+drops the cache.
+
+For the DEFAULT character this now defers to `svg-line-font-advance', which
+answers with the advance the text will EFFECTIVELY have.  That matters
+because svg-line corrects a renderer that advances a font wrongly (see
+`svg-line-correct-tracking'): librsvg walks Monaspace 0.7775 em per
+character where the font itself says 0.62, and svg-line pulls the glyphs
+back onto 0.62 with negative letter-spacing.  Measuring librsvg here and
+laying out on THAT would put the whole line on a grid a quarter wider than
+the text drawn into it -- which is exactly how the workspace indicator came
+to sit further apart than its own glyphs are.  The local measurement stays
+for the icon probes, which ask about a specific codepoint."
+  (or
+   ;; the engine's answer for a plain character, which is the effective one
+   (and (null char) (fboundp 'svg-line-font-advance)
+        (svg-line-font-advance family))
+   (let* ((char (or char ?M))
+          (key (cons family char)))
+     (or (gethash key zetta-svg-line--em-cache)
+         (and (seq-some #'display-graphic-p (frame-list))
+              (ignore-errors
+                (let* ((size zetta-svg-line--em-probe-size)
+                       (w1 (zetta-svg-line--render-width family char 4 size))
+                       (w2 (zetta-svg-line--render-width family char 24 size))
+                       (ratio (/ (- w2 w1) 20.0 size)))
+                  (when (> ratio 0)
+                    (puthash key ratio zetta-svg-line--em-cache)))))))))
+
+(defun zetta-svg-line--px-per-char (family font-size)
+  "Advance of FAMILY at FONT-SIZE px, in pixels per character, per librsvg.
+A thin wrapper on `zetta-svg-line-em-ratio' for callers that want pixels."
+  (when-let* ((ratio (zetta-svg-line-em-ratio family)))
+    (* ratio font-size)))
 
 (defvar zetta-svg-line-uniform-fallback "Terminess Nerd Font Mono"
   "Chrome font used when the requested one advances icons and text differently.")
@@ -2038,54 +2183,76 @@ Two conditions, and both matter:
    renderers place both on ONE grid, so a font whose icons sit on a
    different advance cannot be laid out correctly at any single value.
 
-The rescale factor is divided out of BOTH measurements; correcting only
-the text advance makes any rescaled family read as a false negative."
+Both are measured through LIBRSVG (`zetta-svg-line-em-ratio'), not through
+`string-pixel-width'.  Measuring the icons in Emacs is what made this
+function wrong for years: a face spec naming FAMILY only binds FAMILY for
+the characters it covers, and for a Private-Use codepoint Emacs consults
+the fontset and quietly substitutes some other font.  So the \"icon
+advance\" being compared was the SUBSTITUTE's, not FAMILY's, and every
+Monaspace family failed a test it actually passes -- measured through
+librsvg, all five advance text and icons alike at 0.7775 em.  Terminus
+\(TTF), which carries no icons at all, is the one that genuinely fails."
   (and
    (zetta-svg-line--has-icons-p family)
-   (let* ((scale (or (cdr (assoc family face-font-rescale-alist)) 1.0))
-          (scale (if (> scale 0) scale 1.0))
-          (tx (zetta-svg-line--px-per-char family 150))
-          (ic (/ (/ (float (string-pixel-width
-                            (propertize (make-string 10 #xF0614) 'face
-                                        (list :family family :height 150))))
-                    10)
-                 scale)))
-     (= (round tx) (round ic)))))
+   (when-let* ((tx (zetta-svg-line-em-ratio family ?M)))
+     (seq-every-p
+      (lambda (cp)
+        (when-let* ((ic (zetta-svg-line-em-ratio family cp)))
+          ;; a hair of tolerance: each ratio comes off a width rounded to a
+          ;; whole pixel, so exact equality would be luck rather than a test
+          (< (abs (- tx ic)) 0.01)))
+      zetta-svg-line-icon-probes))))
+
+(defconst zetta-svg-line--bars
+  '((:tab-bar     . zetta-tab-bar-svg-char-advance-ratio)
+    (:tab-line    . zetta-tab-line-svg-char-advance-ratio)
+    (:mode-line   . zetta-modeline-svg-char-advance-ratio)
+    (:header-line . zetta-header-line-svg-char-advance-ratio))
+  "Each SVG bar, and the variable holding the advance ratio it lays out on.")
 
 (defun zetta-svg-line-derive-char-advance ()
-  "Set each SVG line's :char-advance from the font it actually draws with.
+  "Set each SVG bar's layout advance from the font THAT BAR draws with.
 
-The renderers lay text out on a fixed pixels-per-character grid.  That
-number was hardcoded to 8 in all four of them, and 8 is Terminus's
-advance -- measured, at face height 150, Terminus and Terminess come to
-exactly 8.00 px/char while every Monaspace family is 9.00.  So under any
-other font the computed boxes are too narrow and the tab line, tab bar,
-mode line and masthead clip and overlap.
+The renderers lay text out on a fixed advance grid, and a grid that does
+not match the font clips and overlaps -- the tab line, tab bar, mode line
+and masthead all drift.  So each bar's grid is derived, per bar, from
+`zetta-svg-line-font-for' and measured by `zetta-svg-line-em-ratio'.
 
-The SVG `font-size' is in px and corresponds to a face height ten times
-larger, so the advance is measured at (* 10 font-size) for whichever
-family `zetta-svg-line-font' currently names."
-  (let ((family (or (bound-and-true-p zetta-svg-line-font)
-                    (face-attribute 'default :family nil 'default))))
-    ;; Refuse a chrome font whose icons and text disagree -- see
-    ;; `zetta-svg-line--uniform-advance-p'.
-    (when (and family (seq-some #'display-graphic-p (frame-list))
-               (not (zetta-svg-line--uniform-advance-p family)))
-      (message "zetta: %s advances icons and text differently; chrome font -> %s"
-               family zetta-svg-line-uniform-fallback)
-      (setq family zetta-svg-line-uniform-fallback
-            zetta-svg-line-font zetta-svg-line-uniform-fallback))
-    ;; `display-graphic-p' with no argument asks the SELECTED frame, which
-    ;; is not graphical in a daemon at startup -- check the frame list.
-    (when (and family (seq-some #'display-graphic-p (frame-list)))
-      (dolist (pair '((zetta-tab-bar-svg-char-advance      . zetta-tab-bar-svg-font-size)
-                      (zetta-tab-line-svg-char-advance     . zetta-tab-line-svg-font-size)
-                      (zetta-modeline-svg-char-advance     . zetta-modeline-svg-font-size)
-                      (zetta-header-line-svg-char-advance  . zetta-header-line-svg-font-size)))
-        (when (and (boundp (car pair)) (boundp (cdr pair)))
-          (set (car pair)
-               (max 1 (round (zetta-svg-line--px-per-char
-                              family (* 10 (symbol-value (cdr pair))))))))))))
+What is stored is a RATIO of the font size, not a pixel count.  A ratio is
+a property of the family and so survives text scaling: svg-line applies it
+to whatever size the bar ends up drawn at, where a pinned pixel advance had
+to be rescaled alongside the font size and drifted as the two roundings
+diverged.
+
+Two earlier assumptions are gone with it.  The advance is no longer one
+number shared by all four bars -- that is what makes `zetta-svg-line-fonts'
+possible -- and it is no longer measured with `string-pixel-width', which
+answers for Emacs's renderer rather than librsvg's and is wrong by 25% on
+Monaspace (see `zetta-svg-line-em-ratio')."
+  ;; `display-graphic-p' with no argument asks the SELECTED frame, which is
+  ;; not graphical in a daemon at startup -- check the frame list.
+  (when (seq-some #'display-graphic-p (frame-list))
+    (dolist (bar zetta-svg-line--bars)
+      (let* ((key (car bar))
+             (var (cdr bar))
+             (family (or (zetta-svg-line-font-for key)
+                         (face-attribute 'default :family nil 'default))))
+        ;; Refuse a chrome font whose icons and text disagree -- see
+        ;; `zetta-svg-line--uniform-advance-p'.  Almost nothing fails this
+        ;; now that it is measured through the right renderer; a font with
+        ;; no icons at all (plain Terminus) still does.
+        (when (and family (not (zetta-svg-line--uniform-advance-p family)))
+          (message "zetta: %s advances icons and text differently; %s font -> %s"
+                   family key zetta-svg-line-uniform-fallback)
+          (setq family zetta-svg-line-uniform-fallback)
+          (if (plist-get zetta-svg-line-fonts key)
+              (setq zetta-svg-line-fonts
+                    (plist-put zetta-svg-line-fonts key family))
+            (setq zetta-svg-line-font family)))
+        (when-let* ((family family)
+                    (ratio (zetta-svg-line-em-ratio family))
+                    ((boundp var)))
+          (set var ratio))))))
 
 (defcustom zetta-svg-line-debug-tints
   '(:tab-bar     "#f6c9c9"
@@ -2209,7 +2376,9 @@ loaded yet, and a missing one should simply keep its default."
                 (zetta-svg-line--dim warn 0.4))))
       ;; --- tab bar ------------------------------------------------------
       (setc 'zetta-tab-bar-svg-icon-color                 brushup-fg-3)
-      (setc 'zetta-tab-bar-calendar-color                 brushup-fg-5)
+      ;; the clock reads as chrome of the same standing as the row icons,
+      ;; so it sits on their rung of the ink ladder rather than a step below
+      (setc 'zetta-tab-bar-calendar-color                 brushup-fg-3)
       ;; --- mode line ----------------------------------------------------
       ;; Also bar-less.  What is left to tell the windows apart is the text
       ;; itself, so it takes the same two rungs the tab labels do; the buffer

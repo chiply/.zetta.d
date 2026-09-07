@@ -240,12 +240,15 @@ follows; callers add their own separator before the buffer name."
   "Font size (px) for SVG tab-line text." :type 'integer :group 'zetta)
 (defcustom zetta-tab-line-svg-line-pad 4
   "Extra vertical padding (px) per wrapped tab-line row." :type 'integer :group 'zetta)
-(defcustom zetta-tab-line-svg-char-advance 8
-  "Per-character advance (px) used to size tabs and wrap rows.
-Match it to the SVG font's real glyph width as Emacs renders it -- 8 for
-the bitmap Terminess Nerd Font Mono at 15px (a scalable font would be ~9).
-Too high leaves whitespace inside tab boxes; too low overlaps tabs."
+(defcustom zetta-tab-line-svg-char-advance-ratio 0.5
+  "Per-character advance, as a fraction of the font size, for tabs and rows.
+Set from the bar's own font by `zetta-svg-line-derive-char-advance'; the
+default only stands in before that runs.  Too high leaves whitespace inside
+tab boxes; too low overlaps tabs."
   :type 'number :group 'zetta)
+
+(define-obsolete-variable-alias 'zetta-tab-line-svg-char-advance
+  'zetta-tab-line-svg-char-advance-ratio "2026-09-07")
 (defcustom zetta-tab-line-svg-tab-gap 1.0
   "Gap between tabs, in character widths." :type 'number :group 'zetta)
 (defcustom zetta-tab-line-svg-tab-pad 1
@@ -676,10 +679,10 @@ Because the glyph is part of the label text it needs no separate icon."
   ;; dim the whole tab line when its window is not the selected one,
   ;; the same way the SVG mode line distinguishes active/inactive.
   :active #'mode-line-window-selected-p
-  :font (lambda () zetta-svg-line-font)
+  :font (lambda () (zetta-svg-line-font-for :tab-line))
   :font-size (lambda () zetta-tab-line-svg-font-size)
   :line-pad (lambda () zetta-tab-line-svg-line-pad)
-  :char-advance (lambda () zetta-tab-line-svg-char-advance)
+  :char-advance-ratio (lambda () zetta-tab-line-svg-char-advance-ratio)
   :gap (lambda () zetta-tab-line-svg-tab-gap)
   :pad (lambda () zetta-tab-line-svg-pad)
   :pad-y (lambda () zetta-tab-line-svg-pad-y)

@@ -39,15 +39,16 @@
   "Font size (px) for SVG mode-line text." :type 'integer :group 'zetta)
 (defcustom zetta-modeline-svg-line-pad 4
   "Extra vertical padding (px) per SVG mode-line line." :type 'integer :group 'zetta)
-(defcustom zetta-modeline-svg-char-advance 8
-  "Per-character advance (px) for rows laid out by run (pies/bars/segments).
-Match it to the SVG font's real glyph width as librsvg renders it (~8 for the
-bitmap Terminess Nerd Font Mono at 15px scaled).  Used to position progress
-pies/bars and interactive segments (clickable indicators) and to right-align
-their rows; plain all-text rows use exact font anchoring and ignore it.  If a
-clickable indicator's hover box sits too far left (overlapping the previous
-text) raise this; if it sits too far right (a gap before the text) lower it."
+(defcustom zetta-modeline-svg-char-advance-ratio 0.5
+  "Per-character advance, as a fraction of the font size, for run layout.
+Set from the bar's own font by `zetta-svg-line-derive-char-advance'; the
+default only stands in before that runs.  Used to position progress pies and
+bars and interactive segments (clickable indicators) and to right-align their
+rows; plain all-text rows use exact font anchoring and ignore it."
   :type 'number :group 'zetta)
+
+(define-obsolete-variable-alias 'zetta-modeline-svg-char-advance
+  'zetta-modeline-svg-char-advance-ratio "2026-09-07")
 (defcustom zetta-modeline-svg-seg-shape 'arrow
   "Background shape for the mode line\'s chips.
 
@@ -350,7 +351,9 @@ pixel space."
     (round (* sc (+ zetta-modeline-svg-right-margin
                     (if (> (length text) 0)
                         ;; the counter plus a space, at the run layout\='s advance
-                        (* (1+ (length text)) zetta-modeline-svg-char-advance)
+                        (* (1+ (length text))
+                           zetta-modeline-svg-font-size
+                           zetta-modeline-svg-char-advance-ratio)
                       0))))))
 
 (defun zetta-modeline-svg-spans ()
@@ -394,10 +397,10 @@ wedge and the ring does not need this rule rewritten to match."
   :active #'mode-line-window-selected-p
   :seg-shape (lambda () zetta-modeline-svg-seg-shape)
   :seg-slant (lambda () zetta-modeline-svg-seg-slant)
-  :font (lambda () zetta-svg-line-font)
+  :font (lambda () (zetta-svg-line-font-for :mode-line))
   :font-size (lambda () zetta-modeline-svg-font-size)
   :line-pad (lambda () zetta-modeline-svg-line-pad)
-  :char-advance (lambda () zetta-modeline-svg-char-advance)
+  :char-advance-ratio (lambda () zetta-modeline-svg-char-advance-ratio)
   :right-margin (lambda () zetta-modeline-svg-right-margin)
   :pad (lambda () zetta-modeline-svg-left-pad)
   :pad-y (lambda () zetta-modeline-svg-pad-y)
@@ -456,10 +459,10 @@ why `zetta-modeline-svg-bare-format' returns nil rather than an empty bar."
   ;; Same measurements and colours as the full line: this is the SAME bar
   ;; with less in it, and a badge that changed size or tone between buffers
   ;; would read as a different kind of window rather than a quieter one.
-  :font (lambda () zetta-svg-line-font)
+  :font (lambda () (zetta-svg-line-font-for :mode-line))
   :font-size (lambda () zetta-modeline-svg-font-size)
   :line-pad (lambda () zetta-modeline-svg-line-pad)
-  :char-advance (lambda () zetta-modeline-svg-char-advance)
+  :char-advance-ratio (lambda () zetta-modeline-svg-char-advance-ratio)
   :right-margin (lambda () zetta-modeline-svg-right-margin)
   :pad (lambda () zetta-modeline-svg-left-pad)
   :pad-y (lambda () zetta-modeline-svg-pad-y)

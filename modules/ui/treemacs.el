@@ -238,14 +238,34 @@ which is the case this is tuned for, there is nothing to distinguish."
   (require 'treemacs nil t)
   (require 'nerd-icons nil t))
 
+(defcustom zetta-treemacs-icon-scale 1.25
+  "Height of treemacs' icons as a multiple of the buffer's text size.
+
+A Nerd-Font glyph inks well under the box it occupies, so at the text's own
+size it reads a third short: measured at a 16px text size, the folder icon's
+ink stands 8px against a cap height of 12px and an x-height of 9px.  This
+lifts it clear of the x-height without reaching the caps.
+
+It is not free.  There is no slack in a treemacs row -- line height and font
+height are both exactly the text size -- so a taller glyph makes every row
+taller by the same proportion and fewer files fit on screen.  1.0 restores
+the old size, and the tree's original row height with it."
+  :type 'number :group 'zetta)
+
 (defun zetta-treemacs--glyph (fn name plist &optional face)
   "The nerd-icons glyph NAME from FN, spaced for a treemacs row.
 PLIST is passed through, FACE overrides the one it carries.  Nil when the
 icon does not exist, so a name this version of nerd-icons does not carry
-falls through to the inherited theme rather than erroring."
+falls through to the inherited theme rather than erroring.
+
+`:height' is prepended rather than appended: nerd-icons reads its arguments
+with `plist-get', which takes the FIRST match, so this way one scale governs
+every icon even where the source plist carries a height of its own."
   (when (fboundp fn)
     (when-let* ((glyph (ignore-errors
-                         (apply fn name (if face (list :face face) plist)))))
+                         (apply fn name
+                                (append (list :height zetta-treemacs-icon-scale)
+                                        (if face (list :face face) plist))))))
       (concat glyph " "))))
 
 (defun zetta-treemacs-build-icon-theme ()
@@ -261,12 +281,13 @@ falls through to the inherited theme rather than erroring."
     :config
     (let* ((dir-face 'treemacs-directory-face)
            (file-icon (zetta-treemacs--glyph #'nerd-icons-octicon "nf-oct-file" nil))
+           (h zetta-treemacs-icon-scale)
            (folder (ignore-errors
-                     (nerd-icons-octicon "nf-oct-file_directory" :face dir-face)))
+                     (nerd-icons-octicon "nf-oct-file_directory" :height h :face dir-face)))
            (chev-open (ignore-errors
-                        (nerd-icons-octicon "nf-oct-chevron_down" :face dir-face)))
+                        (nerd-icons-octicon "nf-oct-chevron_down" :height h :face dir-face)))
            (chev-closed (ignore-errors
-                          (nerd-icons-octicon "nf-oct-chevron_right" :face dir-face)))
+                          (nerd-icons-octicon "nf-oct-chevron_right" :height h :face dir-face)))
            (dir-open (and folder (concat (or chev-open "") folder " ")))
            (dir-closed (and folder (concat (or chev-closed "") folder " "))))
 

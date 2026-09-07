@@ -74,6 +74,10 @@ in the order they appear in the `zetta-modules!' declaration.")
            ;; builds; see the elfeed/elfeed-protocol precedent).
            "avy.el" "ace-window.el" "treemacs.el"
            "all-the-icons-dired.el" "all-the-icons-ibuffer.el" "theme.el"
+           ;; solaire AFTER theme.el: it caches "does this theme define
+           ;; solaire-default-face?" the first time it sees a theme, and
+           ;; re-asks on load — so it wants the theme already enabled.
+           "solaire-mode.el"
            "modern-fringes.el" "rainbow-mode.el" "image-mode.el" "browse-url.el"
            "mermaid-mode.el" "minimap.el" "unicode-fonts.el" "spinner.el"
            "nyan-mode.el" "popper.el" "window.el"

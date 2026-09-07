@@ -3347,6 +3347,23 @@
                         smartparens :type git :protocol https :inherit
                         t :depth treeless :ref
                         "82d2cf084a19b0c2c3812e0550721f8a61996056"))
+ (solaire-mode :source "elpaca-menu-lock-file" :recipe
+               (:package "solaire-mode" :repo
+                         "hlissner/emacs-solaire-mode" :fetcher github
+                         :files
+                         ("*.el" "*.el.in" "dir" "*.info" "*.texi"
+                          "*.texinfo" "doc/dir" "doc/*.info"
+                          "doc/*.texi" "doc/*.texinfo" "lisp/*.el"
+                          "docs/dir" "docs/*.info" "docs/*.texi"
+                          "docs/*.texinfo"
+                          (:exclude ".dir-locals.el" "test.el"
+                                    "tests.el" "*-test.el"
+                                    "*-tests.el" "LICENSE" "README*"
+                                    "*-pkg.el"))
+                         :source "MELPA" :id solaire-mode :type git
+                         :protocol https :inherit t :depth treeless
+                         :ref
+                         "ea97e01e1f978d0cde63049c0d66a6fed2c672a6"))
  (space-tree :source "elpaca-menu-lock-file" :recipe
              (:source "elpaca-menu-lock-file" :package "space-tree"
                       :id space-tree :host github :repo
@@ -3671,7 +3688,7 @@
                           :source "GNU ELPA" :id track-changes :type
                           git :protocol https :inherit t :depth
                           treeless :ref
-                          "ba331c27f14adb429ef21fdf3d5c62febb7564d3"))
+                          "9a431e431ad92f94f4290c3f0bf043b0f97a7b56"))
  (trailing-newline-indicator :source "elpaca-menu-lock-file" :recipe
                              (:package "trailing-newline-indicator"
                                        :fetcher github :repo
@@ -3922,6 +3939,15 @@
                                 :protocol https :inherit t :depth
                                 treeless :ref
                                 "f68ac37451c1226d6f13c1b299ec7516f74888a1"))
+ (vterm :source "elpaca-menu-lock-file" :recipe
+        (:package "vterm" :fetcher github :repo
+                  "akermu/emacs-libvterm" :files
+                  ("CMakeLists.txt" "elisp.c" "elisp.h"
+                   "emacs-module.h" "etc" "utf8.c" "utf8.h" "vterm.el"
+                   "vterm-module.c" "vterm-module.h")
+                  :source "MELPA" :id vterm :type git :protocol https
+                  :inherit t :depth treeless :ref
+                  "9a32a4afce25647282bc8a8792468e41bc64adf4"))
  (vui :source "elpaca-menu-lock-file" :recipe
       (:package "vui" :fetcher github :repo "d12frosted/vui.el" :files
                 ("*.el" "*.el.in" "dir" "*.info" "*.texi" "*.texinfo"

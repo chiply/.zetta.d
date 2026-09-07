@@ -1,0 +1,69 @@
+#+TITLE: Open-Meteo — verb.el + OpenAPI demo
+#+AUTHOR: Charlie Holland
+# Companion file for the blog post "Live API Exploration with verb.el + swagg".
+# Open-Meteo (https://open-meteo.com) is a free weather API — NO API KEY needed,
+# which makes it perfect for a copy-paste-and-run demo.
+#
+# HOW TO USE:
+#   1. M-x package-install RET verb   (and swagg, if you want the import demo)
+#   2. Open this file. Put point inside any request below and press C-c C-r
+#      (verb-send-request-on-point-no-window) or C-c C-c.
+#   3. The "current" temperature comes back in a response buffer.
+#
+# ── Optional: generate these requests from the OpenAPI spec with swagg ──
+# Add this to your config, then M-x swagg-request-with-rest-block to pick an
+# endpoint interactively and have swagg insert a verb block for you:
+#
+#   (setq swagg-definitions
+#         '((:name "Open-Meteo"
+#            :yaml "https://raw.githubusercontent.com/open-meteo/open-meteo/main/openapi.yml"
+#            :base "https://api.open-meteo.com")))
+#
+# ──────────────────────────────────────────────────────────────────────
+
+* Open-Meteo                                                                         :verb:
+
+** Forecast API
+# `template` sets a partial request that every child heading inherits and
+# extends. Children only add the path + query string.
+template https://api.open-meteo.com/v1
+Accept: application/json
+
+*** Forecast by explicit coordinates
+# The simplest case: hand it a lat/lon, get the weather back.
+get /forecast?latitude=52.52&longitude=13.41&hourly=temperature_2m&current=temperature_2m
+
+*** Forecast for a city you type
+# `verb-var` prompts you once for a value and reuses it. Run this, type any
+# coordinates you like — handy for poking at the API live in a demo.
+get /forecast?latitude={{(verb-var lat "52.52")}}&longitude={{(verb-var lon "13.41")}}&hourly=temperature_2m&current=temperature_2m
+
+** Geocoding API
+# Different host, so this subtree gets its own template.
+template https://geocoding-api.open-meteo.com/v1
+Accept: application/json
+
+*** Resolve a city name to coordinates
+:properties:
+:Verb-Store: geo
+:end:
+# `:Verb-Store: geo` saves this response under the key "geo" so a LATER
+# request can pull values out of it. Run this first (defaults to Berlin; type
+# any city at the prompt). results[0] looks like:
+#   { "id": 2950159, "name": "Berlin", "latitude": 52.52437, "longitude": 13.41053, ... }
+get /search?name={{(verb-var city "Berlin")}}&count=1&language=en&format=json
+
+* Chaining: city name → coordinates → forecast                                       :verb:
+# THE POINT OF THE POST. No POST request, no local server — just one response
+# feeding the next. To run the chain:
+#   1. Run "Resolve a city name to coordinates" above (stores response as "geo").
+#   2. Run the request below. Its {{...}} code tags evaluate at send time:
+#      they reach into the stored "geo" response and splice the latitude and
+#      longitude straight into this URL. The forecast comes back for a city you
+#      only ever named — you never typed a coordinate.
+#
+# This is the same shape as the classic "POST a resource → read the id from the
+# response → GET that resource". A create-API returning an id would slot into
+# verb-json-get identically; Open-Meteo just lets anyone run it with zero setup.
+get https://api.open-meteo.com/v1/forecast?latitude={{(verb-json-get (oref (verb-stored-response "geo") body) "results" 0 "latitude")}}&longitude={{(verb-json-get (oref (verb-stored-response "geo") body) "results" 0 "longitude")}}&hourly=temperature_2m&current=temperature_2m
+Accept: application/json

@@ -35,12 +35,44 @@
  "C-t" (** zetta-refresh-treemacs)
  "M-t" (** zetta-soda-toggle-treemacs-follow-mode))
 
+(defun zetta-treemacs-buffer-name (scope)
+  "Return the scope-specific part of a treemacs buffer name for SCOPE.
+
+Empty, so the buffer is named by `treemacs-buffer-name-prefix' alone.
+Treemacs keeps one buffer per scope -- a frame by default -- and normally
+distinguishes them by appending the scope here, so with several frames open
+they would now share a name and therefore a buffer.  With a single frame,
+which is the case this is tuned for, there is nothing to distinguish."
+  (ignore scope)
+  "")
+
 (use-package treemacs
   :ensure (treemacs
            :files ("src/elisp/*.el"
                    "src/extra/*.el"
                    "src/scripts/*.py"))
   :commands (treemacs treemacs-select-window treemacs-add-project)
+
+  ;; Name the buffer " *T*" instead of " *Treemacs-Buffer-#<frame 0x...>".
+  ;; The tab line trims the leading space, so it reads as "*T*" there and
+  ;; stops crowding out the real buffers beside it.
+  ;;
+  ;; Two variables, not a rename: treemacs finds its own buffers and windows
+  ;; with `s-starts-with?' against `treemacs-buffer-name-prefix'
+  ;; (`treemacs-is-treemacs-window?' and friends), so renaming the buffer
+  ;; behind its back would make it stop recognising its own tree.  The prefix
+  ;; stays the whole name and the scope suffix goes away.
+  ;;
+  ;; Set in `:custom' rather than `:config' because treemacs-compatibility.el
+  ;; bakes the prefix into `winum-ignored-buffers-regexp' AT LOAD TIME -- set
+  ;; afterwards and winum would still be ignoring the old name.
+  ;;
+  ;; The leading space is kept: it is what marks the buffer as internal, so
+  ;; dropping it would surface the tree in `consult-buffer' and every other
+  ;; buffer list.
+  :custom
+  (treemacs-buffer-name-prefix " *T*")
+  (treemacs-buffer-name-function #'zetta-treemacs-buffer-name)
 
   :config
   ;; "Idea" theme no longer exists upstream — use "Default".

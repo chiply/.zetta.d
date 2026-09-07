@@ -104,6 +104,7 @@ API keys and credentials go in `~/.private.el` (see [`.private.sample.el`](.priv
 
 - [`docs/modules.md`](docs/modules.md) — every module file and what it configures
 - [`docs/keybindings.md`](docs/keybindings.md) — full keybinding reference
+- [`docs/ansi-palette.md`](docs/ansi-palette.md) — how the 16 terminal slots are fitted to the theme, and what outside this repo depends on them
 - [`COMPILATION.md`](COMPILATION.md) — byte-compile, native-compile, compile-angel architecture
 - [`secrets.md`](secrets.md) — 1Password CLI secrets management
 - [`slack.md`](slack.md) — emacs-slack token + cookie setup

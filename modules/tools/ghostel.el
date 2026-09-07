@@ -217,7 +217,12 @@ values.  Fit them to a floor instead and they collapse onto one another,
 because every one of them lands on whichever grey sits at that ratio.
 
 Chromatic slots take their number as a MINIMUM: a hue that already reads
-against the page is left alone rather than dragged onto a target."
+against the page is left alone rather than dragged onto a target.
+
+These four numbers are a CONTRACT, not a local preference: the tmux status
+bar, gitmux and the fzf popups are written in slot names precisely so they
+follow this fit, and they live in the .files repo rather than here.
+Changing a rung restyles all of them.  See docs/ansi-palette.md."
   :type '(alist :key-type (choice integer (const t)) :value-type float)
   :group 'ghostel)
 

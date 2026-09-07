@@ -109,3 +109,25 @@ chiply-isr/db/
 # elfeed.stats (elfeed-score-rule-stats.el).  Killing Emacs between the
 # two orphans the temp file.
 /tmp??????
+
+# Emacs backup files
+*~
+
+# elfeed database (~245MB of cached entries)
+elfeed/
+
+# hackernews visited-link state
+hackernews/
+
+# Emacs tutorial progress
+tutorial/
+
+# fontaine runtime state
+fontaine-latest-state.eld
+zetta-fontaine-mode-presets.eld
+
+# dap-mode REPL input history
+dap-ui-repl-*-history
+
+# native modules built by .files/install_emacs_canvas_rs.sh
+source/lib/**/*.so

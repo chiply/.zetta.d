@@ -2,7 +2,17 @@
 
 (general-define-key
  :keymaps 'override
- "C-s" 'save-buffer)
+ "C-s" 'save-buffer
+ ;; VS Code's command palette.  Spelled "s-P" rather than "s-S-p": for an
+ ;; ASCII letter macOS folds Shift into the character itself, so Cmd+Shift+P
+ ;; arrives as super + capital P -- [8388688], where "s-S-p" is [41943152],
+ ;; an event the keyboard never sends.  Same convention as the "s-V"
+ ;; `vertico-repeat' binding in completion/vertico.el.
+ ;;
+ ;; The palette look is the other half of this: `execute-extended-command'
+ ;; opens in a top-centred posframe, see `vertico-multiform-commands' in
+ ;; completion/vertico.el.
+ "s-P" 'execute-extended-command)
 
 (general-define-key
  :keymaps 'launch-map

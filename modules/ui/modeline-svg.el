@@ -48,6 +48,33 @@ their rows; plain all-text rows use exact font anchoring and ignore it.  If a
 clickable indicator's hover box sits too far left (overlapping the previous
 text) raise this; if it sits too far right (a gap before the text) lower it."
   :type 'number :group 'zetta)
+(defcustom zetta-modeline-svg-seg-shape 'arrow
+  "Background shape for the mode line\'s chips.
+
+`arrow\' is a powerline chevron -- square left edge, right edge drawn to a
+point.  The tab line keeps its rounded pills (`round\'), and that difference
+is the point: the two bars carry different KINDS of thing.  A tab is an
+object you can click and switch to, and a rounded pill is the shape
+interfaces have used for a selectable token for decades.  A mode-line chip
+is a reading of state -- which mode, which branch, how far down the buffer
+-- and a chevron reads as a strip of readings rather than a row of buttons.
+
+`square\' and `slant\' are the other ways to not be a pill: see
+`svg-line--seg-box\'."
+  :type '(choice (const :tag "Rounded pill" round)
+                 (const :tag "Square" square)
+                 (const :tag "Powerline chevron" arrow)
+                 (const :tag "Parallelogram" slant))
+  :group 'zetta)
+
+(defcustom zetta-modeline-svg-seg-slant nil
+  "How deep the chevron cuts into a mode-line chip, in pixels.
+nil takes svg-line\'s default, ~0.3 of the row height.  The angle is cut
+INTO the chip, eating the padding its label already carries, so raising this
+eats into the label rather than into the gap after it."
+  :type '(choice (const :tag "Default (~0.3 row height)" nil) integer)
+  :group 'zetta)
+
 (defcustom zetta-modeline-svg-right-margin 8
   "Pixels of inset kept between right-aligned text and the window edge."
   :type 'integer :group 'zetta)
@@ -178,9 +205,12 @@ focused/unfocused distinction."
 (defun zetta-modeline-svg-lines ()
   "Return the mode line as rows (cons LEFT . RIGHT, or :left/:center/:right)."
   (list
-   ;; line 1:  buffer | ace | modal ....... [file] mode | line:col | percent
+   ;; line 1:  buffer | modal ....... [file] mode | line:col | percent
+   ;; (no ace badge: the window key is a PROMPT, shown only while one is
+   ;; being asked for, and it is asked for in the tab line -- which every
+   ;; buffer has and not every buffer has one of these.  See
+   ;; `zetta-tab-line-svg--ace-item'.)
    (list :left '(zetta-modeline-svg--buffer " "
-                 zetta-modeline-svg--ace " "
                  zetta-modeline-svg--modal)
          :center nil
          :right '(zetta-modeline-svg--file-icon " "
@@ -362,6 +392,8 @@ wedge and the ring does not need this rule rewritten to match."
   :content #'zetta-modeline-svg-lines
   :spans #'zetta-modeline-svg-spans
   :active #'mode-line-window-selected-p
+  :seg-shape (lambda () zetta-modeline-svg-seg-shape)
+  :seg-slant (lambda () zetta-modeline-svg-seg-slant)
   :font (lambda () zetta-svg-line-font)
   :font-size (lambda () zetta-modeline-svg-font-size)
   :line-pad (lambda () zetta-modeline-svg-line-pad)
@@ -403,12 +435,14 @@ and its directory -- can say so without needing a whole mode line of its
 own.  See `treemacs.el'.")
 
 (defun zetta-modeline-svg-bare-lines ()
-  "Content for the bare mode line: one row, the ace badge, and nothing else
-except whatever `zetta-modeline-svg-bare-extra' adds for this buffer."
-  (list (list :left (if zetta-modeline-svg-bare-extra
-                        (append '(zetta-modeline-svg--ace " ")
-                                zetta-modeline-svg-bare-extra)
-                      '(zetta-modeline-svg--ace))
+  "Content for the bare mode line: one row of `zetta-modeline-svg-bare-extra'.
+
+Which used to be the ace badge plus that.  The badge has moved to the tab
+line and shows only while a window is being picked
+\(`zetta-tab-line-svg--ace-item'), so what is left here is whatever the
+buffer itself asked for -- and for most buffers that is nothing, which is
+why `zetta-modeline-svg-bare-format' returns nil rather than an empty bar."
+  (list (list :left zetta-modeline-svg-bare-extra
               :center nil :right nil)))
 
 (svg-line-define 'zetta-mode-line-bare
@@ -417,6 +451,8 @@ except whatever `zetta-modeline-svg-bare-extra' adds for this buffer."
   :width 'window
   :content #'zetta-modeline-svg-bare-lines
   :active #'mode-line-window-selected-p
+  :seg-shape (lambda () zetta-modeline-svg-seg-shape)
+  :seg-slant (lambda () zetta-modeline-svg-seg-slant)
   ;; Same measurements and colours as the full line: this is the SAME bar
   ;; with less in it, and a badge that changed size or tone between buffers
   ;; would read as a different kind of window rather than a quieter one.
@@ -436,13 +472,21 @@ except whatever `zetta-modeline-svg-bare-extra' adds for this buffer."
   :inactive-background (lambda () zetta-modeline-svg-bg-inactive))
 
 (defun zetta-modeline-svg-bare-format ()
-  "Return a `mode-line-format' value rendering only the ace badge.
+  "Return a `mode-line-format' rendering this buffer's minimal mode line.
+
+Nil when the buffer has nothing to put on one -- and a nil
+`mode-line-format' is the only way to have NO bar: a format that renders
+an empty image still occupies a row.  So a buffer that wanted the minimal
+line only for the ace badge now gets no mode line at all, which is the
+point: the key is in the tab line, and the tab line is the bar every
+buffer has.
 
 `svg-line-define' names each line's renderer `svg-line--render-NAME' and
 wraps it in exactly this form when it installs one.  We build the same form
 by hand because we want it in ONE buffer, not as the default -- which is
 all `svg-line-activate' can do for a `mode-line' target."
-  '((:eval (svg-line--render-zetta-mode-line-bare))))
+  (and zetta-modeline-svg-bare-extra
+       '((:eval (svg-line--render-zetta-mode-line-bare)))))
 
 ;;; ------------------------------------------------------------------
 ;;; Switching between SVG and telephone-line.

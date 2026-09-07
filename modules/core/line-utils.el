@@ -829,6 +829,52 @@ screenful of identical pills would say nothing about where point is."
                               (cons "Command (M-x)" #'execute-extended-command)))
             (and chip (append chip (list :weight 'bold)))))))
 
+(defvar zetta-line--ace-session nil
+  "Non-nil while an `ace-window\=' selection is reading a key.
+Bind it around anything else that puts the per-window keys in play and the
+indicators light for that too.")
+
+(defun zetta-line-window-picking-p ()
+  "Non-nil while something is asking you to pick a window.
+
+Two things do: an `ace-window\=' selection and a magneto compose session
+\(`magneto--composing\=').  They mean the same thing to a reader -- the
+per-window keys are live and one of them is about to be pressed -- so both
+light the same indicator.
+
+This is what makes the key worth showing at all.  It used to be permanent
+furniture on the mode line, which meant every window carried a letter that
+was inert 99% of the time; shown only for the moment it can be typed, it
+reads as a prompt instead of as decoration."
+  (or zetta-line--ace-session
+      (bound-and-true-p magneto--composing)))
+
+(defun zetta-line--picking-changed (&rest _)
+  "Repaint the bars when a window-picking session starts or ends."
+  (force-mode-line-update t))
+
+;; `aw-select\=' is the whole selection: it puts the keys in play, reads one,
+;; and returns.  Wrapping it is therefore exactly the session, and the
+;; repaint on the way out happens OUTSIDE the binding so the indicators are
+;; already gone by the time it runs.
+(with-eval-after-load 'ace-window
+  (define-advice aw-select (:around (fn &rest args) zetta-line-session)
+    "Light the window-picking indicators for the duration of the selection."
+    (unwind-protect
+        (let ((zetta-line--ace-session t))
+          (force-mode-line-update t)
+          (apply fn args))
+      (force-mode-line-update t))))
+
+;; magneto has no such envelope -- it sets a flag and hands control back to a
+;; transient keymap -- so watch the flag instead of guessing where it moves.
+;; A watcher also survives the paths that clear it without going through
+;; `magneto-move\=', which an advice on that command would miss.  Removed
+;; first so reloading this file does not stack watchers.
+(with-eval-after-load 'magneto
+  (remove-variable-watcher 'magneto--composing #'zetta-line--picking-changed)
+  (add-variable-watcher 'magneto--composing #'zetta-line--picking-changed))
+
 (defun zetta-modeline-svg--ace ()
   "Ace-window key for this window, as a monochrome keycap.
 
@@ -1125,6 +1171,55 @@ Shown whenever `flycheck-mode\=' is active."
   "Render the second breadcrumb row (lsp / org / imenu crumbs), crumbs clickable."
   (zetta-svg-segs-from-propertized
    (format-mode-line zetta-header-line-svg-line2-format) 'hl2))
+
+;;; spinner-only header line content
+;; The running-command spinner is an element of row 1 above, which means a
+;; buffer that gives up its header line gives up the spinner with it.  For
+;; the buffers where the spinner is the ONLY thing worth a bar -- an async
+;; shell command, which has no path to breadcrumb and no position to report
+;; -- this is the same element on a row of its own.  Deliberately the same
+;; `spinner-current' construct rather than a copy: one spinner, shown in
+;; two possible places.
+(defcustom zetta-line-spinner-idle-label "idle"
+  "Shown on the spinner-only header line when nothing has run here yet."
+  :type 'string :group 'zetta)
+
+(defcustom zetta-line-spinner-done-label "done"
+  "Shown on the spinner-only header line after a command finished cleanly."
+  :type 'string :group 'zetta)
+
+(defun zetta-line-spinner-state ()
+  "The running spinner, or a word standing in for it when nothing is running.
+
+A bar that is blank whenever a command is not in flight tells you nothing
+about which of two states you are in -- finished, or never started -- and an
+empty row reads as something failing to draw.  A word tells you both, and
+tells you HOW it ended: the sentinel\'s own signal string, said shorter.
+
+`zetta-spinner-last-result\' (spinner.el) is what makes the distinction
+possible; without it this can only fall back to the idle label."
+  (or (and (fboundp 'spinner-print)
+           (bound-and-true-p spinner-current)
+           (spinner-print spinner-current))
+      (let ((r (and (boundp 'zetta-spinner-last-result)
+                    zetta-spinner-last-result)))
+        (cond
+         ((null r) zetta-line-spinner-idle-label)
+         ((string-prefix-p "finished" r) zetta-line-spinner-done-label)
+         ((string-prefix-p "interrupt" r) "interrupted")
+         ((string-match "code \\([0-9]+\\)" r)
+          (format "exit %s" (match-string 1 r)))
+         ((string-empty-p r) zetta-line-spinner-idle-label)
+         (t r)))))
+
+(defvar zetta-header-line-svg-spinner-format
+  '((:eval (zetta-line-spinner-state)))
+  "Mode-line construct for the spinner-only header line (one row).")
+
+(defun zetta-header-line-svg--spinner ()
+  "Render the spinner-only header row."
+  (zetta-svg-segs-from-propertized
+   (format-mode-line zetta-header-line-svg-spinner-format) 'hlspin))
 
 ;;;; Nerd-font glyph icons for the SVG bars
 ;; ----------------------------------------------------------------

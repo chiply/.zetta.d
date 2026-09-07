@@ -121,6 +121,41 @@ default only stands in before that runs." :type 'integer :group 'zetta)
   :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
                              (face-foreground 'default nil t) "#cccccc")))
 
+(defun zetta-header-line-svg-spinner-lines ()
+  "Content for the spinner-only header line: one row, the spinner, nothing else."
+  (list (cons '(zetta-header-line-svg--spinner) nil)))
+
+(svg-line-define 'zetta-header-line-spinner
+  :target 'header-line
+  :layout 'lines
+  :width 'window
+  :content #'zetta-header-line-svg-spinner-lines
+  ;; Every measurement and colour is the full header line's.  This is the
+  ;; SAME bar with one row instead of two: a spinner that changed size or
+  ;; tone between buffers would read as a different kind of window rather
+  ;; than a quieter one -- the argument `zetta-mode-line-bare' makes.
+  :font (lambda () zetta-svg-line-font)
+  :font-size (lambda () zetta-header-line-svg-font-size)
+  :line-pad (lambda () zetta-header-line-svg-line-pad)
+  :background (lambda () zetta-header-line-svg-background)
+  :pad (lambda () zetta-header-line-svg-pad)
+  :pad-y (lambda () zetta-header-line-svg-pad-y)
+  :margin-y (lambda () zetta-header-line-svg-margin-y)
+  :right-margin (lambda () zetta-header-line-svg-right-margin)
+  :char-advance (lambda () zetta-header-line-svg-char-advance)
+  :foreground (lambda () (or (bound-and-true-p brushup-fg-3)
+                             (face-foreground 'default nil t) "#cccccc")))
+
+(defun zetta-header-line-svg-spinner-format ()
+  "Return a `header-line-format' value rendering only the spinner.
+
+Built by hand for the same reason `zetta-modeline-svg-bare-format' is:
+`svg-line-activate' can only install a renderer as the DEFAULT for its
+target, and this one is wanted in a handful of buffers.  Applied through
+`zetta-window-chrome-rules' (window-chrome.el), whose `spinner' value
+pairs it with the bare ace mode line."
+  '((:eval (svg-line--render-zetta-header-line-spinner))))
+
 ;;; ------------------------------------------------------------------
 ;;; Switching
 ;;; ------------------------------------------------------------------

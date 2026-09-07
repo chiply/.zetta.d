@@ -164,7 +164,8 @@
           prog-mode
           ;;text-mode ;; NOTE this includes org-mode
           ;; NOTE no org mode as minimap doesn't work with narrowed org buffers
-          ;;org-mode
+          ;; NOTE this seems to be fixes now
+          org-mode
           embark-collect-mode
           eww-mode
           Info-mode

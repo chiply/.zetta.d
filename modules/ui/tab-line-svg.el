@@ -203,6 +203,36 @@ follows; callers add their own separator before the buffer name."
   ;; window dividers reappear on every theme switch.
   (add-to-list 'brushup-styles '(zetta-tab-line-faces) t)
 
+  ;; tab-line's switching commands wrap their work in
+  ;; `with-selected-window', which restores the CURRENT BUFFER on exit --
+  ;; but the window's buffer has already changed underneath it.  So the
+  ;; command returns with `current-buffer' still the buffer you left while
+  ;; the window shows the one you arrived at, and `post-command-hook' then
+  ;; runs against the wrong buffer.  Two symptoms, one cause:
+  ;;
+  ;;   global-hl-line moves its overlay in the buffer you LEFT, so the new
+  ;;   one has no highlight until the next command;
+  ;;
+  ;;   beacon's buffer-change trigger compares against the current buffer,
+  ;;   sees nothing changed, and never blinks.
+  ;;
+  ;; Resync after the command and before the hook.  Upstream's own bug --
+  ;; reproduced in `emacs -Q' -- so this rides on the commands rather than
+  ;; being worked around in hl-line or beacon, which are only two of the
+  ;; things a wrong `current-buffer' can mislead.
+  (defun zetta-tab-line--resync-current-buffer (&rest _)
+    "Make the selected window's buffer current after a tab-line switch."
+    (let ((buf (window-buffer (selected-window))))
+      (when (and (buffer-live-p buf) (not (eq buf (current-buffer))))
+        (set-buffer buf))))
+
+  (dolist (cmd '(tab-line-switch-to-next-tab
+                 tab-line-switch-to-prev-tab
+                 tab-line-select-tab
+                 tab-line-select-tab-buffer
+                 tab-line-close-tab))
+    (advice-add cmd :after #'zetta-tab-line--resync-current-buffer))
+
   :general
   (
    :keymaps 'override

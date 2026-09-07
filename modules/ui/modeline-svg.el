@@ -378,6 +378,73 @@ wedge and the ring does not need this rule rewritten to match."
   :inactive-background (lambda () zetta-modeline-svg-bg-inactive))
 
 ;;; ------------------------------------------------------------------
+;;; A bare variant: the ace badge and nothing else.
+;;; ------------------------------------------------------------------
+;; For buffers you glance at and dismiss -- *Messages*, *Backtrace*,
+;; *Warnings*.  Almost nothing on the full line has anything to say about
+;; one of those: no file, no VC, no checkers, and a position that means
+;; nothing because you are not editing.  The ace key is the exception, and
+;; the reason this is a bare line rather than no line: those are precisely
+;; the windows you want to jump OUT of, so the one thing worth showing is
+;; how to leave.
+;;
+;; Defined but deliberately never `svg-line-activate\='d -- activating a
+;; `mode-line\=' line makes it the DEFAULT for every buffer.  This one is
+;; installed per buffer, by `zetta-window-chrome-rules\='
+;; (modules/ui/window-chrome.el).
+
+(defvar-local zetta-modeline-svg-bare-extra nil
+  "Segments appended after the ace badge in the bare mode line.
+
+A list in the same form as a side of `zetta-modeline-svg-lines': strings,
+function symbols, or `svg-line-seg' tokens.  Buffer-local, so a buffer that
+wants the minimal line PLUS one thing of its own -- the treemacs sidebar
+and its directory -- can say so without needing a whole mode line of its
+own.  See `treemacs.el'.")
+
+(defun zetta-modeline-svg-bare-lines ()
+  "Content for the bare mode line: one row, the ace badge, and nothing else
+except whatever `zetta-modeline-svg-bare-extra' adds for this buffer."
+  (list (list :left (if zetta-modeline-svg-bare-extra
+                        (append '(zetta-modeline-svg--ace " ")
+                                zetta-modeline-svg-bare-extra)
+                      '(zetta-modeline-svg--ace))
+              :center nil :right nil)))
+
+(svg-line-define 'zetta-mode-line-bare
+  :target 'mode-line
+  :layout 'lines
+  :width 'window
+  :content #'zetta-modeline-svg-bare-lines
+  :active #'mode-line-window-selected-p
+  ;; Same measurements and colours as the full line: this is the SAME bar
+  ;; with less in it, and a badge that changed size or tone between buffers
+  ;; would read as a different kind of window rather than a quieter one.
+  :font (lambda () zetta-svg-line-font)
+  :font-size (lambda () zetta-modeline-svg-font-size)
+  :line-pad (lambda () zetta-modeline-svg-line-pad)
+  :char-advance (lambda () zetta-modeline-svg-char-advance)
+  :right-margin (lambda () zetta-modeline-svg-right-margin)
+  :pad (lambda () zetta-modeline-svg-left-pad)
+  :pad-y (lambda () zetta-modeline-svg-pad-y)
+  :margin-y (lambda () zetta-modeline-svg-margin-y)
+  :foreground (lambda () (or zetta-modeline-svg-fg-active
+                             (face-foreground 'mode-line nil t) "#cccccc"))
+  :inactive-foreground (lambda () (or zetta-modeline-svg-fg-inactive
+                                      (face-foreground 'mode-line-inactive nil t) "#777777"))
+  :background (lambda () zetta-modeline-svg-bg-active)
+  :inactive-background (lambda () zetta-modeline-svg-bg-inactive))
+
+(defun zetta-modeline-svg-bare-format ()
+  "Return a `mode-line-format' value rendering only the ace badge.
+
+`svg-line-define' names each line's renderer `svg-line--render-NAME' and
+wraps it in exactly this form when it installs one.  We build the same form
+by hand because we want it in ONE buffer, not as the default -- which is
+all `svg-line-activate' can do for a `mode-line' target."
+  '((:eval (svg-line--render-zetta-mode-line-bare))))
+
+;;; ------------------------------------------------------------------
 ;;; Switching between SVG and telephone-line.
 ;;; svg-line-activate/deactivate save and restore `mode-line-format';
 ;;; we additionally toggle telephone-line-mode so its full config is

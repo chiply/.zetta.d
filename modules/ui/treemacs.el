@@ -345,19 +345,26 @@ out of them."
   :ensure nil
   :after (treemacs magit))
 
-;; Treemacs uses a minimal custom mode line (just the path) and a
-;; breadcrumb header line.  (Moved here from line.el.)
+;; Treemacs uses a minimal custom mode line: just the path.  (Moved here
+;; from line.el.)
+;;
+;; It has no header line.  It used to carry a repo:branch breadcrumb there,
+;; but two bars around a column of one-line entries is mostly frame in a
+;; pane this narrow, and the repo and branch are both on the mode line of
+;; whatever you are actually editing.  The header line is switched off in
+;; `zetta-window-chrome-rules' (modules/ui/window-chrome.el), which is where
+;; the rest of the "which bars does this buffer get" decisions live -- the
+;; format is not set here at all, because leaving it unset would inherit the
+;; global SVG breadcrumb rather than nothing.
+(defun zetta-treemacs-mode-line-path ()
+  "The sidebar's directory, shortened when it will not fit."
+  (let ((path (abbreviate-file-name default-directory)))
+    (if (> (length path) 30)
+        (zetta-minify-path default-directory)
+      path)))
+
 (add-hook 'treemacs-mode-hook
           (lambda ()
-            (setq mode-line-format
-                  (list
-                   '(:eval
-                     (let ((path (abbreviate-file-name default-directory)))
-                       (if (> (length path) 30)
-                           (zetta-minify-path default-directory)
-                         path)))))
-            (setq header-line-format
-                  (list '(:eval (zetta-get-repo-name))
-                        ":"
-                        '(:eval (zetta-get-branch-name))))))
+            (setq-local zetta-modeline-svg-bare-extra
+                        '(zetta-treemacs-mode-line-path))))
 ;;; treemacs.el ends here

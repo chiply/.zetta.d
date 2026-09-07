@@ -178,7 +178,7 @@ focused/unfocused distinction."
 (defun zetta-modeline-svg-lines ()
   "Return the mode line as rows (cons LEFT . RIGHT, or :left/:center/:right)."
   (list
-   ;; line 1:  [file] modal | ace | buffer   <progress pie>   mode | line:col
+   ;; line 1:  buffer | ace | modal ....... [file] mode | line:col | percent
    (list :left '(zetta-modeline-svg--buffer " "
                  zetta-modeline-svg--ace " "
                  zetta-modeline-svg--modal)
@@ -186,15 +186,15 @@ focused/unfocused distinction."
          :right '(zetta-modeline-svg--file-icon " "
                   zetta-modeline-svg--mode "  " zetta-modeline-svg--point))
    ;; line 2:  git:branch (clickable -> magit) | [copilot] lsp | flycheck | flags
-   ;;          ......   doc-position
+   ;;          ......   doc-position   <progress pie, under the percent>
    ;; (the git + branch glyphs are folded into the clickable vc segment)
    (cons '(zetta-modeline-svg--vc " "
            zetta-modeline-svg--copilot-icon " " zetta-modeline-svg--checkers " "
            zetta-modeline-svg--flycheck " " zetta-modeline-svg--indicators)
          '(zetta-modeline-svg--docpos))))
 
-(defun zetta-modeline-svg--span-height ()
-  "Pixel height of a full-height (both rows) mode-line span.
+(defun zetta-modeline-svg--span-height (&optional rows)
+  "Pixel height of a ROWS-high mode-line span (one row by default).
 
 Mirrors svg-line\='s own arithmetic -- `svg-line--scaled\=' is
 \(round (* SIZE (svg-line--text-scale))), and a span\='s height is the row
@@ -203,8 +203,9 @@ makes svg-line splice it at scale 1.0, which is what keeps
 `zetta-modeline-svg-pie-ring-width\=' honest: any other size would multiply
 the hairline by the scale factor."
   (let ((sc (if (fboundp 'svg-line--text-scale) (svg-line--text-scale) 1.0)))
-    (max 8 (* 2 (+ (round (* zetta-modeline-svg-font-size sc))
-                   (round (* zetta-modeline-svg-line-pad sc)))))))
+    (max 8 (* (or rows 1)
+              (+ (round (* zetta-modeline-svg-font-size sc))
+                 (round (* zetta-modeline-svg-line-pad sc)))))))
 
 (declare-function svg-line--color "svg-line")
 
@@ -295,31 +296,64 @@ the ink is the one that recedes, and inverting the two needs no change here."
       color
     (zetta-svg-line--dim color 0.55)))
 
+(declare-function zetta-modeline-svg--docpos "line-utils")
+
+(defun zetta-modeline-svg--pie-gap ()
+  "Pixels to inset the pie from the right window edge.
+
+`zetta-modeline-svg-right-margin\=' -- so the pie\='s right edge lands on the
+same line as the percentage above it -- plus room for anything row 2 already
+right-aligns there.  That is `zetta-modeline-svg--docpos\=': empty in most
+buffers, the page counter in a PDF.  A span is an OVERLAY, so it does not
+push text aside the way another segment would; when there IS text there the
+pie steps left of it instead of over it.
+
+Scaled here, unlike the spec options: svg-line scales what it is given
+through `svg-line-define\=', but a span is handed to it already in its own
+pixel space."
+  (let* ((doc (and (fboundp 'zetta-modeline-svg--docpos)
+                   (zetta-modeline-svg--docpos)))
+         (text (cond ((stringp doc) doc)
+                     ((and (consp doc) (eq (car doc) :svg-seg)) (cadr doc))
+                     (t "")))
+         (sc (if (fboundp 'svg-line--text-scale) (svg-line--text-scale) 1.0)))
+    (round (* sc (+ zetta-modeline-svg-right-margin
+                    (if (> (length text) 0)
+                        ;; the counter plus a space, at the run layout\='s advance
+                        (* (1+ (length text)) zetta-modeline-svg-char-advance)
+                      0))))))
+
 (defun zetta-modeline-svg-spans ()
-  "Centred overlay for the SVG mode line: a progress pie spanning both rows.
+  "Overlay for the SVG mode line: a progress pie at the right of row 2.
+
+It sits one row high directly under the percentage in
+`zetta-modeline-svg--point\=', which is the same reading in the other
+notation -- a number and a shape in one column at the right edge, rather
+than a disc floating in the middle of the line.
 
 A hairline ring holds the circle and only the filled wedge is painted inside
 it -- the unfilled remainder is the page (`zetta-modeline-svg-pie-track\=').
 The ring is what makes that safe: with the wedge alone, a buffer at its very
 top drew nothing at all and the indicator appeared to have broken.
 
-The pie dims when the window is not the selected one -- it is the largest
-piece of material left on a transparent mode line, and a bright one in every
-window would flatten the very distinction the bar backgrounds used to make.
-Which PART dims is decided by `zetta-modeline-svg--mute\=' from the colours
-themselves, so swapping the wedge and the ring does not need this rule
-rewritten to match."
+The pie dims when the window is not the selected one -- material on a
+transparent mode line is what carries the focused/unfocused distinction, and
+a bright pie in every window would flatten it.  Which PART dims is decided by
+`zetta-modeline-svg--mute\=' from the colours themselves, so swapping the
+wedge and the ring does not need this rule rewritten to match."
   (let* ((total (max 1 (- (point-max) (point-min))))
          (frac (/ (float (- (point) (point-min))) total))
          (activep (mode-line-window-selected-p))
          (mute (lambda (c) (if activep c (zetta-modeline-svg--mute c)))))
-    (list (list :image '(0 . 1)
+    (list (list :image '(1 . 1)
                 (zetta-modeline-svg--pie-svg
                  frac
                  (funcall mute zetta-modeline-svg-pie-fill)
                  (funcall mute zetta-modeline-svg-pie-ring)
                  zetta-modeline-svg-pie-track
-                 (zetta-modeline-svg--span-height))))))
+                 (zetta-modeline-svg--span-height))
+                'right
+                (zetta-modeline-svg--pie-gap)))))
 
 (svg-line-define 'zetta-mode-line
   :target 'mode-line

@@ -144,20 +144,93 @@ A caller that asked for a size of its own keeps it."
   ;; `default-text-scale-increment' runs it explicitly for exactly this
   ;; reason (see modules/ui/default-text-scale.el).  `text-scale-mode-hook'
   ;; is the buffer-local one.
+  ;; Some buffers cannot be asked to rebuild, because nothing will rebuild
+  ;; them: their icons were INSERTED once and are now just text properties.
+  ;; An *Embark Collect* buffer is the clearest case -- the icon rides in
+  ;; each row's `line-prefix\=', put there by the completion affixator while
+  ;; the MINIBUFFER was current, so it was sized for the minibuffer and the
+  ;; collect buffer is a snapshot with no affixator left to re-run.  Zooming
+  ;; such a buffer out therefore hit a floor at whatever pixel size the icons
+  ;; were born at.  So resize the images that are already there.
+  (defun zetta-icons--rescale-image (img h)
+    "Return a copy of image IMG drawn at H pixels, or nil if it is already H.
+
+A COPY, never a mutation: icon strings come out of `all-the-icons-cache\=',
+so the same image object is shared by every buffer that asked for that
+icon at that size, and editing it in place would resize them all and
+corrupt the cache entry into the bargain.  Only images with an explicit
+`:width\=' are touched -- that is the mark of one this config sized (see
+`zetta-all-the-icons--sized\='), and it leaves other images alone."
+    (let ((w (and (eq (car-safe img) 'image) (plist-get (cdr img) :width))))
+      (when (and w (/= w h))
+        (let ((plist (copy-sequence (cdr img))))
+          (setq plist (plist-put plist :width h))
+          (setq plist (plist-put plist :height h))
+          (cons 'image plist)))))
+
+  (defun zetta-icons--rescale-prop (value h)
+    "Return VALUE with its icons resized to H, or nil if nothing changed.
+VALUE is a text-property value: either an image itself (a `display\=' prop)
+or a string carrying one (a `line-prefix\=' / `wrap-prefix\=' prop)."
+    (cond
+     ((eq (car-safe value) 'image) (zetta-icons--rescale-image value h))
+     ((stringp value)
+      (let (copy)
+        (dotimes (i (length value))
+          (when-let* ((img (get-text-property i 'display value))
+                      (new (zetta-icons--rescale-image img h)))
+            (unless copy (setq copy (copy-sequence value)))
+            (put-text-property i (1+ i) 'display new copy)))
+        copy))))
+
+  (defun zetta-icons-rescale-buffer ()
+    "Resize the icons already sitting in this buffer to its line height.
+Returns the number of property runs changed.  Also normalises a buffer whose
+icons were built at SEVERAL sizes, which is what an Embark Collect buffer
+gets when the minibuffer was zoomed part-way through building it."
+    (interactive)
+    (let ((h (zetta-icon-line-height))
+          (changed 0))
+      ;; `with-silent-modifications\=': these buffers are read-only, the change
+      ;; is presentational, and it must not land on the undo list or set the
+      ;; modified flag.
+      (with-silent-modifications
+        (dolist (prop '(display line-prefix wrap-prefix))
+          (let ((pos (point-min)))
+            (while (< pos (point-max))
+              (let ((end (next-single-property-change pos prop nil (point-max)))
+                    (val (get-text-property pos prop)))
+                (when-let* ((new (and val (zetta-icons--rescale-prop val h))))
+                  (put-text-property pos end prop new)
+                  (setq changed (1+ changed)))
+                (setq pos end))))))
+      changed))
+
   (defun zetta-icons-redraw ()
-    "Rebuild the icons in every buffer that draws them, at the new size.
+    "Rebuild or resize the icons in every buffer that draws them.
 Only the buffers wearing IMAGE icons need this.  Treemacs is not among
 them: it is built out of nerd-icons glyphs (see modules/ui/treemacs.el),
-and text resizes itself."
-    (dolist (buffer (buffer-list))
-      (when (buffer-live-p buffer)
-        (with-current-buffer buffer
-          ;; `bound-and-true-p': all-the-icons-dired is a separate package
-          ;; and may not have loaded at all
-          (when (bound-and-true-p all-the-icons-dired-mode)
-            ;; the icons are put on by the fontify function, so a flush is
-            ;; enough -- jit-lock rebuilds them on the next redisplay
-            (font-lock-flush))))))
+and text resizes itself.
+
+Two ways in, because there are two kinds of buffer.  Where a fontify
+function puts the icons on, a flush is enough and is cheapest.  Where they
+were inserted once, nothing will rebuild them and the images in place are
+resized instead -- but only for buffers on screen, since walking every
+buffer's text properties on every zoom would not pay for itself, and one
+that is off screen gets its turn the next time it is zoomed while visible."
+    (let ((here (current-buffer)))
+      (dolist (buffer (buffer-list))
+        (when (buffer-live-p buffer)
+          (with-current-buffer buffer
+            (cond
+             ;; `bound-and-true-p': all-the-icons-dired is a separate package
+             ;; and may not have loaded at all
+             ((bound-and-true-p all-the-icons-dired-mode)
+              ;; the icons are put on by the fontify function, so a flush is
+              ;; enough -- jit-lock rebuilds them on the next redisplay
+              (font-lock-flush))
+             ((or (eq buffer here) (get-buffer-window buffer t))
+              (zetta-icons-rescale-buffer))))))))
 
   (add-hook 'after-setting-font-hook #'zetta-icons-redraw)
   (add-hook 'text-scale-mode-hook #'zetta-icons-redraw)

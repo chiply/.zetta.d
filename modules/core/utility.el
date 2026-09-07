@@ -55,8 +55,19 @@
 ;;; Functions moved from bootstrap-zettafn.el
 
 (defface zetta-link-face
-  '((t :inherit link :foreground "purple"))
-  "Face for links."
+  '((t :inherit link :underline nil))
+  "Face for file paths in log output.
+
+Inherits `link\=' outright rather than overriding its colour.  It used to
+force `:foreground \"purple\"\=' -- a literal #a020f0 no theme ever chose, and
+the loudest thing in a compile buffer on any page that is not itself violet.
+Paths are most of the lines in one.
+
+Paths and URLs are both clickable and both belong to the theme\='s link
+colour, so the underline is what separates them: `link\=' keeps it and means
+an address you can open, this one drops it.  Same call as
+`zetta-vc-marker-ladder\=' -- a distinction a marker can carry by shape does
+not also need to be carried by hue."
   :group 'basic-faces)
 
 ;;; ------------------------------------------------------------------

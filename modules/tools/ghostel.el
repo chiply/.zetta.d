@@ -178,6 +178,33 @@ is correct rather than a gap.  Set to 0 to switch this off."
   :type 'float
   :group 'ghostel)
 
+(defcustom zetta-ghostel-grey-source 'page
+  "Which of the theme's own colours lends the four greys their hue.
+
+Only hue and chroma are taken from it.  The exact contrast fit replaces
+lightness wholesale, so this decides what the greys are TINTED with, never
+how dark they are -- the ladder in `zetta-ghostel-contrast-targets' is
+unaffected either way.
+
+`page' takes the ground (`brushup-bg'), `ink' the foreground
+(`brushup-fg'), and a face symbol takes that face's background.
+
+The greys are chrome -- 0 is a field, 8 a border or a comment, 15 a fill --
+and chrome belongs to the ground's hue family, which is why the page is the
+default.  It only matters where a theme's ink and ground disagree, and then
+it matters a lot: doric-earth grounds at hue 102 and inks at 342, so
+ink-sourced greys came out mauve while every Emacs surface around them --
+tab bar, mode line, their own inactive tabs at hue 99 -- stayed khaki.  A
+tmux status bar drawn on those greys sat in that gap and read as pasted on.
+Where ink and ground share a family, as doric-plum's violet pair do, the
+two settings agree and this changes nothing.
+
+Set to `ink' to restore the old behaviour."
+  :type '(choice (const :tag "The theme's ground" page)
+                 (const :tag "The theme's ink" ink)
+                 (face :tag "That face's background"))
+  :group 'ghostel)
+
 (defcustom zetta-ghostel-contrast-targets
   '((0 . 1.5) (8 . 3.0) (15 . 5.5) (7 . 9.0) (t . 4.0))
   "WCAG contrast each palette slot should reach against the page.
@@ -463,6 +490,25 @@ greys piling onto one value."
                   (if ok (setq hi mid) (setq lo mid)))))
             best))))))
 
+(defun zetta-ghostel--grey-base (slot src)
+  "The colour lending achromatic SLOT its hue and chroma.
+Chosen by `zetta-ghostel-grey-source'.  Falls back to SLOT's own entry in
+the Ghostty palette SRC when the theme supplies nothing usable, which is
+also what happens for a face that exists but is left unstyled."
+  (or (pcase zetta-ghostel-grey-source
+        ('page (and (boundp 'brushup-bg) (stringp brushup-bg) brushup-bg))
+        ('ink (and (boundp 'brushup-fg) (stringp brushup-fg) brushup-fg))
+        ((and (pred facep) face)
+         ;; A face that exists but is left unstyled answers with the
+         ;; symbol-as-string `unspecified-bg', which is a string and would
+         ;; sail through to `zetta-ghostel--fit', fail to parse there, and
+         ;; leave the slot on the previous theme's value.  Demand something
+         ;; that actually reads as a colour so the Ghostty file takes over
+         ;; instead.
+         (let ((c (face-attribute face :background nil t)))
+           (and (stringp c) (zetta-ghostel--rgb c) c))))
+      (aref src slot)))
+
 (defun zetta-ghostel-apply-ansi-palette ()
   "Fit the 16 ANSI slots to the current theme's page colour.
 
@@ -494,16 +540,15 @@ pushes the result itself -- see `zetta-ghostel--push-palette'."
                                     (nth slot zetta-ghostel--ansi-names)))))
           (when (facep face)
             (let ((base (cond
-                         ;; The four greys take the theme's own ink, so they
-                         ;; pick up its warmth: doric-plum's foreground is
-                         ;; violet-tinted and the terminal's greys follow it
-                         ;; there.  Their lightness is replaced wholesale by
-                         ;; the exact fit below, so only hue and chroma
-                         ;; actually survive from here.
+                         ;; The four greys take their tint from the theme
+                         ;; rather than from the Ghostty file, so they carry
+                         ;; its warmth instead of Zenbones' slate.  Their
+                         ;; lightness is replaced wholesale by the exact fit
+                         ;; below, so only hue and chroma survive from here.
+                         ;; Which colour lends them is
+                         ;; `zetta-ghostel-grey-source'.
                          ((and src (memq slot '(0 7 8 15)))
-                          (or (and (boundp 'brushup-fg) (stringp brushup-fg)
-                                   brushup-fg)
-                              (aref src slot)))
+                          (zetta-ghostel--grey-base slot src))
                          (src (zetta-ghostel--tint-to-page
                                (zetta-ghostel--fit-chroma
                                 (zetta-ghostel--follow-hue (aref src slot) slot profile)

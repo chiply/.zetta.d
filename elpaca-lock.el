@@ -3511,7 +3511,7 @@
                     svg-line :host github :repo "chiply/svg-line"
                     :wait t :type git :protocol https :inherit t
                     :depth treeless :ref
-                    "14f6f6cdca83b3201228ef70f4f1cbe1881f0e2c"))
+                    "a32cf03dc0c217afc7cea2d4577725b613bd3860"))
  (svg-margin :source "elpaca-menu-lock-file" :recipe
              (:source "elpaca-menu-lock-file" :package "svg-margin"
                       :id svg-margin :host github :repo

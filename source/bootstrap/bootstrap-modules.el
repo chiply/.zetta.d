@@ -59,7 +59,7 @@ in the order they appear in the `zetta-modules!' declaration.")
     (completion . ("completion.el" "cape.el" "dabbrev.el" "recursion-indicator.el"
                    "helm.el" "marginalia.el" "orderless.el" "embark.el"
                    "embark-consult.el" "consult.el" "tap.el"
-                   "vertico.el" "corfu.el" "prescient.el" "mono-complete.el"
+                   "vertico.el" "corfu.el" "corfu-terminal.el" "prescient.el" "mono-complete.el"
                    "consult-gh.el" "consult-dash.el" "consult-ls-git.el"))
     (ui . ("display.el" "hud.el" "highlight-indent-guides.el" "ultra-scroll.el"
            "color-identifiers-mode.el" "volatile-highlights.el"
@@ -274,10 +274,24 @@ Examples:
 
 ;;; Init-critical utility functions
 
+(defun zetta--svg-available-p ()
+  "Non-nil when this Emacs can render SVG images.
+Nil on a build without librsvg (apt's emacs-nox, for one), where every
+piece of SVG chrome would fail at its first render."
+  (image-type-available-p 'svg))
+
 (defvar zetta-module-conditions
-  ;; Example of the intended shape, for when one is next needed:
-  ;;   '(("ui/canvas-demo.el" . (lambda () (image-type-available-p 'canvas))))
-  nil
+  ;; The SVG chrome stack: mode line, header line, tab bar, tab line and
+  ;; the margin gutter are all IMAGES, so a build that cannot render SVG
+  ;; has nothing to show for them.  Three of these files use `:wait t',
+  ;; which would block the elpaca queue on a package that can never draw.
+  ;; The predicate, not a profile exclusion, so the same user config is
+  ;; right on the GUI daily driver and on a headless box, and becomes
+  ;; right again the day the headless box gets an SVG-capable build.
+  (mapcar (lambda (file) (cons file #'zetta--svg-available-p))
+          '("ui/svg-line.el" "ui/svg-lib.el" "ui/svg-margin.el"
+            "ui/modeline-svg.el" "ui/header-line-svg.el"
+            "ui/tab-bar-svg.el" "ui/tab-line-svg.el" "ui/poimap.el"))
   "Alist of (MODULE-FILE . PREDICATE) for conditionally loaded modules.
 
 MODULE-FILE is the same \"category/file.el\" string used in `user-files'.
@@ -305,7 +319,8 @@ the version number moves on.")
   "Load a module FILE relative to `zetta-modules-dir'."
   (interactive)
   (if (not (zetta-module-supported-p file))
-      (message "%s (skipped: unsupported on Emacs %s)" file emacs-version)
+      (message "%s (skipped: its capability predicate is nil on this Emacs %s build)"
+               file emacs-version)
     (message file)
     (let* ((emacsdir (expand-file-name user-emacs-directory))
            (sourcefile-path (format "%smodules/%s" emacsdir file))

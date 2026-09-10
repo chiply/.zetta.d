@@ -112,7 +112,12 @@
   :demand t
   :config
   (gptel-make-anthropic "Claude" :stream t :key gptel-api-key)
-  (gptel-make-openai "OpenAI" :stream t :key openai-api-key)
+  ;; `openai-api-key' comes from ~/.private.el alone.  On a machine with
+  ;; no secrets (CI, the headless hub) it is unbound, and an unbound
+  ;; variable here aborts the whole :config -- so register the backend
+  ;; only when there is a key for it.
+  (when (bound-and-true-p openai-api-key)
+    (gptel-make-openai "OpenAI" :stream t :key openai-api-key))
 
   ;; ── OpenRouter ────────────────────────────────────────────────────
   (defvar zetta-openrouter-models-cache-file

@@ -75,6 +75,144 @@ test, =dpkg -l=, user timers.  Package counts: 341 pinned in
 =elpaca-lock.el=, 328 =use-package= forms across =modules/=, 345 built
 package directories on the Mac.
 
+* Implementation status [2026-09-10]
+
+Built the same day, in both repos, on the =dev= branches.  What is done,
+what deviated from the plan and why, and what is left to the owner.
+
+** Done
+
+- *Phase A* -- =hub/bootstrap-hub.sh= carries =build-essential ripgrep
+  fd-find=, the =fdfind= -> =~/.local/bin/fd= link and a =timedatectl
+  set-timezone= (=HUB_TZ=, default America/New_York: the Mac's zone,
+  inferred from =/etc/localtime=; the plan left it as =<zone>=).  The same
+  commands were also run on the hub directly over ssh, so the Done-when
+  holds today: =gcc=, =rg=, =fd= resolve and the zone reads
+  America/New_York.  The resize to 2 OCPU was not done (console, owner);
+  the hub still reports 1 core.
+- *Phase B, step 1* -- =zetta-module-conditions= defaults to the eight
+  SVG-chrome files on =zetta--svg-available-p= (a named predicate, so the
+  batch rehearsal below could override it).
+- *Phase B, step 2* -- =templates/zetta.headless.el=, the lists as
+  specified plus the settings (native-comp jobs 1, silent warnings, the
+  three littering variables under =.data/=, =xterm-mouse-mode=,
+  =auth-sources nil=, and a commented-out key-chord widener for Phase C).
+- *Phase B, step 3* -- the seven guards: ef-themes (=facep=), treesit-tap
+  (=boundp=), gptel (=bound-and-true-p openai-api-key=), modern-fringes
+  (=fboundp set-fringe-bitmap-face=), security.el (=when python=),
+  command-palette (=executable-find pbpaste=), alert.el (=osascript=
+  and =afplay= behind =executable-find=; the osx-notifier style is set
+  only where osascript exists, so =zetta-notify= degrades to the echo
+  area on Linux).
+- *Phase B, step 4* -- =bin/zetta build=: the three install phases are
+  now shared functions; =build= runs them with a 14400 s window, a 1800 s
+  stall limit (=ZETTA_BUILD_TIMEOUT= / =ZETTA_BUILD_STALL=), no eln-cache
+  purge, and refuses to run without a =~/.zetta.el= rather than
+  substitute the full profile.  The elpaca phase ends with the same
+  =ELPACA-FAILED= / =ZETTA-OK= markers as ci-test.
+- *Phase B, step 5* -- =ci-test= (and the local =test=) fail on any
+  "Error (use-package)" line; =ci.yml= gains a =nox-29.3= include row in
+  both jobs: apt =emacs-nox=, a step that asserts the binary cannot
+  render SVG, and the headless template in the stub step.
+- *Phase C, code half* -- =completion/corfu-terminal.el= (corfu-terminal
+  + popon pinned in the lock file), loaded on BOTH profiles because the
+  package gates on =display-graphic-p= per call; =COLORTERM=truecolor= in
+  =hub/bashrc-additions.sh=; =terminal-features RGB=, =extended-keys on=
+  and =extkeys= in =hub/tmux.conf=.  vertico needs nothing: its posframe
+  use is per-command via multiform, and vertico-posframe falls back to
+  =vertico-buffer-mode= where posframe is not workable.
+- *Phase D, files* -- =bootstrap-hub.sh= clones =chiply/.zetta.d= when
+  absent (never pulls), installs the headless template when =~/.zetta.el=
+  is missing (and only if the clone has it, so a deploy before the PR
+  merges is harmless), installs both units and a longer closing
+  checklist (private file, cold build, seeding, restart).
+  =units/emacs.service= runs zetta on the default socket;
+  =units/emacs-lean.service= runs the lean init as =--fg-daemon=lean=,
+  installed not enabled; =el= alias added.  =hub/README.org= gains a
+  "Zetta on the hub" section with the first build, the seeding, the
+  update flow and the Phase C outcome table.
+
+** Deviations from the plan, with reasons
+
+- *=auth-sources= could not be set from the template alone.*  =init.el=
+  loads =~/.zetta.el= at line 18 and set =auth-sources= to =(zetta-op)=
+  unconditionally at line 103, so the template's =nil= was clobbered
+  and Part 7's "the private file can be a one-line =;;=" did not hold.
+  Fix in =init.el=: the 1Password backend is installed only when the
+  =op= binary exists.  On the Mac nothing changes; on the hub the
+  template's value survives.
+- *=emacs.service= carries =ConditionPathExists=%h/.zetta.d/elpaca/builds=.*
+  The plan's ordering (units in step 2, cold build in step 3) leaves a
+  window where a reboot would start an unbuilt zetta, which would clone
+  and build inside the daemon, hit the start timeout and loop under
+  =Restart=on-failure= on one core.  With the condition the unit is
+  skipped, not failed, and =emacs-lean= is the editor until the build
+  exists.  Cost: after a deploy and before the build, =e= fails and the
+  owner starts =emacs-lean= by hand.
+- *=TimeoutStartSec=900= is provisional*, per Part 4: the real value
+  is twice a measured =emacs-init-time= after the cold build.  Recorded
+  as such in the unit and the README.
+- *Phase A was applied over ssh, not through =hub-deploy=.*  A deploy
+  ships the whole of =hub/=, including the Phase D units, and those
+  must not go live before the config is on =main= and built.  The apt
+  and timezone commands are idempotent and identical to what the
+  bootstrap now runs, so the next deploy is a no-op for them.
+- *The local batch rehearsal needed an overlay.*  On the Mac,
+  =bin/zetta ci-test= fails in the bootstrap before any module loads:
+  the =source/bootstrap/*.elc= on disk expand =use-package= forms in a
+  way that works on the daemon path (queues processed at after-init;
+  the live daemon started 2026-09-09 on bytecode from 09-06) but not in
+  batch, where =-l init.el= runs after after-init.  CI never sees this
+  (fresh checkouts have no source =.elc=), and neither will the hub's
+  daemon.  The rehearsal therefore ran against an =.elc=-free copy of
+  the config sharing the real elpaca builds by symlink, with the SVG
+  predicate and =image-type-available-p= forced nil to imitate
+  emacs-nox.  Outcome: see "Rehearsal" below.
+
+** Left to the owner
+
+1. Push =dev= and open the PR to =main= (CI is billed; not pushed from
+   this session).  Four rows must be green, the nox row with =ZETTA-OK=
+   and a =modules== count well under 290.  The tightened gate may turn
+   up "Error (use-package)" lines the measured list did not include;
+   each is a small guard in the same PR.
+2. Merge, then =hub-deploy=.  The bootstrap clones =main=, installs the
+   template and both units.  =e= stops working until step 3; =el= (the
+   lean daemon, =systemctl --user start emacs-lean=) is the editor
+   meanwhile.
+3. On the hub, in tmux: =echo ';;' > ~/.private.el=, then
+   =nohup ~/.zetta.d/bin/zetta build > ~/zetta-build.log 2>&1 &=.  Hours.
+   Done when the log has =ZETTA-OK= and no =ELPACA-FAILED=.  Then
+   =systemctl --user start emacs=, the two seeding evals (README), and
+   =emacs-init-time= to size =TimeoutStartSec=.
+4. Phase C's manual tests from Blink: fill the table in
+   =hub/README.org=.  =extended-keys= and =COLORTERM= are set but
+   untested; drop them first if keys or colours misbehave.
+5. Optional: the 2 OCPU resize (Part 4), Phase E.
+
+** Rehearsal [2026-09-10, measured]
+
+The headless template, loaded in batch on the Mac's source-built Emacs
+32.0.50 against an =.elc=-free overlay of the working tree (real elpaca
+builds symlinked in), with =zetta--svg-available-p= and
+=image-type-available-p= for =svg= forced nil, =HOME= pointed at a
+scratch directory holding the template, a =;;= private file and a
+symlink to =~/kb=:
+
+| Result                        | Value                                                      |
+|-------------------------------+------------------------------------------------------------|
+| Marker                        | =ZETTA-OK packages=199 modules=180= (172 loaded, 8 skipped) |
+| Skipped by the predicate      | the eight SVG-chrome files, and only those                 |
+| "Error (use-package)" lines   | 0                                                          |
+| void-function / wrong-type    | 0                                                          |
+| Failed packages               | 0; corfu-terminal and popon built fresh into elpaca/       |
+| Wall clock                    | about six minutes, warm packages                           |
+| Loaded, by category           | core 25, completion 25, ui 51, editor 30, lang 27, tools 3, app 3, org 16 |
+
+What it does not prove: anything specific to Emacs 29.3 (this was 32),
+to a build without window-system support, or to deferred =:config=
+bodies (Part 2, item 4).  The CI nox row covers the first two.
+
 * Part 1 -- What already works in our favour
 
 - *CI is the existence proof.*  =.github/workflows/ci.yml:74= runs the

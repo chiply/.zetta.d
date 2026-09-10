@@ -779,6 +779,20 @@
                   :source "elpaca-menu-lock-file" :id corfu :type git
                   :protocol https :inherit t :depth treeless :ref
                   "d2a995c5c732d0fc439efe09440870a9de779a74"))
+ (corfu-terminal :source "elpaca-menu-lock-file" :recipe
+                 (:package "corfu-terminal" :fetcher codeberg :repo
+                           "akib/emacs-corfu-terminal" :files
+                           ("*.el" "*.el.in" "dir" "*.info" "*.texi"
+                           "*.texinfo" "doc/dir" "doc/*.info" "doc/*.texi"
+                           "doc/*.texinfo" "lisp/*.el" "docs/dir"
+                           "docs/*.info" "docs/*.texi" "docs/*.texinfo"
+                           (:exclude ".dir-locals.el" "test.el" "tests.el"
+                                          "*-test.el" "*-tests.el" "LICENSE"
+                                          "README*" "*-pkg.el"))
+                           :source "elpaca-menu-lock-file" :id corfu-terminal
+                           :type git :protocol https :inherit t :depth
+                           treeless :ref
+                           "501548c3d51f926c687e8cd838c5865ec45d03cc"))
  (counsel :source "elpaca-menu-lock-file" :recipe
           (:package "counsel" :repo "abo-abo/swiper" :fetcher github
                     :files ("counsel.el") :source
@@ -3050,6 +3064,20 @@
                      :type git :protocol https :inherit t :depth
                      treeless :ref
                      "4604f55cc020c75562526fb76b723e5e242c97c0"))
+ (popon :source "elpaca-menu-lock-file" :recipe
+        (:package "popon" :fetcher codeberg :repo
+                  "akib/emacs-popon" :files
+                  ("*.el" "*.el.in" "dir" "*.info" "*.texi"
+                  "*.texinfo" "doc/dir" "doc/*.info" "doc/*.texi"
+                  "doc/*.texinfo" "lisp/*.el" "docs/dir"
+                  "docs/*.info" "docs/*.texi" "docs/*.texinfo"
+                  (:exclude ".dir-locals.el" "test.el" "tests.el"
+                            "*-test.el" "*-tests.el" "LICENSE"
+                            "README*" "*-pkg.el"))
+                  :source "elpaca-menu-lock-file" :id popon
+                  :type git :protocol https :inherit t :depth
+                  treeless :ref
+                  "bf8174cb7e6e8fe0fe91afe6b01b6562c4dc39da"))
  (popper :source "elpaca-menu-lock-file" :recipe
          (:package "popper" :fetcher github :repo "karthink/popper"
                    :files

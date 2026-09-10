@@ -7,9 +7,12 @@
   (mapc #'disable-theme custom-enabled-themes)
   (load-theme 'ef-light t)
   ;; Emacs 31 has header-line-active/header-line-inactive as built-in faces.
-  ;; Unify them so inactive header-line matches active.
-  (set-face-attribute 'header-line-inactive nil :inherit 'header-line
-                      :background 'unspecified :foreground 'unspecified)
+  ;; Unify them so inactive header-line matches active.  Both guarded: on
+  ;; 29 and 30 the faces do not exist and an unguarded call aborts this
+  ;; whole :config, theme included.
+  (when (facep 'header-line-inactive)
+    (set-face-attribute 'header-line-inactive nil :inherit 'header-line
+                        :background 'unspecified :foreground 'unspecified))
   (when (facep 'header-line-active)
     (set-face-attribute 'header-line-active nil :inherit 'header-line
                         :background 'unspecified :foreground 'unspecified))

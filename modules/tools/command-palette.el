@@ -249,8 +249,11 @@ hung `pbpaste\=' can never queue up a second."
     (cancel-timer zetta-clipboard-timer)
     (setq zetta-clipboard-timer nil)))
 
-;; Start monitoring on load
-(zetta-clipboard-monitor-start)
+;; Start monitoring on load.  The poll shells out to pbpaste, so on a
+;; machine without it (any Linux box) every tick would only log an
+;; error; leave the timer unstarted there.
+(when (executable-find "pbpaste")
+  (zetta-clipboard-monitor-start))
 
 ;; -- Kill ring browser (popup clipboard manager) ----------------------------
 

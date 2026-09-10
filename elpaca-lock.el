@@ -2763,6 +2763,12 @@
                              org-super-agenda :type git :protocol
                              https :inherit t :depth treeless :ref
                              "fb20ad9c8a9705aa05d40751682beae2d094e0fe"))
+ (org-timegrid :source "elpaca-menu-lock-file" :recipe
+               (:source "elpaca-menu-lock-file" :package "org-timegrid"
+                        :id org-timegrid :host github :repo
+                        "Gleek/org-timegrid" :type git :protocol https
+                        :inherit t :depth treeless :ref
+                        "5249d6ff68011424cf2b235e41a888ec2e466c6a"))
  (org-transclusion :source "elpaca-menu-lock-file" :recipe
                    (:package "org-transclusion" :repo
                              ("https://github.com/nobiot/org-transclusion"

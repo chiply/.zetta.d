@@ -126,7 +126,18 @@ in the order they appear in the `zetta-modules!' declaration.")
             "mastodon.el" "erc.el" "eww.el" "nano-mu4e.el" "mu4e-dashboard.el"
             "org-msg.el" "flappy-fish.el" "speed-type.el"
             "spray.el" "touchtype.el" "key-quiz.el"))
-    (org . ("org.el" "org-ql.el" "org-capture.el" "org-ref.el" "ob-mermaid.el"
+    ;; org.el first: it defines the (todo) corpus functions and the todo
+    ;; source toggle that the agenda, the schema tools and the queue all
+    ;; read.  org-super-agenda.el before org-agenda.el, because the
+    ;; grouping variables it defines are what the custom commands there
+    ;; name.
+    (org . ("org.el" "org-todo-schema.el"
+            "org-super-agenda.el" "org-agenda.el" "org-other-agenda.el"
+            ;; org-queue.el before org-gantt.el: the chart takes its
+            ;; working-state vocabulary from the queue's, and reads the
+            ;; queue's plan history for the planned rail.
+            "org-queue.el" "org-gantt.el"
+            "org-ql.el" "org-capture.el" "org-ref.el" "ob-mermaid.el"
             "pdf-tools.el" "biblio.el" "citar.el" "org-remark.el"
             "org-tree-slide.el" "org-transclusion.el"))
     (term . ("shell.el" "foreman.el" "foreman-conf.el" "vterm.el")))

@@ -1,0 +1,1204 @@
+#+title: Zetta Optimisation Backlog
+#+author: Charlie Holland
+#+startup: overview
+
+Performance findings for the zetta config and the Emacs build under it.
+Same rule as [[file:TODO.org][TODO.org]]: keep the evidence with the item so the next person to
+look does not have to re-derive it.  Where a number is a measurement it says
+so; where it is an inference it says that too.
+
+Produced [2026-09-08] from a five-way audit (build, startup, redisplay,
+runtime/GC, editing latency) plus direct measurement of the live daemon.
+The investigation started from "Emacs keeps freezing -- is it native comp?"
+The answer was no: *zero* native-compilation subprocesses were running and no
+=.eln= had been written in two hours.  The freezes are GC pauses, and the
+allocation that drives them comes from animation timers repainting SVG chrome.
+
+* Where to start
+
+Ranked by (measured impact x confidence) / effort.  The first five are one
+line each and between them address the freezing.
+
+|  # | Item                                                   | Effort   | Evidence        |
+|----+--------------------------------------------------------+----------+-----------------|
+|  1 | [[*gc-cons-percentage is never restored, so it sits at the init value 0.6][=gc-cons-percentage= stuck at 0.6]]                       | 1 line   | measured, 3x    |
+|  2 | [[*A dead mode-line animation forces 5 redisplays/second][Dead =flappy-fish= timer, 5 Hz]]                          | delete   | measured        |
+|  3 | [[*read-process-output-max is 64 MB globally][=read-process-output-max= 64 MB globally]]                 | delete   | measured        |
+|  4 | [[*copilot-idle-delay is 0 -- one request per keystroke][=copilot-idle-delay= 0]]                                  | 1 line   | live value      |
+|  5 | [[*svg-line's renderers never memoize][svg-line never memoizes -- rebuilds every pass]]             | ~5 lines | 6.4 ms/pass     |
+|  6 | [[*pbpaste is forked synchronously once per second][=pbpaste= forked 1 Hz on the main thread]]                 | small    | 6.5 ms measured |
+|  7 | [[*The Spotify mode-line leaks an HTTP buffer every 30 s and blocks on it][Spotify: 51 leaked buffers + 30 s sync block]]             | small    | measured        |
+|  8 | [[*The vc segment forks git from inside redisplay][vc segment forks git inside redisplay]]                    | med      | file:line       |
+|  9 | [[*auto-revert polls every buffer every 5 s despite notification working][=auto-revert-avoid-polling= nil]]                          | 1 line   | live value      |
+| 10 | [[*Fontification runs synchronously inside redisplay][=jit-lock-defer-time= nil]]                               | 1 line   | live value      |
+| 11 | [[*Two unset redisplay wins, and hl-line is sticky][=redisplay-skip-fontification-on-input= + hl-line sticky]]  | 1 line   | live value      |
+| 12 | [[*The config's own code is never byte-compiled -- 662 interpreted functions][294 modules load as source; 662 interpreted functions]]     | half day | measured        |
+
+*Status [2026-09-09]:* items 1-6 and 9-11 are *applied* (each section says what
+was done and what it measured).  Left: 7 (Spotify), 8 (the vc segment's git
+forks -- the surviving half of the starvation diagnosis) and 12 (byte-compiling
+the config).  Nothing has been re-measured against the live daemon yet: it was
+wedged in the debugger all day (see below), so every number here is still the
+[2026-09-08] baseline.
+
+*Measure again after each of 1-5.*  They interact: less allocation means less
+GC, and the GC fix changes what the remaining allocation costs.  Items 2, 5
+and 6 all reduce the same treadmill, so their savings do not simply add.
+
+For the build, the one worthwhile change is a single rebuild dropping
+=--with-imagemagick=, =--with-xwidgets= and =--with-dbus= and adding =-g= --
+justified as "compiled in but unused", *not* as a memory fix.  [[*One combined rebuild: drop three unused features, add debug info][Details]].
+
+*Two things NOT to do*, both checked and rejected: do not chase native
+compilation as a memory lever ([[*Where the memory is][correction here]]), and do not merge the MPS
+branch ([[*MPS incremental GC -- viable, but it costs you canvas][why]]).
+
+* Baseline measurements [2026-09-08]
+:PROPERTIES:
+:EMACS:    32.0.50, --with-ns --with-native-compilation=aot, CFLAGS=-O2
+:HOST:     Apple M5, macOS 26.1
+:END:
+
+Taken against the =src= daemon at 18-29 min uptime.  Re-measure after each
+change; several of these move together.
+
+| Metric                        | Value                    | How                                 |
+|-------------------------------+--------------------------+-------------------------------------|
+| Full GC pause                 | 130-174 ms (peak 462 ms) | =(benchmark-run 1 (garbage-collect))= |
+| GC share of wall clock        | 1.3%                     | =gc-elapsed= / =emacs-uptime=           |
+| GC frequency                  | one per 10-13 s          | =gcs-done= over uptime                |
+| Live Lisp heap                | 209 MB                   | =garbage-collect= sum                 |
+| Physical footprint            | 1.4 GB (peak 1.8 GB)     | =vmmap -summary=                      |
+| Idle CPU                      | ~11% of one core         | =sample 3373 5=                       |
+| Idle allocation rate          | 9.4 MB/s                 | cons/vector deltas over 5 s         |
+| Init time                     | 9.169 s                  | =(emacs-init-time)=                   |
+| Mapped =.eln= dylibs            | 1199 distinct            | =vmmap 3373 \vert grep .eln=            |
+| Config functions interpreted  | 662 of 702               | =type-of= over =zetta-*=                |
+
+** The idle profile
+
+A 5 s =sample(1)= of a completely idle daemon put ~450/4200 samples here:
+
+#+begin_example
+wait_reading_process_output
+ -> detect_input_pending_run_timers
+    -> redisplay_preserve_echo_area
+       -> redisplay_window -> redisplay_tab_bar
+          -> lookup_image -> svg_load_image
+             -> librsvg parse + cairo text fill
+#+end_example
+
+That is the whole story in one stack: timers wake Emacs ~19x/second, each
+wake forces a redisplay, and each redisplay rebuilds the SVG chrome.
+
+*Refinement from later measurement.*  Of the ~450 samples in that path, ~115
+are in =svg_load_image= (librsvg rasterisation) and the remaining ~335 are the
+elisp rebuild and redisplay machinery.  So rasterisation is roughly a quarter
+of the cost and the *elisp rebuild is the bulk of it* -- which matters,
+because it means the fix is memoisation in the renderer, not image caching.
+An independent check could not reproduce sustained librsvg parsing at idle
+(10 consecutive tab-bar renders were byte-identical; only 2 distinct strings
+appeared over ~10 s, tracking the clock's minute hand), and the elisp
+arithmetic alone accounts for the observed 11%.
+
+** The economics of one SVG bar
+
+Measured directly, and worth knowing before tuning anything in =modules/ui/=:
+
+| Bar                              | cache hit | one char changed |
+|----------------------------------+-----------+------------------|
+| tab bar (1874x66, 21 =<text>=)     |   0.20 ms |          4.4 ms  |
+| mode line (1665 B)               |   0.07 ms |          1.56 ms |
+
+A cache hit is nearly free; *any* content change costs a full librsvg parse
+plus fontconfig and cairo text layout.  So the cost is driven by how often the
+string changes, not by how often redisplay runs.
+
+The pure-elisp rebuild of every bar in every live window is *~6.4 ms per
+redisplay pass* steady-state (14.3 ms including a first-render outlier), across
+6 windows.  At ~20 timer wakeups/second that is ~128 ms/s, i.e. *~13% of a
+core in elisp alone* -- independently the same order as the 11% =sample(1)=
+attributed to the redisplay path.  The librsvg parses sit on top of that.
+
+** Where the memory is
+
+=vmmap -summary= against the 1.4 GB footprint:
+
+| Region                   | Resident | What it is                                    |
+|--------------------------+----------+-----------------------------------------------|
+| =MALLOC_SMALL=           | 918 MB   | Lisp heap + 165 MB free-lists + fragmentation |
+| =__TEXT=                 | 627 MB   | mapped code -- mostly *system frameworks*     |
+| =mapped file=            | 519 MB   | frameworks, fonts, =.eln=                     |
+| =dyld private memory=    | 245 MB   | loader bookkeeping (1091 regions)             |
+| =MALLOC_LARGE (empty)=   | 52 MB    | 47 empty regions -- see [[*read-process-output-max is 64 MB globally][the 64 MB read buffer]] |
+| /of which/ =.eln=-backed | 103 MB   | measured subset, see below                    |
+
+*Correction, recorded because the first pass got it wrong.*  The 1199 mapped
+=.eln= dylibs look like they should dominate =__TEXT=, and an early reading of
+this table attributed ~600 MB to them.  Summing the =.eln=-backed regions
+directly says otherwise:
+
+#+begin_example
+4605 regions   virtual 156.3 MB   resident 103.2 MB   dirty 27.3 MB
+#+end_example
+
+So native compilation costs ~103 MB resident, not ~600 MB.  The rest of
+=__TEXT= is system frameworks -- WebCore 28.2 MB and JavaScriptCore 18.9 MB
+(pulled in by =--with-xwidgets=), =__OBJC_RO= 60 MB, and the usual macOS set.
+*Do not treat AOT native-compilation as a memory lever* -- dropping it would
+recover far less than the raw =__TEXT= figure suggests.
+
+The real oddity is not memory but compilation status: 1199 native-compiled
+libraries are mapped into the process while the config's own 294 module files
+run interpreted.
+
+* One-line fixes, highest value first
+
+These are the cheap ones.  Each is a single line or a single deletion, each
+was verified live, and together they address the freezing directly.
+
+** DONE gc-cons-percentage is never restored, so it sits at the init value 0.6
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  early-init.el, source/bootstrap/bootstrap-gcmh.el
+:END:
+
+The root cause of the GC numbers above.  Found independently by two auditors
+and confirmed directly.
+
+=early-init.el:11-13= raises the threshold and the percentage for init, and
+=early-init.el:16-21= defines =zetta--restore-gc= to put *both* back:
+
+#+begin_src emacs-lisp
+(defun zetta--restore-gc ()
+  (setq gc-cons-threshold (* 16 1024 1024)   ; 16MB
+        gc-cons-percentage 0.1))
+#+end_src
+
+=bootstrap-gcmh.el:20-21= then removes that hook wholesale so gcmh can own the
+threshold -- but gcmh only ever writes =gc-cons-threshold=, never the
+percentage.  So the percentage half is silently lost.
+
+#+begin_example
+gc-cons-percentage => 0.6      gc-cons-threshold => 800000
+live heap          => 209 MB
+#+end_example
+
+The effective trigger is =max(threshold, percentage x (live + since_gc))=
+(=src/alloc.c:5740=), i.e. *~125 MB*.  gcmh's 800 KB low threshold is inert:
+its "collect early and cheaply while idle" design never runs, and every GC
+you feel is gcmh's explicit idle call sweeping a huge nursery.
+
+*Action.*  Keep removing the hook, but do not lose its percentage half -- add
+=(setq gc-cons-percentage 0.1)= to =bootstrap-gcmh.el='s =:config=.
+
+*Caveat.*  Mark time scales with the /live/ set (209 MB), not with accumulated
+garbage, so this makes collections more frequent and much shorter rather than
+free.  Re-measure =gcs-done= and =gc-elapsed= after.
+
+
+*Applied [2026-09-09]: `(setq gc-cons-percentage 0.1)' in bootstrap-gcmh.el's
+:init, next to the threshold, with the alloc.c reasoning in a comment.
+Re-measure `gcs-done' and `gc-elapsed' after a day's use.*
+
+** DONE A dead mode-line animation forces 5 redisplays/second
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/app/flappy-fish.el
+:END:
+
+The single clearest waste in the config.  =modules/app/flappy-fish.el:207= is a
+bare top-level =(fish-start-timer)=, which runs =fish--next-frame= every 0.2 s,
+ending in =(force-mode-line-update nil)= (=flappy-fish.el:91-99=).
+
+It updates =fish-mode-line-string=, whose only consumer is
+=modules/ui/telephone-line.el:35=.  Telephone-line is not active:
+
+#+begin_example
+telephone-line-mode => nil
+mode-line-format    => ((:eval (svg-line--render-zetta-mode-line)))
+#+end_example
+
+So it is five forced full-chrome redisplays per second, across 6 live
+windows, to animate a string nothing renders.
+
+*Action.*  Delete =flappy-fish.el:207=, or gate it behind a defcustom that
+defaults off.  Zero user-visible loss.
+
+
+*Applied [2026-09-09]: gated behind `fish-animate', defaulting nil, rather than
+deleted -- `M-x fish-start-timer' still starts it by hand.*
+
+** DONE read-process-output-max is 64 MB globally
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/term/shell.el, early-init.el
+:END:
+
+=early-init.el:53= deliberately sets 4 MB with a comment saying why.
+=modules/term/shell.el:3= then overrides it globally at top level:
+
+#+begin_src emacs-lisp
+(setq read-process-output-max (* 64 1024 1024))
+(setq process-adaptive-read-buffering nil)
+#+end_src
+
+Live value is =67108864=, so the override wins.  The comment at
+=modules/tools/lsp.el:4= claiming this is "handled in early-init.el" is now false.
+
+In =src/process.c:973= the value is clipped only to =INT_MAX=, not to
+=MAX_ALLOCA=, and is latched per process at creation.  =process.c:6267= then
+does =SAFE_ALLOCA(carryover + readmax)=, which above ~16 KB becomes
+=record_xmalloc= (=lisp.h:5629=).  So *every read from every subprocess mallocs
+and frees 64 MB* -- on macOS an =mmap=/=munmap= pair plus page-fault churn, per
+read, for copilot's streaming completions, =mu server=, and elfeed's curl.
+
+This is visible in =vmmap= as 47 =MALLOC_LARGE (empty)= regions holding 52 MB.
+
+*Action.*  Delete =shell.el:3= so early-init's 4 MB stands; set it buffer-locally
+in a shell hook if shell buffers genuinely need more.  Reconsider
+=process-adaptive-read-buffering nil= on line 4 -- also global, also every process.
+
+
+*Applied [2026-09-09]: both globals removed from shell.el, so early-init's 4MB
+stands.  `process-adaptive-read-buffering' is left at its default for the same
+reason it was flagged: it applied to every process, not just shells.*
+
+** DONE copilot-idle-delay is 0 -- one request per keystroke
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/tools/ai.el
+:END:
+
+Live =copilot-idle-delay= is =0= (the package default; nothing in
+=modules/tools/ai.el:321-349= overrides it), and =:344= puts
+=zetta-copilot-maybe-enable= on =prog-mode-hook=.  Zero debounce means a JSONRPC
+round trip to the node agent after every single keystroke in every prog
+buffer, plus the consing that goes with it.
+
+Related: that node process is holding *811 MB* RSS (PID 5135).  Whether that
+is a leak or normal for this workspace is *not verified*.
+
+*Action.*  =(setq copilot-idle-delay 0.3)=.  Re-measure the node RSS after
+fixing the 64 MB read buffer above, since copilot is the highest-frequency
+stdio producer and the biggest beneficiary.
+
+
+*Applied [2026-09-09]: `(setq copilot-idle-delay 0.3)' in the `:config'.  The
+node RSS was NOT re-measured -- do that after a session with the 4MB read
+buffer in place.*
+
+** DONE pbpaste is forked synchronously once per second
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/tools/command-palette.el
+:END:
+
+=modules/tools/command-palette.el:181-196= does a synchronous
+=(call-process "pbpaste" ...)=, driven by the timer at =:209-210= at 1 Hz.
+*Measured at 6.5 ms per call* in the live daemon.
+
+6.5 ms of hard main-loop block every second.  This is the same class of defect
+as the git/pmset shell-outs recorded in the =consult-async-starvation= note --
+still unfixed, and running ten times more often.  It starves async consult/irs
+sinks and jitters keystroke echo.
+
+*Action.*  Make it async (=make-process= + sentinel), or drive it from
+=focus-in= / =window-buffer-change-functions= instead of polling.  Raising the
+poll interval is a weaker mitigation.
+
+
+*Applied [2026-09-09]: `zetta-clipboard-poll' now uses `make-process' with a
+sentinel, and skips a poll while the previous one is still running, so a slow
+`pbpaste' can never queue up a second.  The one-off read in
+`zetta-clipboard-monitor-start' is left synchronous -- it happens once.*
+
+** DONE auto-revert polls every buffer every 5 s despite notification working
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/core/interface.el
+:END:
+
+=modules/core/interface.el:737= enables =global-auto-revert-mode=.  Live state:
+=auto-revert-use-notify= is =t= and =file-notify-descriptors= is 5, but
+=auto-revert-avoid-polling= is *nil* and =auto-revert-interval= is 5.  Setting
+=use-notify= alone does not stop the poll, so Emacs stats the whole buffer list
+12x/minute forever.
+
+*Action.*  =(setq auto-revert-avoid-polling t)= next to =interface.el:737= --
+this is the behaviour the config already assumes it has.
+
+*Trade-off.*  Files changed by tools that defeat notification stop
+auto-reverting.  Safe on local APFS.
+
+
+*Applied [2026-09-09]: `(setq auto-revert-avoid-polling t)' beside the mode.*
+
+** DONE Fontification runs synchronously inside redisplay
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  (unset -- add near the jit-lock/font-lock config)
+:END:
+
+Live: =jit-lock-defer-time= nil, =jit-lock-stealth-time= nil,
+=jit-lock-chunk-size= 1500.  With no defer time, every keystroke that dirties a
+region fontifies inside redisplay.  After the timer treadmill, this is the
+largest remaining per-keystroke cost in org buffers.
+
+*Action.*  =(setq jit-lock-defer-time 0.05)=.
+
+
+*Applied [2026-09-09]: `jit-lock-defer-time' 0.05, in interface.el beside the
+other redisplay settings.*
+
+** TODO consult preview still opens real files for five commands
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/completion/consult.el
+:END:
+
+=modules/completion/consult.el:29= sets =consult-preview-key 'any=.  The
+=consult-customize= at =:42-48= demotes ripgrep, buffer, bookmark,
+project-buffer and theme to ="C-="= -- verified against the live
+=consult--customize-alist= -- but *not* =consult-recent-file=, =consult-find=,
+=consult-grep=, =consult-git-grep= or =consult-locate=.
+
+Those five open a real file per candidate move, paying the entire live
+=find-file-hook= on every arrow keypress: =hproperty:but-create= (Hyperbole
+scans the whole buffer for implicit buttons), =vc-refresh-state=,
+=org-remark-auto-on=, =forge-bug-reference-setup=, =recentf-track-opened-file=.
+
+*Action.*  Add those five commands to the existing =consult-customize= form.
+
+** TODO Paren matching runs two to three times per command
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/editor/smartparens.el
+:END:
+
+Live: =show-paren-mode= is =t= (Emacs default) *and*
+=show-smartparens-global-mode= is =t= (=modules/editor/smartparens.el:7=), and
+=blink-matching-paren= is =t= with =blink-paren-post-self-insert-function= on the
+global =post-self-insert-hook=.  Two independent match scans per command, plus
+a third per self-insert, on the hot path.
+
+*Action.*  Disable =show-smartparens-global-mode=; set =blink-matching-paren= to
+nil or ='jump-offscreen=.
+
+** TODO blinker animates the tab bar 2.5x/second
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/ui/blinker.el
+:END:
+
+=modules/ui/blinker.el:37= is a bare top-level =(blinker-start)=; =blinker--advance=
+calls =force-mode-line-update= every 0.4 s (=blinker.el:15-18=).  Unlike the fish
+timer this one *is* rendered (=modules/ui/tab-bar-svg.el:205=), so it is a real
+trade rather than pure waste -- a full chrome re-render 2.5x/second to animate
+a four-frame dot.
+
+*Action.*  Gate behind a defcustom defaulting off, or slow to >=1 s.
+
+* Chrome rendering
+
+The bars themselves.  Ordered by leverage; the first item is the single
+biggest one in this document after the GC fix.
+
+** DONE svg-line's renderers never memoize
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  ~/source_code/svg-line/svg-line.el
+:END:
+
+=svg-line--render= (=svg-line.el:2144=) rebuilds unconditionally on every call.
+The only cache in the file is =svg-line--freeze-cache= (=:1352=), gated solely
+on =(active-minibuffer-window)=, and =svg-line-display= (=:1748=) allocates a
+fresh =svg-image= spec every time.
+
+So every bar in every window is rebuilt in full on every redisplay pass even
+when the resulting string is byte-identical -- which, per the measurement
+above, it usually is.  That is ~6.4 ms per pass across 6 windows, ~20 times a
+second.
+
+*Action.*  Hash the built SVG string per =(NAME . window)= and return the
+previous propertized display string on a match.  Insert at =:2172= -- after
+=svg-line--build-lines=, before =svg-line-display=.  Keep
+=svg-line--store-placements= *outside* the short-circuit; placements must stay
+live for hit-testing.
+
+Note this is the DEV copy at =~/source_code/svg-line=, which is unpushed and
+loaded live -- see [[file:~/.claude/projects/-Users-charlieholland--zetta-d/memory/svg-line-engine-features.md][the svg-line engine note]].  A restart wipes uncommitted work.
+
+
+*Applied [2026-09-09]: `svg-line--display-cache', keyed per window (per FRAME
+for a tab-bar line, which is drawn once for the frame but rendered with
+whichever window is selected).  Compared with `equal' on the built DOM rather
+than a hash of the printed string: a hash collision would pin a stale bar on
+screen until something else changed it.  Measured on a 3-row line with a
+60-segment map row: 0.151 -> 0.103 ms per render, *32% off*, with the `equal'
+on two distinct-but-equal DOMs costing 0.0062 ms.  `svg-line--store-placements'
+and `svg-line--interactive' stay outside the short-circuit.  66/66 package
+tests pass.  NOTE the remaining cost is now `svg-line--build-lines' itself
+(0.106 of the 0.103-0.151 ms), which no cache at this level can skip -- the
+next lever is the segment functions, i.e. items 6, 8 and 14-16.*
+
+** TODO The vc segment forks git from inside redisplay
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/core/line-utils.el
+:END:
+
+=line-utils.el:1050-1055= calls =vc-git-root= (which is =vc-find-root=, *not*
+memoized -- it walks up the tree with =file-exists-p= per render per window),
+=vc-git--symbolic-ref= (forks =git symbolic-ref HEAD= on a cache miss), and
+=zetta-get-repo-name= -> =zetta--git-info= (=:95=, =:100=), which is two
+=shell-command-to-string= calls per 10 s TTL per directory.
+
+This is the surviving half of the =consult-async-starvation= diagnosis: 2N
+forks per 10 s issued from inside redisplay.
+
+*Action.*  Read the filesystem instead -- walk up for =.git=, parse
+=.git/HEAD= -- and memoize =vc-git-root= per =default-directory=.  No fork, no
+TTL, and it becomes instant on branch switch.
+
+** TODO A full-buffer line count runs per window per render
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/core/line-utils.el
+:END:
+
+=line-utils.el:1186= -- =zetta-modeline-svg--point= calls
+=(line-number-at-pos (point-max))=.  Batch-measured: 0.05 ms at 10k lines,
+0.27 ms at 50k, *1.09 ms at 200k*.
+
+A cliff rather than a slope: a 200k-line log open in two windows adds ~44 ms/s
+at 20 Hz.
+
+*Action.*  Cache the total against =buffer-chars-modified-tick=.  The
+percentage is already free from =(point)/(point-max)=, which
+=zetta-modeline-svg-spans= computes at =modeline-svg.el:418=.
+
+** TODO The header line builds imenu crumbs inside redisplay
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/core/line-utils.el
+:END:
+
+=line-utils.el:1255-1263= wires =:eval= forms (=:1230-1252=) that call
+=breadcrumb-imenu-crumbs=, =org-display-outline-path=, =jsonian-path= and
+=jpt-yaml-path-to-point=.  Measured *7.90 ms on the first render* in an elisp
+buffer and <1 ms after -- the imenu index is being built inside redisplay.
+
+*Action.*  Warm the crumbs from =window-buffer-change-functions= or a short
+idle timer into a buffer-local, and have the =:eval= return only the cache.
+
+** TODO buffer-list-update-hook invalidates all 18 bars
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/core/line-utils.el
+:END:
+
+=line-utils.el:17= puts =ml-update-all= (=:13=, a bare
+=(force-mode-line-update t)=) on =buffer-list-update-hook=, which fires on
+select-window, switch-to-buffer, kill, bury and named =get-buffer-create=.
+That is a ~6.4 ms full rebuild per navigation event, and *nothing in the SVG
+bars depends on the buffer list*.
+
+Two other blanket invalidators already cover the same ground:
+=interface.el:790= on =window-selection-change-functions=, and =keycast--update=
+on =post-command-hook=.
+
+*Action.*  Remove the entry, or downgrade to =(force-mode-line-update)=.
+
+A feedback-loop theory was checked and *ruled out*: =with-temp-buffer= does not
+fire this hook (Emacs 28+ =inhibit-buffer-hooks=), so bar rendering cannot
+re-trigger it.
+
+** TODO poimap mutates window state during redisplay
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/ui/poimap.el
+:END:
+
+=poimap.el:620= calls =(set-window-parameter win 'poimap-width w)= inside
+=zetta-poimap-span=, which runs from =zetta-modeline-svg-spans=
+(=modeline-svg.el:426=) for every window on every pass.  Mutating window state
+from inside redisplay is a correctness risk more than a cost.
+
+*Action.*  Drop the setter until something actually hit-tests the map -- the
+file's own Commentary says nothing does yet.  Its DOM cache (=:572-587=) and
+mark gate (=:443-472=) are correct; leave both alone.
+
+** DONE Two unset redisplay wins, and hl-line is sticky
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:END:
+
+=redisplay-skip-fontification-on-input= is nil and =auto-window-vscroll= is t;
+both are worth flipping.  Separately, =hl-line-sticky-flag= is =t= under
+=global-hl-line-mode=, so the overlay is maintained in *every* window on every
+command rather than only the selected one.
+
+#+begin_src emacs-lisp
+(setq redisplay-skip-fontification-on-input t
+      auto-window-vscroll nil
+      hl-line-sticky-flag nil)
+#+end_src
+
+
+*Applied [2026-09-09]: all three set in interface.el.*
+
+** IDEA Cut dimmer-mode
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:END:
+
+=window-configuration-change-hook= carries 11 handlers.  =dimmer-mode= is the
+one worth cutting: it rewrites =face-remapping-alist= per command and per
+config change, invalidating realized faces.  =solaire-global-mode= is already
+enabled and encodes the same focused/unfocused distinction without that cost.
+
+Noted for context: =svg-margin.el:457= documents that a margin re-render fires
+all 11 handlers and re-triggers git-gutter, with the loop broken by a
+=diffinfos= compare at =:452=.
+
+** TODO Dead and latent hook entries
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/ui/awesome-tray.el
+:END:
+
+Two dead entries on =window-buffer-change-functions=:
+=fish--update-on-buffer-change= (dies with the flappy-fish fix) and an
+=awesome-tray-flycheck-status-update-cache= lambda (=awesome-tray-mode= is nil).
+
+Latent trap: =modules/ui/awesome-tray.el:20= sets
+=awesome-tray-refresh-idle-delay= to *0.01* -- a 100 Hz idle refresh waiting
+for whoever enables that mode.
+
+** DONE Verified clean -- do not spend time here
+CLOSED: [2026-09-08]
+
+Recorded so nobody re-audits them:
+
+- =window-scroll-functions= -- one entry (=beacon--window-scroll-function=), and
+  =beacon-blink-when-window-scrolls= is nil, so it returns immediately.
+- =after-change-functions= -- no global additions anywhere in =modules/= or
+  =source/=.
+- =window-state-change-hook= -- empty.
+- =bidi-inhibit-bpa= t, =long-line-threshold= 50000, =line-spacing= nil,
+  =cursor-in-non-selected-windows= nil, =blink-cursor-mode= nil,
+  =highlight-nonselected-windows= nil -- all already correct.
+- *All ImageMagick and image-scaling settings.*  =modules/core/image.el:24= and
+  =:31= are deliberate and correct; =tab-bar-svg.el:157-166= sets
+  =image-cache-eviction-delay= 30 with an accurate note on the global blast
+  radius, and was verified *not* to be the churn source (identical data hits
+  at 0.20 ms); =line-utils.el:2083= correctly pins =image-scaling-factor= for
+  font probes, cached at =:2056=.
+- =modeline-svg.el='s extras machinery (=zetta-modeline-svg--run-extras=,
+  =:224=) drops a signalling contributor rather than raising per render.
+- Off in this session, so not contributors: rainbow-delimiters,
+  highlight-indent-guides, hl-block, color-identifiers, minimap, nyan, focus,
+  telephone-line.  =parrot-mode= is on but has no timer.
+- Repeating *idle* timers fire once per idle stretch, not continuously, so
+  =symbol-overlay= 0.05 and =show-paren= 0.125 are not treadmills -- unlike the
+  sub-second *repeating* timers.
+- =modules/ui/line.el= is in =disabled/= and not loaded.  It has a
+  =shell-command-to-string= in a mode-line =:eval= at =disabled/line.el:81= --
+  do not resurrect as-is.
+
+* Leaks and silently-broken features
+
+Things that cost you something and give nothing back.
+
+** TODO The Spotify mode-line leaks an HTTP buffer every 30 s and blocks on it
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  elpaca/sources/spot/
+:END:
+
+=spot-mode-line.el:120-123= drives a 30 s timer into
+=spot-generic-query.el:58=, which is =url-retrieve-synchronously= with a 10 s
+timeout (=spot-var.el:120=).  Nothing kills the response buffer.
+
+Live: *51 of 86 buffers* are =*http api.spotify.com:443*= -- 51 leaks over
+26 min, exactly 2/min.
+
+Two costs: a hard main-loop block every 30 s (100-400 ms typical, 10 s worst
+case), and 59% of the buffer list held permanently live, inflating the mark
+phase of every one of those 150 ms GCs.
+
+*Action.*  Wrap the sync retrieve in =unwind-protect= + =kill-buffer= to stop
+the leak now, then route the timer through the package's *existing but unused*
+=spot-retrieve-url-to-alist-asynchronously= (=spot-generic-query.el:85=).
+Interim no-code mitigation: raise =spot--update-interval=, drop
+=spot--request-timeout= to 2.
+
+Separately, =spot-mode-line.el:106-112= cancels =spot--update-timers= but never
+resets the list to nil, so dead timers accumulate.
+
+** TODO desktop-save-mode writes into a directory that does not exist
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/core/desktop.el
+:END:
+
+=modules/core/desktop.el:6= points =desktop-base-file-name= at =.data/desktop/=
+and =:9= enables the mode.  Live: =desktop-save-mode= t,
+=desktop-auto-save-timeout= 30, and =(file-directory-p ".data/desktop")= is
+*nil* -- =du= confirms no such directory.
+
+So Emacs builds desktop state across 86 buffers every 30 idle seconds and then
+fails at the write.  Desktop persistence is silently broken, including
+=zetta-server-shutdown-save-desktop= (=interface.el:771=).  You pay the cost and
+get nothing.
+
+*Action.*  =mkdir -p ~/.zetta.d/.data/desktop= to make the feature work, or
+disable the mode.  Decide which you actually want.
+
+** TODO elfeed's shared curl buffer holds 42 MB indefinitely
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/app/elfeed.el
+:END:
+
+Live buffer scan: = *curl*= holds *43,920,976 bytes* -- 98% of the 44.8 MB of
+buffer text across all 86 buffers.  Next largest is
+=*Async-native-compile-log*= at 425 KB.  =modules/app/elfeed.el:32= sets
+=elfeed-use-curl t= and =zetta-elfeed--auto-update= runs on a 900 s timer.
+
+*Action.*  Erase the buffer once the curl queue drains;
+=modules/app/elfeed.el:688-696= already advises =elfeed-curl--run-queue= and is
+the natural hook point.  Verify the queue is idle first -- erasing mid-fetch
+breaks the fetch.
+
+*Caveat.*  This shrinks RSS but *not* GC pause time: buffer text lives outside
+=garbage-collect= accounting and is never marked.
+
+** TODO kill-ring-max is 10000 and the whole ring is serialised to savehist
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/core/simple.el, modules/core/cleanup.el
+:END:
+
+=modules/core/simple.el:7= sets =kill-ring-max= to 10000 (Emacs default is 120),
+and =modules/core/cleanup.el:66= adds =kill-ring= to
+=savehist-additional-variables= (42 vars total).  Live: 770 entries / 711 KB
+after 26 min; =.data/savehist/history= is 1.1 MB on disk;
+=savehist-autosave-interval= is 300.
+
+Unlike the curl buffer this is *live-set growth* -- permanently reachable, so
+it is marked on every one of those 150 ms pauses, and it trends toward the
+10000 cap over a day.
+
+*Action.*  Drop =kill-ring-max= to ~500 and remove =kill-ring= from
+=savehist-additional-variables=.  =recentf= (438/500, 35 KB) and =save-place=
+(293) were checked and are fine as configured.
+
+* Startup and load time
+
+=(emacs-init-time)= is *9.169 s*.  Only ~15% of that is attributed by direct
+measurement -- see [[*Open questions][Open questions]] before acting on the rest.
+
+** TODO The config's own code is never byte-compiled -- 662 interpreted functions
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  source/bootstrap/bootstrap-modules.el
+:END:
+
+The highest-value structural finding.  =bootstrap-modules.el:293-309= loads
+modules with =load-file=, which takes an exact filename and therefore can
+*never* prefer =.elc=.  The comment at =:311-317= already documents this and
+says the fix "breaks startup".
+
+#+begin_example
+(:module-files-loaded 294 :as-elc 0 :as-source 294)
+(:total 702 :types (("cons" . 8) ("subr" . 32) ("interpreted-function" . 662)))
+#+end_example
+
+All 294 modules have a *fresh* =.elc= beside them (0 stale, 0 missing) and
+there are 3237 =.eln= on disk.  The compiled artefacts are 100% unused.
+
+*The startup cost is the smaller half.*  Measured in isolation: the reader over
+all 294 files is 35 ms, and =macroexpand-all= over all 311 =use-package= forms
+is 262 ms -- so roughly 0.3-0.8 s of the 9.17 s.  Real, not dominant.
+
+*The runtime cost is the prize.*  Interpreted closures never get faster, and
+the mode-line, tab-bar and margin segment functions are re-entered on *every
+redisplay* in interpreted form.  =zt-flycheck-segment= -- a mode-line segment --
+is an interpreted closure.  This compounds the redisplay treadmill above.
+
+*Action.*  Do not switch to bare =load=; the documented failure is that
+=org/org.el= halts the sequence and silently drops the remaining 16 modules.
+Prefer =.elc= explicitly *and* fault-isolate each file so one bad module cannot
+truncate the sequence:
+
+#+begin_src emacs-lisp
+(let* ((elc (concat sourcefile-path "c"))
+       (target (if (file-newer-than-file-p elc sourcefile-path) elc sourcefile-path)))
+  (condition-case err (load target nil t t)
+    (error (message "zetta: %s failed (%S); retrying from source" file err)
+           (load sourcefile-path nil t t))))
+#+end_src
+
+*Verification.*  Re-run this probe; =:as-elc= should go 0 -> 294:
+
+#+begin_src emacs-lisp
+(let ((mods 0) (elcs 0) (els 0))
+  (dolist (h load-history)
+    (let ((f (car h)))
+      (when (and (stringp f) (string-match-p "/\\.zetta\\.d/modules/" f))
+        (setq mods (1+ mods))
+        (if (string-suffix-p ".elc" f) (setq elcs (1+ elcs)) (setq els (1+ els))))))
+  (list :module-files-loaded mods :as-elc elcs :as-source els))
+#+end_src
+
+** TODO =op inject= blocks startup for ~1.1 s
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  init.el, ~/.private.el
+:END:
+
+=init.el:33-44= defines =zetta-op-load= as a synchronous
+=shell-command-to-string "op inject ..."=.  =~/.private.el:30= calls it
+unconditionally, and =init.el:106= loads =.private.el= before any module.
+
+*Measured at 1.05 s and 1.21 s* across two warm runs -- and that is with
+1Password already unlocked.  A locked vault adds a Touch ID prompt to the
+critical path.  This is the single largest *measured* startup item, 12% of init.
+
+*Action.*  The seam already exists: the =zetta-op= auth-source backend at
+=init.el:61-103= is pull-based and does not need the cache populated at load
+time.  Make =zetta-op-read= populate on first miss instead of eagerly at
+=.private.el:30=.
+
+** TODO 145 eager use-package blocks and 27 =:demand t=
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/ (widespread)
+:END:
+
+=use-package-always-defer= is unset, so a block with no deferral keyword is
+eager.  A classifier over all 311 =use-package= forms found 145 such blocks
+plus 27 explicit =:demand t=, keeping ~20 interactive-only packages resident.
+This is the auditor's best inference for the bulk of the 7.7 s of unattributed
+init time -- *inference from =features= membership, not measurement*.
+
+Start with the four keystones, which are one-line edits each:
+
+- =modules/term/shell.el:10= -- wrap =(require 'em-tramp)= in
+  =with-eval-after-load 'eshell=; drops tramp and eshell from startup.
+- =modules/tools/pr-review.el:3= -- add =:commands=; un-pulls magit, forge, ghub.
+- =modules/lang/ein.el:3= -- add =:commands=.
+- =modules/app/elfeed.el:232,256= -- =:demand t= -> =:after elfeed=.
+
+*Do not* set =use-package-always-defer t= globally: many =:config= bodies call
+activators, so it would disable them rather than defer them.
+
+*Caveat.*  The auditor's per-file appendix covers ~130 of the 145; two
+truncated classifier windows hid ~15 entries.  Re-run the classifier before
+treating any list as exhaustive.
+
+** TODO use-package-inject-hooks is on with no consumers
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  source/bootstrap/bootstrap-elpaca.el
+:END:
+
+=bootstrap-elpaca.el:301= sets =use-package-inject-hooks t=, adding =run-hooks=
+calls around =:init= and =:config= for all 311 blocks.  A grep found no
+consumers of the injected hooks anywhere in =modules/=.  Impact is small and
+was not isolated.
+
+*Action.*  Set to nil.
+
+** HOLD Four synchronous elpaca-wait barriers
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  init.el, source/bootstrap/
+:END:
+
+=init.el:113= (one per category boundary, up to 8), =bootstrap-elpaca.el:178=,
+=bootstrap-brushup.el:12=, =bootstrap-compile-angel.el:12=.
+
+Deliberately on hold.  Cost is *unmeasured*, and =bootstrap-elpaca.el:150-215=
+documents real deadlock and race fixes that depend on this ordering.
+
+*Action.*  Time them across one startup before touching anything.  If the warm
+cost is near zero, leave entirely alone.
+
+* Editing latency
+
+** TODO org-fragtog spawns LaTeX on cursor motion in every org buffer
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/org/org.el
+:END:
+
+=modules/org/org.el:419-420= enables it globally; =org-fragtog--post-cmd= was
+confirmed on the buffer-local =post-command-hook= of a live org buffer.  Point
+entering or leaving a LaTeX fragment spawns =latex= + =dvisvgm= synchronously --
+hundreds of ms on plain cursor motion.
+
+*Cost is UNVERIFIED* -- the auditor correctly declined to spawn LaTeX in the
+live daemon.
+
+*Action.*  Scope to files that actually use fragments, or drop the hook and
+toggle manually.
+
+** TODO symbol-overlay re-scans the buffer every 0.05 s
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/ui/symbol-overlay.el
+:END:
+
+=modules/ui/symbol-overlay.el:6= sets =symbol-overlay-idle-time= to 0.05, and
+the mode is on =org-mode-hook=; =symbol-overlay-post-command= was confirmed
+buffer-local in a live org buffer.  A full-buffer regex scan at 20 Hz.
+
+*Action.*  Raise to ~0.5 s, or scope the mode to prog buffers only.
+
+** QUES key-chord costs 50 ms on every =j= and =k= typed in insert state
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  source/bootstrap/bootstrap-keys.el, modules/editor/evil.el
+:END:
+
+=bootstrap-keys.el:8-11= sets =key-chord-two-keys-delay= to =.05=; chords are
+="jk"= (=modules/editor/evil.el:32=), ="kj"= (=:33=, and =bootstrap-keys.el:202=).
+Live =input-method-function= is =key-chord-input-method=.
+
+Any chord-heading character triggers a 50 ms =sit-for=, so *just*, *like*,
+*make*, *work*, *know* all hitch at word boundaries in org prose.
+
+Marked QUES rather than TODO because this is a real trade, not a defect: the
+fix is to move the escape chords off high-frequency letters, and that is
+muscle memory.  *Your call.*
+
+** QUES org-fold-core-style is =overlays=, not =text-properties=
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  unknown -- setter not found
+:END:
+
+Live value is =overlays=, the pre-9.6 compatibility path: markedly slower
+folding and =after-change= work, scaling with file size (three agenda files
+are 68-97 KB).
+
+*The setter was NOT FOUND in the config.*  Candidates are org-transclusion,
+org-remark, or a stale customisation.
+
+*Action.*  =grep -r org-fold-core-style= across the elpaca repos.  If nothing
+requires it, let it default to =text-properties=.
+
+* Building from source
+
+The build is =--with-ns --with-native-compilation=aot=, =CFLAGS=-O2=, on an
+*Apple M5* against a source tree at =~/source_code/emacs= (detached at
+=1d836d5c595=, master, 2026-09-05).
+
+The short version: *the build is not where your problem is.*  Every finding
+above is config, and the GC pauses that started this investigation are caused
+by =gc-cons-percentage=, not by codegen.  Fix those first and re-measure before
+touching the build at all.
+
+** HOLD MPS incremental GC -- viable, but it costs you canvas
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  build
+:END:
+
+This was the headline candidate, given 130-174 ms stop-the-world pauses.  The
+verdict is a *conditional no*.
+
+What is true: MPS is real and arm64 macOS is a first-class platform for it.
+=mps/code/mpstd.h:170-183= detects =__APPLE__ && __arm64__ && __clang__= ->
+=MPS_PF_XCA6LL=.  It needs *no* external dependency -- the branch vendors the
+full Ravenbrook tree at =mps/=, =configure.ac:5586= does
+=AC_CONFIG_SUBDIRS([mps])=, and =src/Makefile.in:704-706= compiles
+=mps/code/mps.c= directly.  (=README-IGC='s advice to =brew install libmps= is
+out of date.)  Interface is =--with-mps=yes|debug|no=.
+
+Why not yet:
+
+- *It is not on master.*  =grep -i mps configure.ac= on master returns only
+  false hits; =src/igc.c= does not exist there; =etc/NEWS= has no entry, so it
+  is not slated for 32.1.  It lives on =origin/feature/igc3=, tip
+  =07b35c82b7d= (2026-08-06) -- one month stale, with master 460 commits ahead
+  of the merge-base.
+- *That branch has no canvas, and you daily-drive this build for canvas.*
+  Canvas landed on master as =d5f515e4a33= on 2026-08-16, ten days *after*
+  igc3's tip.  =git show origin/feature/igc3:src/image.c | grep -ci canvas=
+  gives 3 incidental hits against master's 129; =canvas-refresh= exists only
+  on master.
+- *Porting canvas onto it is not a cherry-pick.*  The four canvas commits
+  (~1050 lines) touch =src/emacs-module.c= and =src/module-env-32.h=: canvas
+  hands a raw writable pixel buffer to a dynamic module, and under a *copying*
+  collector that buffer needs pinning and lifetime work nobody upstream has
+  written.
+- =README-IGC= itself asks users to "help us stabilize this branch".
+
+*Action.*  Do not merge.  If you want to evaluate MPS, build a throwaway third
+bundle (=EMACS_SRC_REVISION=origin/feature/igc3=, =--with-mps=yes=) on its own
+chemacs profile, accept that it has no canvas, and leave your pin alone.
+
+*De-risking datapoint:* all four emacs-plus NS patches dry-run clean against
+igc3 (=patch --dry-run= over its =ns-win.el=, =frame.{c,h}=, =nsfns.m=,
+=nsterm.{h,m}= -- no fuzz, no rejects), so the build script needs no surgery.
+
+** DONE Keep --with-native-compilation=aot
+CLOSED: [2026-09-08]
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:END:
+
+Considered and rejected as a lever.  =configure.ac:1744-1746=: =aot= compiles
+the whole tree ahead of time, while plain =yes= compiles only the preloaded
+files and JITs the rest at runtime.  Note the setting covers *Emacs's own
+=lisp/= only* -- package =.eln= are produced by the async JIT either way.
+
+The memory case for dropping it does not survive measurement: see the
+correction in [[*Where the memory is][Where the memory is]] -- =.eln= account for 103 MB resident, not
+600 MB.  Keep AOT.
+
+** IDEA -mcpu targets apple-m1 on an M5
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  ~/.files/install_emacs_source.sh
+:END:
+
+=clang -###= with no flag selects =-target-cpu apple-m1=.  =-mcpu=native= gives
+=apple-m3= (clang 17 does not know the M5) and =-mcpu=apple-m5= is an
+=unsupported argument=; =apple-m4= works, and gcc-16 accepts the same set.
+
+Expected gain is *low single-digit % on the C core and zero on hot Lisp*,
+which libgccjit compiles rather than clang.  It also breaks the
+"fresh machine reproduces this exact Emacs" property of
+=files/.config/emacs-src/revision= -- the bundle becomes M4-or-newer only.
+
+*Action.*  Low priority.  If you try it, use =-mcpu=apple-m4= explicitly --
+never =native=, which silently degrades to m3 -- and A/B it.
+
+** NOPE -O3 instead of -O2
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:END:
+
+=install_emacs_source.sh:344= passes =-O2=, which is also Emacs's own default
+(=configure.ac:1641-1642=).  Expected difference is negligible for the same
+reason as above: the hot path is native-compiled Lisp, not the C core.  This
+is not where your GC time is.  Left at =-O2=.
+
+** NOPE Link-time optimisation
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:END:
+
+Two independent reasons.  Upstream advises against it -- =INSTALL:465-466=
+verbatim: "Link time optimization is not the default as it tends to cause
+crashes and to make Emacs slower."
+
+And on this machine it would be a *silent no-op*: =configure.ac:1943-1948=
+enables LTO for clang only if =$CC -print-file-name=LLVMgold.so= is executable;
+here that returns the bare string =LLVMgold.so= (not found), so
+=ac_lto_supported=no= and configure reports "no" *without erroring*.  You would
+believe you had enabled it and you would not have.
+
+** DONE Keep native-comp-speed at 2
+CLOSED: [2026-09-08]
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:END:
+
+=lisp/emacs-lisp/comp.el:58-67= describes level 2 as "max optimization level
+fully adherent to the language semantic", and level *3* as one where "the
+compiler is free to perform dangerous optimizations".  Unknown gain against a
+semantic-correctness risk across 1199 =.eln=.  Left at 2.
+
+Also leave =native-comp-driver-options= (=("-Wl,-w")=) alone -- appending a
+=-mcpu== there invalidates the comp hash and forces recompiling all 1199
+=.eln= for a noise-level gain.
+
+** TODO One combined rebuild: drop three unused features, add debug info
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  ~/.files/install_emacs_source.sh
+:END:
+
+Four changes worth batching into a single rebuild.  *Back the bundle up
+first* -- see below.
+
+*** Drop =--with-imagemagick=
+
+Compiled in, then switched off at runtime: =modules/core/image.el:24= sets
+=imagemagick-types-inhibit t=, and =t= means IM renders *no* type.
+=image.el:14-23= explains why (IM pre-resamples and blurs on 2x displays), and
+=modules/lang/markdown.el:123-132= advises markdown-mode off it.  =otool -L=
+confirms both Magick dylibs are linked.
+
+Memory saving is *negligible* -- ~112 KB resident, precisely because it is
+never called.  The win is deleting a heavyweight brew dependency and its
+pkg-config workaround at =install_emacs_source.sh:294= and =:302=.
+=gif-screencast= uses the IM *CLI* and is unaffected.
+
+*** Drop =--with-xwidgets=
+
+=grep -rn -i xwidget --include=*.el ~/.zetta.d= returns *no hits*, and there is
+no webkit package in =elpaca-lock.el=.  It pulls in WebCore (28.2 MB
+resident), JavaScriptCore (18.9 MB), WebKit (13.5 MB), plus libwebrtc,
+WebKitLegacy and libANGLE -- ~65 MB of RSS.
+
+*Do not expect this to fix the memory problem.*  Those are clean, file-backed
+=SM=COW= pages with *0 K dirty*: real RSS, but they contribute essentially
+nothing to the 1.4 GB physical footprint and nothing at all to GC pause time.
+The honest justification is "compiled in but unused", plus a smaller dyld bind
+graph at launch.
+
+Also fix the now-stale =--with-x11= mutual-exclusion comment at
+=install_emacs_source.sh:319-321=.
+
+*** Drop =--with-dbus=
+
+No D-Bus usage in the config; =modules/tools/alert.el:75= sets
+=alert-default-style 'osx-notifier= (osascript/afplay).  =dbus.el= *is* loaded
+via mu4e, but =lisp/net/dbus.el= guards every entry point with
+=(or (featurep 'dbusbind) (signal 'dbus-error ...))= at lines 380, 521, 573,
+594, 612 and 631, so it loads fine without C support.  ~200 KB resident and
+one brew runtime dep off the link line.
+
+*UNVERIFIED:* the auditor confirmed =dbus.el= loads without C support, *not*
+that no mu4e path calls a dbus function at load time.  After this rebuild,
+load mail once and watch for a =dbus-error=.
+
+*** Add =-g=
+
+The build currently ships with *zero debug information*.  =configure.ac:1634=
+gates Emacs's =-g3= default on =ac_test_CFLAGS != set=, and
+=install_emacs_source.sh:344= passes =CFLAGS= explicitly, so it is skipped.
+Confirmed: =dwarfdump --debug-info= is empty, =nm -a | grep -c "OSO\|SO "= is
+*0*, and there is no =.dSYM=.
+
+That matters on a pretest-master daily driver: a crash gives an address-only
+backtrace, useless for =bug-gnu-emacs=, leaving =--rollback= as the only tool.
+Add =-g= to line 344; run =dsymutil= and strip before =codesign= if bundle size
+matters.
+
+** TODO No rollback target exists right now
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  ~/.files/install_emacs_source.sh
+:END:
+
+=~/Applications/EmacsSrc.app.prev= is absent -- it is only created from the
+second bump onward (=install_emacs_source.sh:485-492=).  So any bad experiment
+currently costs a 45-70 min rebuild.
+
+*Action.*  =ditto= the current bundle aside before changing any configure flag.
+Do this before the rebuild above.
+
+** QUES The build script names a chemacs profile that does not exist
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  ~/.files/install_emacs_source.sh, ~/.emacs-profiles.el
+:END:
+
+=install_emacs_source.sh:513= tells you it installed chemacs profile
+=zetta-src=, but =~/.emacs-profiles.el= has no such entry and the live daemon
+runs =--with-profile zetta=.  So EmacsSrc shares =~/.zetta.d= *and* the elpaca
+=builds/= directory with emacs-plus@31.
+
+=eln-cache= is version-namespaced (=31.0.91-3ec82db9= at 142 MB and
+=32_0_50-69ae531f= at 187 MB), but elpaca =.elc= files are *not*.  That is
+exactly the shape of the 2026-07 version-skew incident.
+
+*Action.*  Decide deliberately: either add a real =zetta-src= profile with its
+own =user-emacs-directory=, or fix the message to say =zetta=.  If emacs-plus
+is retired, delete the stale 142 MB =31.0.91= tree.
+
+* Open questions
+
+Things the audit could not settle.  Each names the instrument that would.
+
+** QUES 85% of the 9.169 s init time is unattributed
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:END:
+
+| Component                       | Cost         | Confidence                    |
+|---------------------------------+--------------+-------------------------------|
+| =op inject=                       | 1.05-1.21 s  | high -- direct, in situ        |
+| use-package macroexpansion      | 262 ms       | high, but isolated not in situ |
+| module =.el= reader               | 35 ms        | high, but isolated not in situ |
+| =python -m certifi=               | 30-90 ms     | high                          |
+| *Confidently attributed*        | *~1.4 s (15%)* |                             |
+| *Unattributed*                  | *~7.7 s (85%)* |                             |
+
+The reader and macroexpand figures were measured in a batch Emacs over the
+files on disk, *not* during real startup -- they are a floor, and exclude
+interpreted evaluation of =:init= and =:general= bodies.
+
+*Action.*  Enable =use-package-compute-statistics= for a single session and read
+=use-package-statistics=.  That is the instrument that settles it; the auditor
+was told not to enable it, so it remains open.  Do this *before* spending time
+on the 145 eager blocks -- it will say whether they are actually the 7.7 s.
+
+** QUES Is copilot's 811 MB RSS a leak?
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:END:
+
+PID 5135 =node copilot-language-server --stdio= held 811 MB after 26 min.
+=mu server= by contrast is 39 MB and is *not* a problem.  Whether 811 MB is a
+leak or normal for this workspace is *not verified*.
+
+*Action.*  Fix the 64 MB read buffer and =copilot-idle-delay= first, re-measure,
+then cap with =NODE_OPTIONS=--max-old-space-size= if it still climbs.
+
+** IDEA Font cache compaction is permanently disabled
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  early-init.el
+:END:
+
+=early-init.el:67= sets =inhibit-compacting-font-caches t=, so font caches are
+never reclaimed -- unbounded, against 2107 live faces.  This is a plausible
+contributor to the 918 MB =MALLOC_SMALL= region but was *not* isolated.
+
+*Action.*  Worth flipping to nil once the GC fixes land and collections are
+cheap.  Measure the footprint before and after.
+
+* Not an optimisation -- see TODO.org
+
+The audit turned up one correctness bug that is filed in [[file:TODO.org][TODO.org]] instead:
+=modules/core/security.el= leaves =gnutls-trustfiles= pointing at a shell error
+message while =gnutls-verify-error= is =t=.
+
+* Method, and what this audit did not do
+
+Produced by five parallel read-only audits (build, startup, redisplay,
+runtime/GC, editing latency), each reporting file:line evidence, with the
+load-bearing claims re-verified independently against the live =src= daemon
+before being written down here.
+
+Three claims were checked and *overturned* in the process; they are recorded
+in place rather than quietly dropped, because each one would otherwise have
+sent someone down a wrong path:
+
+- Native compilation is *not* the source of the freezing -- the question that
+  started this.  Zero comp subprocesses were running and no =.eln= had been
+  written in two hours.
+- =.eln= dylibs account for ~103 MB resident, *not* the ~600 MB an early
+  reading of =__TEXT= suggested.  AOT is not a memory lever.
+- librsvg rasterisation is roughly a quarter of the idle redisplay cost, not
+  the bulk; the elisp rebuild dominates.  This changes the fix from image
+  caching to renderer memoisation.
+
+*Known gaps.*  85% of the 9.169 s init time is unattributed; the eager
+=use-package= list covers ~130 of 145 blocks; the cost of =org-fragtog= and of
+the =elpaca-wait= barriers was never measured; and the practical consequence of
+the TLS bug in [[file:TODO.org][TODO.org]] is not established.  Each is flagged at its item.
+
+*One side effect to be aware of:* while benchmarking header-line segments, an
+auditor evaluated =(goto-char (point-max))= in the =FONTS.org= buffer, which is
+live in a window -- point there was moved to end of buffer.  No file was
+written and nothing else was changed.

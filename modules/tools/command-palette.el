@@ -178,23 +178,54 @@
 (defvar zetta-clipboard-poll-interval 1
   "Seconds between clipboard polls.")
 
+(defvar zetta-clipboard--process nil
+  "The in-flight `pbpaste', if any.")
+
+(defun zetta-clipboard--accept (current)
+  "Push CURRENT into the kill ring if it is new."
+  (when (and current
+             (not (string-empty-p current))
+             (not (string= current zetta-clipboard-last))
+             ;; Don\='t clobber the kill ring head if it has the same
+             ;; text — it may carry a yank-handler (e.g. evil
+             ;; linewise yank) that would be lost by kill-new.
+             (not (string= current (substring-no-properties
+                                    (or (car kill-ring) "")))))
+    (setq zetta-clipboard-last current)
+    (kill-new current)))
+
 (defun zetta-clipboard-poll ()
-  "Check macOS clipboard and push new content into the kill ring."
-  (condition-case nil
-      (let ((current (with-temp-buffer
-                       (call-process "pbpaste" nil t nil)
-                       (buffer-string))))
-        (when (and current
-                   (not (string-empty-p current))
-                   (not (string= current zetta-clipboard-last))
-                   ;; Don't clobber the kill ring head if it has the same
-                   ;; text — it may carry a yank-handler (e.g. evil
-                   ;; linewise yank) that would be lost by kill-new.
-                   (not (string= current (substring-no-properties
-                                          (or (car kill-ring) "")))))
-          (setq zetta-clipboard-last current)
-          (kill-new current)))
-    (error nil)))
+  "Read the macOS clipboard off the main loop, pushing new content to the kill ring.
+
+Asynchronous deliberately.  `call-process\=' here measured *6.5ms* in the
+live daemon, once a second, as a hard block of the main loop -- which
+starves consult\='s and irs\='s async sinks (their refresh timers cannot run
+while it blocks) and jitters keystroke echo.  See OPTIMIZATIONS.org item 6
+and the consult-async-starvation note.
+
+A poll is skipped while the previous one is still running, so a slow or
+hung `pbpaste\=' can never queue up a second."
+  (unless (process-live-p zetta-clipboard--process)
+    (condition-case nil
+        (let ((buffer (generate-new-buffer " *zetta-pbpaste*" t)))
+          (setq zetta-clipboard--process
+                (make-process
+                 :name "zetta-pbpaste"
+                 :buffer buffer
+                 :command '("pbpaste")
+                 :noquery t
+                 :connection-type 'pipe
+                 :sentinel
+                 (lambda (process _event)
+                   (unless (process-live-p process)
+                     (let ((buffer (process-buffer process)))
+                       (when (buffer-live-p buffer)
+                         (unwind-protect
+                             (ignore-errors
+                               (zetta-clipboard--accept
+                                (with-current-buffer buffer (buffer-string))))
+                           (kill-buffer buffer)))))))))
+      (error nil))))
 
 (defun zetta-clipboard-monitor-start ()
   "Start polling the macOS clipboard."

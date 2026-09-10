@@ -1,0 +1,743 @@
+#+title: Headless Zetta on kb-hub — Research & Implementation Plan
+#+author: Charlie Holland
+#+startup: overview
+
+# PHASE 1 -- RESEARCH, plus the PHASE 2 REVIEW.  This document is the
+# phase-one research for the implementation plan: what was measured and
+# read on [2026-09-10], the verdict, and a recommended shape.  The phase-two
+# review, same day, re-verified the phase-one claims against the code and
+# the hub: the analysis held, the plan had gaps.  Its findings are folded
+# in below at the point each applies, marked [phase 2], and Part 8 lists
+# them in one place.  Nothing has been built or changed in either repo.
+# Part 6 now carries ordered tasks per repo and a "Done when" per phase,
+# written so a smaller model can implement them; Part 7 marks each
+# question as settled, defaulted, or the owner's call.
+#
+# Same rule as TODO.org and OPTIMIZATIONS.org: evidence stays with the
+# claim.  Where a number is a measurement it says so; where it is an
+# inference it says that too.
+#
+# Problem statement: the Emacs on the kb-hub Oracle VPS (the Syncthing hub
+# for ~/kb, reached from Blink over ssh/mosh) is a 59-line purpose-built
+# config.  It is different enough from the daily driver that editing there
+# feels foreign.  Question: what would it take to run a headless edition of
+# .zetta.d and .files on the hub, which modules would need excluding, can
+# that be done cleanly, and does the full config need a beefier VPS?
+
+* Start here
+
+** Verdict [2026-09-10]
+
+*Feasible, and no paid upgrade is needed.*  The config already loads on
+headless Linux under Emacs 29: every pull request runs the entire module set
+in batch on ubuntu-latest (see Part 2).  What the hub changes is two things
+CI never exercises: its Emacs has no SVG support, and the machine has no
+compiler toolchain.  [phase 2] CI's own gate also has a hole: it discards
+use-package's error reports, so a =:config= that fails on 29.x is green
+today (Part 2, item 3).
+
+The work is:
+- a headless module profile in .zetta.d (a module list plus a populated
+  =zetta-module-conditions=),
+- roughly eight small guards in individual modules (Part 3),
+- an apt list in the existing hub bootstrap script (Part 5),
+- one unattended cold build on the hub (Part 4),
+- [phase 2] a committed =templates/zetta.headless.el= plus a hand-placed
+  hub private file, since neither user file is in .files (Part 5),
+- [phase 2] an =emacs-nox= CI row that also fails on use-package errors
+  (Phase B),
+- [phase 2] a build entry point with a multi-hour window: =bin/zetta
+  install= gives up after ten minutes (Part 4).
+
+The dotfiles need a Linux path only for the slice actually wanted on a
+server.  Do not port =bootstrap.sh=.
+
+** The two machines
+
+| Capability          | Mac (daily driver)                              | kb-hub today                                            |
+|---------------------+-------------------------------------------------+---------------------------------------------------------|
+| Emacs               | 31.0.91 pretest, GUI, SVG, chemacs =zetta=      | apt =emacs-nox= 29.3, 44 days up, 120 MB resident        |
+| Native compilation  | yes                                             | yes (verified: native-compiled a test file on the hub)  |
+| Build toolchain     | Xcode CLT, cmake, libtool                       | none: no gcc, make or cmake in PATH; libgccjit0 only    |
+| System libs         | libvterm, poppler, tree-sitter, librsvg         | none of these                                           |
+| Search binaries     | ripgrep, fd, ag                                 | none; git, tmux, mosh, python3 only                     |
+| Secrets             | 1Password CLI =op= with service-account token   | no =op=; only =~/.config/readwise/token=                 |
+| Terminal            | native frames                                   | Blink over ssh/mosh, tmux =tmux-256color=, prefix C-b   |
+| Shape               | --                                              | A1 Flex, 1 OCPU / 6 GB, Neoverse N1, no swap, 141 GB free |
+| Config on disk      | 3.6 GB (1.3 GB sources, 0.7 GB eln caches)      | 4 elpa packages                                         |
+| Emacs features      | GUI build with RSVG                             | SQLITE3 TREE_SITTER NATIVE_COMP MODULES GNUTLS JSON DBUS LIBSYSTEMD; no RSVG, no X [phase 2, measured] |
+| OS, tmux, git       | macOS (Darwin 25.1)                             | Ubuntu 24.04.4 aarch64, tmux 3.4, git 2.43 [phase 2, measured] |
+| Timezone            | local                                           | Etc/UTC, and user units inherit no TZ [phase 2, measured] |
+
+Measured over ssh on [2026-09-10]: =uname=, =free=, =df=, =emacs --version=,
+=system-configuration-features= (no RSVG, no X), a =native-compile= smoke
+test, =dpkg -l=, user timers.  Package counts: 341 pinned in
+=elpaca-lock.el=, 328 =use-package= forms across =modules/=, 345 built
+package directories on the Mac.
+
+* Part 1 -- What already works in our favour
+
+- *CI is the existence proof.*  =.github/workflows/ci.yml:74= runs the
+  whole module set in batch on ubuntu-latest under 29.4, 30.2 and the 31
+  pretest, gating on zero failed packages, zero unpinned packages, and no
+  void-function or wrong-type-argument in the log (=bin/zetta ci-test=).
+  Linux and Emacs 29 are already supported targets.  [phase 2] The gate
+  has a hole, though: it discards use-package's own error reports (Part 2,
+  item 3).
+
+- *The loader has the right hook.*  =zetta-module-conditions= in
+  =source/bootstrap/bootstrap-modules.el= is an alist of module file to
+  predicate; a module loads only when its predicate is true, and is skipped
+  with a message otherwise.  It is currently =nil=.  Its docstring already
+  shows the intended =image-type-available-p= use and explains why guarding
+  inside the file is the wrong alternative (definitions stop being
+  top-level, =defsubst= stops inlining).
+
+- *The user config can branch.*  =init.el:18= loads =~/.zetta.el= with
+  =load-file=, so it can pick a module set by hostname or an environment
+  variable.  =zetta-modules!= just setqs =user-files=; if it is never
+  called the hardcoded list in =source/init-data/init-data.el= wins, so a
+  headless branch must still call it.  Parser gotcha
+  (=bootstrap-modules.el:227=): a category spec switches to exclusion mode
+  if any symbol starts with a hyphen and then silently ignores plain
+  includes, so one list cannot mix the two.  [phase 2] Two more facts about
+  the user files: neither =~/.zetta.el= nor =~/.private.el= is in .files
+  (both are plain files in =$HOME= on the Mac, and the hub has neither),
+  and =bin/zetta install= copies the full-profile
+  =templates/zetta.example.el= into place when =~/.zetta.el= is missing.
+  So the headless template has to be installed before the first build,
+  not after.  On the other side of the ledger, =zetta--module-files= lists
+  what is on disk, so a module the hub's checkout lacks is simply absent,
+  not an error.
+
+- *The bootstrap is TTY-safe.*  Nothing in =source/bootstrap/=, =init.el=
+  or =early-init.el= requires a GUI or macOS.  =bootstrap-brushup.el:38=
+  wraps its face overrides in =(when window-system)= and ships a palette
+  fallback at lines 15-33.  =bootstrap-repeatable.el:8= gates on 30.1.
+  =early-init.el:40= already special-cases daemon startup.  The =:brushup=
+  keyword is registered by the external brushup package, not this repo
+  (=bootstrap-use-package-keywords.el:35=), and brushup is bootstrap-level,
+  so excluding =:ui= does not strand the ~20 modules that use it.
+
+- *Secrets are skippable.*  =zetta-op-load= is called from
+  =~/.private.el:30= only, never from =init.el=.  =init.el:106= loads
+  =~/.private.el= unguarded, so the hub needs its own private file; the
+  current one is 548 lines, mostly mu4e/msmtp with =/opt/homebrew= paths
+  (lines 127, 133, 137, 297), none of which belongs on the hub.
+
+- *The SVG engine is inert without its consumers.*  =modules/core/line-utils.el=
+  holds the ~2,100-line mode-line and tab-bar engine in the *core*
+  category.  Its =svg-line= calls are =fboundp=-guarded at 165, 226, 2123
+  and bare at 1007, 1945, 2010, 2031 -- but the bare ones sit in functions
+  only =ui/telephone-line.el= and =ui/disabled/line.el= call.  Excluding the
+  UI files leaves it loaded and harmless.  =core/interface.el:688= reads
+  =zetta-svg-line-font= through =bound-and-true-p=.
+
+- *The hub already has a Linux installer.*  =~/.files/hub/bootstrap-hub.sh=
+  (105 lines) is idempotent and apt-based, and is what =hub-deploy= runs
+  after an =scp= of =hub/= to =~/syncthing-hub/=.  It is the natural place
+  for build dependencies.
+
+* Part 2 -- What CI does not prove
+
+CI runs on GitHub's ubuntu-latest image with a =setup-emacs= build that has
+librsvg and a full toolchain, so vterm and pdf-tools build there and every
+SVG module loads.  The hub differs in exactly those two respects:
+
+1. =emacs-nox= 29.3: =(image-type-available-p 'svg)= is nil.
+2. No gcc/make/cmake, no libvterm, no poppler, no tree-sitter CLI.
+
+Both vterm and pdf-tools are in =elpaca-lock.el=, which is why CI builds
+them and the hub will not.  Everything in Part 3 follows from these two
+facts plus macOS-isms that CI's Linux run already tolerates silently.
+
+[phase 2] Two more things CI does not prove, found by reading the harness:
+
+3. *The error gate is porous.*  =bin/zetta ci-test= greps the log for
+   void-function, wrong-type-argument and debug-early, then drops every
+   line containing "use-package" (=bin/zetta:704=; the local =test= command
+   has the same filter at line 421).  use-package wraps each =:config= in
+   a condition-case and reports failures as "Error (use-package): ..."
+   warnings, which is exactly what that filter discards.  So a =:config=
+   that signals on 29.x passes CI today: =ui/ef-themes.el:11= fails on
+   29.4 in every PR run and nobody sees it.  The headless row in Phase B
+   must fail on those warnings too, or none of the Part 3 guards is
+   CI-verifiable.  Measured blast radius of tightening it: the last cold
+   run (34091453070, 2026-09-07) hides, per row, ef-themes, modern-fringes
+   and gptel on 29.4 and 30.2; modern-fringes and gptel on 31; and
+   treesit-tap on 29.4 alone.  Four packages, each a few-line fix (Phase B,
+   step 3); treesit-tap is a hub break the first audit missed (Part 3).
+4. *Deferred =:config= never runs in batch.*  A =use-package= with =:hook=,
+   =:commands=, =:mode= or =:bind= defers its =:config= to first use, and
+   =use-package-always-defer= is not set, so CI exercises the eager forms
+   only (29 =:demand t=, 4 =:defer t=, the rest decided per keyword).
+   Breaks behind a deferred form surface on the hub at first use, which
+   is why Phase C's tests are manual.  The batch-versus-daemon worry, by
+   contrast, is small: the only =noninteractive= gate in =modules/= is
+   vterm's, and the only =daemonp= is =early-init.el:40=.
+
+* Part 3 -- What breaks, by class
+
+Two read-only audits inspected all 300 module files individually
+[2026-09-10].  Classes:
+- =break=     aborts a module load on 29.3 or on Linux
+- =patch=     needs a small guard, then fine
+- =toolchain= needs a compiler or system lib on the hub
+- =skip=      GUI-only; exclude via profile or predicate
+
+** Hard breaks and load-time hazards
+
+| File                                              | Class     | What happens                                                                                                                                                   |
+|---------------------------------------------------+-----------+----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| =ui/ef-themes.el:11=                              | break     | Unguarded =set-face-attribute= on =header-line-inactive= (new in Emacs 31).  Signals on 29.3 and aborts the theme =:config=.  The sibling call two lines down is =facep=-guarded. |
+| =completion/treesit-tap.el:14=                    | break     | =(treesit-tap-setup)= in the =:config= reads =bounds-of-thing-at-point-provider-alist=, an Emacs 30 variable: void on 29 (measured: CI run 34091453070, 29.4 row).  Missed by the first audit [phase 2]. |
+| =tools/ai.el:115=                                 | patch     | gptel's =:config= passes =openai-api-key=, which only the private file defines; unbound, the whole =:config= aborts (measured on all three CI rows).  =bound-and-true-p= it [phase 2]. |
+| =ui/modern-fringes.el=                            | patch     | The =:config= calls =set-fringe-bitmap-face=, void without a window system (measured on all three CI rows).  The hub skips the module; the full-profile CI rows need an =fboundp= guard once the gate tightens [phase 2]. |
+| =app/whisper.el:18=                               | break     | A =:config=-time helper signals "only supported on macOS".                                                                                                     |
+| =term/vterm.el:9=                                 | toolchain | =vterm-always-compile-module= is t; only guard is =(unless noninteractive)= at line 5, which a daemon fails.  Attempts a cmake build at every start.            |
+| =org/pdf-tools.el=                                | toolchain | =pdf-loader-install= at =:init= only registers autoloads; epdfinfo is built (make + poppler) on the first PDF open, so this is a first-use failure, not a load-time one [phase 2].  Exclude it anyway; =org/pdfnote.el= goes with it.                                                                           |
+| =lang/treesit.el:17= and six dependents           | toolchain | Grammar installs need a C compiler (=typescript-ts-mode=, =treesit-fold=, =treesit-tap=, =treesit-textobj=, =meow-tree-sitter=, =ui/hl-block.el:212=).  Cheapest fix: install gcc. |
+| =tools/ghostel.el=                                | toolchain | Loads a dynamic module; referenced from =ui/window-chrome.el= and =ui/display-line-numbers.el:96=.                                                              |
+| =tools/command-palette.el:241=                    | patch     | Polls =pbpaste= on a timer at load (async via =make-process= since [2026-09-09], but the binary does not exist on Linux, so every poll errors).  Hardcodes =/Applications= at 79-82. |
+| =tools/alert.el= (49, 58, 90)                     | patch     | All of =zetta-notify= goes through osascript and afplay.  Silent, not fatal, but wasted shell-outs.                                                            |
+| =tools/signel.el:12=                              | patch     | Overrides =notifications-notify= with osascript.                                                                                                               |
+| =tools/devdocs.el:26=                             | patch     | Installs 36 doc sets over the network at =:config= load.                                                                                                       |
+| =core/security.el:8=                              | patch     | A nil =executable-find= for python silently writes a garbage =gnutls-trustfiles= entry.                                                                        |
+| =completion/corfu.el=, =completion/vertico.el:58= | patch     | Child-frame popups (corfu, vertico-posframe) with no terminal fallback.  Emacs 29 has no TTY child frames; needs corfu-terminal or in-buffer display.           |
+
+** GUI-only modules to skip
+
+All class =skip=.  The SVG chrome stack is the largest group; three of its
+files use =:wait t= (=ui/svg-line.el:17=, =ui/svg-margin.el:19=,
+=ui/poimap.el:51=), so they would block the elpaca queue on a package that
+cannot render.
+
+| Group            | Files                                                                                                                                                                  | Note                                                                                                                                                                       |
+|------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| SVG chrome       | =ui/svg-line= =ui/svg-lib= =ui/svg-margin= =ui/modeline-svg= =ui/header-line-svg= =ui/tab-bar-svg= =ui/tab-line-svg= =ui/poimap=                                       | Only poimap guards itself (line 699).  One predicate on =(image-type-available-p 'svg)= covers the lot.                                                                    |
+| Icons            | =ui/all-the-icons= =ui/all-the-icons-dired= =ui/all-the-icons-ibuffer=                                                                                                 | Pinned to the svg branch (line 25); a =display-graphic-p= guard was *deliberately removed* (comment, lines 27-33).  Unguarded pulls also from =completion/corfu.el:194= and =completion/consult-gh.el:11=. |
+| Fonts and pixels | =ui/fontaine= =ui/ligature= =ui/unicode-fonts= =ui/default-text-scale= =ui/face= =ui/ultra-scroll= =ui/minimap= =ui/modern-fringes= =ui/image-mode= =core/image=       | Pointless without a window system.                                                                                                                                         |
+| Toys and charts  | =ui/nyan-mode= =ui/parrot= =app/flappy-fish= =org/org-image= =org/org-gantt= =org/org-timegrid= =editor/evil-fringe-mark=                                              | org-gantt already guards on image availability inside the package (=zettapkg/org-gantt/org-gantt.el:139=).                                                                 |
+| macOS            | =tools/osx-lib= =tools/spotlight= =app/say=                                                                                                                            | mdfind, osascript, say.                                                                                                                                                    |
+
+** Silent degradations needing no action
+
+=core/emacs.el:12-18= and =lang/treesit.el:17,21= set variables that do not
+exist on 29.  =ui/theme.el:37= records a spec for the Emacs 31 face via
+=custom-set-faces=, which is harmless (unlike the live call in ef-themes).
+=ui/theme.el:5= calls =load-theme= at =:init=, which works on a 256-colour
+or truecolor TTY.
+
+Already self-gated: =tools/ai.el:3=, =app/bluesky.el:11=,
+=tools/flamegraph.el:16=, =core/xref.el:10=, =app/eca-emacs.el:18=
+(window-system), =tools/dired.el:230= (xdg-open branch), =tools/sql.el=
+(Homebrew paths behind =executable-find=), =editor/tap-fold.el:22=.
+=core/keys.el= carries no GUI-command references.  No hardcoded =/Users/=
+anywhere in =modules/=.
+
+** External binaries used without a guard
+
+- ripgrep at =completion/consult.el:36= and =org/org.el:1175=; git across
+  =tools/magit.el= and =tools/git-gutter.el= (global mode at =:init=); zsh
+  hardcoded at =term/shell.el:44=; curl at =app/elfeed.el:32=; node, npx,
+  uvx, deno in =tools/ai.el=; kubectl, jq, dasel, tilt, ffmpeg elsewhere.
+- Already guarded: ag, color-rg, tokei, docker, gh, mu, mmdc, dot, typst.
+- Guard census: 29 occurrences of =display-graphic-p=, =window-system=,
+  =daemonp= or =image-type-available-p= across =modules/= and =source/=
+  combined.  No =daemonp= guard exists in any module.
+  =image-type-available-p= is a real guard in two places only.
+
+** Terminal-specific losses (inference, not measured)
+
+- =bootstrap-keys.el:245= binds =s-z= chords; super is unreachable over
+  ssh.  Cosmetic.  The comma leader (=launch-key=) transmits fine; the
+  hub tmux.conf already notes that C-comma does not.
+- Clipboard: no pbcopy/pbpaste.  OSC 52 through Blink is the likely
+  answer; unverified.
+- 24-bit colour needs the chain Blink -> mosh -> tmux -> Emacs to agree.
+  The hub's tmux sets =tmux-256color= but no =terminal-features RGB=.
+  Unverified.
+- [phase 2] Colour, concretely: Emacs enables 24-bit output when the
+  client's environment has =COLORTERM=truecolor= or the terminfo entry
+  carries an RGB capability; tmux's outer =terminal-features= alone tells
+  Emacs nothing.  =emacsclient -t= inherits the shell's environment, so
+  the recipe is COLORTERM in =hub/bashrc-additions.sh= plus
+  =terminal-features ",*:RGB"= in =hub/tmux.conf=.
+- [phase 2] Key chords: =bootstrap-keys.el:10= sets
+  =key-chord-two-keys-delay= to 0.05 s, and =kj= leaves insert state
+  through key-chord (line 202).  Over mosh from an iPad the gap between
+  two keystrokes will not reliably fit 50 ms.  Inference; test first.
+- [phase 2] The tmux.conf comment that C-comma cannot transmit predates
+  tmux 3.2's =extended-keys=; the hub runs tmux 3.4 (measured).  Whether
+  Blink emits CSI-u or modifyOtherKeys decides it.  Test rather than
+  accept.
+- [phase 2] =xterm-mouse-mode= is on in the lean init and nowhere in
+  zetta; touch taps on the iPad need it.
+
+** Classification check [phase 2]
+
+Re-verified [2026-09-10] against the code, the lock file and the hub:
+
+- *Toolchain list is complete.*  =elpaca-lock.el= was checked for every
+  other native-module or binary-fetching package in common use (jinx, zmq,
+  sqlite3, parinfer-rust-mode, telega, eat, jupyter, lsp-bridge, codeium,
+  emacs-lsp-booster, eaf, org-roam): none is pinned.  Present are vterm,
+  pdf-tools, ghostel and whisper only, plus copilot (node at run time) and
+  nov (unzip at run time).
+- *macOS list is complete.*  A sweep for osascript, pbcopy/pbpaste,
+  =open -a=, =/Applications=, =/opt/homebrew=, afplay and mdfind across
+  =modules/= found nothing unlisted that is unguarded: =tools/dired.el=
+  branches on =system-type=, =tools/sql.el= and =app/anki.el= go through
+  =executable-find=, and the osascript in =tools/gha.el= sits inside a
+  command string that runs only when a workflow run is watched.
+- *Hub features close three questions.*  The hub's Emacs has SQLITE3
+  (forge and emacsql work), TREE_SITTER (the ts-modes work once grammars
+  can compile) and MODULES (dynamic modules load), measured with
+  =system-configuration-features= and the =*-available-p= predicates.
+- *All recipe sources are public.*  The config repo and the ten =chiply/*=
+  recipes (brushup, detached.el, magneto, package-tutor, repeatable,
+  space-tree, spot, svg-line, svg-margin, touchtype) are PUBLIC per
+  =gh repo view=, so the hub clones with no credentials.  CI's
+  =GIT_TERMINAL_PROMPT=0= exists for exactly the failure that would
+  otherwise follow.
+- *Working tree versus checkout.*  The audit read the working tree.  dev
+  is 37 commits ahead of =origin/main= and eight module files are
+  untracked (=org/org-agenda.el=, =org-queue.el=, =org-gantt.el=,
+  =org-timegrid.el=, =org-todo-schema.el=, =org-super-agenda.el=,
+  =org-other-agenda.el=, =ui/poimap.el=).  A missing file is silently
+  absent rather than an error (Part 1), but the agenda and queue work the
+  hub exists for is not in any pushable commit yet.
+- *SVG skip list is complete.*  The only svg references outside it are
+  guarded (=editor/tap-fold.el:22= via =fboundp=, =core/interface.el:688=
+  via =bound-and-true-p=) or inert (=ui/solaire-mode.el:260= advises a
+  function that may never be defined, which =advice-add= permits).
+
+* Part 4 -- Sizing: no beefier paid VPS
+
+The hub README (=~/.files/hub/README.org:86-87=) already says the Always
+Free A1 Flex shape allows up to 4 OCPU / 24 GB and recommends 2 / 12.  The
+hub is provisioned at 1 / 6.  Resizing in place stays at $0, subject to
+Oracle having ARM capacity in the region; the README's idle-reclamation
+warning (upgrade to PAYG) still applies.
+
+| Cost                        | Measured     | Where                                              | Implication for the hub                                                  |
+|-----------------------------+--------------+----------------------------------------------------+--------------------------------------------------------------------------|
+| Cold elpaca build           | 105-132 min  | 4-vCPU GitHub runners, last five green runs        | Inference: several hours on one N1 core plus the native-comp tail.  One-off; run unattended. |
+| Warm CI run                 | 13 min       | cache hit                                          | Later pulls rebuild only what changed.                                   |
+| Resident memory, GUI daemon | ~960 MB      | Mac, 22 h uptime                                   | Fits in 6 GB; 12 GB gives native-comp workers room.                      |
+| Disk                        | 3.6 GB       | =~/.zetta.d= incl. sources and eln                 | 141 GB free on the hub.                                                  |
+| GC thresholds               | 128 / 256 MB | =bootstrap-gcmh.el:22,40=                          | Fine at 6 GB; not a blocker.                                             |
+
+The single-core pain is contention, not memory: compile-angel byte- and
+native-compiles every file as it loads (=bootstrap-compile-angel.el:34=),
+and async native compilation will hog the only core for the first days.
+Expected mitigation: =native-comp-async-jobs-number= 1 and a full
+ahead-of-time compile once during provisioning.  A 2 OCPU resize makes the
+daemon usable while that runs.
+
+[phase 2] Three sizing facts the plan has to respect, measured in
+=bin/zetta= and the hub unit:
+
+| Command or unit         | Wall-clock window   | Stall limit | Where            |
+|-------------------------+---------------------+-------------+------------------|
+| =bin/zetta install=     | 600 s               | 600 s       | =bin/zetta:88=   |
+| =bin/zetta ci-sync=     | 900 s               | 600 s       | =bin/zetta:551=  |
+| =bin/zetta ci-test=     | 6600 s              | none        | =bin/zetta:620=  |
+| =emacs.service= start   | 300 s, =Type=notify= | none        | =hub/units/=     |
+
+- A multi-hour cold build on one core dies inside =install= after ten
+  minutes.  =install= also deletes =eln-cache= on every run
+  (=bin/zetta:78=), so it is the wrong update path as well: each pull
+  would native-recompile everything.  Phase D needs a build entry point
+  with a multi-hour window and no purge.
+- READY=1 reaches systemd only when init finishes, and every module loads
+  interpreted through =load-file= (see the NOTE in =bootstrap-modules.el=)
+  on one core.  The 300 s window is a per-boot risk, not a first-boot one.
+  Measure =emacs-init-time= after the cold build and size
+  =TimeoutStartSec= from it, or switch the unit to =Type=simple=.
+- Neither =native-comp-async-jobs-number= nor
+  =native-comp-async-report-warnings-errors= is set anywhere in the config
+  (grep of =source/= and =modules/core/=); the lean init silences the
+  latter.  Without it, the first days of deferred compilation pop
+  =*Warnings*= buffers into the TTY client.  Both belong in the headless
+  template.
+
+* Part 5 -- The dotfiles side (~/.files)
+
+- *No OS detection anywhere.*  No =uname=, =OSTYPE=, =Darwin= or
+  =system-type= in any script or dotfile.  The only conditionals are the
+  two =INCLUDE_EMACS_*= feature gates exported from =files/.zshrc=.
+- *=bootstrap.sh= is macOS-only* end to end: xcode-select, Homebrew,
+  =brew bundle=, pkg installer, =defaults write=, launchctl, tlmgr.  Do not
+  port it.  The symlinker =main.py= (walks =files/=, =ln -s -f= each file
+  into =$HOME=) is portable and python3 exists on the hub.
+- *Brewfile* (=files/.config/Brewfile=): 489 lines, 135 formulae, 255 casks
+  (~230 fonts).  Every Emacs-relevant formula has an apt or cargo
+  equivalent: ripgrep, fd, cmake, libtool, tree-sitter, poppler, graphviz,
+  pandoc, mu, isync.  Not portable: emacs-plus, aerospace, borders,
+  blueutil, macmon, snowsql, 1password casks.
+- *zsh*: zinit self-installs into =$XDG_DATA_HOME/zinit=, so plugins are
+  fine.  Breaks: the unconditional =/opt/homebrew= PATH prepend at
+  =files/.zshrc:18=; the =aws_completer= block; atuin, starship,
+  television, sesh, zoxide, gitmux, kubecolor and eza absent from apt.
+- *tmux*: =files/.tmux.conf= binds yank and thumbs to =pbcopy= at lines 61,
+  193, 194.  The hub's own 12-line =hub/tmux.conf= deliberately uses prefix
+  C-b, mouse on, status on top for mobile keyboards.
+- *bash*: =files/.bashrc= sources a broot launcher under =~/Library= with
+  no guard; would error on every Linux login.
+- *Mail*: =fetch_mail.sh= uses BSD-only =date -j -f= and a Homebrew mbsync
+  path.  Not wanted on the hub anyway.
+- *Hub deploy today*: =files/.local/bin/hub-deploy= (15 lines) does
+  =scp -q -r hub/. kb-hub:syncthing-hub/= then runs =bootstrap-hub.sh=
+  there.  Deleted files are never pruned on the hub.  =hub/units/emacs.service=
+  runs =/usr/bin/emacs --fg-daemon= as =Type=notify= with a 300 s start
+  timeout.  =hub/emacs/init.el= is package.el + MELPA, one =use-package=
+  (evil), fido-vertical, xterm-mouse, two commands (=kb=, =kb-inbox=).
+- *Bug found in passing*: the four files in =files/.aliases/= are symlinks
+  pointing at themselves since commit =b02c1f8=, so =source ~/.aliases/index=
+  in =.zshrc= has been a silent no-op since March 2026.  Prior contents are
+  recoverable from =b02c1f8~1= and are themselves stale (pin =emacs-plus@29=
+  paths).
+- [phase 2] *Two daemons collide as the unit stands.*  =units/emacs.service=
+  stops the daemon with =emacsclient --eval "(kill-emacs)"= and names no
+  socket, and =bootstrap-hub.sh= copies =emacs/init.el= over
+  =~/.emacs.d/init.el= and enables =emacs.service= unconditionally on every
+  deploy.  Two units need two sockets.  Decision (Phase D): zetta takes
+  over =emacs.service= and the default socket, so =emacsclient -t= and the
+  =e=/=ei= aliases are unchanged; the lean init moves to
+  =emacs-lean.service= with =--fg-daemon=lean= and a matching =-s lean= in
+  its ExecStop, installed but not enabled.
+- [phase 2] *The user files have no delivery path.*  Neither =~/.zetta.el=
+  nor =~/.private.el= is in this repo (plain files in =$HOME= on the Mac,
+  absent on the hub), and the private file holds secrets, so it cannot
+  join a public repo.  The headless module list should be committed in
+  .zetta.d as a template and installed by =bootstrap-hub.sh=; the private
+  file is a manual step to add to the script's closing checklist.
+- [phase 2] *Timezone.*  =timedatectl= reports =Etc/UTC= and user units
+  inherit no =TZ=, so an agenda on the hub would compute today, scheduled
+  items and clock-derived times in UTC.  One =timedatectl set-timezone= or
+  an =Environment=TZ== line in the unit fixes it.
+- [phase 2] *Emacs droppings are already handled.*  =seed/stignore-shared=
+  ignores =*~=, =*#= and =.#*=, so the hub Emacs's autosaves and lockfiles
+  inside =~/kb= never sync.  Zetta sets none of =create-lockfiles=,
+  =backup-directory-alist= or =auto-save-file-name-transforms=; the lean
+  init sets all three, and the headless template should too, so =~/kb=
+  stays clean on the hub.
+- [phase 2] *No update flow after cutover.*  =hub-deploy= ships =hub/= only.
+  Config updates need =git pull= in the hub's clone, a warm rebuild that
+  does not purge =eln-cache= (Part 4), and =systemctl --user restart emacs=
+  when convenient, the same rule the bootstrap already prints for the lean
+  init.
+
+* Part 6 -- Recommended shape
+
+Order matters: the hub must be able to build before the config is worth
+pushing, and the config change should ride through CI before it lands on a
+machine edited from a phone.  Effort figures are estimates.
+
+** TODO Phase A -- Resize and provision the hub
+:PROPERTIES:
+:REPO:     ~/.files
+:FILES:    hub/bootstrap-hub.sh
+:ESTIMATE: half a day
+:END:
+
+Resize the A1 instance to 2 OCPU / 12 GB in the Oracle console (manual,
+owner; Part 7 notes it may be refused, and the plan survives at 1 OCPU).
+Extend =hub/bootstrap-hub.sh= with =build-essential ripgrep fd-find=, set
+the timezone there (=sudo timedatectl set-timezone <zone>=), and symlink
+Ubuntu's =fdfind= to =~/.local/bin/fd= for anything that calls it by the
+usual name.  Deploy with =hub-deploy= as today.
+
+[phase 2] Decision: the apt list follows the profile.  vterm and pdf-tools
+are excluded (Part 3), so =cmake libtool-bin libvterm-dev
+libpoppler-glib-dev= stay out until one of them joins the profile;
+=build-essential= alone covers the tree-sitter grammars.  =op= stays out
+under the secret-free default (Part 7).
+
+Done when: =ssh kb-hub 'command -v gcc rg fd; timedatectl show -p
+Timezone'= prints three paths and the chosen zone.
+
+** TODO Phase B -- Headless profile in .zetta.d
+:PROPERTIES:
+:REPO:     ~/.zetta.d
+:FILES:    templates/zetta.headless.el, source/bootstrap/bootstrap-modules.el, bin/zetta, .github/workflows/ci.yml, the modules in step 3
+:ESTIMATE: about a day, PR through CI
+:END:
+
+One PR against .zetta.d, in this order.  Prerequisite: the agenda and
+queue modules the hub is for are untracked, and dev is 37 commits ahead of
+main (Part 3, classification check).  They land first, or this PR proves
+nothing about the hub's actual use.
+
+1. *Capability predicates* in =source/bootstrap/bootstrap-modules.el=: make
+   the default of =zetta-module-conditions= carry one entry per SVG-chrome
+   file (=ui/svg-line.el=, =ui/svg-lib.el=, =ui/svg-margin.el=,
+   =ui/modeline-svg.el=, =ui/header-line-svg.el=, =ui/tab-bar-svg.el=,
+   =ui/tab-line-svg.el=, =ui/poimap.el=), each with the predicate
+   =(lambda () (image-type-available-p 'svg))=.  Keys are
+   "category/file.el" strings, as the docstring says.  This is the
+   capability half of Part 7's predicate-versus-exclusion question and
+   stays correct on every profile.
+2. *The template* =templates/zetta.headless.el=.  It must call
+   =zetta-modules!= (Part 1).  Parser rule: within one category the list is
+   either all inclusions or all exclusions, never both.  Shape:
+   - =:core (-image)=, =:completion=, =:editor (-evil-fringe-mark)=,
+     =:lang=, =:org (-pdf-tools -pdfnote -org-image -org-gantt
+     -org-timegrid)=: exclusion, taken from the Part 3 skip tables.
+   - =:ui (...)=: exclusion of every icon, font, pixel and toy row in the
+     Part 3 skip table.  The SVG-chrome files need no listing; the
+     predicate from step 1 skips them.
+   - =:tools (magit dired git-gutter)= and =:app (hyperbole hywiki-alias
+     hywiki-graph)=: inclusion, seeded from the stated use (org editing,
+     agenda, capture, search over =~/kb=, git).  Grow by need; every
+     addition must pass the nox CI row.  =:term= is omitted: tmux is the
+     shell, and =term/shell.el:44= hardcodes zsh.
+   - Settings: =native-comp-async-jobs-number= 1,
+     =native-comp-async-report-warnings-errors= 'silent, the three
+     littering variables from the lean init (Part 5), =xterm-mouse-mode=,
+     and =(setq auth-sources nil)= under the secret-free default (Part 7).
+     Leave the key-chord delay alone; Phase C adjusts it.
+   The hub private file is not part of the PR (Part 5); with
+   =auth-sources= set in the template it can be a one-line =;;=.
+3. *Guards*, each a few lines:
+   - =ui/ef-themes.el:11=: wrap in =(when (facep 'header-line-inactive) ...)=
+     like the sibling call two lines down.
+   - =completion/treesit-tap.el:14=: guard the =(treesit-tap-setup)= call
+     with =(when (boundp 'bounds-of-thing-at-point-provider-alist) ...)=.
+   - =tools/ai.el:115=: =(bound-and-true-p openai-api-key)=, registering
+     the OpenAI backend only when it is non-nil.
+   - =ui/modern-fringes.el=: =(when (fboundp 'set-fringe-bitmap-face) ...)=
+     around the =:config= body.
+   - =core/security.el:8=: write the trustfile only when =python= is
+     non-nil.
+   - =tools/command-palette.el:253=: start the clipboard poll only when
+     =(executable-find "pbpaste")=.
+   - =tools/alert.el=: =executable-find= guards on osascript and afplay.
+   - =app/whisper.el=, =tools/signel.el=, =tools/devdocs.el=,
+     =tools/ghostel.el=, =tools/osx-lib.el=, =tools/spotlight.el=,
+     =app/say.el=: no guard; they are simply absent from the inclusion
+     lists.
+   The first four are the ones CI hides today (Part 2, item 3); they must
+   land in this PR or step 5 turns the existing rows red.
+4. *Build entry point* in =bin/zetta=: a =build= command (or flags on
+   =install=) with a wall-clock window of at least four hours, a stall
+   limit of thirty minutes, and no =eln-cache= purge.  Phase D runs it on
+   the hub; nothing on the Mac changes.
+5. *CI*: tighten the =ci-test= gate so any "Error (use-package)" line
+   fails the run (=bin/zetta:704=; the local =test= filter at line 421
+   gets the same change).  Add a matrix entry for apt =emacs-nox= on
+   ubuntu-latest (24.04 ships =1:29.3+1=, the hub's package): skip
+   =setup-emacs= for that entry, =apt-get install -y emacs-nox=, and copy
+   =templates/zetta.headless.el= to =~/.zetta.el= in the stub step instead
+   of the example.  Cache keys already include the version string, so the
+   entry gets its own cache.
+
+Done when: the nox row is green with =ZETTA-OK= in its log, zero "Error
+(use-package)" lines, and a =modules== count well under the full
+profile's 290; and the three existing rows are green under the tightened
+gate.
+
+** TODO Phase C -- Terminal ergonomics
+:PROPERTIES:
+:REPO:     ~/.zetta.d + ~/.files/hub/tmux.conf + ~/.files/hub/bashrc-additions.sh
+:ESTIMATE: half a day
+:END:
+
+corfu-terminal or in-buffer completion for corfu and vertico; 24-bit colour
+by the COLORTERM plus =terminal-features= recipe in Part 3; accept that
+=s-z= chords are unreachable and confirm the comma leader works through
+tmux; decide clipboard strategy (OSC 52 via Blink is the likely answer).
+
+[phase 2] Added: test =extended-keys on= in the hub tmux.conf against
+Blink before conceding C-comma; measure whether =kj= survives mosh at the
+50 ms chord delay and widen it in the template if not, or bind a
+non-chord exit; confirm =xterm-mouse-mode= gives touch taps.  These tests
+are manual by nature (Part 2, item 4); record the outcomes in this
+section.
+
+Done when: this section records, for each of colour, C-comma, =kj=, mouse
+and clipboard, what was tried from Blink and whether it worked; and
+completion pops in =emacsclient -t= (corfu-terminal on 29, or the
+in-buffer fallback).
+
+** TODO Phase D -- Clone, cold build, cut over
+:PROPERTIES:
+:REPO:     hub
+:FILES:    hub/units/emacs.service, hub/units/emacs-lean.service, hub/bootstrap-hub.sh, hub/README.org
+:ESTIMATE: hours of unattended build
+:END:
+
+Everything here lives in =~/.files/hub/= except the build itself, and it
+lands through =hub-deploy= as today.  Phase B must be merged first: the
+hub clones =main=.
+
+[phase 2] Ordered, with the gaps closed:
+1. =bootstrap-hub.sh=: clone =https://github.com/chiply/.zetta.d= into
+   =~/.zetta.d= when absent (never pull in the bootstrap; updates are step
+   6); copy =~/.zetta.d/templates/zetta.headless.el= to =~/.zetta.el= when
+   that is missing and never overwrite it; add "=~/.private.el=: create it
+   by hand, =;;= is enough" to the closing checklist.  The template must be
+   in place before anything loads init.el, or =bin/zetta= substitutes the
+   full profile (Part 1).
+2. Units: =emacs.service= keeps the default socket and gains
+   =--init-directory=%h/.zetta.d=, so =emacsclient -t= and the =e=/=ei=
+   aliases keep working and now reach zetta.  The lean init moves to a new
+   =emacs-lean.service= with =--fg-daemon=lean= and
+   =ExecStop=emacsclient -s lean --eval "(kill-emacs)"=, installed by the
+   bootstrap but not enabled; start it by hand when zetta is broken.  The
+   bootstrap keeps copying =emacs/init.el= to =~/.emacs.d/= for it.
+3. Cold build, by hand, in a tmux window: =~/.zetta.d/bin/zetta build=
+   (Phase B, step 4) under =nohup=, with =native-comp-async-jobs-number=
+   already 1 from the template.  Hours.  Done when its log has =ZETTA-OK=
+   and no failed packages.
+4. Seed per-machine state, once, from =emacsclient --eval=:
+   =org-id-update-id-locations= over =~/kb= (=org-id-locations-file= is
+   under =.data/= in the config directory, =modules/org/org.el:83=), and
+   =treesit-install-language-grammar= for each entry of
+   =treesit-language-source-alist= now that gcc exists.
+5. Measure =(emacs-init-time)= after a restart and set =TimeoutStartSec=
+   to twice it, or switch the unit to =Type=simple= (Part 4).  Redeploy;
+   restart when convenient.
+6. Update flow, written into =hub/README.org= next to =hub-deploy=:
+   =git -C ~/.zetta.d pull && ~/.zetta.d/bin/zetta build= (warm, minutes),
+   then =systemctl --user restart emacs= when convenient.
+
+Done when: =systemctl --user is-active emacs= says active and =ps= shows
+the zetta init directory; =emacsclient -t ~/kb/inbox.org= opens with the
+zetta bindings (the comma leader works); =M-x org-agenda= renders; an
+=id:= link follows; =emacs-init-time= and the chosen =TimeoutStartSec= are
+recorded here; and =systemctl --user start emacs-lean= followed by
+=emacsclient -s lean -t= gives the old lean editor.
+
+** TODO Phase E -- Shell slice, if wanted
+:PROPERTIES:
+:REPO:     ~/.files
+:ESTIMATE: half a day, optional
+:END:
+
+Add darwin guards to =.zshrc=, =.tmux.conf= and =.bashrc= and let =main.py=
+symlink the slice wanted.  Optional: the pain today is Emacs, not the shell.
+
+* Part 7 -- Open questions for phase 2
+
+- *Profile mechanism*: hostname branch in =~/.zetta.el=, an environment
+  variable, or a committed =templates/zetta.headless.el= that the hub
+  bootstrap installs?  The last is the most reproducible and keeps CI able
+  to test it.  [phase 2] Settled: the template.  Neither user file is in
+  .files, and =bin/zetta install= writes the full-profile example when
+  =~/.zetta.el= is missing, so a committed template installed by the
+  bootstrap is required, not merely preferable.
+- *Predicate versus exclusion*: which skips belong in
+  =zetta-module-conditions= (capability-based, self-correcting if the hub
+  ever gets an SVG build) and which in the profile's exclusion list
+  (taste-based)?  [phase 2] Settled: the SVG-chrome files go in the
+  =zetta-module-conditions= default in bootstrap-modules.el, everything
+  else in the template's lists (Phase B, steps 1 and 2).
+- *Emacs version on the hub*: stay on apt 29.3, or build 31 from source
+  with =.files/install_emacs_source.sh= adapted for Linux?  Emacs 31 has
+  TTY child frames, which makes corfu and posframe work unchanged, and
+  matches the Mac's bytecode expectations.  Costs a long compile on the hub
+  and a second moving pretest to track.  [phase 2] One more cost of 31:
+  apt 29.3 is also what ubuntu-latest ships, which is what makes a
+  bit-identical CI row possible (Phase B).  A source-built 31 on the hub
+  forfeits that unless CI builds the same.  Default: stay on 29.3; revisit
+  only if Phase C finds corfu-terminal inadequate.
+- *Secrets*: install =op= with the service-account token from
+  =~/.zshenv.local=, or keep the hub secret-free and let elfeed, mastodon,
+  forge and gptel stay unconfigured there?  [phase 2] Either way the hub
+  private file must set =auth-sources=: =init.el:103= points it at the
+  1Password backend unconditionally, so with no =op= every credential
+  lookup silently returns nothing.  Default: secret-free, =auth-sources=
+  nil in the template, and the secret-bearing modules simply absent from
+  the inclusion lists.  Owner's call to reverse.
+- *What the hub Emacs is for*: org editing, agenda, capture and search over
+  =~/kb= is the stated use.  Whether magit, lsp, ai.el and the app modules
+  belong on it at all decides how much of the exclusion list is "cannot"
+  versus "should not".  [phase 2] Resolved by shape rather than by list:
+  =:tools= and =:app= are inclusion lists seeded from the stated use, so
+  nothing reaches the hub without being asked for (Phase B, step 2).
+- *Fallback*: keep the lean init reachable as a second daemon unit, or as a
+  chemacs profile like the Mac?  [phase 2] If a second unit: distinct
+  socket names, see Part 5.
+- *Sizing follow-up*: confirm A1 capacity in the region before planning
+  around 2 OCPU.  If a resize is refused, the plan still works at 1 OCPU
+  with a longer cold build and compile-angel disabled.  Manual, owner,
+  before Phase A.
+
+* Part 8 -- Phase 2 review findings [2026-09-10]
+
+The phase-one analysis survived re-verification: every Part 3 line cited
+was checked and holds, the macOS and toolchain classifications are
+complete, and the hub facts match a second inspection.  The gaps are in
+the plan.  Each is folded in above at the point it applies; this is the
+list in one place, ordered by how hard it bites.
+
+** Break the plan as written
+
+| #  | Gap                                                                                                                         | Folded in                   |
+|----+-----------------------------------------------------------------------------------------------------------------------------+-----------------------------|
+| G1 | =bin/zetta install= gives up after 600 s and purges =eln-cache= every run; no multi-hour, no-purge build entry point exists | Part 4, Phase D             |
+| G2 | CI's error gate discards "Error (use-package)" lines, so =:config= breaks on 29.x pass today; ef-themes is the live case    | Part 2 item 3, Phase B      |
+| G3 | The hub unit and bootstrap assume one daemon: no socket names, lean init overwritten and enabled on every deploy            | Part 5, Phase D             |
+| G4 | =~/.zetta.el= and =~/.private.el= have no delivery path, and =install= substitutes the full profile when the former is missing | Part 1, Part 5, Phases B, D |
+| G5 | Hub clock is Etc/UTC with no TZ in user units; the agenda would run on UTC                                                  | Part 5, Phase A             |
+| G6 | The agenda and queue modules the hub is for are untracked, and dev is 37 commits ahead of main                              | Part 3 check, Phase B       |
+
+** Missing steps
+
+| #   | Gap                                                                                                        | Folded in                |
+|-----+------------------------------------------------------------------------------------------------------------+--------------------------|
+| G7  | Org ID index is per machine; =id:= links need a one-time =org-id-update-id-locations= on the hub           | Phase D                  |
+| G8  | The 50 ms key-chord delay behind =kj= is unlikely to survive mosh                                          | Part 3 terminal, Phase C |
+| G9  | C-comma may transmit after all: tmux 3.4 =extended-keys= is untested                                       | Part 3 terminal, Phase C |
+| G10 | Truecolor needs COLORTERM in the client environment, not just tmux's terminal-features                     | Part 3 terminal, Phase C |
+| G11 | =native-comp-async-report-warnings-errors= and =native-comp-async-jobs-number= are set nowhere              | Part 4, Phase B          |
+| G12 | The 300 s =Type=notify= window is a per-boot risk with interpreted module loading                          | Part 4, Phase D          |
+| G13 | No update flow after cutover; =hub-deploy= ships =hub/= only                                               | Part 5, Phase D          |
+| G14 | =xterm-mouse-mode= and the three littering variables are in the lean init but not in zetta                 | Part 5, Phase B          |
+| G15 | Tightening the gate exposes four packages CI hides today; treesit-tap among them is a hub break the audit missed | Part 2 item 3, Part 3, Phase B |
+
+** Refinements to the analysis
+
+- The CI row should be exact, not optional: apt =emacs-nox= on
+  ubuntu-latest is the hub's package (Phase B).
+- pdf-tools is a first-use failure, not a load-time one (Part 3 table).
+- Hub features SQLITE3, TREE_SITTER and MODULES verified; forge, the
+  ts-modes and dynamic modules are viable (machines table, Part 3 check).
+- All recipe sources are public; no clone credentials needed (Part 3 check).
+- The shared stignore already covers Emacs droppings (Part 5).
+- The SVG skip list is complete; the three references outside it are
+  guarded or inert (Part 3 check).
+- Batch CI is more representative than feared, one =noninteractive= gate
+  and one =daemonp= in the whole config, but deferred =:config= is never
+  exercised (Part 2, item 4).
+
+* Evidence
+
+- Hub inspection over ssh [2026-09-10]: =uname=, =nproc=, =free -m=, =df=,
+  =emacs --version=, =system-configuration-features=, a =native-compile=
+  smoke test in =emacs -Q --batch=, =dpkg -l=, =systemctl --user list-timers=,
+  =ps= of the daemon, =which= for the toolchain and =op=.
+- =.github/workflows/ci.yml= matrix and comments; =gh run list= durations
+  for the last eight CI runs.
+- =source/bootstrap/bootstrap-modules.el= (module parser,
+  =zetta-module-conditions=), =init.el= (private file and 1Password
+  loader), =bin/zetta ci-test=, =OPTIMIZATIONS.org= (pbpaste history).
+- Two read-only audits of all 300 module files and of =~/.files= including
+  =hub/=, with file and line references reproduced above.
+- Prior context: =~/.files/hub/README.org= (Oracle shape and reclamation
+  notes), =~/syncthing-migration.org= (hub decision history).
+- Phase 2 review [2026-09-10]: second ssh inspection of the hub
+  (=/etc/os-release=, =system-configuration-features=, =sqlite-available-p=,
+  =treesit-available-p=, =timedatectl=, =tmux -V=, =git --version=,
+  =dpkg -l=, =systemctl --user cat emacs=, a =command -v= census);
+  =bin/zetta= timeouts and the error filters at lines 421 and 704;
+  =elpaca-lock.el= checked for native-module packages; =gh repo view=
+  visibility of the config repo and the ten =chiply/*= recipes;
+  =git status= and =git log origin/main..dev= for unpushed work; grep
+  census of =noninteractive=, =daemonp=, posframe users, macOS calls and
+  the littering variables across =modules/= and =source/=; =~/.files/hub/=
+  read in full (bootstrap, unit, tmux.conf, bashrc additions, stignore
+  seed, lean init); the log of CI run 34091453070 grepped for
+  "Error (use-package)" per matrix row.

@@ -201,28 +201,70 @@ focused/unfocused distinction."
 ;;; ------------------------------------------------------------------
 
 ;;; ------------------------------------------------------------------
+;;; Extension points -- extra rows and extra spans from other modules
+;;; ------------------------------------------------------------------
+;; So a module that wants to put something on this bar does NOT have to be
+;; named here and this file does not have to know it exists.  Each hook
+;; holds functions of no arguments returning a LIST (of rows, or of span
+;; specs) to append; a function returning nil contributes nothing.
+;;
+;; Rows land after the two standard ones, spans after the progress pie.  A
+;; contributor that adds a row and a span for the same thing must decide
+;; both from ONE predicate: `:content' and `:spans' are called separately
+;; within a render, and a row with no span in it is a blank strip of bar.
+;;
+;; See `poimap.el' for the worked example (the buffer map).
+
+(defvar zetta-modeline-svg-extra-rows nil
+  "Functions returning extra `zetta-modeline-svg-lines' rows to append.")
+
+(defvar zetta-modeline-svg-extra-spans nil
+  "Functions returning extra `zetta-modeline-svg-spans' specs to append.")
+
+(defun zetta-modeline-svg--run-extras (var)
+  "Call each function in the list held by symbol VAR and append the results.
+
+A contributor that signals is REMOVED from VAR and reported once.  These run
+inside redisplay: left in place, a broken one would raise on every render of
+every window -- which in practice means the mode line stops drawing and the
+echo area fills faster than the error can be read.  Dropping it costs the
+one contribution and leaves the bar working and the reason on screen."
+  (let (out)
+    (dolist (f (symbol-value var))
+      (condition-case err
+          (setq out (append out (funcall f)))
+        (error
+         (set var (delq f (symbol-value var)))
+         (message "zetta-modeline: dropped %s from %s -- %s"
+                  f var (error-message-string err)))))
+    out))
+
+;;; ------------------------------------------------------------------
 ;;; Content -- rows of (LEFT-SEGMENTS . RIGHT-SEGMENTS)
 ;;; ------------------------------------------------------------------
 (defun zetta-modeline-svg-lines ()
   "Return the mode line as rows (cons LEFT . RIGHT, or :left/:center/:right)."
-  (list
-   ;; line 1:  buffer | modal ....... [file] mode | line:col | percent
-   ;; (no ace badge: the window key is a PROMPT, shown only while one is
-   ;; being asked for, and it is asked for in the tab line -- which every
-   ;; buffer has and not every buffer has one of these.  See
-   ;; `zetta-tab-line-svg--ace-item'.)
-   (list :left '(zetta-modeline-svg--buffer " "
-                 zetta-modeline-svg--modal)
-         :center nil
-         :right '(zetta-modeline-svg--file-icon " "
-                  zetta-modeline-svg--mode "  " zetta-modeline-svg--point))
-   ;; line 2:  git:branch (clickable -> magit) | [copilot] lsp | flycheck | flags
-   ;;          ......   doc-position   <progress pie, under the percent>
-   ;; (the git + branch glyphs are folded into the clickable vc segment)
-   (cons '(zetta-modeline-svg--vc " "
-           zetta-modeline-svg--copilot-icon " " zetta-modeline-svg--checkers " "
-           zetta-modeline-svg--flycheck " " zetta-modeline-svg--indicators)
-         '(zetta-modeline-svg--docpos))))
+  (append
+   (list
+    ;; line 1:  buffer | modal ....... [file] mode | line:col | percent
+    ;; (no ace badge: the window key is a PROMPT, shown only while one is
+    ;; being asked for, and it is asked for in the tab line -- which every
+    ;; buffer has and not every buffer has one of these.  See
+    ;; `zetta-tab-line-svg--ace-item'.)
+    (list :left '(zetta-modeline-svg--buffer " "
+                  zetta-modeline-svg--modal)
+          :center nil
+          :right '(zetta-modeline-svg--file-icon " "
+                   zetta-modeline-svg--mode "  " zetta-modeline-svg--point))
+    ;; line 2:  git:branch (clickable -> magit) | [copilot] lsp | flycheck | flags
+    ;;          ......   doc-position   <progress pie, under the percent>
+    ;; (the git + branch glyphs are folded into the clickable vc segment)
+    (cons '(zetta-modeline-svg--vc " "
+            zetta-modeline-svg--copilot-icon " " zetta-modeline-svg--checkers " "
+            zetta-modeline-svg--flycheck " " zetta-modeline-svg--indicators)
+          '(zetta-modeline-svg--docpos)))
+   ;; line 3+: whatever another module asked for (the buffer map).
+   (zetta-modeline-svg--run-extras 'zetta-modeline-svg-extra-rows)))
 
 (defun zetta-modeline-svg--span-height (&optional rows)
   "Pixel height of a ROWS-high mode-line span (one row by default).
@@ -378,7 +420,7 @@ wedge and the ring does not need this rule rewritten to match."
          (frac (/ (float (- (point) (point-min))) total))
          (activep (mode-line-window-selected-p))
          (mute (lambda (c) (if activep c (zetta-modeline-svg--mute c)))))
-    (list (list :image '(1 . 1)
+    (cons (list :image '(1 . 1)
                 (zetta-modeline-svg--pie-svg
                  frac
                  (funcall mute zetta-modeline-svg-pie-fill)
@@ -386,7 +428,8 @@ wedge and the ring does not need this rule rewritten to match."
                  zetta-modeline-svg-pie-track
                  (zetta-modeline-svg--span-height))
                 'right
-                (zetta-modeline-svg--pie-gap)))))
+                (zetta-modeline-svg--pie-gap))
+          (zetta-modeline-svg--run-extras 'zetta-modeline-svg-extra-spans))))
 
 (svg-line-define 'zetta-mode-line
   :target 'mode-line

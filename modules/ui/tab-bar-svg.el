@@ -190,12 +190,15 @@ jittered -- but it is now measured from the font that draws it (see
 `zetta-svg-line-em-ratio'), which is also what lets a segment name a font of
 its own via `zetta-svg-seg-fonts'."
   (list
-   ;; line 1 -- file glyph + buffer (left); keycast + recursion + thing-at-point (right)
+   ;; line 1 -- file glyph + buffer (left); prefix + keycast + recursion +
+   ;; thing-at-point (right).  The prefix-in-progress leads the keycast entry
+   ;; it is about to become, so all the key feedback reads as one group.
    (cons '(zetta-tab-bar-file-icon " "
                                    zetta-tab-bar-svg--buffer
                                    zmc-modeline-indicator
                                    zetta-pyvenv-activate-poetry-modeline)
-         '(zetta-tab-bar-svg--keycast " "
+         '(zetta-current-prefix "  "
+           zetta-tab-bar-svg--keycast " "
            zetta-tab-bar-recursion-icon " " zetta-tab-bar-recursion-level " "
            recursion-indicator--string))
    ;; line 2 -- modal etc left; <analog clock spans the centre>; mail right
@@ -206,11 +209,10 @@ its own via `zetta-svg-seg-fonts'."
          :center nil
          :right '(zetta-tab-bar-font-preset "  "
                   zetta-tab-bar-svg--elfeed "  " zetta-tab-bar-svg--mu4e))
-   ;; line 3 -- Spotify left; clock centre (it spans all 3 rows); battery/prefix/space-tree right
+   ;; line 3 -- Spotify left; clock centre (it spans all 3 rows); battery/space-tree right
    (list :left '(zetta-tab-bar-svg--spotify)
          :center nil
-         :right '(zetta-tab-bar-svg--battery " "
-                  zetta-current-prefix "  "
+         :right '(zetta-tab-bar-svg--battery "  "
                   zetta-tab-bar-svg--workspace))))
 
 (defcustom zetta-tab-bar-calendar-color "#9aa0aa"
@@ -307,12 +309,12 @@ The sunrise/sunset flank and the date/moon-phase widget were removed."
           ;; line 3 left-aligned
           new-line zetta-tab-bar-modal zetta-gptel-processes
           blinker-tab-bar
-          ;; line 3 right-aligned
-          tab-bar-format-align-right tab-bar-keycast zetta-insert-space
+          ;; line 3 right-aligned -- prefix leads keycast, as in the SVG rows
+          tab-bar-format-align-right zetta-current-prefix zetta-insert-space
+          tab-bar-keycast zetta-insert-space
           zetta-tab-bar-current-thing zetta-tab-bar-recursion-level
           recursion-indicator--string tab-bar-format-global
-          internal-echo-keystrokes-prefix
-          zetta-insert-space zetta-current-prefix zetta-insert-space
+          internal-echo-keystrokes-prefix zetta-insert-space
           space-tree-modeline-lighter
           )))
 

@@ -1,0 +1,546 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<!-- 2026-05-31 Sun 10:44 -->
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tutorial: bookmark-in-project</title>
+<meta name="author" content="Charlie Holland" />
+<meta name="generator" content="Org Mode" />
+<style type="text/css">
+  #content { max-width: 60em; margin: auto; }
+  .title  { text-align: center;
+             margin-bottom: .2em; }
+  .subtitle { text-align: center;
+              font-size: medium;
+              font-weight: bold;
+              margin-top:0; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { font-family: monospace; color: green; }
+  .priority { font-family: monospace; color: orange; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .org-right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .org-left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .org-center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #e6e6e6;
+    border-radius: 3px;
+    background-color: #f2f2f2;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: auto;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    top: -8px;
+    right: 12px;
+    padding: 3px;
+    color: #555;
+    background-color: #f2f2f299;
+  }
+  pre.src:hover:before { display: inline; margin-top: 14px;}
+  /* Languages per Org manual */
+  pre.src-asymptote:before { content: 'Asymptote'; }
+  pre.src-awk:before { content: 'Awk'; }
+  pre.src-authinfo::before { content: 'Authinfo'; }
+  pre.src-C:before { content: 'C'; }
+  /* pre.src-C++ doesn't work in CSS */
+  pre.src-clojure:before { content: 'Clojure'; }
+  pre.src-css:before { content: 'CSS'; }
+  pre.src-D:before { content: 'D'; }
+  pre.src-ditaa:before { content: 'ditaa'; }
+  pre.src-dot:before { content: 'Graphviz'; }
+  pre.src-calc:before { content: 'Emacs Calc'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-fortran:before { content: 'Fortran'; }
+  pre.src-gnuplot:before { content: 'gnuplot'; }
+  pre.src-haskell:before { content: 'Haskell'; }
+  pre.src-hledger:before { content: 'hledger'; }
+  pre.src-java:before { content: 'Java'; }
+  pre.src-js:before { content: 'Javascript'; }
+  pre.src-latex:before { content: 'LaTeX'; }
+  pre.src-ledger:before { content: 'Ledger'; }
+  pre.src-lisp:before { content: 'Lisp'; }
+  pre.src-lilypond:before { content: 'Lilypond'; }
+  pre.src-lua:before { content: 'Lua'; }
+  pre.src-matlab:before { content: 'MATLAB'; }
+  pre.src-mscgen:before { content: 'Mscgen'; }
+  pre.src-ocaml:before { content: 'Objective Caml'; }
+  pre.src-octave:before { content: 'Octave'; }
+  pre.src-org:before { content: 'Org mode'; }
+  pre.src-oz:before { content: 'OZ'; }
+  pre.src-plantuml:before { content: 'Plantuml'; }
+  pre.src-processing:before { content: 'Processing.js'; }
+  pre.src-python:before { content: 'Python'; }
+  pre.src-R:before { content: 'R'; }
+  pre.src-ruby:before { content: 'Ruby'; }
+  pre.src-sass:before { content: 'Sass'; }
+  pre.src-scheme:before { content: 'Scheme'; }
+  pre.src-screen:before { content: 'Gnu Screen'; }
+  pre.src-sed:before { content: 'Sed'; }
+  pre.src-sh:before { content: 'shell'; }
+  pre.src-sql:before { content: 'SQL'; }
+  pre.src-sqlite:before { content: 'SQLite'; }
+  /* additional languages in org.el's org-babel-load-languages alist */
+  pre.src-forth:before { content: 'Forth'; }
+  pre.src-io:before { content: 'IO'; }
+  pre.src-J:before { content: 'J'; }
+  pre.src-makefile:before { content: 'Makefile'; }
+  pre.src-maxima:before { content: 'Maxima'; }
+  pre.src-perl:before { content: 'Perl'; }
+  pre.src-picolisp:before { content: 'Pico Lisp'; }
+  pre.src-scala:before { content: 'Scala'; }
+  pre.src-shell:before { content: 'Shell Script'; }
+  pre.src-ebnf2ps:before { content: 'ebfn2ps'; }
+  /* additional language identifiers per "defun org-babel-execute"
+       in ob-*.el */
+  pre.src-cpp:before  { content: 'C++'; }
+  pre.src-abc:before  { content: 'ABC'; }
+  pre.src-coq:before  { content: 'Coq'; }
+  pre.src-groovy:before  { content: 'Groovy'; }
+  /* additional language identifiers from org-babel-shell-names in
+     ob-shell.el: ob-shell is the only babel language using a lambda to put
+     the execution function name together. */
+  pre.src-bash:before  { content: 'bash'; }
+  pre.src-csh:before  { content: 'csh'; }
+  pre.src-ash:before  { content: 'ash'; }
+  pre.src-dash:before  { content: 'dash'; }
+  pre.src-ksh:before  { content: 'ksh'; }
+  pre.src-mksh:before  { content: 'mksh'; }
+  pre.src-posh:before  { content: 'posh'; }
+  /* Additional Emacs modes also supported by the LaTeX listings package */
+  pre.src-ada:before { content: 'Ada'; }
+  pre.src-asm:before { content: 'Assembler'; }
+  pre.src-caml:before { content: 'Caml'; }
+  pre.src-delphi:before { content: 'Delphi'; }
+  pre.src-html:before { content: 'HTML'; }
+  pre.src-idl:before { content: 'IDL'; }
+  pre.src-mercury:before { content: 'Mercury'; }
+  pre.src-metapost:before { content: 'MetaPost'; }
+  pre.src-modula-2:before { content: 'Modula-2'; }
+  pre.src-pascal:before { content: 'Pascal'; }
+  pre.src-ps:before { content: 'PostScript'; }
+  pre.src-prolog:before { content: 'Prolog'; }
+  pre.src-simula:before { content: 'Simula'; }
+  pre.src-tcl:before { content: 'tcl'; }
+  pre.src-tex:before { content: 'TeX'; }
+  pre.src-plain-tex:before { content: 'Plain TeX'; }
+  pre.src-verilog:before { content: 'Verilog'; }
+  pre.src-vhdl:before { content: 'VHDL'; }
+  pre.src-xml:before { content: 'XML'; }
+  pre.src-nxml:before { content: 'XML'; }
+  /* add a generic configuration mode; LaTeX export needs an additional
+     (add-to-list 'org-latex-listings-langs '(conf " ")) in .emacs */
+  pre.src-conf:before { content: 'Configuration File'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.org-right  { text-align: center;  }
+  th.org-left   { text-align: center;   }
+  th.org-center { text-align: center; }
+  td.org-right  { text-align: right;  }
+  td.org-left   { text-align: left;   }
+  td.org-center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara { display: inline; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .equation-container {
+    display: table;
+    text-align: center;
+    width: 100%;
+  }
+  .equation {
+    vertical-align: middle;
+  }
+  .equation-label {
+    display: table-cell;
+    text-align: right;
+    vertical-align: middle;
+  }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  .org-svg { }
+</style>
+</head>
+<body>
+<div id="content" class="content">
+<h1 class="title">Tutorial: bookmark-in-project</h1>
+<div id="table-of-contents" role="doc-toc">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents" role="doc-toc">
+<ul>
+<li><a href="#org75e434f">1. Overview</a></li>
+<li><a href="#org2a01898">2. Commands</a>
+<ul>
+<li><a href="#orgf196172">2.1. bookmark-in-project-delete-all</a></li>
+<li><a href="#org242b0dd">2.2. bookmark-in-project-jump</a></li>
+<li><a href="#org62e4c88">2.3. bookmark-in-project-jump-next</a></li>
+<li><a href="#org9854ff8">2.4. bookmark-in-project-jump-other-frame</a></li>
+<li><a href="#org6311d4b">2.5. bookmark-in-project-jump-other-window</a></li>
+<li><a href="#orgcc59064">2.6. bookmark-in-project-jump-previous</a></li>
+<li><a href="#org8ba7b27">2.7. bookmark-in-project-toggle</a></li>
+</ul>
+</li>
+<li><a href="#org5aec66d">3. Options</a>
+<ul>
+<li><a href="#orga4d186d">3.1. bookmark-in-project-name</a></li>
+<li><a href="#orga343579">3.2. bookmark-in-project-name-fontify</a></li>
+<li><a href="#org5a3c4e0">3.3. bookmark-in-project-project-root</a></li>
+<li><a href="#org2fc8e67">3.4. bookmark-in-project-use-completion-ivy</a></li>
+<li><a href="#org440f53a">3.5. bookmark-in-project-verbose-cycle</a></li>
+<li><a href="#org25252c7">3.6. bookmark-in-project-verbose-toggle</a></li>
+</ul>
+</li>
+<li><a href="#org36d99dd">4. Functions</a>
+<ul>
+<li><a href="#org88682f1">4.1. bookmark-in-project-name-default-fontify</a></li>
+<li><a href="#orgad8cddb">4.2. bookmark-in-project-name-default-with-context</a></li>
+<li><a href="#org9df0a29">4.3. bookmark-in-project-name-default-with-line</a></li>
+<li><a href="#orgc2a471f">4.4. bookmark-in-project-project-root-default</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-org75e434f" class="outline-2">
+<h2 id="org75e434f"><span class="section-number-2">1.</span> Overview</h2>
+<div class="outline-text-2" id="text-1">
+<p>
+This package adds functionality for quickly accessing bookmarks within the current projects.
+</p>
+</div>
+</div>
+<div id="outline-container-org2a01898" class="outline-2">
+<h2 id="org2a01898"><span class="section-number-2">2.</span> Commands</h2>
+<div class="outline-text-2" id="text-2">
+</div>
+<div id="outline-container-orgf196172" class="outline-3">
+<h3 id="orgf196172"><span class="section-number-3">2.1.</span> bookmark-in-project-delete-all</h3>
+<div class="outline-text-3" id="text-2-1">
+<p>
+Delete all bookmarks in the project.
+If optional argument NO-CONFIRM is non-nil, don’t ask for
+confirmation.
+</p>
+
+<p>
+(fn &amp;optional NO-CONFIRM)
+</p>
+
+<div class="org-src-container">
+<pre class="src src-emacs-lisp"><span style="color: #008858;">(</span>call-interactively #'bookmark-in-project-delete-all<span style="color: #008858;">)</span>
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-org242b0dd" class="outline-3">
+<h3 id="org242b0dd"><span class="section-number-3">2.2.</span> bookmark-in-project-jump</h3>
+<div class="outline-text-3" id="text-2-2">
+<p>
+Jump to a bookmark in the current project.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-emacs-lisp"><span style="color: #008858;">(</span>call-interactively #'bookmark-in-project-jump<span style="color: #008858;">)</span>
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-org62e4c88" class="outline-3">
+<h3 id="org62e4c88"><span class="section-number-3">2.3.</span> bookmark-in-project-jump-next</h3>
+<div class="outline-text-3" id="text-2-3">
+<p>
+Jump to the next bookmark.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-emacs-lisp"><span style="color: #008858;">(</span>call-interactively #'bookmark-in-project-jump-next<span style="color: #008858;">)</span>
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-org9854ff8" class="outline-3">
+<h3 id="org9854ff8"><span class="section-number-3">2.4.</span> bookmark-in-project-jump-other-frame</h3>
+<div class="outline-text-3" id="text-2-4">
+<p>
+Jump to a bookmark in another frame, see ‘bookmark-in-project-jump’.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-emacs-lisp"><span style="color: #008858;">(</span>call-interactively #'bookmark-in-project-jump-other-frame<span style="color: #008858;">)</span>
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-org6311d4b" class="outline-3">
+<h3 id="org6311d4b"><span class="section-number-3">2.5.</span> bookmark-in-project-jump-other-window</h3>
+<div class="outline-text-3" id="text-2-5">
+<p>
+Jump to a bookmark in another window, see ‘bookmark-in-project-jump’.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-emacs-lisp"><span style="color: #008858;">(</span>call-interactively #'bookmark-in-project-jump-other-window<span style="color: #008858;">)</span>
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-orgcc59064" class="outline-3">
+<h3 id="orgcc59064"><span class="section-number-3">2.6.</span> bookmark-in-project-jump-previous</h3>
+<div class="outline-text-3" id="text-2-6">
+<p>
+Jump to the previous bookmark.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-emacs-lisp"><span style="color: #008858;">(</span>call-interactively #'bookmark-in-project-jump-previous<span style="color: #008858;">)</span>
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-org8ba7b27" class="outline-3">
+<h3 id="org8ba7b27"><span class="section-number-3">2.7.</span> bookmark-in-project-toggle</h3>
+<div class="outline-text-3" id="text-2-7">
+<p>
+Create or delete a bookmark on the current line.
+</p>
+
+<div class="org-src-container">
+<pre class="src src-emacs-lisp"><span style="color: #008858;">(</span>call-interactively #'bookmark-in-project-toggle<span style="color: #008858;">)</span>
+</pre>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-org5aec66d" class="outline-2">
+<h2 id="org5aec66d"><span class="section-number-2">3.</span> Options</h2>
+<div class="outline-text-2" id="text-3">
+</div>
+<div id="outline-container-orga4d186d" class="outline-3">
+<h3 id="orga4d186d"><span class="section-number-3">3.1.</span> bookmark-in-project-name</h3>
+<div class="outline-text-3" id="text-3-1">
+<ul class="org-ul">
+<li><p>
+Current value: <code>bookmark-in-project-name-default-with-context</code>
+</p>
+
+<p>
+Function to call that returns the bookmark name to use.
+A nil return value will fall back to the ‘path:line’.
+</p></li>
+</ul>
+
+<div class="org-src-container">
+<pre class="src src-emacs-lisp"><span style="color: #008858;">(</span>customize-variable 'bookmark-in-project-name<span style="color: #008858;">)</span>
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-orga343579" class="outline-3">
+<h3 id="orga343579"><span class="section-number-3">3.2.</span> bookmark-in-project-name-fontify</h3>
+<div class="outline-text-3" id="text-3-2">
+<ul class="org-ul">
+<li><p>
+Current value: <code>bookmark-in-project-name-default-fontify</code>
+</p>
+
+<p>
+Function to call that sets font properties for bookmark display.
+</p>
+
+<p>
+This takes and returns a string, optionally setting font properties,
+set to ‘identity’ to use plain text.
+</p></li>
+</ul>
+
+<div class="org-src-container">
+<pre class="src src-emacs-lisp"><span style="color: #008858;">(</span>customize-variable 'bookmark-in-project-name-fontify<span style="color: #008858;">)</span>
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-org5a3c4e0" class="outline-3">
+<h3 id="org5a3c4e0"><span class="section-number-3">3.3.</span> bookmark-in-project-project-root</h3>
+<div class="outline-text-3" id="text-3-3">
+<ul class="org-ul">
+<li><p>
+Current value: <code>bookmark-in-project-project-root-default</code>
+</p>
+
+<p>
+Function to call that returns the root path of the current buffer.
+A nil return value will fall back to the ‘default-directory’.
+</p></li>
+</ul>
+
+<div class="org-src-container">
+<pre class="src src-emacs-lisp"><span style="color: #008858;">(</span>customize-variable 'bookmark-in-project-project-root<span style="color: #008858;">)</span>
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-org2fc8e67" class="outline-3">
+<h3 id="org2fc8e67"><span class="section-number-3">3.4.</span> bookmark-in-project-use-completion-ivy</h3>
+<div class="outline-text-3" id="text-3-4">
+<ul class="org-ul">
+<li><p>
+Current value: <code>t</code>
+</p>
+
+<p>
+Use the IVY completion framework (when available).
+</p></li>
+</ul>
+
+<div class="org-src-container">
+<pre class="src src-emacs-lisp"><span style="color: #008858;">(</span>customize-variable 'bookmark-in-project-use-completion-ivy<span style="color: #008858;">)</span>
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-org440f53a" class="outline-3">
+<h3 id="org440f53a"><span class="section-number-3">3.5.</span> bookmark-in-project-verbose-cycle</h3>
+<div class="outline-text-3" id="text-3-5">
+<ul class="org-ul">
+<li><p>
+Current value: <code>t</code>
+</p>
+
+<p>
+Show messages when cycling between bookmarks.
+</p></li>
+</ul>
+
+<div class="org-src-container">
+<pre class="src src-emacs-lisp"><span style="color: #008858;">(</span>customize-variable 'bookmark-in-project-verbose-cycle<span style="color: #008858;">)</span>
+</pre>
+</div>
+</div>
+</div>
+<div id="outline-container-org25252c7" class="outline-3">
+<h3 id="org25252c7"><span class="section-number-3">3.6.</span> bookmark-in-project-verbose-toggle</h3>
+<div class="outline-text-3" id="text-3-6">
+<ul class="org-ul">
+<li><p>
+Current value: <code>t</code>
+</p>
+
+<p>
+Show messages when toggling bookmarks on/off.
+</p></li>
+</ul>
+
+<div class="org-src-container">
+<pre class="src src-emacs-lisp"><span style="color: #008858;">(</span>customize-variable 'bookmark-in-project-verbose-toggle<span style="color: #008858;">)</span>
+</pre>
+</div>
+</div>
+</div>
+</div>
+<div id="outline-container-org36d99dd" class="outline-2">
+<h2 id="org36d99dd"><span class="section-number-2">4.</span> Functions</h2>
+<div class="outline-text-2" id="text-4">
+</div>
+<div id="outline-container-org88682f1" class="outline-3">
+<h3 id="org88682f1"><span class="section-number-3">4.1.</span> bookmark-in-project-name-default-fontify</h3>
+<div class="outline-text-3" id="text-4-1">
+<ul class="org-ul">
+<li><p>
+Signature: <code>(bookmark-in-project-name-default-fontify name)</code>
+</p>
+
+<p>
+Apply face property to the bookmark NAME (for display only).
+</p>
+
+<p>
+(fn NAME)
+</p></li>
+</ul>
+</div>
+</div>
+<div id="outline-container-orgad8cddb" class="outline-3">
+<h3 id="orgad8cddb"><span class="section-number-3">4.2.</span> bookmark-in-project-name-default-with-context</h3>
+<div class="outline-text-3" id="text-4-2">
+<ul class="org-ul">
+<li><p>
+Signature: <code>(bookmark-in-project-name-default-with-context)</code>
+</p>
+
+<p>
+Return the name used to create the bookmark with contextual information.
+</p></li>
+</ul>
+</div>
+</div>
+<div id="outline-container-org9df0a29" class="outline-3">
+<h3 id="org9df0a29"><span class="section-number-3">4.3.</span> bookmark-in-project-name-default-with-line</h3>
+<div class="outline-text-3" id="text-4-3">
+<ul class="org-ul">
+<li><p>
+Signature: <code>(bookmark-in-project-name-default-with-line)</code>
+</p>
+
+<p>
+Return the name used to create the bookmark with the line number.
+</p></li>
+</ul>
+</div>
+</div>
+<div id="outline-container-orgc2a471f" class="outline-3">
+<h3 id="orgc2a471f"><span class="section-number-3">4.4.</span> bookmark-in-project-project-root-default</h3>
+<div class="outline-text-3" id="text-4-4">
+<ul class="org-ul">
+<li><p>
+Signature: <code>(bookmark-in-project-project-root-default)</code>
+</p>
+
+<p>
+Function to find the project root from the current buffer.
+This checks ‘ffip’, ‘projectile’, ‘project’ &amp; ‘vc’ root.
+</p></li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div id="postamble" class="status">
+<p class="author">Author: Charlie Holland</p>
+<p class="date">Created: 2026-05-31 Sun 10:44</p>
+<p class="validation"><a href="https://validator.w3.org/check?uri=referer">Validate</a></p>
+</div>
+</body>
+</html>

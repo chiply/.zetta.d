@@ -736,6 +736,28 @@ preset switch, and a missing font must never be able to break either."
 
 (global-auto-revert-mode 1) ;; you might not want this
 (setq auto-revert-verbose nil) ;; or this
+;; File notification is working (`auto-revert-use-notify' t, five live
+;; descriptors), but setting that alone does NOT stop the poll: with
+;; `auto-revert-avoid-polling' nil, Emacs stats the entire buffer list every
+;; five seconds, forever.  This is the behaviour the config already assumed
+;; it had.  Trade-off: files changed by tools that defeat notification stop
+;; reverting on their own -- safe on local APFS.  OPTIMIZATIONS.org item 9.
+(setq auto-revert-avoid-polling t)
+
+;; Redisplay and fontification, all measured live as unset.
+;;
+;; `jit-lock-defer-time' nil means every keystroke that dirties a region
+;; fontifies INSIDE redisplay; after the timer treadmill this was the largest
+;; remaining per-keystroke cost in org buffers.  0.05 defers it to just after
+;; the pass instead.  `redisplay-skip-fontification-on-input' lets a pass
+;; abandon fontifying when input is waiting, so a held key scrolls rather
+;; than fontifies.  `hl-line-sticky-flag' t maintains the highlight overlay
+;; in EVERY window on every command instead of only the selected one.
+;; OPTIMIZATIONS.org items 10 and 11.
+(setq jit-lock-defer-time 0.05
+      redisplay-skip-fontification-on-input t
+      auto-window-vscroll nil
+      hl-line-sticky-flag nil)
 
 ;; need to turn this on per mode, causes too many issues
 (global-visual-line-mode -1)

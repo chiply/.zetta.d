@@ -344,6 +344,12 @@ tools like HyRolo or consult-grep open in the background to scan files."
   (add-hook 'prog-mode-hook #'zetta-copilot-maybe-enable)
 
   :config
+  ;; Debounce.  The package default is 0, which is a JSONRPC round trip to
+  ;; the node agent after EVERY keystroke in every prog buffer, plus the
+  ;; consing that goes with it -- and copilot is the highest-frequency stdio
+  ;; producer in the session.  See OPTIMIZATIONS.org item 4.
+  (setq copilot-idle-delay 0.3)
+
   ;; -32800 "Request was canceled" is routine — it means we typed past
   ;; an in-flight inlineCompletion request; don't echo it
   (define-advice copilot--log (:around (fn level format &rest args) zetta-silence-cancelled)

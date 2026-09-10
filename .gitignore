@@ -131,3 +131,7 @@ dap-ui-repl-*-history
 
 # native modules built by .files/install_emacs_canvas_rs.sh
 source/lib/**/*.so
+
+# org LaTeX export byproducts (the .org is the source)
+productivity.log
+productivity.tex

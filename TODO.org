@@ -209,3 +209,48 @@ same call at top level in =core/interface.el= finally surfaced it.
 The exclusions exist to suppress benign noise, so the fix is to narrow them
 rather than remove them -- match the noise precisely instead of discarding
 every line that mentions use-package.
+
+* TODO TLS trust is configured from a shell error message
+:PROPERTIES:
+:FOUND:    [2026-09-08]
+:MODULES:  modules/core/security.el
+:END:
+
+=modules/core/security.el:8-10= probes for a Python interpreter:
+
+#+begin_src emacs-lisp
+(setq python (or (executable-find "py.exe")
+                 (executable-find "python")))
+#+end_src
+
+Neither exists on this machine -- there is only =/opt/homebrew/bin/python3=.
+So =python= is nil, =:17='s =(concat python " -m certifi")= becomes =" -m certifi"=,
+and the shell's error message is stored as the CA bundle path.  Verified live:
+
+#+begin_example
+gnutls-trustfiles  => ("zsh:1: command not found: -m")
+gnutls-verify-error => t
+tls-program        => ("gnutls-cli --x509cafile zsh:1: command not found: -m -p %p %h")
+(file-exists-p (car gnutls-trustfiles)) => nil
+#+end_example
+
+So =gnutls-verify-error= is =t= while the trust store points at a path that does
+not exist.  This has been silently true for as long as the machine has lacked
+a bare =python=.
+
+The *practical consequence is not yet established* -- much of this config's
+networking goes through curl/plz rather than gnutls, which is likely why
+nothing visibly broke.  Establish what actually breaks before choosing a fix.
+
+Two other problems in the same 19 lines: =:5= is =(require 'cl)=, which resolves
+to =lisp/obsolete/cl.elc= in this 32.0.50 build (deprecated, still loadable);
+and =:8= assigns to a *global unnamespaced variable named =python=*.
+
+Fixes, in order of preference:
+1. Delete the block, keeping only =(setq gnutls-verify-error t)= -- Emacs 27+
+   ignores =tls-program= on most paths and uses the system trust store.
+2. Or: add ="python3"= to the =executable-find= list, guard the =let= on the probe
+   returning a file that exists, and change =(require 'cl)= to =cl-lib=.
+
+The block is copy-pasted from a 2015 article (credited at =:3-4=) and its
+assumptions no longer hold.

@@ -4146,4 +4146,17 @@
                           :source "elpaca-menu-lock-file" :id
                           zenburn-theme :type git :protocol https
                           :inherit t :depth treeless :ref
-                          "d9557cf5ab9c03dc70693e3892f5ffdc5d345d22")))
+                          "d9557cf5ab9c03dc70693e3892f5ffdc5d345d22"))
+ (textui :source "elpaca-menu-lock-file" :recipe
+         (:source nil :package "textui" :id textui :host github :repo
+                  "yibie/textui" :type git :protocol https :inherit t
+                  :depth treeless :ref
+                  "ce37202ec910e03008bd50472b2df1217b5f1a7e"))
+ (org-other-agenda :source "elpaca-menu-lock-file" :recipe
+                   (:source nil :package "org-other-agenda" :id
+                            org-other-agenda :host github :repo
+                            "yibie/org-other-agenda" :build
+                            (:not elpaca-check-version) :type git
+                            :protocol https :inherit t :depth treeless
+                            :ref
+                            "468a416912bd6742ef348b435a051ac9fb7478fb")))

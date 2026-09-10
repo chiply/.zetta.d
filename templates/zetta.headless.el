@@ -80,7 +80,10 @@
 (zetta-modules!
  ;; image.el is pixel plumbing for a window system.
  :core (-image)
- :completion
+ ;; consult-gh and consult-omni declare Package-Requires emacs 29.4, so
+ ;; elpaca refuses to build them on the hub's 29.3 (measured: CI nox row).
+ ;; Neither is hub work anyway: gh plus credentials, and web search.
+ :completion (-consult-gh -consult-omni)
  ;; Icons need a GUI font, the font and pixel modules a window system,
  ;; the toys a place to draw.  (SVG chrome: see the header.)
  :ui (-all-the-icons -all-the-icons-dired -all-the-icons-ibuffer

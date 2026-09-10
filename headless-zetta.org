@@ -213,6 +213,32 @@ What it does not prove: anything specific to Emacs 29.3 (this was 32),
 to a build without window-system support, or to deferred =:config=
 bodies (Part 2, item 4).  The CI nox row covers the first two.
 
+** CI, PR #140 [2026-09-10, measured]
+
+Run 34518176225 (first push): the Emacs 31 row reached =ZETTA-OK
+packages=335 modules=301= and failed on two things, fixed in 5fbd8d8:
+the WIP org-timegrid module queued an unpinned package (=LOCK-MISSING=),
+and the tightened gate caught =Error (use-package): devdocs/:config=, a
+flaky doc-set download at load.  devdocs now installs nothing in batch
+and tolerates a failed fetch.
+
+Run 34519579545 (5fbd8d8): 29.4, 30.2 and 31 green under the tightened
+gate, so the four guards did clear the hidden errors.  The nox row
+measured what the rehearsal could not:
+
+| Check                      | Result                                                          |
+|----------------------------+-----------------------------------------------------------------|
+| apt package                | GNU Emacs 29.3; =svg: nil  window-system-support: nil=            |
+| SVG chrome                 | all eight files skipped by the predicate, on both ci-sync and ci-test passes |
+| Marker                     | =ZETTA-OK packages=198 modules=180=                               |
+| "Error (use-package)"      | 0                                                               |
+| Failed packages            | 2: consult-omni and consult-gh, "emacs version 29.3 installed, 29.4 required" |
+
+Both declare =Package-Requires= emacs 29.4, so elpaca refuses them on
+the hub's package.  Neither is hub work (gh plus credentials; web
+search); they leave the headless profile's completion list and the row
+is re-run.
+
 * Part 1 -- What already works in our favour
 
 - *CI is the existence proof.*  =.github/workflows/ci.yml:74= runs the

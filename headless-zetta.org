@@ -171,12 +171,10 @@ what deviated from the plan and why, and what is left to the owner.
 
 ** Left to the owner
 
-1. Push =dev= and open the PR to =main= (CI is billed; not pushed from
-   this session).  Four rows must be green, the nox row with =ZETTA-OK=
-   and a =modules== count well under 290.  The tightened gate may turn
-   up "Error (use-package)" lines the measured list did not include;
-   each is a small guard in the same PR.
-2. Merge, then =hub-deploy=.  The bootstrap clones =main=, installs the
+1. [done 2026-09-10] =dev= pushed, PR #140 open, all four rows green on
+   the third run (see "CI, PR #140" below for what the first two
+   caught).  Review and merge.
+2. After the merge, =hub-deploy=.  The bootstrap clones =main=, installs the
    template and both units.  =e= stops working until step 3; =el= (the
    lean daemon, =systemctl --user start emacs-lean=) is the editor
    meanwhile.
@@ -236,8 +234,14 @@ measured what the rehearsal could not:
 
 Both declare =Package-Requires= emacs 29.4, so elpaca refuses them on
 the hub's package.  Neither is hub work (gh plus credentials; web
-search); they leave the headless profile's completion list and the row
-is re-run.
+search); they left the headless profile's completion list (d990455).
+
+Run 34522648342 (d990455): *all four rows green.*  Phase B's Done-when
+holds: the nox row logs =ZETTA-OK packages=195 modules=178=, zero
+"Error (use-package)" lines, zero failed packages, the eight SVG files
+skipped by predicate, and the three existing rows pass under the
+tightened gate.  Wall clock, cold nox row 27 min; the warm rows 6, 9
+and 13 min (30.2, 31, 29.4).
 
 * Part 1 -- What already works in our favour
 

@@ -280,6 +280,19 @@ could (all deferred or per-machine, Part 2 item 4), each fixed:
   reads up to 14 ("version-mismatch: 15").  Pinned to v0.23.6 in
   =lang/treesit.el=.
 
+*The update flow's first run broke, and fixed a real bug.*  After
+#142 merged, =git pull && bin/zetta build= on the hub died in phase 1
+with "Cannot load key-chord" then void-function =general-define-key=:
+the Mac rehearsal's bytecode failure (above), now on the machine it
+matters for.  The first build's phase 2 had written
+=source/bootstrap/*.elc=, and a batch =-l init.el= cannot start from
+them.  =install= never sees it because it purges every =.elc= first;
+=build= and =sync= did not.  Both now purge module and bootstrap
+bytecode before phase 1 (eln-cache still kept), which is what the
+first cold build had accidentally enjoyed.  Why the compiled bootstrap
+only works on the daemon path is still unexplained; the purge sidesteps
+it for a few seconds of recompilation.
+
 One thing the build revealed about =bin/zetta= itself, pre-existing and
 shared with =install=: the native-compile phase runs without the
 config's load-path, so most packages fail with "Cannot open load file"

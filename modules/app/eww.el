@@ -1,5 +1,43 @@
 ;;; eww.el --- Configure eww -*- lexical-binding: t; -*-
 
+;; shr renders for eww AND for elfeed's entry buffer, so its settings belong
+;; here rather than inside eww's `:config'.  That block is deferred behind
+;; `:commands', so an elfeed entry read before eww had ever been invoked was
+;; rendered under shr's own defaults and looked nothing like one read after.
+(use-package shr
+  :ensure nil
+  :custom
+  (shr-max-image-proportion 0.7)
+  (shr-inhibit-images nil)
+  (shr-max-width nil)
+  ;; 0 is not "no width" -- `shr-fill-lines' skips filling entirely when the
+  ;; internal width is <= 0, which is what lets text run to the window edge
+  ;; and reflow with it instead of being hard-wrapped at render time.
+  (shr-width 0)
+  (shr-discard-aria-hidden t)
+  (shr-cookie-policy nil)
+
+  ;; Render web pages in the preset's own font rather than in `variable-pitch'.
+  ;;
+  ;; With this on, shr faces its text `shr-text' (-> `variable-pitch'), which
+  ;; under the `terminus' preset is Helvetica Neue -- a family that is in no
+  ;; other part of this config.  Worse, it is only PART of a page: shr applies
+  ;; a page's inline CSS colours as a bare (:foreground "#...") with no family
+  ;; and no `:inherit', so those spans drop back to `default' and a document
+  ;; changes font mid-paragraph.  A live buffer measured 14061 characters in
+  ;; Helvetica Neue against 2713 in Terminus.
+  ;;
+  ;; nil makes shr skip the face entirely -- it is applied under `(when
+  ;; shr-use-fonts ...)' -- so everything renders in `default' and follows
+  ;; whichever preset is active.  `shr-width' behaves the same either way:
+  ;; both branches of the width calculation yield 0 here.
+  (shr-use-fonts nil)
+  :config
+  ;; Inert while `shr-use-fonts' is nil, since `shr-text' is then never
+  ;; applied; kept so that re-enabling fonts does not go back to pinning a
+  ;; hard family, which is what made pages stay Terminus under every preset.
+  (set-face-attribute 'shr-text nil :family 'unspecified :inherit 'variable-pitch))
+
 (use-package eww
   :ensure nil
   :commands (eww eww-browse-url)
@@ -7,19 +45,6 @@
   (setq eww-auto-rename-buffer 'title)
   (setq eww-bookmarks-directory (expand-file-name "data/eww" user-emacs-directory))
   ;; eww-default-download-directory set in ~/.private.el
-
-  ;; Rendering settings
-  (setq shr-max-image-proportion 0.7)
-  (setq shr-inhibit-images nil)
-  (setq shr-use-fonts t)
-  (setq shr-max-width nil)
-  (setq shr-width 0)
-  (setq shr-discard-aria-hidden t)
-  (setq shr-cookie-policy nil)
-  ;; Inherit `variable-pitch' rather than pinning Terminus.  fontaine sets
-  ;; that face per preset, so a hard family here meant web pages stayed
-  ;; Terminus no matter which preset was active.
-  (set-face-attribute 'shr-text nil :family 'unspecified :inherit 'variable-pitch)
 
   (setopt eww-search-prefix "https://lite.duckduckgo.com/lite/?q=")
 

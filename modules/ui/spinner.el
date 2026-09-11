@@ -202,5 +202,34 @@
 
   (add-to-list 'compilation-finish-functions 'zetta-compile-spin-stop)
 
+  ;; Async shell commands are NOT compilation buffers -- `shell-command-mode'
+  ;; derives from `comint-mode' -- so `compilation-finish-functions', and with
+  ;; it `zetta-compile-spin-stop', never fires for them.  The spinner started
+  ;; from the `shell-command-mode' hook (term/shell.el) therefore never
+  ;; stopped: an animation timer left running per finished command, and a
+  ;; header line still claiming the command was in flight long after it
+  ;; returned.
+  ;;
+  ;; `shell-command-sentinel' is that buffer's own end signal.  ADVISED rather
+  ;; than chained onto the process, because `shell-command' installs its
+  ;; sentinel AFTER running the mode hook (simple.el ~4825 then ~4829) -- a
+  ;; sentinel set from the hook is overwritten a moment later.
+  (defvar-local zetta-spinner-last-result nil
+    "How this buffer's last shell command ended.
+The sentinel's signal string, trimmed -- \"finished\", \"interrupt\",
+\"exited abnormally with code 1\" -- or nil if none has ended here.")
+
+  (defun zetta-spinner-shell-command-stop (process signal)
+    "Stop this buffer's spinner and remember how PROCESS ended.
+SIGNAL is the sentinel's message."
+    (when (and (not (process-live-p process))
+               (buffer-live-p (process-buffer process)))
+      (with-current-buffer (process-buffer process)
+        (setq zetta-spinner-last-result (string-trim (or signal "")))
+        (when (fboundp 'spinner-stop) (spinner-stop))
+        (force-mode-line-update))))
+
+  (advice-add 'shell-command-sentinel :after #'zetta-spinner-shell-command-stop)
+
   )
 ;;; spinner.el ends here

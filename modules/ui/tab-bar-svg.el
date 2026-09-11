@@ -75,15 +75,53 @@ twice."
   :group 'zetta)
 
 (defcustom zetta-tab-bar-svg-right-margin 8
-  "Pixels of inset between right-aligned content and the right window edge."
+  "Pixels of inset between right-aligned content and the right window edge.
+When the clock is right-aligned, `zetta-tab-bar-svg--right-margin' adds the
+room it needs on top of this."
   :type 'integer :group 'zetta)
 
-(defcustom zetta-tab-bar-svg-char-advance 8
-  "Per-character advance (px) used to lay out rows containing pies/bars/segments.
-Match it to the monospace SVG font's glyph width as librsvg renders it (~8 for
-Terminess at 15px scaled) so a clickable indicator's hover box lands snugly on
-its text.  Plain all-text rows use exact font anchoring and ignore this."
+(defcustom zetta-tab-bar-svg-clock-align 'right
+  "Where the analog clock sits: `right\=' at the right edge, or `center\='.
+
+Right is the default because the centre of a three-row bar is the one place
+a permanent ornament costs the most: every row has to break around it, and
+the left content needs truncating to a budget that changes with the frame
+width.  At the edge it costs a fixed inset and nothing else moves."
+  :type '(choice (const :tag "Right edge" right) (const :tag "Centred" center))
+  :group 'zetta)
+
+(defcustom zetta-tab-bar-svg-clock-gap 10
+  "Pixels between a right-aligned clock and the content beside it."
+  :type 'integer :group 'zetta)
+
+(defun zetta-tab-bar-svg--clock-radius ()
+  "Radius the tab-bar clock is drawn at, or nil when it is not shown.
+From `svg-line-span-metrics', so it tracks the drawn font size rather than
+assuming one -- the bar is 51px tall under Monaspace and 57 under Terminus,
+and the clock is sized off that."
+  (when (fboundp 'svg-line-span-metrics)
+    (cdr (svg-line-span-metrics (zetta-svg-line-font-for :tab-bar)
+                                zetta-tab-bar-svg-font-size
+                                zetta-tab-bar-svg-line-pad 3))))
+
+(defun zetta-tab-bar-svg--right-margin ()
+  "Right inset for the rows, wide enough to clear a right-aligned clock.
+An edge-aligned span reserves no room for itself -- see `svg-line-define'."
+  (let ((r (and (eq zetta-tab-bar-svg-clock-align 'right)
+                (zetta-tab-bar-svg--clock-radius))))
+    (+ zetta-tab-bar-svg-right-margin
+       (if r (+ (* 2 r) zetta-tab-bar-svg-clock-gap) 0))))
+
+(defcustom zetta-tab-bar-svg-char-advance-ratio 0.5
+  "Per-character advance, as a fraction of the font size, for run layout.
+Set from the bar's own font by `zetta-svg-line-derive-char-advance'; the
+default only stands in before that runs.  A ratio rather than a pixel count
+so it survives text scaling -- see that function.  Plain all-text rows use
+exact font anchoring and ignore this."
   :type 'number :group 'zetta)
+
+(define-obsolete-variable-alias 'zetta-tab-bar-svg-char-advance
+  'zetta-tab-bar-svg-char-advance-ratio "2026-09-07")
 
 (defcustom zetta-tab-bar-svg-icon t
   "When non-nil, draw a full-height major-mode-icon masthead at the left of the tab bar."
@@ -106,7 +144,10 @@ flush-left)."
 
 (defcustom zetta-tab-bar-svg-icon-scale 1.9
   "Masthead icon size as a fraction of the tab bar's full height.
-Nerd-Font icon glyphs only ink ~half their em box, so values >1 are normal:
+Measured against the glyph's INK rather than its em box, so one value holds
+across families: a Nerd glyph inks about half its em, but Terminess inks
+0.45 of it and Monaspace 0.55, and svg-line divides that difference out.
+Values >1 are still normal --
 the glyph is scaled past the bar height (the empty em overflow is clipped) so
 its visible ink fills the height."
   :type 'number :group 'zetta)
@@ -139,16 +180,25 @@ value untouched.  Applied only while the SVG renderer is active."
 ;;; ------------------------------------------------------------------
 (defun zetta-tab-bar-svg-lines ()
   "Return the tab-bar content as a list of (LEFT-SEGMENTS . RIGHT-SEGMENTS).
-Icons are nerd-font glyphs (plain text in `zetta-svg-line-font'), so every
-side is one font-accurate text run -- no char-advance estimation, nothing
-jitters as keycast changes width."
+Icons are nerd-font glyphs drawn as ordinary text, so they need no separate
+positioning.
+
+Sides carrying an interactive segment are laid out on the char-advance grid
+rather than by exact text anchoring.  That used to be worth avoiding -- the
+grid was an estimate, and keycast changing width under an estimate is what
+jittered -- but it is now measured from the font that draws it (see
+`zetta-svg-line-em-ratio'), which is also what lets a segment name a font of
+its own via `zetta-svg-seg-fonts'."
   (list
-   ;; line 1 -- file glyph + buffer (left); keycast + recursion + thing-at-point (right)
+   ;; line 1 -- file glyph + buffer (left); prefix + keycast + recursion +
+   ;; thing-at-point (right).  The prefix-in-progress leads the keycast entry
+   ;; it is about to become, so all the key feedback reads as one group.
    (cons '(zetta-tab-bar-file-icon " "
                                    zetta-tab-bar-svg--buffer
                                    zmc-modeline-indicator
                                    zetta-pyvenv-activate-poetry-modeline)
-         '(zetta-tab-bar-svg--keycast " "
+         '(zetta-current-prefix "  "
+           zetta-tab-bar-svg--keycast " "
            zetta-tab-bar-recursion-icon " " zetta-tab-bar-recursion-level " "
            recursion-indicator--string))
    ;; line 2 -- modal etc left; <analog clock spans the centre>; mail right
@@ -159,11 +209,10 @@ jitters as keycast changes width."
          :center nil
          :right '(zetta-tab-bar-font-preset "  "
                   zetta-tab-bar-svg--elfeed "  " zetta-tab-bar-svg--mu4e))
-   ;; line 3 -- Spotify left; clock centre (it spans all 3 rows); battery/prefix/space-tree right
+   ;; line 3 -- Spotify left; clock centre (it spans all 3 rows); battery/space-tree right
    (list :left '(zetta-tab-bar-svg--spotify)
          :center nil
-         :right '(zetta-tab-bar-svg--battery " "
-                  zetta-current-prefix "  "
+         :right '(zetta-tab-bar-svg--battery "  "
                   zetta-tab-bar-svg--workspace))))
 
 (defcustom zetta-tab-bar-calendar-color "#9aa0aa"
@@ -171,10 +220,12 @@ jitters as keycast changes width."
   :type 'color :group 'zetta)
 
 (defun zetta-tab-bar-svg-spans ()
-  "Analog clock spanning all three rows in the centre.
+  "Analog clock spanning all three rows, per `zetta-tab-bar-svg-clock-align'.
 The sunrise/sunset flank and the date/moon-phase widget were removed."
-  (let ((gray zetta-tab-bar-calendar-color))
-    (list (list :clock '(0 . 2) gray gray))))
+  (let ((ink zetta-tab-bar-calendar-color))
+    (list (list :clock '(0 . 2) ink ink
+                zetta-tab-bar-svg-clock-align
+                zetta-tab-bar-svg-clock-gap))))
 
 (defvar zetta-tab-bar-svg--clock-timer nil
   "Periodic timer that re-renders the SVG tab bar so the analog clock ticks.")
@@ -215,15 +266,15 @@ The sunrise/sunset flank and the date/moon-phase widget were removed."
                  :context-buffer #'zetta-tab-bar--context-buffer
                  :content #'zetta-tab-bar-svg-lines
                  :spans #'zetta-tab-bar-svg-spans
-                 :font (lambda () zetta-svg-line-font)
+                 :font (lambda () (zetta-svg-line-font-for :tab-bar))
                  :font-size (lambda () zetta-tab-bar-svg-font-size)
                  :line-pad (lambda () zetta-tab-bar-svg-line-pad)
                  :background (lambda () zetta-tab-bar-svg-background)
                  :pad (lambda () zetta-tab-bar-svg-pad)
                  :pad-y (lambda () zetta-tab-bar-svg-pad-y)
                  :margin-y (lambda () zetta-tab-bar-svg-margin-y)
-                 :right-margin (lambda () zetta-tab-bar-svg-right-margin)
-                 :char-advance (lambda () zetta-tab-bar-svg-char-advance)
+                 :right-margin #'zetta-tab-bar-svg--right-margin
+                 :char-advance-ratio (lambda () zetta-tab-bar-svg-char-advance-ratio)
                  :icon (lambda () (and zetta-tab-bar-svg-icon
                                        (fboundp 'zetta-tab-bar-mode-icon)
                                        (zetta-tab-bar-mode-icon)))
@@ -258,12 +309,12 @@ The sunrise/sunset flank and the date/moon-phase widget were removed."
           ;; line 3 left-aligned
           new-line zetta-tab-bar-modal zetta-gptel-processes
           blinker-tab-bar
-          ;; line 3 right-aligned
-          tab-bar-format-align-right tab-bar-keycast zetta-insert-space
+          ;; line 3 right-aligned -- prefix leads keycast, as in the SVG rows
+          tab-bar-format-align-right zetta-current-prefix zetta-insert-space
+          tab-bar-keycast zetta-insert-space
           zetta-tab-bar-current-thing zetta-tab-bar-recursion-level
           recursion-indicator--string tab-bar-format-global
-          internal-echo-keystrokes-prefix
-          zetta-insert-space zetta-current-prefix zetta-insert-space
+          internal-echo-keystrokes-prefix zetta-insert-space
           space-tree-modeline-lighter
           )))
 

@@ -1,0 +1,121 @@
+#+TITLE: Study and reading
+#+CATEGORY: learn
+#+PROPERTY: Effort_ALL 0 0:05 0:10 0:15 0:20 0:30 0:45 1:00 1:30 2:00 3:00 4:00 5:00 6:00 7:00
+#+COLUMNS: %40ITEM(Task) %TODO %3PRIORITY(P) %6IMPACT(Imp) %17Effort(Estimate){:} %CLOCKSUM(Clocked) %DEADLINE %SCHEDULED %TAGS
+#+FILETAGS: :learn:
+
+* PROG [#B] Finish the MPS garbage collector paper  :@deep:reading:@tired:
+SCHEDULED: <2026-09-08 Tue>
+:PROPERTIES:
+:ID:       4AF3F017-A667-4F0D-91B8-A0377133AE70
+:CREATED:  [2026-08-02 Sun]
+:Effort:   1:00
+:END:
+:LOGBOOK:
+- State "PROG"       from "TODO"       [2026-09-07 Mon 09:00]
+- State "TODO"       from "PROG"       [2026-09-01 Tue 09:58]
+- State "PROG"       from              [2026-09-01 Tue 09:30]
+:END:
+
+Relevant to whether feature/igc3 is worth evaluating.
+
+* HOLD [#C] Work through the Rust ownership chapter  :@deep:reading:
+:PROPERTIES:
+:ID:       34F6FD93-03DC-4160-89E9-E1AA2AC0FA27
+:CREATED:  [2026-08-24 Mon]
+:Effort:   1:00
+:IMPACT:   4
+:END:
+:LOGBOOK:
+- State "HOLD"       from "TODO"       [2026-08-19 Wed 16:40] \\
+  Revisit when there is budget.
+:END:
+
+* DONE Watch the EmacsConf talk on org-ql  :@shallow:video:@fresh:
+CLOSED: [2026-08-19 Wed 14:46] SCHEDULED: <2026-09-23 Wed> DEADLINE: <2026-10-13 Tue>
+:PROPERTIES:
+:ID:       66B08058-EFB3-452E-A7D9-AFE21BA56794
+:CREATED:  [2026-07-25 Sat]
+:END:
+:LOGBOOK:
+- State "DONE"       from "PROG"       [2026-08-19 Wed 14:46]
+- State "PROG"       from "TODO"       [2026-08-19 Wed 14:30]
+- State "TODO"       from "PROG"       [2026-08-17 Mon 13:15]
+- State "PROG"       from              [2026-08-17 Mon 13:00]
+- Rescheduled from "[2026-09-16 Wed]" on [2026-09-04 Fri 08:55]
+- New deadline from "[2026-10-03 Sat]" on [2026-09-04 Fri 12:30]
+:END:
+
+- [X] first pass
+- [ ] second pass
+
+* IDEA [#B] Read the Ravenbrook MPS design docs  :@deep:reading:
+SCHEDULED: <2026-10-05 Mon>
+:PROPERTIES:
+:ID:       8C421104-5560-47E1-A133-D85BA469F007
+:CREATED:  [2026-07-17 Fri]
+:Effort:   6:00
+:IMPACT:   4
+:END:
+
+* IDEA Try the new tree-sitter query syntax  :@deep:practice:
+:PROPERTIES:
+:ID:       6DED3269-2979-4DFD-ADDA-13562778A9CA
+:CREATED:  [2026-08-16 Sun]
+:Effort:   1:30
+:END:
+
+* TODO Take notes on the retrieval-augmentation survey  :@deep:reading:@tired:
+SCHEDULED: <2026-09-06 Sun>
+:PROPERTIES:
+:ID:       46984E2F-30BE-452B-9198-D7E354E5FAAA
+:CREATED:  [2026-07-09 Thu]
+:Effort:   0:45
+:END:
+
+* HOLD Rebuild the SQL study deck  :@shallow:practice:
+DEADLINE: <2026-09-23 Wed>
+:PROPERTIES:
+:ID:       2EB56C3C-189E-4CFA-9BF2-D2DD1BC7806F
+:CREATED:  [2026-08-31 Mon]
+:Effort:   1:00
+:DEADLINE_TYPE: soft
+:REVIEW_ON: [2026-11-06 Fri]
+:END:
+:LOGBOOK:
+- State "HOLD"       from "TODO"       [2026-08-10 Mon 16:40] \\
+  Revisit when there is budget.
+- New deadline from "[2026-09-13 Sun]" on [2026-09-07 Mon 12:30]
+:END:
+
+* TODO [#B] Read up on org-element caching  :@deep:reading:
+DEADLINE: <2026-10-16 Fri>
+:PROPERTIES:
+:ID:       C654E555-1C99-4A7F-9FBC-0791EFA87277
+:CREATED:  [2026-08-29 Sat]
+:Effort:   3:00
+:IMPACT:   3
+:END:
+
+Prompted by org-fold-core-style being set to `overlays' by something
+unidentified.
+
+* DONE [#B] Weekly review  :@deep:review:
+CLOSED: [2026-08-21 Fri 10:52] SCHEDULED: <2026-09-10 Thu .+1w>
+:PROPERTIES:
+:ID:       42E34135-F817-404D-82D7-1344537A78C8
+:CREATED:  [2026-07-26 Sun]
+:Effort:   3:00
+:IMPACT:   5
+:LAST_REPEAT: [2026-09-05 Sat]
+:END:
+:LOGBOOK:
+- State "DONE"       from "PROG"       [2026-08-21 Fri 10:52]
+- State "PROG"       from "TODO"       [2026-08-21 Fri 09:00]
+- State "TODO"       from "PROG"       [2026-08-19 Wed 15:22]
+- State "PROG"       from              [2026-08-19 Wed 13:30]
+:END:
+
+- [X] first pass
+- [ ] second pass
+

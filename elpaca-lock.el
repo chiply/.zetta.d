@@ -779,6 +779,20 @@
                   :source "elpaca-menu-lock-file" :id corfu :type git
                   :protocol https :inherit t :depth treeless :ref
                   "d2a995c5c732d0fc439efe09440870a9de779a74"))
+ (corfu-terminal :source "elpaca-menu-lock-file" :recipe
+                 (:package "corfu-terminal" :fetcher codeberg :repo
+                           "akib/emacs-corfu-terminal" :files
+                           ("*.el" "*.el.in" "dir" "*.info" "*.texi"
+                           "*.texinfo" "doc/dir" "doc/*.info" "doc/*.texi"
+                           "doc/*.texinfo" "lisp/*.el" "docs/dir"
+                           "docs/*.info" "docs/*.texi" "docs/*.texinfo"
+                           (:exclude ".dir-locals.el" "test.el" "tests.el"
+                                          "*-test.el" "*-tests.el" "LICENSE"
+                                          "README*" "*-pkg.el"))
+                           :source "elpaca-menu-lock-file" :id corfu-terminal
+                           :type git :protocol https :inherit t :depth
+                           treeless :ref
+                           "501548c3d51f926c687e8cd838c5865ec45d03cc"))
  (counsel :source "elpaca-menu-lock-file" :recipe
           (:package "counsel" :repo "abo-abo/swiper" :fetcher github
                     :files ("counsel.el") :source
@@ -2749,6 +2763,12 @@
                              org-super-agenda :type git :protocol
                              https :inherit t :depth treeless :ref
                              "fb20ad9c8a9705aa05d40751682beae2d094e0fe"))
+ (org-timegrid :source "elpaca-menu-lock-file" :recipe
+               (:source "elpaca-menu-lock-file" :package "org-timegrid"
+                        :id org-timegrid :host github :repo
+                        "Gleek/org-timegrid" :type git :protocol https
+                        :inherit t :depth treeless :ref
+                        "5249d6ff68011424cf2b235e41a888ec2e466c6a"))
  (org-transclusion :source "elpaca-menu-lock-file" :recipe
                    (:package "org-transclusion" :repo
                              ("https://github.com/nobiot/org-transclusion"
@@ -3050,6 +3070,20 @@
                      :type git :protocol https :inherit t :depth
                      treeless :ref
                      "4604f55cc020c75562526fb76b723e5e242c97c0"))
+ (popon :source "elpaca-menu-lock-file" :recipe
+        (:package "popon" :fetcher codeberg :repo
+                  "akib/emacs-popon" :files
+                  ("*.el" "*.el.in" "dir" "*.info" "*.texi"
+                  "*.texinfo" "doc/dir" "doc/*.info" "doc/*.texi"
+                  "doc/*.texinfo" "lisp/*.el" "docs/dir"
+                  "docs/*.info" "docs/*.texi" "docs/*.texinfo"
+                  (:exclude ".dir-locals.el" "test.el" "tests.el"
+                            "*-test.el" "*-tests.el" "LICENSE"
+                            "README*" "*-pkg.el"))
+                  :source "elpaca-menu-lock-file" :id popon
+                  :type git :protocol https :inherit t :depth
+                  treeless :ref
+                  "bf8174cb7e6e8fe0fe91afe6b01b6562c4dc39da"))
  (popper :source "elpaca-menu-lock-file" :recipe
          (:package "popper" :fetcher github :repo "karthink/popper"
                    :files
@@ -3347,6 +3381,23 @@
                         smartparens :type git :protocol https :inherit
                         t :depth treeless :ref
                         "82d2cf084a19b0c2c3812e0550721f8a61996056"))
+ (solaire-mode :source "elpaca-menu-lock-file" :recipe
+               (:package "solaire-mode" :repo
+                         "hlissner/emacs-solaire-mode" :fetcher github
+                         :files
+                         ("*.el" "*.el.in" "dir" "*.info" "*.texi"
+                          "*.texinfo" "doc/dir" "doc/*.info"
+                          "doc/*.texi" "doc/*.texinfo" "lisp/*.el"
+                          "docs/dir" "docs/*.info" "docs/*.texi"
+                          "docs/*.texinfo"
+                          (:exclude ".dir-locals.el" "test.el"
+                                    "tests.el" "*-test.el"
+                                    "*-tests.el" "LICENSE" "README*"
+                                    "*-pkg.el"))
+                         :source "MELPA" :id solaire-mode :type git
+                         :protocol https :inherit t :depth treeless
+                         :ref
+                         "ea97e01e1f978d0cde63049c0d66a6fed2c672a6"))
  (space-tree :source "elpaca-menu-lock-file" :recipe
              (:source "elpaca-menu-lock-file" :package "space-tree"
                       :id space-tree :host github :repo
@@ -3494,7 +3545,7 @@
                     svg-line :host github :repo "chiply/svg-line"
                     :wait t :type git :protocol https :inherit t
                     :depth treeless :ref
-                    "14f6f6cdca83b3201228ef70f4f1cbe1881f0e2c"))
+                    "a32cf03dc0c217afc7cea2d4577725b613bd3860"))
  (svg-margin :source "elpaca-menu-lock-file" :recipe
              (:source "elpaca-menu-lock-file" :package "svg-margin"
                       :id svg-margin :host github :repo
@@ -3671,7 +3722,7 @@
                           :source "GNU ELPA" :id track-changes :type
                           git :protocol https :inherit t :depth
                           treeless :ref
-                          "ba331c27f14adb429ef21fdf3d5c62febb7564d3"))
+                          "9a431e431ad92f94f4290c3f0bf043b0f97a7b56"))
  (trailing-newline-indicator :source "elpaca-menu-lock-file" :recipe
                              (:package "trailing-newline-indicator"
                                        :fetcher github :repo
@@ -3922,6 +3973,15 @@
                                 :protocol https :inherit t :depth
                                 treeless :ref
                                 "f68ac37451c1226d6f13c1b299ec7516f74888a1"))
+ (vterm :source "elpaca-menu-lock-file" :recipe
+        (:package "vterm" :fetcher github :repo
+                  "akermu/emacs-libvterm" :files
+                  ("CMakeLists.txt" "elisp.c" "elisp.h"
+                   "emacs-module.h" "etc" "utf8.c" "utf8.h" "vterm.el"
+                   "vterm-module.c" "vterm-module.h")
+                  :source "MELPA" :id vterm :type git :protocol https
+                  :inherit t :depth treeless :ref
+                  "9a32a4afce25647282bc8a8792468e41bc64adf4"))
  (vui :source "elpaca-menu-lock-file" :recipe
       (:package "vui" :fetcher github :repo "d12frosted/vui.el" :files
                 ("*.el" "*.el.in" "dir" "*.info" "*.texi" "*.texinfo"
@@ -4120,4 +4180,17 @@
                           :source "elpaca-menu-lock-file" :id
                           zenburn-theme :type git :protocol https
                           :inherit t :depth treeless :ref
-                          "d9557cf5ab9c03dc70693e3892f5ffdc5d345d22")))
+                          "d9557cf5ab9c03dc70693e3892f5ffdc5d345d22"))
+ (textui :source "elpaca-menu-lock-file" :recipe
+         (:source nil :package "textui" :id textui :host github :repo
+                  "yibie/textui" :type git :protocol https :inherit t
+                  :depth treeless :ref
+                  "ce37202ec910e03008bd50472b2df1217b5f1a7e"))
+ (org-other-agenda :source "elpaca-menu-lock-file" :recipe
+                   (:source nil :package "org-other-agenda" :id
+                            org-other-agenda :host github :repo
+                            "yibie/org-other-agenda" :build
+                            (:not elpaca-check-version) :type git
+                            :protocol https :inherit t :depth treeless
+                            :ref
+                            "468a416912bd6742ef348b435a051ac9fb7478fb")))

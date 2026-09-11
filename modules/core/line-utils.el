@@ -1,7 +1,8 @@
 ;;; line-utils.el --- Configure line utilities -*- lexical-binding: t; -*-
 
-;; `zetta-hue-wash' works in HSL; nothing else here pulls color.el in.
+;; `zetta-hue-wash' and the LCH helpers below need color.el; nothing else here does.
 (require 'color)
+(require 'xml)                          ; `xml-escape-string', for the SVG probes
 
 ;;;;;; Utils
 (defvar ml-selected-window nil)
@@ -131,6 +132,29 @@ returned; BRANCH-NAME is a string."
 (declare-function svg-line-segs "svg-line")
 (declare-function svg-line-map-string-regions "svg-line")
 
+(defcustom zetta-svg-seg-fonts
+  '(:script "Monaspace Radon NF"
+    :prose  "Monaspace Argon NF"
+    :chrome "Monaspace Krypton NF")
+  "Families for individual chrome segments, keyed by the ROLE they play.
+
+A segment may name its own font (svg-line lays it out at that family's own
+advance, so the families need not be metrically related).  Naming them by
+role rather than in place means retuning the look is one edit here instead
+of one per segment:
+
+  `:script'  a handwriting cut -- for the transient and the incidental
+  `:prose'   a humanist cut -- for text that is read rather than scanned
+  `:chrome'  a mechanical cut -- for instrumentation
+
+A nil value for a role leaves those segments in the bar's own font."
+  :type '(plist :key-type symbol :value-type (choice (const nil) string))
+  :group 'zetta)
+
+(defun zetta-svg-seg-font (role)
+  "Font family for segment ROLE, per `zetta-svg-seg-fonts', or nil."
+  (plist-get zetta-svg-seg-fonts role))
+
 (defun zetta-svg-seg (text key &rest plist)
   "Return an interactive svg-line segment for TEXT, keyed by KEY.
 The hover/identity id is (KEY . current-buffer) so a per-window bar only
@@ -252,11 +276,14 @@ for empty STR."
               (root (file-name-directory venv)))
     (when (string-prefix-p (expand-file-name root)
                            (expand-file-name default-directory))
-      (concat "{venv:"
-              (zetta-minify-path venv)
-              "/"
-              (car (last (split-string venv "/")))
-              "}"))))
+      (zetta-svg-seg
+       (concat "{venv:"
+               (zetta-minify-path venv)
+               "/"
+               (car (last (split-string venv "/")))
+               "}")
+       'tb-venv
+       :font (zetta-svg-seg-font :chrome)))))
 
 (defun zetta-tab-bar-spot-mode-line-string ()
   (if (fboundp 'spot-mode-line-string)
@@ -319,7 +346,15 @@ up far to the left of the actual key/command.  Returns nil when idle."
     (when (> (length str) 0)
       (let ((icon (and (featurep 'nerd-icons)
                        (zetta-line--glyph (ignore-errors (nerd-icons-mdicon "nf-md-keyboard_caps"))))))
-        (concat (and icon (concat icon " ")) str)))))
+        ;; A segment rather than a bare string, so it can carry its own font.
+        ;; That does move this side of the row from exact text anchoring onto
+        ;; the char-advance grid -- which is only safe because the grid is now
+        ;; measured from the font rather than assumed (see
+        ;; `zetta-svg-line-em-ratio'); it used to be an estimate, and keycast
+        ;; changing width under an estimate is exactly what jittered.
+        (zetta-svg-seg (concat (and icon (concat icon " ")) str)
+                       'tb-keycast
+                       :font (zetta-svg-seg-font :script))))))
 
 (defun zetta-tab-bar-recursion-icon ()
   "Type-hierarchy glyph shown to the left of the recursion-depth indicator."
@@ -327,6 +362,8 @@ up far to the left of the actual key/command.  Returns nil when idle."
        (zetta-line--glyph (ignore-errors (nerd-icons-codicon "nf-cod-type_hierarchy_sub")))))
 
 (defun zetta-current-prefix ()
+  "The prefix keys in progress, as a segment in the `:script' font.
+Empty for a mouse event, which is not a keystroke anyone is tracking."
   (let ((descr (key-description
                 (or
                  (and
@@ -335,7 +372,8 @@ up far to the left of the actual key/command.  Returns nil when idle."
                  (this-command-keys-vector)))))
     (if (string-match-p "mouse" descr)
         ""
-      descr)))
+      (zetta-svg-seg descr 'tb-prefix
+                     :font (zetta-svg-seg-font :script)))))
 
 ;; otherwise prefix keys won't show up
 (add-hook 'prefix-command-echo-keystrokes-functions 'force-mode-line-update)
@@ -387,6 +425,28 @@ KIND is one of error, warning, success, accent, added, removed, changed."
                                     (if (<= c 0.03928) (/ c 12.92)
                                       (expt (/ (+ c 0.055) 1.055) 2.4)))
                                   rgb)))))
+
+(defun zetta-color--lch (color)
+  "COLOR as a list (L* C h), or nil if it names nothing.
+L* is CIE lightness, which is a function of relative luminance alone --
+which is why `zetta-hue-wash' can match a weight by copying L* instead of
+searching for it."
+  (when-let* ((rgb (color-name-to-rgb color)))
+    (apply #'color-lab-to-lch (apply #'color-srgb-to-lab rgb))))
+
+(defun zetta-color--render (l c h)
+  "Render lightness L, chroma C and hue H as \"#rrggbb\", clamped into sRGB.
+Chroma that will not fit the gamut at L is clipped, which costs a little
+saturation at the extremes and never shifts the hue."
+  (apply #'color-rgb-to-hex
+         (append (mapcar (lambda (v) (max 0.0 (min 1.0 v)))
+                         (apply #'color-lab-to-srgb (color-lch-to-lab l c h)))
+                 '(2))))
+
+(defconst zetta-color-grey-chroma 2.0
+  "Chroma below which a colour is treated as carrying no hue at all.
+Matches the threshold `zetta-ghostel--tint-to-page' uses for the same
+judgement: under it, an angle is rounding error rather than a direction.")
 
 (defun zetta-contrast-ratio (a b)
   "WCAG contrast ratio between colours A and B."
@@ -471,43 +531,44 @@ only if brushup has not defined its gradient yet."
 ;;; Hue washes
 ;;; ------------------------------------------------------------------
 ;; For anything painting a theme colour BEHIND text that has to stay
-;; readable through it: the org-remark pens, the log highlighters in
-;; modules/core/utility.el.
+;; readable through it -- these days just the log highlighters in
+;; modules/core/utility.el, the org-remark pens having gone monochrome.
 
-(defun zetta-hue-wash (hue anchor sat)
-  "HUE re-lit to weigh the same against the page as ANCHOR does.
+(defun zetta-hue-wash (hue anchor)
+  "HUE painted at ANCHOR\='s weight: ANCHOR\='s lightness and chroma, HUE\='s hue.
 
-Hue and saturation come from HUE, saturation clamped into SAT (a
-`(min . max)\=' pair).  Lightness is searched for rather than taken from
-HUE, so the result lands on ANCHOR\='s relative luminance -- ANCHOR being a
-step of the brushup gradient, which is already the theme\='s own answer to
-\"how far off the page is a faint wash\".
+ANCHOR is a step of the brushup gradient, which is the theme\='s own answer
+to \"how far off the page does a wash sit\" -- and it answers in BOTH
+channels, not just one.  Taking only its luminance and letting saturation
+fall out of the hue is what made these clash: a fixed HSL saturation is not
+a fixed amount of colour, because sRGB holds far more chroma at yellow and
+green than at red or magenta.  On doric-earth that put the four washes
+between chroma 15 and chroma 61 against a page of chroma 14 -- the warning
+wash over four times as saturated as anything the theme paints, and red
+half as saturated as green at the same nominal strength.
 
-Matching luminance rather than HSL lightness is the whole point.  A shared
-lightness is not a shared weight: blue at L 0.5 carries about a seventh of
-the luminance of yellow at L 0.5, which is how the org-remark important pen came out
-a near-black smudge on a dark page while the question pen read fine.
-Luminance climbs monotonically with lightness at a fixed hue and
-saturation, so a bisection finds the lightness that lands on ANCHOR."
-  (if-let* ((rgb (color-name-to-rgb hue))
-            (goal (zetta-color--luminance anchor)))
-      (let* ((hsl (apply #'color-rgb-to-hsl rgb))
-             (h (nth 0 hsl))
-             ;; A theme colour that is genuinely achromatic is left
-             ;; alone: forcing it up to the saturation floor would pick
-             ;; hue 0 and silently turn a grey pen red.
-             (s (if (< (nth 1 hsl) 0.05)
-                    (nth 1 hsl)
-                  (min (cdr sat) (max (car sat) (nth 1 hsl)))))
-             (lo 0.0) (hi 1.0) (l 0.5) (hex hue))
-        (dotimes (_ 14)
-          (setq l (/ (+ lo hi) 2.0)
-                hex (apply #'color-rgb-to-hex
-                           (append (color-hsl-to-rgb h s l) '(2))))
-          (if (< (zetta-color--luminance hex) goal)
-              (setq lo l)
-            (setq hi l)))
-        hex)
+Copying the anchor\='s chroma instead lands all four within a few points of
+each other and inside the theme\='s own range, so they read as the theme\='s
+washes in four hues rather than as four arbitrary colours.
+
+Lightness is copied rather than searched for.  L* is defined from relative
+luminance alone, so matching L* IS matching weight, whatever the hue -- the
+bisection this function used to run was converging on exactly the anchor\='s
+L* every time.  That is still the point worth keeping: a shared HSL
+lightness is not a shared weight, since blue at L 0.5 carries about a
+seventh of the luminance of yellow at L 0.5.
+
+A theme colour that is genuinely achromatic is left grey rather than pushed
+up to the anchor\='s chroma, because forcing chroma onto a hueless colour
+picks an angle out of rounding error and silently invents a colour the
+theme never chose."
+  (if-let* ((hl (zetta-color--lch hue))
+            (al (zetta-color--lch anchor)))
+      (zetta-color--render (nth 0 al)
+                           (if (< (nth 1 hl) zetta-color-grey-chroma)
+                               (nth 1 hl)
+                             (nth 1 al))
+                           (nth 2 hl))
     hue))
 
 (defun zetta-hue-of (color)
@@ -523,15 +584,41 @@ saturation, so a bisection finds the lightness that lands on ANCHOR."
                (append (color-hsl-to-rgb hue (nth 1 hsl) (nth 2 hsl)) '(2))))
     color))
 
+(defun zetta-hue-distance (a b)
+  "Distance between hues A and B, in turns (0 to 0.5).
+The wheel wraps, so 0.98 and 0.02 are 0.04 apart rather than 0.96."
+  (let ((d (abs (- a b)))) (min d (- 1.0 d))))
+
 (defun zetta-hue--clear-p (hue taken min-sep)
   "Non-nil if HUE sits at least MIN-SEP turns from every hue in TAKEN."
-  (cl-every (lambda (other)
-              (let ((d (abs (- hue other))))
-                ;; the wheel wraps: 0.98 and 0.02 are 0.04 apart, not 0.96
-                (>= (min d (- 1.0 d)) min-sep)))
-            taken))
+  (cl-every (lambda (other) (>= (zetta-hue-distance hue other) min-sep)) taken))
 
-(defun zetta-hue-separate (hues min-sep)
+(defun zetta-hue--gap (hue taken)
+  "Distance from HUE to the nearest hue in TAKEN, in turns.
+1.0 when nothing is placed yet -- an empty wheel is maximally clear."
+  (if taken
+      (cl-loop for other in taken minimize (zetta-hue-distance hue other))
+    1.0))
+
+(defun zetta-hue--separate-one (hue taken min-sep max-rot)
+  "HUE moved as little as possible to clear MIN-SEP turns from TAKEN.
+Searches outward in both directions, up to MAX-ROT turns, preferring the
+first angle that clears outright.  When nothing within MAX-ROT clears,
+returns the angle in reach whose nearest neighbour is furthest away --
+the most separation the cap allows, rather than none."
+  (cl-block zetta-hue--pick
+    (let ((best hue) (best-gap (zetta-hue--gap hue taken)))
+      (cl-loop for step from 0.01 to max-rot by 0.01 do
+               (dolist (cand (list (mod (+ hue step) 1.0)
+                                   (mod (- hue step) 1.0)))
+                 (let ((gap (zetta-hue--gap cand taken)))
+                   (when (>= gap min-sep)
+                     (cl-return-from zetta-hue--pick cand))
+                   (when (> gap best-gap)
+                     (setq best cand best-gap gap)))))
+      best)))
+
+(defun zetta-hue-separate (hues min-sep &optional max-rot)
   "HUES rotated apart so no two sit closer than MIN-SEP turns on the wheel.
 
 Earlier entries keep their hue outright; a later one that crowds an
@@ -541,25 +628,171 @@ works, so a theme whose colours are already spread is left untouched and
 one that bunches them is bent no further than it has to be.
 
 Needed because a palette is under no obligation to supply four separable
-hues.  ef-light paints `error' crimson and `warning' rust, two steps
-apart on the wheel; doric-obsidian paints `warning' tan and `link' brown,
+hues.  ef-light paints `error\=' crimson and `warning\=' rust, two steps
+apart on the wheel; doric-obsidian paints `warning\=' tan and `link\=' brown,
 which wash to the same colour outright.  Where hue is decoration this
 does not matter and the answer is to drop hue altogether (see
-`zetta-vc-marker-ladder').  Where hue is the CONTENT, it has to be made
-to separate."
+`zetta-vc-marker-ladder\=').  Where hue is the CONTENT, it has to be made
+to separate.
+
+MAX-ROT caps how far, in turns, any one hue may be moved; nil lets it go
+anywhere on the wheel.  The cap is what stops separation from INVENTING a
+colour.  Asked for four hues 47 degrees apart, doric-earth -- which paints
+`error\=' at 0, `warning\=' at 23 and `accent\=' at 32, a warm theme all the
+way through -- has no room, and the nearest clear angle for `accent\=' is 79
+degrees away at magenta, which appears nowhere in that theme.  A wash in a
+hue the theme never uses is the same complaint as a wash more saturated
+than the theme ever paints: it reads as pasted on.  Capped, `accent\=' stays
+gold, and the four come out a warm ramp plus green -- less separation than
+was asked for, but all of it the theme\='s own."
   (let (taken out)
     (dolist (h hues (nreverse out))
       (let ((pick (if (or (null h) (zetta-hue--clear-p h taken min-sep))
                       h
-                    (cl-loop for step from 0.01 to 0.5 by 0.01
-                             for up = (mod (+ h step) 1.0)
-                             for down = (mod (- h step) 1.0)
-                             if (zetta-hue--clear-p up taken min-sep) return up
-                             else if (zetta-hue--clear-p down taken min-sep)
-                             return down
-                             finally return h))))
+                    (zetta-hue--separate-one h taken min-sep (or max-rot 0.5)))))
         (when pick (push pick taken))
         (push pick out)))))
+
+;;; ------------------------------------------------------------------
+;;; Icon palette
+;;; ------------------------------------------------------------------
+;; File-type icons arrive with a colour vocabulary of their own: both
+;; all-the-icons and nerd-icons ship some forty fixed hexes -- a Base16
+;; palette, in all-the-icons\' case -- that no theme has any say over.
+;;
+;; Colour is doing a different job here than anywhere else in this file.
+;; A gutter marker has its shape and a modal badge its letter, so their
+;; colour is free to carry prominence instead; an icon\'s colour is part
+;; of how a reader tells a .py from a .org without stopping to look, and
+;; flattening the lot to one ink would throw that away.  So the icons
+;; keep their variety and give up their palette: each stock colour is
+;; remapped to the nearest hue among the theme\'s own strongest colours.
+;;
+;; Strongest is measured, not declared.  The candidates are sampled off
+;; the live theme, and a colour earns its place by being chromatic enough
+;; to read as a colour at all and by clearing a contrast floor against
+;; the page.  A deliberately monochrome theme yields an empty palette,
+;; which is the honest answer -- the caller falls back to ink.
+
+(defvar zetta-icon-palette-faces
+  '(font-lock-keyword-face font-lock-function-name-face font-lock-string-face
+    font-lock-type-face font-lock-constant-face font-lock-builtin-face
+    font-lock-variable-name-face font-lock-preprocessor-face
+    link error warning success)
+  "Faces sampled for the theme\'s strongest colours.
+Syntax faces first: a theme paints its palette there whether or not it
+defines anything else, and they are the colours the reader is looking at
+all day anyway.  The semantic four come last, so a theme too plain to
+have much of a syntax palette can still contribute something.")
+
+(defvar zetta-icon-palette-min-chroma 0.12
+  "Least chroma for a theme colour to join the icon palette.
+Below this it reads as grey, and an icon painted in it tells the reader
+nothing its neighbours do not.
+
+Chroma rather than HSL saturation, which is a bad judge of how colourful
+a colour looks at the ends of its range: doric-water paints
+`font-lock-constant-face\=' #edf0f8, a near-white that HSL calls 44%
+saturated and this calls 0.04 -- and it is the second reading that
+matches what the eye does with a 16-pixel icon.")
+
+(defvar zetta-icon-stock-min-chroma 0.08
+  "Least chroma for an icon\'s own colour to be treated as coloured at all.
+The grey rungs of an icon vocabulary -- silver, grey, and their light and
+dark shades -- have no hue to match, so matching them by hue lands them
+on whatever the wheel happens to be nearest.  Below this they are handed
+back as nil and the caller inks them instead.")
+
+(defun zetta-color-chroma (color)
+  "Chroma of COLOR in 0.0-1.0, or nil if it cannot be parsed.
+The plain HSL kind: the spread between its strongest and weakest
+channel, which is 0 for any grey and 1 for a primary."
+  (when-let* ((rgb (color-name-to-rgb color)))
+    (- (apply #'max rgb) (apply #'min rgb))))
+
+(defvar zetta-icon-palette-min-contrast 3.0
+  "Least contrast against the page for a theme colour to join the palette.
+3:1 is the WCAG floor for non-text graphics, and about where a small
+solid glyph stops being a smudge.")
+
+(defvar zetta-icon-palette-hue-spacing 0.05
+  "Least distance, in turns, between two colours in the icon palette.
+Themes routinely paint several syntax faces the same hue; without this
+the palette fills with one colour repeated and every icon lands on it.")
+
+(defun zetta-icon-line-height ()
+  "Pixel height of one text line in the current buffer.
+
+The size an icon has to be drawn at to sit on a line without making it
+taller.  Computed rather than read off the face, because the face cannot
+answer: `text-scale-mode\=' works by remapping `default\=' buffer-locally, so
+the global face an icon package consults knows nothing about it, and an
+icon sized that way stays full height in a shrunken buffer -- which is
+what put a floor under the row height in treemacs (text-scale -2) and in
+any zoomed-out buffer.  `frame-char-height\=' carries the global size, the
+`text-scale\=' factor carries the local one."
+  (max 4 (round (* (frame-char-height)
+                   (expt (if (boundp 'text-scale-mode-step) text-scale-mode-step 1.2)
+                         (or (bound-and-true-p text-scale-mode-amount) 0))))))
+
+(defun zetta-icon-palette ()
+  "The theme\'s strongest colours, as an alist of (HUE . COLOUR).
+
+Most chromatic first, thinned so that no two entries sit within
+`zetta-icon-palette-hue-spacing\=' of each other.  Empty on a monochrome
+theme, which is the point: there is nothing there to borrow."
+  (let ((bg (or (bound-and-true-p brushup-bg)
+                (face-background 'default nil t) "#000000"))
+        (found nil) (kept nil))
+    (dolist (face zetta-icon-palette-faces)
+      (when (facep face)
+        (when-let* ((c (face-foreground face nil t))
+                    (rgb (and (stringp c) (color-name-to-rgb c)))
+                    (chroma (zetta-color-chroma c)))
+          (when (and (>= chroma zetta-icon-palette-min-chroma)
+                     (>= (zetta-contrast-ratio c bg)
+                         zetta-icon-palette-min-contrast))
+            (push (list (car (apply #'color-rgb-to-hsl rgb)) c chroma) found)))))
+    (dolist (e (sort (nreverse found) (lambda (a b) (> (nth 2 a) (nth 2 b))))
+               (nreverse kept))
+      (unless (seq-some (lambda (k) (< (zetta-hue-distance (car e) (car k))
+                                       zetta-icon-palette-hue-spacing))
+                        kept)
+        (push (cons (nth 0 e) (nth 1 e)) kept)))))
+
+(defun zetta-icon-color (stock &optional variant)
+  "The theme colour nearest STOCK in hue.
+
+Nil when there is nothing to match: a monochrome theme offers no palette,
+and a grey STOCK has no hue worth matching (`zetta-icon-stock-min-chroma\=').
+Either way the caller is expected to fall back to ink.
+
+VARIANT `light\=' or `dark\=' nudges the result away from or toward the page,
+so that a vocabulary\'s light, medium and dark shades of one colour stay
+apart after all three have been remapped onto the same palette entry.
+
+Away-from and toward-the-page, note -- not toward white and black.
+Absolute lightness is exactly what broke these icons in the first place:
+a fixed dark blue is invisible on a dark theme however well it reads on a
+light one.  The nudge is dropped if it would push the colour past
+`zetta-icon-palette-min-contrast\=' into the page."
+  (when-let* ((rgb (and (stringp stock) (color-name-to-rgb stock)))
+              (_ (>= (zetta-color-chroma stock) zetta-icon-stock-min-chroma))
+              (palette (zetta-icon-palette)))
+    (let* ((hue (car (apply #'color-rgb-to-hsl rgb)))
+           (pick (cdr (car (sort (copy-sequence palette)
+                                 (lambda (a b)
+                                   (< (zetta-hue-distance hue (car a))
+                                      (zetta-hue-distance hue (car b))))))))
+           (bg (or (bound-and-true-p brushup-bg) (face-background 'default nil t)))
+           (fg (or (bound-and-true-p brushup-fg) (face-foreground 'default nil t)))
+           (nudged (pcase variant
+                     ('light (and fg (zetta-line-blend pick fg 0.3)))
+                     ('dark (and bg (zetta-line-blend pick bg 0.3))))))
+      (if (and nudged bg (>= (zetta-contrast-ratio nudged bg)
+                             zetta-icon-palette-min-contrast))
+          nudged
+        pick))))
 
 ;;; ------------------------------------------------------------------
 ;;; Keyword prominence tiers
@@ -685,6 +918,52 @@ screenful of identical pills would say nothing about where point is."
                               (cons "Describe mode" #'describe-mode)
                               (cons "Command (M-x)" #'execute-extended-command)))
             (and chip (append chip (list :weight 'bold)))))))
+
+(defvar zetta-line--ace-session nil
+  "Non-nil while an `ace-window\=' selection is reading a key.
+Bind it around anything else that puts the per-window keys in play and the
+indicators light for that too.")
+
+(defun zetta-line-window-picking-p ()
+  "Non-nil while something is asking you to pick a window.
+
+Two things do: an `ace-window\=' selection and a magneto compose session
+\(`magneto--composing\=').  They mean the same thing to a reader -- the
+per-window keys are live and one of them is about to be pressed -- so both
+light the same indicator.
+
+This is what makes the key worth showing at all.  It used to be permanent
+furniture on the mode line, which meant every window carried a letter that
+was inert 99% of the time; shown only for the moment it can be typed, it
+reads as a prompt instead of as decoration."
+  (or zetta-line--ace-session
+      (bound-and-true-p magneto--composing)))
+
+(defun zetta-line--picking-changed (&rest _)
+  "Repaint the bars when a window-picking session starts or ends."
+  (force-mode-line-update t))
+
+;; `aw-select\=' is the whole selection: it puts the keys in play, reads one,
+;; and returns.  Wrapping it is therefore exactly the session, and the
+;; repaint on the way out happens OUTSIDE the binding so the indicators are
+;; already gone by the time it runs.
+(with-eval-after-load 'ace-window
+  (define-advice aw-select (:around (fn &rest args) zetta-line-session)
+    "Light the window-picking indicators for the duration of the selection."
+    (unwind-protect
+        (let ((zetta-line--ace-session t))
+          (force-mode-line-update t)
+          (apply fn args))
+      (force-mode-line-update t))))
+
+;; magneto has no such envelope -- it sets a flag and hands control back to a
+;; transient keymap -- so watch the flag instead of guessing where it moves.
+;; A watcher also survives the paths that clear it without going through
+;; `magneto-move\=', which an advice on that command would miss.  Removed
+;; first so reloading this file does not stack watchers.
+(with-eval-after-load 'magneto
+  (remove-variable-watcher 'magneto--composing #'zetta-line--picking-changed)
+  (add-variable-watcher 'magneto--composing #'zetta-line--picking-changed))
 
 (defun zetta-modeline-svg--ace ()
   "Ace-window key for this window, as a monochrome keycap.
@@ -983,6 +1262,55 @@ Shown whenever `flycheck-mode\=' is active."
   (zetta-svg-segs-from-propertized
    (format-mode-line zetta-header-line-svg-line2-format) 'hl2))
 
+;;; spinner-only header line content
+;; The running-command spinner is an element of row 1 above, which means a
+;; buffer that gives up its header line gives up the spinner with it.  For
+;; the buffers where the spinner is the ONLY thing worth a bar -- an async
+;; shell command, which has no path to breadcrumb and no position to report
+;; -- this is the same element on a row of its own.  Deliberately the same
+;; `spinner-current' construct rather than a copy: one spinner, shown in
+;; two possible places.
+(defcustom zetta-line-spinner-idle-label "idle"
+  "Shown on the spinner-only header line when nothing has run here yet."
+  :type 'string :group 'zetta)
+
+(defcustom zetta-line-spinner-done-label "done"
+  "Shown on the spinner-only header line after a command finished cleanly."
+  :type 'string :group 'zetta)
+
+(defun zetta-line-spinner-state ()
+  "The running spinner, or a word standing in for it when nothing is running.
+
+A bar that is blank whenever a command is not in flight tells you nothing
+about which of two states you are in -- finished, or never started -- and an
+empty row reads as something failing to draw.  A word tells you both, and
+tells you HOW it ended: the sentinel\'s own signal string, said shorter.
+
+`zetta-spinner-last-result\' (spinner.el) is what makes the distinction
+possible; without it this can only fall back to the idle label."
+  (or (and (fboundp 'spinner-print)
+           (bound-and-true-p spinner-current)
+           (spinner-print spinner-current))
+      (let ((r (and (boundp 'zetta-spinner-last-result)
+                    zetta-spinner-last-result)))
+        (cond
+         ((null r) zetta-line-spinner-idle-label)
+         ((string-prefix-p "finished" r) zetta-line-spinner-done-label)
+         ((string-prefix-p "interrupt" r) "interrupted")
+         ((string-match "code \\([0-9]+\\)" r)
+          (format "exit %s" (match-string 1 r)))
+         ((string-empty-p r) zetta-line-spinner-idle-label)
+         (t r)))))
+
+(defvar zetta-header-line-svg-spinner-format
+  '((:eval (zetta-line-spinner-state)))
+  "Mode-line construct for the spinner-only header line (one row).")
+
+(defun zetta-header-line-svg--spinner ()
+  "Render the spinner-only header row."
+  (zetta-svg-segs-from-propertized
+   (format-mode-line zetta-header-line-svg-spinner-format) 'hlspin))
+
 ;;;; Nerd-font glyph icons for the SVG bars
 ;; ----------------------------------------------------------------
 ;; The bars render in a scalable Nerd Font (`zetta-svg-line-font'), so
@@ -996,7 +1324,32 @@ Shown whenever `flycheck-mode\=' is active."
 A single-width Nerd Font carrying the icon glyphs, so icons render inline
 as ordinary text.  Terminess is the Nerd-patched Terminus, keeping that
 look; any Nerd Font works (e.g. \"JetBrainsMono Nerd Font Mono\").  Buffers
-keep their own font (`zetta-font').")
+keep their own font (`zetta-font').
+
+`zetta-svg-line-fonts' overrides this per bar.")
+
+(defcustom zetta-svg-line-fonts nil
+  "Per-bar overrides of `zetta-svg-line-font', a plist keyed by bar.
+
+Keys are `:tab-bar', `:tab-line', `:mode-line' and `:header-line'; each
+value is a font family, or nil to fall back to `zetta-svg-line-font'.
+
+  (setq zetta-svg-line-fonts \='(:tab-bar \"Monaspace Krypton NF\"))
+
+Mixing families is safe because nothing is shared between bars: each one's
+layout grid is derived from the family IT draws with, by
+`zetta-svg-line-derive-char-advance'.  Two bars in fonts of different width
+therefore need not agree about anything -- which they could not do before,
+when one advance was measured once and handed to all four."
+  :type '(plist :key-type symbol :value-type (choice (const :tag "Default" nil)
+                                                     (string :tag "Family")))
+  :group 'zetta)
+
+(defun zetta-svg-line-font-for (bar)
+  "Font family BAR is drawn in.
+BAR is `:tab-bar', `:tab-line', `:mode-line' or `:header-line'; the answer
+is its `zetta-svg-line-fonts' entry, or `zetta-svg-line-font'."
+  (or (plist-get zetta-svg-line-fonts bar) zetta-svg-line-font))
 
 (defun zetta-line--glyph (s)
   "Return nerd-icons glyph string S without text properties, or nil if empty."
@@ -1175,16 +1528,18 @@ A pull that added nothing leaves the previous +N (entries you've not seen)."
   (when (boundp 'display-time-string) (string-trim (or display-time-string ""))))
 
 (defcustom zetta-tab-bar-battery-low 20
-  "At or below this battery percentage the indicator is drawn red."
+  "At or below this battery percentage the indicator is drawn at its loudest.
+See `zetta-tab-bar-battery-ladder'."
   :type 'integer :group 'zetta)
 (defcustom zetta-tab-bar-battery-medium 50
-  "At or below this battery percentage the indicator is drawn orange (red wins
-below `zetta-tab-bar-battery-low'); above it the indicator is green."
+  "At or below this battery percentage the indicator steps up the ink ladder
+\(`zetta-tab-bar-battery-low' wins below it); above it the indicator recedes."
   :type 'integer :group 'zetta)
 (defcustom zetta-tab-bar-battery-colors nil
-  "Explicit battery colours as an alist of (low medium full).
-nil -- the default -- derives them from the theme's `error', `warning' and
-`success' faces instead, so the indicator tracks whatever theme is loaded."
+  "Explicit battery colours as an alist of (LEVEL . COLOUR).
+LEVEL is `low', `medium' or `full'.  nil -- the default -- takes the colour
+from `zetta-tab-bar-battery-ladder' instead, so the indicator tracks
+whatever theme is loaded."
   :type '(alist :key-type symbol :value-type color) :group 'zetta)
 
 (defvar zetta-tab-bar--battery-cache nil
@@ -1220,17 +1575,46 @@ inside redisplay, so the status is polled here at most once a minute;
          (zetta-line--glyph (ignore-errors
                               (nerd-icons-faicon (format "nf-fa-battery_%d" n)))))))
 
-(defun zetta-tab-bar--battery-color (pct)
-  "Return the level colour for PCT.
-Honours `zetta-tab-bar-battery-colors' when set; otherwise takes the
-theme's own error/warning/success colours, so the indicator tracks the
-theme rather than staying red-orange-green from a fixed palette."
-  (let ((level (cond ((<= pct zetta-tab-bar-battery-low) 'low)
-                     ((<= pct zetta-tab-bar-battery-medium) 'medium)
-                     (t 'full))))
+;; The battery used to take red/orange/green from the theme's error,
+;; warning and success faces.  Reading them off the theme kept the hues
+;; in the family, but it was still the stoplight: a colour vocabulary the
+;; reader has to be told, and one that says nothing on a deliberately
+;; monochrome theme.  Here it was not even carrying the message -- the
+;; Font-Awesome glyph already draws five fill levels and the percentage
+;; is spelled out beside it, so the colour only repeated what the label
+;; had said.
+;;
+;; With the level already legible, colour has prominence left to encode
+;; and nothing else, so the cluster climbs the brushup ink ladder as the
+;; charge falls: below the bar's resting ink (`brushup-fg-3') while there
+;; is nothing to do about it, up to full foreground when there is.  Same
+;; move as `zetta-vc-marker-ladder' in the gutter and
+;; `zetta-line-modal-tier' on the mode line.
+
+(defvar zetta-tab-bar-battery-ladder
+  '((low    brushup-fg   brushup-fg-3)
+    (medium brushup-fg-2 brushup-fg-4)
+    (full   brushup-fg-5 brushup-fg-6))
+  "Ink-ladder rungs per battery level, as (LEVEL ON-BATTERY PLUGGED-IN).
+
+Plugged in, every level steps down a couple of rungs: a charging battery
+is not a call to action, and 15% on the charger should not shout the way
+15% off it should.  Symbols, not colours: they are resolved per call,
+after a theme change has rewritten the palette.")
+
+(defun zetta-tab-bar--battery-color (pct &optional plugged)
+  "Return the ink colour for charge PCT, quieter when PLUGGED.
+Honours `zetta-tab-bar-battery-colors' when set; otherwise reads
+`zetta-tab-bar-battery-ladder', falling back to the default foreground
+only if brushup has not defined its gradient yet."
+  (let* ((level (cond ((<= pct zetta-tab-bar-battery-low) 'low)
+                      ((<= pct zetta-tab-bar-battery-medium) 'medium)
+                      (t 'full)))
+         (rung (nth (if plugged 2 1) (assq level zetta-tab-bar-battery-ladder))))
     (or (cdr (assq level zetta-tab-bar-battery-colors))
-        (zetta-theme-color (pcase level
-                             ('low 'error) ('medium 'warning) (_ 'success))))))
+        (and rung (boundp rung) (symbol-value rung))
+        (face-foreground 'default nil t)
+        "#a0a0a0")))
 
 (defun zetta-tab-bar-workspace-lighter ()
   "The space-tree lighter string, or nil.
@@ -1288,6 +1672,7 @@ recolours it via `zetta-tab-bar-svg-icon-color', so the raw glyph is returned."
   "Clickable tab-bar buffer name (switch buffer; menu of buffer/file actions)."
   (zetta-svg-seg
    (zetta-buffer-name) 'tb-buffer
+   :font (zetta-svg-seg-font :prose)
    :help (format "buffer: %s" (buffer-name))
    :action-help "switch buffer"
    :action (if (fboundp 'consult-buffer) #'consult-buffer #'switch-to-buffer)
@@ -1328,18 +1713,28 @@ Derived from the LIVE frame width and the tab bar's own geometry, so it
 adapts to any screen width: the clock spans all three rows, centred at
 WIDTH/2 with radius ~0.86*(3*LH)/2; the left content starts past the square
 masthead (width = bar height); inline-segment rows lay out at
-`zetta-tab-bar-svg-char-advance' px/char.  These mirror `svg-line''s internal
-geometry -- keep in sync if its clock-radius/masthead formulas change."
+`zetta-tab-bar-svg-char-advance-ratio' of the font size per character.
+
+The clock only bounds this while it is CENTRED: moved to the edge it takes
+its room out of the right margin instead (see
+`zetta-tab-bar-svg--right-margin'), and the left content is then free of it.
+
+These mirror `svg-line''s internal geometry -- keep in sync if its
+clock-radius/masthead formulas change."
   (let* ((width (frame-inner-width))
          (fz   (or (bound-and-true-p zetta-tab-bar-svg-font-size) 15))
          (lp   (or (bound-and-true-p zetta-tab-bar-svg-line-pad) 4))
          (lh   (+ fz lp))
          (rows 3)
          (height (* lh rows))                              ; full bar height
-         (r    (round (* 0.86 (/ (float height) 2))))      ; clock radius
+         ;; only a CENTRED clock eats into the left half
+         (r    (if (eq (bound-and-true-p zetta-tab-bar-svg-clock-align) 'right)
+                   0
+                 (round (* 0.86 (/ (float height) 2)))))
          (masthead (if (bound-and-true-p zetta-tab-bar-svg-icon) height 0))
          (gap  (* 2 fz))                                    ; breathing room
-         (ca   (max 1 (or (bound-and-true-p zetta-tab-bar-svg-char-advance) 8)))
+         (ca   (max 1.0 (* fz (or (bound-and-true-p zetta-tab-bar-svg-char-advance-ratio)
+                                  0.6))))
          ;; the bar's own left inset comes off the budget too, or the left
          ;; content is sized as though it still started at x=0 and runs that
          ;; many pixels closer to the centred clock than intended
@@ -1363,6 +1758,7 @@ at any frame width (see `zetta-tab-bar--left-of-clock-chars')."
          (label (concat prefix txt)))
     (zetta-svg-seg
      label 'tb-spotify
+     :font (zetta-svg-seg-font :script)
      :help "Spotify"
      :action-help "pause/play"
      :action (cond ((fboundp 'spot-player-pause) #'spot-player-pause)
@@ -1450,9 +1846,10 @@ Hidden until elfeed loads (the count cache is nil); the count comes from
                          (and (fboundp 'org-agenda) (cons "Agenda" #'org-agenda))))))))
 
 (defun zetta-tab-bar-svg--battery ()
-  "Clickable battery cluster: a Font-Awesome battery glyph coloured by level
-\(red/orange/green), a plug glyph when on AC, and the percentage.  Click shows
-the full battery status."
+  "Clickable battery cluster: a Font-Awesome battery glyph, a plug glyph when
+on AC, and the percentage.  The cluster is drawn in one ink whose prominence
+tracks the charge (see `zetta-tab-bar-battery-ladder') rather than in a
+red/orange/green stoplight.  Click shows the full battery status."
   (when (bound-and-true-p display-battery-mode)
     (let ((d (zetta-tab-bar--battery-data)))
       (when d
@@ -1466,7 +1863,8 @@ the full battery status."
           (when (> (length (string-trim label)) 0)
             (zetta-svg-seg
              label 'tb-battery
-             :color (zetta-tab-bar--battery-color pct)
+             :font (zetta-svg-seg-font :chrome)
+             :color (zetta-tab-bar--battery-color pct plugged)
              :help (format "battery: %d%%%s" pct (if plugged " (plugged in)" ""))
              :action-help "battery status"
              :action #'battery
@@ -1655,23 +2053,92 @@ to change it."
                              (zetta-fontaine--mode-entry))
                         "click to change this mode's font preset"
                       "click to change the font preset")))))
-(defun zetta-svg-line--px-per-char (family height)
-  "Advance of FAMILY at face HEIGHT, in pixels per character.
+(defvar zetta-svg-line--em-cache (make-hash-table :test 'equal)
+  "Cache of (FAMILY . CHAR) -> em advance, as measured through librsvg.")
 
-Divides out any `face-font-rescale-alist' entry for FAMILY.  That matters
-because the two consumers disagree: the SVG chrome is drawn by librsvg via
-fontconfig, which never sees `face-font-rescale-alist', while
-`string-pixel-width' measures Emacs rendering, which does.  The chrome font
-is usually also a buffer fallback and therefore rescaled -- Terminess sat
-at 0.87 to fit inside Monaspace's box -- so measuring it naively reported
-7px/char when librsvg was still drawing it at 8, and every SVG line was
-laid out one pixel per character too narrow."
-  (let* ((probe (make-string 20 ?M))
-         (measured (/ (float (string-pixel-width
-                              (propertize probe 'face (list :family family :height height))))
-                      20))
-         (scale (or (cdr (assoc family face-font-rescale-alist)) 1.0)))
-    (if (> scale 0) (/ measured scale) measured)))
+(defconst zetta-svg-line--em-probe-size 60
+  "Font size, in px, at which `zetta-svg-line-em-ratio' renders its probes.
+Large enough that rounding the rendered width to a whole pixel is noise
+against a twenty-character span, small enough that the throwaway raster
+stays under a megapixel.")
+
+;;;###autoload
+(defun zetta-svg-line-forget-em-ratios ()
+  "Drop the cached librsvg advance measurements.
+Run after installing, removing or replacing a font file."
+  (interactive)
+  (clrhash zetta-svg-line--em-cache))
+
+(defun zetta-svg-line--render-width (family char n size)
+  "Ink width in px of N copies of CHAR drawn in FAMILY at SIZE, per librsvg.
+
+An SVG carrying no width/height renders at its content's bounding box, so
+the image Emacs hands back is exactly as wide as the text librsvg drew.
+That is the whole trick: it turns a librsvg metric, which the renderer
+otherwise never reports, into a number Lisp can read.
+
+`image-scaling-factor' is pinned because the answer is wanted in the SVG's
+own coordinates -- the same ones the chrome is laid out in -- not in
+whatever the display would blow them up to."
+  (let ((image-scaling-factor 1.0))
+    (car (image-size
+          (create-image
+           (format (concat "<svg xmlns=\"http://www.w3.org/2000/svg\">"
+                           "<text x=\"0\" y=\"%d\" font-family=\"%s\" font-size=\"%d\""
+                           " xml:space=\"preserve\">%s</text></svg>")
+                   (* 2 size) (xml-escape-string family) size
+                   (xml-escape-string (make-string n char)))
+           'svg t)
+          t))))
+
+(defun zetta-svg-line-em-ratio (family &optional char)
+  "Advance of CHAR (default ?M) in FAMILY as a fraction of the font size.
+
+Measured through LIBRSVG -- the engine that actually draws the SVG chrome --
+rather than through Emacs.  That distinction is the whole point of this
+function, because the two disagree, and not slightly: Monaspace declares
+2000 units per em in `head' while its CFF `FontMatrix' implies about 1596,
+and FreeType (librsvg) believes the matrix where CoreText (Emacs) believes
+`head'.  So `string-pixel-width' reports Monaspace at 0.62 em while librsvg
+draws it at 0.7775 -- a 25% error, and the reason every previous attempt to
+put Monaspace in the chrome came out overlapping.  Terminess is off by a
+smaller margin in the other direction: measured 8px/char, really 7.5.
+
+Two lengths are rendered and subtracted so the glyph's side bearings cancel
+and only the advance survives.  Cached; `zetta-svg-line-forget-em-ratios'
+drops the cache.
+
+For the DEFAULT character this now defers to `svg-line-font-advance', which
+answers with the advance the text will EFFECTIVELY have.  That matters
+because svg-line corrects a renderer that advances a font wrongly (see
+`svg-line-correct-tracking'): librsvg walks Monaspace 0.7775 em per
+character where the font itself says 0.62, and svg-line pulls the glyphs
+back onto 0.62 with negative letter-spacing.  Measuring librsvg here and
+laying out on THAT would put the whole line on a grid a quarter wider than
+the text drawn into it -- which is exactly how the workspace indicator came
+to sit further apart than its own glyphs are.  The local measurement stays
+for the icon probes, which ask about a specific codepoint."
+  (or
+   ;; the engine's answer for a plain character, which is the effective one
+   (and (null char) (fboundp 'svg-line-font-advance)
+        (svg-line-font-advance family))
+   (let* ((char (or char ?M))
+          (key (cons family char)))
+     (or (gethash key zetta-svg-line--em-cache)
+         (and (seq-some #'display-graphic-p (frame-list))
+              (ignore-errors
+                (let* ((size zetta-svg-line--em-probe-size)
+                       (w1 (zetta-svg-line--render-width family char 4 size))
+                       (w2 (zetta-svg-line--render-width family char 24 size))
+                       (ratio (/ (- w2 w1) 20.0 size)))
+                  (when (> ratio 0)
+                    (puthash key ratio zetta-svg-line--em-cache)))))))))
+
+(defun zetta-svg-line--px-per-char (family font-size)
+  "Advance of FAMILY at FONT-SIZE px, in pixels per character, per librsvg.
+A thin wrapper on `zetta-svg-line-em-ratio' for callers that want pixels."
+  (when-let* ((ratio (zetta-svg-line-em-ratio family)))
+    (* ratio font-size)))
 
 (defvar zetta-svg-line-uniform-fallback "Terminess Nerd Font Mono"
   "Chrome font used when the requested one advances icons and text differently.")
@@ -1716,54 +2183,76 @@ Two conditions, and both matter:
    renderers place both on ONE grid, so a font whose icons sit on a
    different advance cannot be laid out correctly at any single value.
 
-The rescale factor is divided out of BOTH measurements; correcting only
-the text advance makes any rescaled family read as a false negative."
+Both are measured through LIBRSVG (`zetta-svg-line-em-ratio'), not through
+`string-pixel-width'.  Measuring the icons in Emacs is what made this
+function wrong for years: a face spec naming FAMILY only binds FAMILY for
+the characters it covers, and for a Private-Use codepoint Emacs consults
+the fontset and quietly substitutes some other font.  So the \"icon
+advance\" being compared was the SUBSTITUTE's, not FAMILY's, and every
+Monaspace family failed a test it actually passes -- measured through
+librsvg, all five advance text and icons alike at 0.7775 em.  Terminus
+\(TTF), which carries no icons at all, is the one that genuinely fails."
   (and
    (zetta-svg-line--has-icons-p family)
-   (let* ((scale (or (cdr (assoc family face-font-rescale-alist)) 1.0))
-          (scale (if (> scale 0) scale 1.0))
-          (tx (zetta-svg-line--px-per-char family 150))
-          (ic (/ (/ (float (string-pixel-width
-                            (propertize (make-string 10 #xF0614) 'face
-                                        (list :family family :height 150))))
-                    10)
-                 scale)))
-     (= (round tx) (round ic)))))
+   (when-let* ((tx (zetta-svg-line-em-ratio family ?M)))
+     (seq-every-p
+      (lambda (cp)
+        (when-let* ((ic (zetta-svg-line-em-ratio family cp)))
+          ;; a hair of tolerance: each ratio comes off a width rounded to a
+          ;; whole pixel, so exact equality would be luck rather than a test
+          (< (abs (- tx ic)) 0.01)))
+      zetta-svg-line-icon-probes))))
+
+(defconst zetta-svg-line--bars
+  '((:tab-bar     . zetta-tab-bar-svg-char-advance-ratio)
+    (:tab-line    . zetta-tab-line-svg-char-advance-ratio)
+    (:mode-line   . zetta-modeline-svg-char-advance-ratio)
+    (:header-line . zetta-header-line-svg-char-advance-ratio))
+  "Each SVG bar, and the variable holding the advance ratio it lays out on.")
 
 (defun zetta-svg-line-derive-char-advance ()
-  "Set each SVG line's :char-advance from the font it actually draws with.
+  "Set each SVG bar's layout advance from the font THAT BAR draws with.
 
-The renderers lay text out on a fixed pixels-per-character grid.  That
-number was hardcoded to 8 in all four of them, and 8 is Terminus's
-advance -- measured, at face height 150, Terminus and Terminess come to
-exactly 8.00 px/char while every Monaspace family is 9.00.  So under any
-other font the computed boxes are too narrow and the tab line, tab bar,
-mode line and masthead clip and overlap.
+The renderers lay text out on a fixed advance grid, and a grid that does
+not match the font clips and overlaps -- the tab line, tab bar, mode line
+and masthead all drift.  So each bar's grid is derived, per bar, from
+`zetta-svg-line-font-for' and measured by `zetta-svg-line-em-ratio'.
 
-The SVG `font-size' is in px and corresponds to a face height ten times
-larger, so the advance is measured at (* 10 font-size) for whichever
-family `zetta-svg-line-font' currently names."
-  (let ((family (or (bound-and-true-p zetta-svg-line-font)
-                    (face-attribute 'default :family nil 'default))))
-    ;; Refuse a chrome font whose icons and text disagree -- see
-    ;; `zetta-svg-line--uniform-advance-p'.
-    (when (and family (seq-some #'display-graphic-p (frame-list))
-               (not (zetta-svg-line--uniform-advance-p family)))
-      (message "zetta: %s advances icons and text differently; chrome font -> %s"
-               family zetta-svg-line-uniform-fallback)
-      (setq family zetta-svg-line-uniform-fallback
-            zetta-svg-line-font zetta-svg-line-uniform-fallback))
-    ;; `display-graphic-p' with no argument asks the SELECTED frame, which
-    ;; is not graphical in a daemon at startup -- check the frame list.
-    (when (and family (seq-some #'display-graphic-p (frame-list)))
-      (dolist (pair '((zetta-tab-bar-svg-char-advance      . zetta-tab-bar-svg-font-size)
-                      (zetta-tab-line-svg-char-advance     . zetta-tab-line-svg-font-size)
-                      (zetta-modeline-svg-char-advance     . zetta-modeline-svg-font-size)
-                      (zetta-header-line-svg-char-advance  . zetta-header-line-svg-font-size)))
-        (when (and (boundp (car pair)) (boundp (cdr pair)))
-          (set (car pair)
-               (max 1 (round (zetta-svg-line--px-per-char
-                              family (* 10 (symbol-value (cdr pair))))))))))))
+What is stored is a RATIO of the font size, not a pixel count.  A ratio is
+a property of the family and so survives text scaling: svg-line applies it
+to whatever size the bar ends up drawn at, where a pinned pixel advance had
+to be rescaled alongside the font size and drifted as the two roundings
+diverged.
+
+Two earlier assumptions are gone with it.  The advance is no longer one
+number shared by all four bars -- that is what makes `zetta-svg-line-fonts'
+possible -- and it is no longer measured with `string-pixel-width', which
+answers for Emacs's renderer rather than librsvg's and is wrong by 25% on
+Monaspace (see `zetta-svg-line-em-ratio')."
+  ;; `display-graphic-p' with no argument asks the SELECTED frame, which is
+  ;; not graphical in a daemon at startup -- check the frame list.
+  (when (seq-some #'display-graphic-p (frame-list))
+    (dolist (bar zetta-svg-line--bars)
+      (let* ((key (car bar))
+             (var (cdr bar))
+             (family (or (zetta-svg-line-font-for key)
+                         (face-attribute 'default :family nil 'default))))
+        ;; Refuse a chrome font whose icons and text disagree -- see
+        ;; `zetta-svg-line--uniform-advance-p'.  Almost nothing fails this
+        ;; now that it is measured through the right renderer; a font with
+        ;; no icons at all (plain Terminus) still does.
+        (when (and family (not (zetta-svg-line--uniform-advance-p family)))
+          (message "zetta: %s advances icons and text differently; %s font -> %s"
+                   family key zetta-svg-line-uniform-fallback)
+          (setq family zetta-svg-line-uniform-fallback)
+          (if (plist-get zetta-svg-line-fonts key)
+              (setq zetta-svg-line-fonts
+                    (plist-put zetta-svg-line-fonts key family))
+            (setq zetta-svg-line-font family)))
+        (when-let* ((family family)
+                    (ratio (zetta-svg-line-em-ratio family))
+                    ((boundp var)))
+          (set var ratio))))))
 
 (defcustom zetta-svg-line-debug-tints
   '(:tab-bar     "#f6c9c9"
@@ -1887,7 +2376,9 @@ loaded yet, and a missing one should simply keep its default."
                 (zetta-svg-line--dim warn 0.4))))
       ;; --- tab bar ------------------------------------------------------
       (setc 'zetta-tab-bar-svg-icon-color                 brushup-fg-3)
-      (setc 'zetta-tab-bar-calendar-color                 brushup-fg-5)
+      ;; the clock reads as chrome of the same standing as the row icons,
+      ;; so it sits on their rung of the ink ladder rather than a step below
+      (setc 'zetta-tab-bar-calendar-color                 brushup-fg-3)
       ;; --- mode line ----------------------------------------------------
       ;; Also bar-less.  What is left to tell the windows apart is the text
       ;; itself, so it takes the same two rungs the tab labels do; the buffer

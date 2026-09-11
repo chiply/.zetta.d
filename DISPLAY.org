@@ -1,0 +1,275 @@
+#+title: Emacs Graphics: The Four Doors, and What Canvas Actually Added
+#+author: Charlie Holland
+#+startup: overview
+
+# Written 2026-09-06, after moving the source build to Emacs 32 for canvas.
+# Everything about canvas below was read out of the tree at
+# ~/source_code/emacs (32.0.50, rev 1d836d5c595) rather than recalled; the
+# capability list is from this machine's build, not from what Emacs can be
+# configured to do in general. See Evidence for the file references.
+#
+# Read "The four doors" first. It is the whole model, and nearly every
+# limitation in this document follows from which door a given thing uses.
+
+* TL;DR
+
+- Emacs redisplay produces a *glyph matrix*. Everything graphical enters
+  through one of four doors, and the door predicts the limits.
+- *Canvas is not a new door.* It is a new image type inside door 2: a
+  persistent, writable ARGB32 pixel buffer that does not allocate a new Lisp
+  object per update.
+- *Canvas is a pixel buffer, not a drawing API.* No lines, paths, fills,
+  gradients or text. Nothing like the HTML =<canvas>= 2D context beyond the
+  name and the buffer format. Real use = a C/Rust renderer writing through
+  the module API.
+- *Anything web-native (Plotly, D3, WebGL) needs a browser engine*, which
+  means xwidgets in-tree or EAF out-of-tree. Canvas will never do it.
+- For charts we generate ourselves, SVG through librsvg stays the right
+  answer, and that is where =svg-line= / =svg-margin= already live.
+
+* The four doors
+
+** Door 1 — glyph-level styling
+
+Faces and display specs, laid out by redisplay as part of normal text.
+
+- Face attributes: =:box=, =:overline=, underline styles including wave,
+  =:stipple= (X11 only in practice, so irrelevant on this machine).
+- Pixel-precise display specs: =(space :width (12))=, =:align-to=, =raise=.
+- =line-height=, =line-spacing=.
+- *Fringe bitmaps* via =define-fringe-bitmap=: 1-bit, monochrome, at most 16
+  pixels wide. This is exactly why =svg-margin= exists — the fringe cannot
+  carry an SVG, the display margin can.
+- *Display margins* (left/right) hold arbitrary text, including images.
+
+Cheapest and best integrated. Scrolls, clips and composites correctly
+because it *is* text.
+
+** Door 2 — images as glyphs
+
+A =display= property holding an image descriptor. Compiled into this build:
+
+: (heic svg imagemagick webp png gif tiff jpeg xpm xbm pbm canvas)
+
+Supporting machinery: =:scale=, =:rotation=, =:transform-smoothing=, =:map=
+(clickable hotspots with tooltips), =insert-sliced-image= for large images
+that need to scroll a row at a time, and an =equal=-keyed image cache with
+=image-flush= to invalidate it.
+
+SVG via librsvg is the interesting member: generate markup, hand it over, get
+a glyph. That is the mechanism behind =svg.el=, =svg-lib=, and our own
+=svg-line= and =svg-margin=.
+
+*librsvg limits*, worth knowing before designing anything around it: no
+scripting, no SMIL animation, no =foreignObject=, and only partial CSS.
+
+** Door 3 — canvas (new in Emacs 32)
+
+Unconditional on master. There is no =--with-canvas= flag and no patch to
+apply; building the =emacs-31= branch instead would need minad's
+=canvas-31.patch=. This is the reason the source build exists at all — see
+=~/.files/install_emacs_source.sh=.
+
+*** What it is
+
+An image type whose backing store is a *writable ARGB32 pixel buffer*, in the
+same byte order on every platform.
+
+#+begin_src elisp
+(defvar my-canvas
+  '(image :type canvas
+          :id my-canvas
+          :data-width 800
+          :data-height 600))
+#+end_src
+
+- =:id= (a symbol), =:data-width= and =:data-height= are *mandatory*; the
+  dimensions must be positive integers.
+- The spec object identifies the canvas uniquely with respect to =eq=.
+- Initial content comes from a vector of fixnums or a unibyte string in
+  =:data=, or from a file of raw ARGB32 in =:file=. =create-image= accepts
+  both forms.
+- Changing =:data-width= / =:data-height= resizes the underlying buffer
+  automatically.
+- Display it like any image: =(insert (propertize "#" 'display my-canvas))=
+  or =(overlay-put ov 'display my-canvas)=.
+- =:scale=, =:margin=, =:relief=, =:transform-smoothing= and =:map= all work.
+
+Push changes to screen with =(canvas-refresh IMAGE &optional RELOAD-DATA)=.
+In a loop you must call =(redisplay)= yourself; from a timer or a command
+redisplay happens implicitly afterwards. The manual's own example runs at
+~30fps off a 0.033s timer.
+
+*The headline*, in the manual's words: canvas images "do not require creating
+a new Emacs Lisp object every time they get updated." Before canvas,
+animating anything meant rebuilding an image spec every frame and fighting
+the =equal=-keyed image cache — an allocation plus a re-decode per frame.
+NEWS names the intended users: document viewers, visualization tools,
+dynamically computed animations, and games.
+
+*** The fast path: dynamic modules
+
+The module ABI grew a version-32 entry point:
+
+#+begin_src c
+uint32_t *(*canvas_data) (emacs_env *env, emacs_value canvas);
+#+end_src
+
+It returns the raw buffer, row-major, size width * height, ARGB32 on all
+platforms. The pointer stays valid as long as the canvas is alive and its
+dimensions have not changed; NULL on error.
+
+This build is =--with-modules=, so the fast path is available to us.
+
+It is not a nicety. Pushing pixels from Lisp means one =aset= per pixel — an
+800x600 canvas is 480,000 Lisp operations per frame. The module API is how
+canvas is meant to be driven for anything real.
+
+*** What canvas cannot do
+
+The one that matters most: *canvas is a pixel buffer, not a drawing API.*
+There is no context, no =moveTo= / =lineTo=, no paths, no fills, no
+gradients, and *no text rendering* — no font shaping, no glyph rasterisation.
+Want a line, write the pixels. Want a label, rasterise it yourself. The
+realistic architecture is a renderer in C or Rust (tiny-skia, cairo, or
+hand-rolled) writing through =canvas_data=, with Emacs doing the blit.
+
+Also:
+
+- *No web engine.* No DOM, no JS, no CSS. Plotly is out, permanently.
+- *No GPU, no layers, no dirty rectangles.* =canvas-refresh= is
+  whole-canvas, and it runs on the same thread as redisplay and our Lisp.
+- *Still a glyph.* It occupies a rectangle anchored to a character or an
+  overlay. It cannot float over arbitrary text, cannot be positioned freely
+  in a window, and is laid out and clipped by redisplay like any image.
+- *No event model.* Clicks arrive through =:map= hotspots or ordinary
+  keymaps over the underlying text. There is no per-pixel event routing.
+- *Frame rate is bound to redisplay* and to whatever else the Lisp thread is
+  doing. See "Notes for this config" below.
+
+** Door 4 — native widgets composited over the frame
+
+Not glyphs at all. A real native view is positioned on top of the frame.
+
+*** Xwidgets (in-tree)
+
+This build has them: =--with-xwidgets=, and =(featurep 'xwidget-internal)= is
+=t=. A WebKit view, in-process, composited into the Emacs frame.
+
+=make-xwidget= accepts exactly one TYPE: =webkit=. The macOS backend
+(=src/nsxwidget.m=) implements =goto_uri=, history navigation, estimated load
+progress, =stop_loading=, =zoom= and =execute_script= — enough to load a
+local HTML file carrying a Plotly bundle and drive it from Lisp via
+=xwidget-webkit-execute-script=.
+
+Caveats, all of them consequences of it being a native view rather than a
+glyph:
+
+- It floats above the frame, so it does not scroll cleanly with surrounding
+  text and does not respect being covered by overlays or child frames.
+- No TTY, ever.
+- No snapshot function in this tree.
+- The NS backend is the less-maintained of the two; upstream effort goes to
+  GTK. Most of =src/xwidget.c= is =#ifdef USE_GTK= with a smaller
+  =NS_IMPL_COCOA= arm beside it.
+
+*** EAF (emacs-application-framework, out-of-tree)
+
+Not installed here; this section is general knowledge, not verified against a
+local checkout.
+
+EAF runs PyQt + QtWebEngine (Chromium) as *separate OS processes*, talking to
+Emacs over EPC RPC. Emacs renders nothing at all — it reserves a window
+region and EAF keeps a native Qt window aligned on top of it. On X11 that is
+done by reparenting the Qt window into the Emacs frame, which is why EAF was
+X11-only for years; macOS and Wayland support arrived later by positioning an
+always-on-top window instead, and has historically been the rougher path.
+
+* Orthogonal: child frames
+
+Real OS-level frames positioned relative to a parent — the mechanism behind
+=corfu=, =posframe= and friends. A layout facility rather than a rendering
+one, but it interacts with door 4: a child frame will happily cover an
+xwidget, because the xwidget is not in the compositing order.
+
+Since Emacs 31, child frames also work on TTY frames; check with
+=(featurep 'tty-child-frames)=, and =tty-tip-mode= for tooltips.
+
+* Not available: images on TTY
+
+There is *no* TTY image support upstream. Grepping =etc/=, =src/= and =lisp/=
+for "sixel" in the 32.0.50 tree returns nothing. Anything of that kind is a
+fork or an out-of-band hack.
+
+* Choosing: how do I render X
+
+| Property              | canvas            | xwidget           | EAF                 |
+|-----------------------+-------------------+-------------------+---------------------|
+| Where it runs         | in redisplay      | in-process view   | separate processes  |
+| Engine                | none — raw pixels | WebKit            | Chromium            |
+| Part of glyph matrix  | yes (an image)    | no, composited    | no, a window on top |
+| HTML / JS / Plotly    | no                | yes               | yes                 |
+| Drawing API           | none              | full web platform | full web platform   |
+| Works in TTY          | no                | no                | no                  |
+| Present in this build | yes               | yes               | not installed       |
+
+Canvas and EAF are opposite ends of one spectrum. Canvas gave Emacs a fast,
+honest, dependency-free pixel surface and deliberately stopped there. EAF
+gave Emacs a whole browser by giving up on Emacs drawing it at all. Xwidgets
+sit between, and are the only in-tree answer to "render this web thing".
+
+** Plotly and other web-native visualisations
+
+In descending order of how much they are actually worth doing:
+
+1. *Render to a static image outside Emacs.* =plotly.io.write_image= via
+   kaleido to PNG or SVG, then display through door 2. Loses interactivity,
+   keeps everything in the glyph model, works everywhere.
+2. *Open it in the real browser* with =browse-url=. For Plotly specifically,
+   where the entire value is hover, zoom and legend toggling, this is often
+   the honest answer.
+3. *Xwidget.* Load a local HTML file with the bundle, drive it with
+   =xwidget-webkit-execute-script=. Works, with the door-4 caveats above.
+4. EAF. Only if the whole application, not the chart, is the point.
+
+** Charts I generate myself
+
+SVG through librsvg (door 2). Declarative, themeable, sits in the glyph
+matrix, no native-window weirdness, and already the basis of our chrome.
+Reach past it only when re-generating markup per frame is a measured
+bottleneck.
+
+* Notes for this config
+
+- =svg-line= and =svg-margin= are firmly door 2 and should stay there.
+  Nothing in canvas improves a widget that redraws on change rather than
+  per frame.
+- Canvas becomes interesting only for a genuinely *animated* surface — one
+  that repaints every frame regardless of whether state changed — and even
+  then the module API is the entry point, not Lisp =aset= loops.
+- *Be careful adding any per-frame timer work to the mode line.* See the
+  consult async starvation investigation: results stalling until a keypress
+  turned out to be a redisplay treadmill from the =svg-line= hover poll and
+  shell-outs in mode-line segments. Canvas refreshes run on that same
+  thread and would join that queue, not bypass it.
+
+* Evidence
+
+All references relative to =~/source_code/emacs= at rev =1d836d5c595=
+(32.0.50, build date 2026-09-05).
+
+| Claim                      | Source                                      |
+|----------------------------+---------------------------------------------|
+| Canvas NEWS entry          | =etc/NEWS= "Lisp Changes in Emacs 32.1"     |
+| Canvas reference manual    | =doc/lispref/display.texi= §Canvas Images   |
+| =canvas_data= module ABI   | =src/module-env-32.h=, =src/emacs-module.h= |
+| Only =webkit= xwidget type | =src/xwidget.c=, =DEFUN ("make-xwidget"…)=  |
+| macOS xwidget API coverage | =src/nsxwidget.h=                           |
+| TTY child frames           | =etc/NEWS.31=                               |
+| No sixel anywhere          | grep of =etc/=, =src/=, =lisp/=             |
+
+This build's configure line:
+
+: --with-ns --with-native-compilation=aot --with-modules --with-xml2
+: --with-gnutls --with-rsvg --with-webp --with-imagemagick --with-dbus
+: --with-xwidgets --with-tree-sitter --with-sqlite3 --without-x

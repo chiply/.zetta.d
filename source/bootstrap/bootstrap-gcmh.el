@@ -20,6 +20,20 @@
   (when (fboundp 'zetta--restore-gc)
     (remove-hook 'emacs-startup-hook #'zetta--restore-gc))
   (setq gc-cons-threshold (* 128 1024 1024))
+  ;; The half of `zetta--restore-gc' that gcmh does NOT own.  Cancelling that
+  ;; hook dropped both settings, but gcmh only ever writes the threshold, so
+  ;; the percentage silently kept init's 0.6 for the life of the session.
+  ;;
+  ;; The trigger is max(threshold, percentage x (live + since_gc))
+  ;; (src/alloc.c:5740), so at 0.6 against a 209MB live heap the real
+  ;; threshold is ~125MB and gcmh's low idle threshold is INERT -- its
+  ;; "collect early and cheaply while idle" design never runs, and every
+  ;; collection you feel is a full sweep of a huge nursery (measured
+  ;; 130-174ms, peak 462ms).  See OPTIMIZATIONS.org.
+  ;;
+  ;; Mark time scales with the LIVE set rather than with accumulated garbage,
+  ;; so this makes collections more frequent and much shorter -- not free.
+  (setq gc-cons-percentage 0.1)
   :config
   (setq gcmh-idle-delay 'auto                 ; scale idle delay to GC cost
         gcmh-auto-idle-delay-factor 10

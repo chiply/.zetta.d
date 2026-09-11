@@ -1,0 +1,253 @@
+#+TITLE: Professional and project work
+#+CATEGORY: work
+#+PROPERTY: Effort_ALL 0 0:05 0:10 0:15 0:20 0:30 0:45 1:00 1:30 2:00 3:00 4:00 5:00 6:00 7:00
+#+COLUMNS: %40ITEM(Task) %TODO %3PRIORITY(P) %6IMPACT(Imp) %17Effort(Estimate){:} %CLOCKSUM(Clocked) %DEADLINE %SCHEDULED %TAGS
+#+FILETAGS: :work:
+
+* PROG [#A] Draft Q4 roadmap for the retrieval service [1/4]  :@deep:planning:
+DEADLINE: <2026-09-02 Wed>
+:PROPERTIES:
+:ID:       717878C0-24CB-4B63-B29E-54A787B2F20F
+:CREATED:  [2026-08-13 Thu]
+:Effort:   6:00
+:END:
+:LOGBOOK:
+- State "PROG"       from "TODO"       [2026-09-06 Sun 10:00]
+- State "TODO"       from "PROG"       [2026-09-01 Tue 13:30]
+- State "PROG"       from              [2026-09-01 Tue 09:30]
+- New deadline from "[2026-08-23 Sun]" on [2026-09-03 Thu 12:30]
+:END:
+
+Three themes so far: enrichment, gold-set curation, and whether the
+CLIP tier earns its keep.
+
+** DONE Collect input from the team
+CLOSED: [2026-09-05 Sat 10:33]
+:PROPERTIES:
+:ID:       FC6604E5-A2A9-417B-85B0-281F8E727C1C
+:Effort:   1:00
+:END:
+:LOGBOOK:
+- State "DONE"       from "PROG"       [2026-09-05 Sat 10:33]
+- State "PROG"       from              [2026-09-05 Sat 09:00]
+:END:
+
+** PROG Draft the enrichment section
+:PROPERTIES:
+:ID:       190497E2-D289-404F-9584-B59C166346D0
+:Effort:   2:00
+:END:
+
+** TODO Cost the CLIP tier decision
+:PROPERTIES:
+:ID:       31D60D16-DA07-4928-91D7-0E632758518A
+:Effort:   2:00
+:END:
+
+** TODO Circulate for review
+:PROPERTIES:
+:ID:       77E148CB-1F7D-4B71-8078-56D0BAFE321B
+:Effort:   0:30
+:END:
+
+* TODO [#B] Review the reranker benchmark writeup  :@deep:review:@fresh:
+SCHEDULED: <2026-09-08 Tue>
+:PROPERTIES:
+:ID:       AB6BB001-A9B4-4BB1-9769-882E126828A6
+:CREATED:  [2026-07-10 Fri]
+:Effort:   1:00
+:IMPACT:   5
+:END:
+
+* TODO [#A] Prepare slides for the architecture review  :@deep:present:
+DEADLINE: <2026-09-09 Wed>
+:PROPERTIES:
+:ID:       D63317C6-F9F3-45E6-B027-459129E01824
+:CREATED:  [2026-08-27 Thu]
+:Effort:   4:00
+:IMPACT:   4
+:END:
+:LOGBOOK:
+- New deadline from "[2026-08-30 Sun]" on [2026-09-05 Sat 12:30]
+:END:
+
+* WAIT [#B] Reply to the vendor security questionnaire  :@shallow:admin:
+SCHEDULED: <2026-10-05 Mon>
+:PROPERTIES:
+:ID:       C087E801-3CBB-404A-A1D6-8B7626658852
+:CREATED:  [2026-07-21 Tue]
+:Effort:   0:45
+:IMPACT:   4
+:WAITING_ON: legal
+:END:
+:LOGBOOK:
+- State "WAIT"       from "TODO"       [2026-08-28 Fri 11:20] \\
+  Sent the details, waiting on confirmation.
+- Rescheduled from "[2026-09-28 Mon]" on [2026-09-04 Fri 08:55]
+:END:
+
+Waiting on legal for the subprocessor list.
+
+- [X] first pass
+- [ ] second pass
+
+* NEXT [#C] Update the on-call runbook for the index rebuild  :@deep:docs:
+DEADLINE: <2026-09-26 Sat>
+:PROPERTIES:
+:ID:       E33412EB-3E3B-4CD3-9307-1542817BBFA3
+:CREATED:  [2026-08-20 Thu]
+:Effort:   2:00
+:IMPACT:   2
+:END:
+
+* PROG Pair with Sam on the ingestion backpressure bug  :@deep:pairing:
+:PROPERTIES:
+:ID:       61DFAC47-6EEC-4704-B1C3-97B642F0B02E
+:CREATED:  [2026-08-27 Thu]
+:Effort:   0:45
+:IMPACT:   4
+:END:
+:LOGBOOK:
+- State "PROG"       from "TODO"       [2026-09-07 Mon 11:00]
+- State "TODO"       from "PROG"       [2026-09-02 Wed 11:38]
+- State "PROG"       from "TODO"       [2026-09-02 Wed 11:30]
+- State "TODO"       from "PROG"       [2026-09-01 Tue 14:07]
+- State "PROG"       from              [2026-09-01 Tue 14:00]
+:END:
+
+* TODO [#C] File expenses for the August conference  :@shallow:admin:
+SCHEDULED: <2026-10-06 Tue>
+:PROPERTIES:
+:ID:       652343D4-70E1-4DBC-B36C-2D9ECD6357F1
+:CREATED:  [2026-07-11 Sat]
+:Effort:   0:10
+:END:
+
+* DONE Interview debrief writeup  :@shallow:hiring:@tired:
+CLOSED: [2026-08-25 Tue 09:11] SCHEDULED: <2026-08-11 Tue>
+:PROPERTIES:
+:ID:       CFF37306-94D4-4AC1-8FBE-4E7548408FAA
+:CREATED:  [2026-07-14 Tue]
+:Effort:   0:20
+:IMPACT:   5
+:END:
+:LOGBOOK:
+- State "DONE"       from "PROG"       [2026-08-25 Tue 09:11]
+- State "PROG"       from "TODO"       [2026-08-25 Tue 09:00]
+- State "TODO"       from "PROG"       [2026-08-22 Sat 16:10]
+- State "PROG"       from "TODO"       [2026-08-22 Sat 16:00]
+- State "TODO"       from "PROG"       [2026-08-21 Fri 10:40]
+- State "PROG"       from              [2026-08-21 Fri 10:30]
+- Rescheduled from "[2026-08-04 Tue]" on [2026-09-06 Sun 08:55]
+:END:
+
+* QUES [#B] Decide whether to keep the CLIP tier  :@deep:decision:@fresh:
+SCHEDULED: <2026-09-11 Fri>
+:PROPERTIES:
+:ID:       68A9BFCB-59D2-4AFF-AD9A-52388A79827C
+:CREATED:  [2026-08-06 Thu]
+:Effort:   1:30
+:BLOCKED_BY: 13009921-F5DE-4A4E-B570-F20A51B4962C
+:END:
+:LOGBOOK:
+- Rescheduled from "[2026-09-04 Fri]" on [2026-09-02 Wed 08:55]
+:END:
+
+Measured 36%/46% OCR-vs-CLIP split. Scores are shown rather than
+filtered, which may be the wrong call.
+
+* TODO [#B] Cut the 0.4.0 release  :@deep:release:@fresh:
+DEADLINE: <2026-09-11 Fri>
+:PROPERTIES:
+:ID:       4300C9E5-61E4-4922-B104-BAC8901AEDA9
+:CREATED:  [2026-07-28 Tue]
+:Effort:   3:00
+:DEADLINE_TYPE: soft
+:BLOCKED_BY: 6B54F7E6-ABCE-46F0-9A7A-5BB461FDA169
+:END:
+
+* TODO [#A] Rotate the Algolia API key and audit its ACLs  :@deep:security:
+DEADLINE: <2026-09-06 Sun -5d>
+:PROPERTIES:
+:ID:       87B3D08A-EF66-474B-B0B8-9384F09594C3
+:CREATED:  [2026-07-22 Wed]
+:Effort:   3:00
+:IMPACT:   3
+:DEADLINE_TYPE: soft
+:END:
+
+The key baked into the public bundle has addObject, deleteIndex and
+settings ACLs. Rotate regardless.
+
+- [X] first pass
+- [ ] second pass
+
+* TODO [#B] Write the postmortem for the Aug 21 outage [1/3]  :@deep:docs:
+SCHEDULED: <2026-09-15 Tue>
+:PROPERTIES:
+:ID:       DD18651F-A91A-4F29-80DC-3D2F39AFDE98
+:CREATED:  [2026-07-25 Sat]
+:Effort:   6:00
+:END:
+
+** DONE Assemble the timeline
+CLOSED: [2026-09-04 Fri 15:07]
+:PROPERTIES:
+:ID:       1672384E-9A59-4843-843C-BF23B9D5D74F
+:Effort:   1:00
+:END:
+:LOGBOOK:
+- State "DONE"       from "PROG"       [2026-09-04 Fri 15:07]
+- State "PROG"       from              [2026-09-04 Fri 14:30]
+:END:
+
+** TODO Identify contributing factors
+:PROPERTIES:
+:ID:       9B34288A-CDA1-441F-9FE3-994112B27BEE
+:Effort:   2:00
+:END:
+
+** TODO Write up remediations
+:PROPERTIES:
+:ID:       EFAB3604-9E66-455E-A947-720AED08587E
+:Effort:   2:00
+:END:
+
+* HOLD [#C] Renew the team's model API quota  :@shallow:admin:@fresh:
+:PROPERTIES:
+:ID:       ECF1C884-D1A8-410C-A07C-5AAD376EA7B2
+:CREATED:  [2026-07-19 Sun]
+:Effort:   0:30
+:IMPACT:   2
+:END:
+:LOGBOOK:
+- State "HOLD"       from "TODO"       [2026-08-25 Tue 16:40] \\
+  Revisit when there is budget.
+:END:
+
+* IDEA [#B] Sync with design on the dashboard redesign  :@call:
+:PROPERTIES:
+:ID:       3161B90A-3C8C-4E60-B474-A737A59BB245
+:CREATED:  [2026-07-26 Sun]
+:IMPACT:   2
+:END:
+
+* NOPE [#A] Archive the retired ingestion prototype  :@shallow:admin:
+CLOSED: [2026-08-30 Sun 16:37] SCHEDULED: <2026-08-09 Sun>
+:PROPERTIES:
+:ID:       5DFEB445-494A-43E4-98F9-815EFD803BF7
+:CREATED:  [2026-07-04 Sat]
+:Effort:   0:20
+:END:
+:LOGBOOK:
+- State "NOPE"       from "PROG"       [2026-08-30 Sun 16:37] \\
+  Duplicate of another entry.
+- State "PROG"       from "TODO"       [2026-08-30 Sun 16:30]
+- State "TODO"       from "PROG"       [2026-08-28 Fri 09:36]
+- State "PROG"       from "TODO"       [2026-08-28 Fri 09:30]
+- State "TODO"       from "PROG"       [2026-08-25 Tue 13:06]
+- State "PROG"       from              [2026-08-25 Tue 13:00]
+:END:
+
+Superseded -- the prototype was folded into the main pipeline.
+

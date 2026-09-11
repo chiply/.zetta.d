@@ -33,6 +33,18 @@
 
 (require 'svg-line)
 
+(defcustom zetta-tab-line-name-space-ok t
+  "When non-nil, a DISPLAYED buffer gets a tab line even if its name starts
+with a space.
+
+That prefix is the convention for buffers the user is not meant to see, and
+`tab-line-mode--turn-on' skips them on that basis.  The convention breaks
+down for a buffer that is on screen anyway: treemacs names its sidebar
+\" *Treemacs-Buffer-#<frame 0x...>\", and the tab line is the one piece of
+chrome that would say so.  Consulted only by `zetta-tab-line-ensure', which
+runs when a buffer lands in a window, so a hidden buffer stays untouched."
+  :type 'boolean :group 'zetta)
+
 ;; `ct/circle-number' (defined in the `tab-line' use-package :config below)
 ;; wraps `zetta-circle-number' (line-utils) -- the shared source of the
 ;; numbered-circle glyphs also used by svg-margin's org rail.  Declared here so
@@ -69,13 +81,31 @@ end up as the odd buffer with no tab line for no visible reason.  The
 `fundamental-mode' is CALLED, not when a buffer is merely born in it.
 
 Runs from `window-buffer-change-functions', i.e. exactly when a buffer lands
-in a window -- the moment you would notice.  Eligibility is left entirely to
-`tab-line-mode--turn-on', so the exclusion rules stay in one place."
+in a window -- the moment you would notice.  Eligibility is left to
+`tab-line-mode--turn-on', so the exclusion rules stay in one place, with the
+one exception described in `zetta-tab-line-name-space-ok'."
     (when (bound-and-true-p global-tab-line-mode)
       (dolist (w (window-list nil 'no-minibuf))
         (with-current-buffer (window-buffer w)
           (unless (bound-and-true-p tab-line-mode)
-            (ignore-errors (tab-line-mode--turn-on)))))))
+            (ignore-errors (tab-line-mode--turn-on))
+            ;; `tab-line-mode--turn-on' exempts any buffer whose name begins
+            ;; with a space, the convention for buffers the user is not
+            ;; supposed to see.  A buffer that is ON SCREEN plainly is not
+            ;; one of those, whatever it called itself -- treemacs names its
+            ;; sidebar \" *Treemacs-Buffer-#<frame 0x...>\" and so has never
+            ;; had a tab line, which is the one place the name is worth
+            ;; showing.  Every OTHER exclusion is still honoured; only the
+            ;; leading space is overridden.
+            (when (and (not (bound-and-true-p tab-line-mode))
+                       zetta-tab-line-name-space-ok
+                       (string-match-p "\\` " (buffer-name))
+                       (not (minibufferp))
+                       (not (memq major-mode tab-line-exclude-modes))
+                       (not (buffer-match-p tab-line-exclude-buffers (buffer-name)))
+                       (not (get major-mode 'tab-line-exclude))
+                       (not (buffer-local-value 'tab-line-exclude (current-buffer))))
+              (tab-line-mode 1)))))))
 
   (add-hook 'window-buffer-change-functions #'zetta-tab-line-ensure)
 
@@ -154,9 +184,16 @@ follows; callers add their own separator before the buffer name."
     ;; what shows through the image's transparent margin, and its OVERLINE is
     ;; a single-sided rule along the top of the tab line -- which, the tab
     ;; line being per-window, is a rule along the top of each WINDOW.
+    ;; The overline here is the FALLBACK.  A face attribute is painted
+    ;; across the face's whole extent, so on a window-width image it is a
+    ;; window-width rule and cannot be inset; svg-line draws an inset one
+    ;; itself (`:rule' in the definition below) wherever the engine is new
+    ;; enough to know the key.  Both would show as two rules, so this one
+    ;; stands down when the other is available.
     (set-face-attribute 'tab-line nil :box nil :inherit nil
                         :background brushup-bg :foreground brushup-bg-3
                         :overline (and zetta-tab-line-svg-overline
+                                       (not (bound-and-true-p svg-line-rule-supported))
                                        (zetta-line-blend brushup-bg brushup-fg
                                                          zetta-tab-line-svg-overline-strength))))
 
@@ -165,6 +202,36 @@ follows; callers add their own separator before the buffer name."
   ;; colours and lands one theme change behind -- the same bug that made the
   ;; window dividers reappear on every theme switch.
   (add-to-list 'brushup-styles '(zetta-tab-line-faces) t)
+
+  ;; tab-line's switching commands wrap their work in
+  ;; `with-selected-window', which restores the CURRENT BUFFER on exit --
+  ;; but the window's buffer has already changed underneath it.  So the
+  ;; command returns with `current-buffer' still the buffer you left while
+  ;; the window shows the one you arrived at, and `post-command-hook' then
+  ;; runs against the wrong buffer.  Two symptoms, one cause:
+  ;;
+  ;;   global-hl-line moves its overlay in the buffer you LEFT, so the new
+  ;;   one has no highlight until the next command;
+  ;;
+  ;;   beacon's buffer-change trigger compares against the current buffer,
+  ;;   sees nothing changed, and never blinks.
+  ;;
+  ;; Resync after the command and before the hook.  Upstream's own bug --
+  ;; reproduced in `emacs -Q' -- so this rides on the commands rather than
+  ;; being worked around in hl-line or beacon, which are only two of the
+  ;; things a wrong `current-buffer' can mislead.
+  (defun zetta-tab-line--resync-current-buffer (&rest _)
+    "Make the selected window's buffer current after a tab-line switch."
+    (let ((buf (window-buffer (selected-window))))
+      (when (and (buffer-live-p buf) (not (eq buf (current-buffer))))
+        (set-buffer buf))))
+
+  (dolist (cmd '(tab-line-switch-to-next-tab
+                 tab-line-switch-to-prev-tab
+                 tab-line-select-tab
+                 tab-line-select-tab-buffer
+                 tab-line-close-tab))
+    (advice-add cmd :after #'zetta-tab-line--resync-current-buffer))
 
   :general
   (
@@ -203,12 +270,15 @@ follows; callers add their own separator before the buffer name."
   "Font size (px) for SVG tab-line text." :type 'integer :group 'zetta)
 (defcustom zetta-tab-line-svg-line-pad 4
   "Extra vertical padding (px) per wrapped tab-line row." :type 'integer :group 'zetta)
-(defcustom zetta-tab-line-svg-char-advance 8
-  "Per-character advance (px) used to size tabs and wrap rows.
-Match it to the SVG font's real glyph width as Emacs renders it -- 8 for
-the bitmap Terminess Nerd Font Mono at 15px (a scalable font would be ~9).
-Too high leaves whitespace inside tab boxes; too low overlaps tabs."
+(defcustom zetta-tab-line-svg-char-advance-ratio 0.5
+  "Per-character advance, as a fraction of the font size, for tabs and rows.
+Set from the bar's own font by `zetta-svg-line-derive-char-advance'; the
+default only stands in before that runs.  Too high leaves whitespace inside
+tab boxes; too low overlaps tabs."
   :type 'number :group 'zetta)
+
+(define-obsolete-variable-alias 'zetta-tab-line-svg-char-advance
+  'zetta-tab-line-svg-char-advance-ratio "2026-09-07")
 (defcustom zetta-tab-line-svg-tab-gap 1.0
   "Gap between tabs, in character widths." :type 'number :group 'zetta)
 (defcustom zetta-tab-line-svg-tab-pad 1
@@ -277,8 +347,141 @@ to 0 if you would rather the rule hugged the tint."
 (defcustom zetta-tab-line-svg-overline-strength 0.22
   "How far the tab-line overline is blended from the page toward the ink.
 Matches `zetta-window-divider-rule-strength\=' so the two rules read as one
-system rather than as two unrelated lines."
-  :type 'number :group 'zetta)
+system rather than as two unrelated lines.
+
+This is the SELECTED window's strength;
+`zetta-tab-line-svg-overline-inactive-strength\=' is the other half of the
+pair, and the gap between them is what marks the window you are in.
+
+Either one number, or a cons (LIGHT . DARK) to set the two polarities
+apart -- see the inactive strength, where that distinction matters."
+  :type '(choice number (cons :tag "Per polarity"
+                              (number :tag "Light") (number :tag "Dark")))
+  :group 'zetta)
+
+(defcustom zetta-tab-line-svg-overline-inactive-strength '(0.08 . 0.14)
+  "Strength of the overline in a window that is NOT selected, or nil.
+
+Either one number, or a cons (LIGHT . DARK).  It has to be a pair,
+because the same blend is not equally visible in both polarities and the
+reason is not the blend: measured in CIE L*, 0.08 moves the rule about 7
+units off the page whichever way round the theme is.
+
+What differs is the page.  `alpha-background\=' is 85 in
+`default-frame-alist\=', so a sixth of the desktop shows through it, while
+the rule is opaque pixels inside the SVG (which paints no background of
+its own -- see `zetta-tab-line-svg-tint\=').  On a light theme that is
+harmless: the page is already the brightest thing on screen and bleed
+barely moves it, so the separation holds at about 6 L* over any backdrop.
+On a dark theme the page you actually see is not `brushup-bg\=' at all but
+`brushup-bg\=' lifted toward the wallpaper, and a rule computed 8 percent
+off the nominal colour is not 8 percent off the visible one -- over a
+bright backdrop the gap falls by more than half.
+
+Hence a heavier dark default, at roughly twice the lightness step.  It
+stays well under the selected window's, which is the point: the pair has
+to keep saying which window you are in.  Raise the dark half further if
+your wallpaper is bright, lower it toward the light value if it is dark
+or if the frame is opaque.
+
+The pair with `zetta-tab-line-svg-overline-strength\=' is what makes the
+rule say which window you are in.  Held at one strength the rule
+delineates every window equally and so distinguishes none of them; dimmed
+here, the selected window is the one with a rule you can see, and the
+prominence does the telling rather than a second colour.
+
+nil drops the rule entirely on unselected windows, which is the strongest
+version of the same idea -- worth trying if a dim rule still reads as a
+boundary rather than as a lesser one.
+
+Only the SVG-drawn rule can do this.  A face `:overline\=' is one global
+attribute painted wherever the face lands, and face remapping is
+buffer-local rather than window-local, so the fallback route cannot tell
+two windows apart even when they show different buffers.  See
+`zetta-tab-line-svg-overline\='."
+  :type '(choice (const :tag "No rule when unselected" nil)
+                 number
+                 (cons :tag "Per polarity"
+                       (number :tag "Light") (number :tag "Dark")))
+  :group 'zetta)
+
+(defun zetta-tab-line-svg--strength (value)
+  "Resolve VALUE: one number for both polarities, or (LIGHT . DARK)."
+  (if (consp value)
+      (if (bound-and-true-p brushup-dark-p) (cdr value) (car value))
+    value))
+
+(defun zetta-tab-line-svg--rule-color ()
+  "Colour for the rule in the window being rendered, or nil for none.
+
+Evaluated per render, so `mode-line-window-selected-p\=' answers for the
+window whose tab line is being drawn -- the same predicate `:active\=' uses
+to pick the inactive tab palette, which is what keeps the rule and the
+tabs agreeing about which window is selected."
+  (and (zetta-tab-line-overline-wanted-p)
+       (bound-and-true-p brushup-bg)
+       (let ((strength (zetta-tab-line-svg--strength
+                        (if (mode-line-window-selected-p)
+                            zetta-tab-line-svg-overline-strength
+                          zetta-tab-line-svg-overline-inactive-strength))))
+         (and strength
+              (zetta-line-blend brushup-bg brushup-fg strength)))))
+
+(defcustom zetta-tab-line-svg-overline-height 1
+  "Thickness of the tab-line overline, in pixels.
+Only consulted for the SVG-drawn rule (`svg-line-rule-supported\='); the
+fallback face `:overline\=' is one pixel by construction."
+  :type 'integer :group 'zetta)
+
+(defcustom zetta-tab-line-svg-overline-margin nil
+  "Pixels the overline is inset from BOTH window edges, or nil.
+
+nil insets it by `zetta-tab-line-svg-margin\=', so the rule ends exactly
+where the tab line\='s background would if one were painted -- the rule and
+the tint read as one strip rather than as a rule with a narrower thing
+under it.  A number overrides that: 0 spans the full window (what the face
+`:overline\=' did, and all it could do), larger pulls the ends in further.
+
+Only consulted for the SVG-drawn rule; a face `:overline\=' is always the
+full width of the face it is on."
+  :type '(choice (const :tag "Match the tab line's margin" nil) integer)
+  :group 'zetta)
+
+(defcustom zetta-tab-line-svg-overline-files-only t
+  "When non-nil, draw the overline only above a buffer visiting a FILE.
+
+The rule delineates the window you are working in.  Above a shell, dired,
+treemacs, *Messages*, an embark collect -- anything not visiting a file --
+it is a boundary drawn around furniture rather than around work, so it is
+suppressed there and those windows sit flush under what is above them.
+
+`buffer-file-name\=' is the whole test, which is what \"directly associated
+with a file\" means: an indirect clone answers nil and loses the rule, as
+does a dired buffer that is merely POINTED at a directory.
+
+Asked per RENDER, through `zetta-tab-line-overline-wanted-p\=', because the
+rule is drawn inside the SVG (see `zetta-tab-line-svg-overline\=') and the
+renderer runs with the window\='s buffer current.  So this really is per
+window-showing-a-buffer, not the coarser per-buffer answer a face remap
+would have given."
+  :type 'boolean :group 'zetta)
+
+(defun zetta-tab-line-overline-wanted-p ()
+  "Non-nil when the current buffer should carry the rule.
+
+The one predicate both routes ask.  It is evaluated per RENDER now that
+the rule is drawn inside the SVG (`:rule\=' below), which is what makes a
+per-buffer answer possible without remapping anything: the renderer runs
+with the window\='s buffer current, so the rule simply is not drawn for a
+buffer that should not have one.
+
+\(An earlier version suppressed the FACE `:overline\=' with a buffer-local
+remap and a set of hooks.  That machinery is gone: it has no effect on a
+rule the SVG draws, and it was only ever needed because a face attribute
+cannot be decided per render.)"
+  (and zetta-tab-line-svg-overline
+       (or (not zetta-tab-line-svg-overline-files-only)
+           (buffer-file-name))))
 
 (defcustom zetta-tab-line-svg-tint 0
   "How far the tab line's background is blended from the page toward the ink.
@@ -419,6 +622,28 @@ at `zetta-tab-line-svg-modified-background\='."
 ;;; Content -- a list of (LABEL . STATE) for the `wrap' layout, where
 ;;; STATE is a plist of `:current' / `:modified' flags.
 ;;; ------------------------------------------------------------------
+(defun zetta-tab-line-svg--ace-lead ()
+  "This window\'s ace-window key, for the tab line\'s left margin, or nil.
+
+Only while `zetta-line-window-picking-p\' -- the key is a prompt, and a
+prompt that is always on screen is not a prompt.
+
+Drawn by the engine in the margin rather than handed back as a leading TAB,
+which is what it was first: a tab takes a slot in the flow, and a slot that
+appears the moment you press the pick key shoves every tab sideways just as
+you are reading them.  The margin is empty anyway (`zetta-tab-line-svg-margin\'
+insets the flow by 60px), so the indicator costs no layout at all.
+
+The tab line is the right bar for this now that every buffer has one (see
+`zetta-tab-line-name-space-ok\') and not every buffer has a mode line --
+which is where this badge used to live, and why it could not be relied on."
+  (when (and (fboundp 'zetta-line-window-picking-p)
+             (zetta-line-window-picking-p))
+    (let ((path (window-parameter (selected-window) 'ace-window-path))
+          (pad (make-string (max 0 zetta-tab-line-svg-tab-pad) ?\s)))
+      (and path (> (length path) 0)
+           (concat pad (substring-no-properties path) pad)))))
+
 (defun zetta-tab-line-svg-tabs ()
   "Return a list of (LABEL . STATE) for the window's tab-line tabs.
 LABEL is \"N GLYPH name\" -- the 1-based index (matching g1..g9), a
@@ -484,16 +709,24 @@ Because the glyph is part of the label text it needs no separate icon."
   ;; dim the whole tab line when its window is not the selected one,
   ;; the same way the SVG mode line distinguishes active/inactive.
   :active #'mode-line-window-selected-p
-  :font (lambda () zetta-svg-line-font)
+  :font (lambda () (zetta-svg-line-font-for :tab-line))
   :font-size (lambda () zetta-tab-line-svg-font-size)
   :line-pad (lambda () zetta-tab-line-svg-line-pad)
-  :char-advance (lambda () zetta-tab-line-svg-char-advance)
+  :char-advance-ratio (lambda () zetta-tab-line-svg-char-advance-ratio)
   :gap (lambda () zetta-tab-line-svg-tab-gap)
   :pad (lambda () zetta-tab-line-svg-pad)
   :pad-y (lambda () zetta-tab-line-svg-pad-y)
   :margin (lambda () zetta-tab-line-svg-margin)
   :margin-y (lambda () zetta-tab-line-svg-margin-y)
   :center (lambda () zetta-tab-line-svg-center)
+  ;; The rule along the top of the window.  A function, so the colour is
+  ;; recomputed from the palette at render time and follows a theme change
+  ;; with no brushup entry of its own.
+  :rule #'zetta-tab-line-svg--rule-color
+  :rule-height (lambda () zetta-tab-line-svg-overline-height)
+  :rule-margin (lambda () zetta-tab-line-svg-overline-margin)
+  ;; the window-picking key, in the left margin the tab flow never uses
+  :lead (lambda () (zetta-tab-line-svg--ace-lead))
   :background (lambda () zetta-tab-line-svg-background)
   :foreground (lambda () (or zetta-tab-line-svg-foreground
                              (face-foreground 'shadow nil t) "#888888"))

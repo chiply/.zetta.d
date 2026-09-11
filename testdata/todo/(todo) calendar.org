@@ -1,0 +1,109 @@
+#+TITLE: Appointments and fixed commitments
+#+CATEGORY: cal
+#+PROPERTY: Effort_ALL 0 0:05 0:10 0:15 0:20 0:30 0:45 1:00 1:30 2:00 3:00 4:00 5:00 6:00 7:00
+#+COLUMNS: %40ITEM(Task) %TODO %3PRIORITY(P) %6IMPACT(Imp) %17Effort(Estimate){:} %CLOCKSUM(Clocked) %DEADLINE %SCHEDULED %TAGS
+
+* TODO Architecture review  :@meeting:work:
+:PROPERTIES:
+:ID:       0CAB76E4-3FFA-4256-8D3C-BB4095028266
+:CREATED:  [2026-08-01 Sat]
+:Effort:   1:30
+:END:
+<2026-09-08 Tue 10:00-11:30>
+
+* TODO 1:1 with manager  :@meeting:work:
+:PROPERTIES:
+:ID:       AA8046D5-91FE-4C8D-8DC0-4DEFE3862FB3
+:CREATED:  [2026-08-15 Sat]
+:Effort:   0:30
+:END:
+<2026-09-08 Tue 15:00-15:30 +1w>
+
+* TODO Team retro  :@meeting:work:
+:PROPERTIES:
+:ID:       58135DAD-94CB-4FAC-8864-70A7BA759B01
+:CREATED:  [2026-08-09 Sun]
+:Effort:   1:00
+:END:
+<2026-09-10 Thu 14:00-15:00 +2w>
+
+* TODO Dentist appointment  :@meeting:health:
+:PROPERTIES:
+:ID:       237FF4E6-8A7B-4E87-85B9-35BB6DBE1B5A
+:CREATED:  [2026-07-27 Mon]
+:Effort:   0:40
+:END:
+<2026-09-13 Sun 09:20-10:00>
+
+* TODO Car service drop-off  :@errand:
+:PROPERTIES:
+:ID:       A4670646-E251-44F0-8432-FCBD65EC3A0C
+:CREATED:  [2026-08-14 Fri]
+:Effort:   0:30
+:END:
+<2026-09-17 Thu 08:00-08:30>
+
+* TODO Standup  :@meeting:work:
+:PROPERTIES:
+:ID:       7A57BD9F-5F79-43F3-9EE9-813381BF29FC
+:CREATED:  [2026-08-31 Mon]
+:Effort:   0:15
+:END:
+<2026-09-09 Wed 09:30-09:45 +1d>
+
+* TODO Design sync  :@meeting:work:
+:PROPERTIES:
+:ID:       4051D048-452E-42E0-9ADD-1228FFFB1D20
+:CREATED:  [2026-09-01 Tue]
+:Effort:   1:00
+:END:
+<2026-09-11 Fri 11:00-12:00 +1w>
+
+* TODO Flight to Boston  :@travel:
+:PROPERTIES:
+:ID:       0AEB43C3-310D-4BEC-AB51-CA7BE34941D0
+:CREATED:  [2026-07-25 Sat]
+:Effort:   3:25
+:END:
+<2026-09-20 Sun 07:15-10:40>
+
+* TODO Conference  :@travel:
+:PROPERTIES:
+:ID:       9878C844-C360-44BA-BE9A-20C277FEDA65
+:CREATED:  [2026-09-03 Thu]
+:END:
+<2026-09-21 Mon>--<2026-09-24 Thu>
+
+* TODO Quarterly planning offsite  :@meeting:work:
+:PROPERTIES:
+:ID:       65330ED4-7FFF-481E-B25C-53BF971175AA
+:CREATED:  [2026-07-26 Sun]
+:END:
+<2026-10-02 Fri>--<2026-10-04 Sun>
+
+* TODO Sam's leaving drinks  :@social:
+:PROPERTIES:
+:ID:       5571F171-7A13-4760-A2E6-352BA6BAE46B
+:CREATED:  [2026-07-20 Mon]
+:Effort:   2:00
+:END:
+<2026-09-14 Mon 18:00-20:00>
+
+* DONE Board game night  :@social:
+CLOSED: [2026-09-04 Fri 22:00]
+:PROPERTIES:
+:ID:       A66CFCE2-EC02-47D8-B953-BA74976ADDA9
+:CREATED:  [2026-08-31 Mon]
+:Effort:   3:00
+:END:
+<2026-09-04 Fri 19:00-22:00>
+
+* DONE Physio  :@health:
+CLOSED: [2026-08-28 Fri 09:15]
+:PROPERTIES:
+:ID:       CEE0DBAF-4D28-4E93-9B81-2F3E3DB685B0
+:CREATED:  [2026-07-29 Wed]
+:Effort:   0:45
+:END:
+<2026-08-28 Fri 08:30-09:15>
+

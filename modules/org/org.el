@@ -95,6 +95,11 @@ the live theme, which is exactly what a calendar wants."
         org-fontify-quote-and-verse-blocks t
         org-refile-use-outline-path 'file
         org-log-refile 'time
+        ;; Needed by the Review view: `:log closed' matches on a CLOSED:
+        ;; timestamp, and the LOGBOOK state line the `!' in every keyword
+        ;; already writes is a different thing the agenda reports as
+        ;; "state", not "closed".
+        org-log-done 'time
         org-log-redeadline 'time
         org-log-reschedule 'time
         org-log-into-drawer t
@@ -122,16 +127,101 @@ the live theme, which is exactly what a calendar wants."
         ;; someday/maybe, NOPE = cancelled.  Scheduling stays with
         ;; org's SCHEDULED timestamps, not a state.
         org-todo-keywords
+        ;; NEXT is the one manual override in the set: `org-queue' scores
+        ;; every other state from its metadata, and NEXT is how you tell it
+        ;; you know something the formula does not.  Its key is uppercase
+        ;; because `n' already belongs to NOPE.
+        ;;
+        ;; The states you LEAVE work in log a note (@) rather than only a
+        ;; timestamp (!).  Waiting, parking and abandoning are the three
+        ;; decisions whose reason is unrecoverable a month later, and the
+        ;; prompt costs a sentence at the only moment it is cheap -- the
+        ;; same argument the `t' capture template already makes about
+        ;; estimates.  Starting something (PROG) and finishing it (DONE)
+        ;; need no explanation, so they stay silent.
         '((sequence
            "TODO(t!)"
+           "NEXT(N!)"
            "PROG(p!)"
-           "WAIT(w!)"
-           "QUES(q!)"
-           "HOLD(h!)"
+           "WAIT(w@/!)"
+           "QUES(q@/!)"
+           "HOLD(h@/!)"
            "IDEA(i!)"
            "|"
            "DONE(d!)"
-           "NOPE(n!)")))
+           "NOPE(n@/!)")))
+
+  ;; `org-id-locations-file' points into .data/org/, and nothing creates
+  ;; that directory -- org-id writes the file but will not make its parent.
+  ;; Every org-id write therefore failed with "Opening output file: No such
+  ;; file or directory", which nothing in this config had exercised until
+  ;; the smart tree started indexing IDs.  org-persist makes its own
+  ;; directory, which is why the neighbouring setting never showed this.
+  (make-directory (file-name-directory org-id-locations-file) t)
+
+  ;; The metadata schema, in the two places Org reads it globally.
+  ;;
+  ;; `Effort_ALL' is what makes an estimate a single keypress: in column
+  ;; view, `Effort' becomes a menu of these values rather than a free-text
+  ;; prompt, and `%^{Effort}p' in the capture template offers the same
+  ;; list.  That matters more than the values themselves -- a
+  ;; metadata-heavy system only pays off if capturing the metadata is
+  ;; nearly free, and a task that costs more than a few seconds to file
+  ;; loses to a checkbox list.  The list is the one in the (todo) file
+  ;; headers (`zetta-org-todo-file-header'), so the two agree.
+  ;;
+  ;; The column format is the real answer to "must I look at all this
+  ;; syntax?".  TODO state, priority cookie and tags are Org SYNTAX and
+  ;; have to live in the headline -- moving them into properties would
+  ;; cost every tool that reads them.  Column view (`C-c C-x C-c') simply
+  ;; re-presents the headline as a table, and the noise stops mattering.
+  ;; Declaring the allowed values is what makes a property usable rather
+  ;; than a typo farm: Org offers them for completion, column view edits
+  ;; them with n/p, and a value outside the set is visibly wrong.
+  ;;
+  ;; The effort list gained 0:05 through 1:30.  The old list stepped 0:10 ->
+  ;; 0:30, which left `org-queue-quick-threshold' (15 minutes) able to match
+  ;; only 0:10 -- the "quick win" term was quietly a "ten minutes exactly"
+  ;; term, and the packer had no resolution between a ten-minute job and a
+  ;; half-hour one.
+  (setq org-global-properties
+        '(("Effort_ALL" . "0 0:05 0:10 0:15 0:20 0:30 0:45 1:00 1:30 2:00 3:00 4:00 5:00 6:00 7:00")
+          ;; Importance, separate from the priority cookie, which conflates
+          ;; importance with urgency -- and from DEADLINE, which is urgency
+          ;; proper.  3 is neutral, so an unset IMPACT costs nothing.
+          ("IMPACT_ALL" . "1 2 3 4 5")
+          ;; A soft deadline is an intention, not a commitment.  Without this
+          ;; every DEADLINE hits the scorer at the same weight, so "would be
+          ;; nice by Friday" outranks work that genuinely must ship.
+          ("DEADLINE_TYPE_ALL" . "hard soft"))
+        org-columns-default-format
+        (concat "%40ITEM(Task) %TODO %3PRIORITY(P) %6IMPACT(Imp) "
+                "%17Effort(Estimate){:} "
+                "%CLOCKSUM(Clocked) %DEADLINE %SCHEDULED %TAGS"))
+
+  ;; Contexts and energy as mutually exclusive tag groups.  The exclusion is
+  ;; the point as much as the single-key entry is: `:startgroup' makes Org
+  ;; clear the others when you pick one, so "exactly one context" is
+  ;; enforced rather than hoped for, and the Context view cannot land the
+  ;; same task in two places.
+  ;;
+  ;; Energy is a tag rather than a property because it is a small closed set
+  ;; and tags are far cheaper to enter; IMPACT is a property because it
+  ;; carries a value, not a membership.
+  (setq org-tag-alist
+        '((:startgroup)
+          ("@deep"    . ?d)
+          ("@shallow" . ?s)
+          ("@errand"  . ?e)
+          ("@call"    . ?c)
+          ("@meeting" . ?m)
+          ("@travel"  . ?v)
+          ("@social"  . ?o)
+          (:endgroup)
+          (:startgroup)
+          ("@fresh"   . ?f)
+          ("@tired"   . ?y)
+          (:endgroup)))
 
   ;; State faces.  A TODO keyword is a WORD -- "PROG", "WAIT", "NOPE" --
   ;; so it already says which state it is; the colour has nothing left to
@@ -256,6 +346,36 @@ one particular theme.")
           ("HOLD" . zetta-org-todo-hold)
           ("IDEA" . zetta-org-todo-idea)
           ("NOPE" . zetta-org-todo-nope)))
+
+  ;; Priority cookies, down the same ladder.  A cookie is a marker, not a
+  ;; badge: org paints `[#A]' in `org-priority', which most themes render
+  ;; as a saturated warning colour at bold weight, so a triaged heading
+  ;; shouts louder than an overdue one.  Here the three cookies occupy
+  ;; three rungs -- A where a state that wants you sits, B where context
+  ;; sits, C where finished work sits -- all at normal weight, so they
+  ;; read as a quiet ordering rather than as three alarms.
+  ;;
+  ;; Note what is NOT encoded: an absent cookie.  Org treats a heading
+  ;; with no cookie as B for sorting, but `org-queue' scores it between B
+  ;; and C on purpose (most tasks are never triaged, and burying
+  ;; everything untriaged hides the backlog).  Nothing is painted for it
+  ;; either -- absence should look like absence.
+  (defun zetta-org-priority-refresh-faces ()
+    "Re-colour the priority cookies from the current theme's ink ladder."
+    (when (fboundp 'zetta-tier-color)
+      (when (facep 'org-priority)
+        (set-face-attribute 'org-priority nil
+                            :foreground (zetta-tier-color 'parked)
+                            :weight 'normal))
+      (setq org-priority-faces
+            (list (cons ?A (list :foreground (zetta-tier-color 'open)
+                                 :weight 'normal))
+                  (cons ?B (list :foreground (zetta-tier-color 'parked)
+                                 :weight 'normal))
+                  (cons ?C (list :foreground (zetta-tier-color 'closed)
+                                 :weight 'normal))))))
+  (zetta-org-priority-refresh-faces)
+  (add-to-list 'brushup-styles '(zetta-org-priority-refresh-faces) t)
 
   (defun orgtree-forward-orgtree (&optional arg)
     "Move ARG times to start of a set of the same orgtree characters."
@@ -466,10 +586,38 @@ negative = backward)."
 (defvar zetta-logseq-pages-dir zetta-logseq-dir
   "Directory containing logseq pages.  Defaults to `zetta-logseq-dir'.")
 
+(defcustom zetta-org-todo-source 'real
+  "Which corpus of (todo) files drives `org-agenda-files'.
+
+`real' is the live kb under `zetta-logseq-pages-dir'.  `test' is the
+generated two-month fixture under `zetta-org-todo-test-dir', which exists so
+the queueing and view work can be exercised against a corpus with full
+metadata without touching real notes -- and without a half-planned day
+leaking into the real files.
+
+Toggle with `zetta-org-toggle-todo-source'; `org-agenda-files' is rebuilt
+from scratch, so nothing from the other corpus survives the switch."
+  :type '(choice (const :tag "Real kb" real)
+                 (const :tag "Generated test fixture" test))
+  :group 'zetta)
+
+(defcustom zetta-org-todo-test-dir
+  (expand-file-name "testdata/todo" user-emacs-directory)
+  "Directory holding the generated (todo) test fixture.
+Regenerate it with `python3 testdata/generate.py'."
+  :type 'directory :group 'zetta)
+
+(defun zetta-org-todo-dir ()
+  "Return the directory (todo) files are read from, per `zetta-org-todo-source'."
+  (if (eq zetta-org-todo-source 'test)
+      zetta-org-todo-test-dir
+    zetta-logseq-pages-dir))
+
 (defun zetta-logseq-todo-files ()
-  "Return list of files in logseq pages starting with '(todo)'."
-  (when (file-directory-p zetta-logseq-pages-dir)
-    (directory-files zetta-logseq-pages-dir t "^(todo).*\\.org$")))
+  "Return list of files in the active corpus starting with '(todo)'."
+  (let ((dir (zetta-org-todo-dir)))
+    (when (file-directory-p dir)
+      (directory-files dir t "^(todo).*\\.org$"))))
 
 (defun zetta-logseq-todo-file-name (file)
   "Extract the name part from a (todo) FILE path.
@@ -512,14 +660,54 @@ Uses first letter, or first two letters if conflicts exist."
   "Additional files to add to `org-agenda-files'.
 Set this in ~/.private.el before modules load.")
 
+(defvar zetta-org-inbox-file "~/kb/inbox.org"
+  "Where the capture templates land, and the file the Inbox view reads.
+
+Part of the real corpus rather than an entry in `zetta-extra-agenda-files'
+because it is not optional: every `n', `N' and `t' capture goes here, so a
+kb whose agenda cannot see it has a hole exactly where new work arrives.
+It was outside `org-agenda-files' until now, which is why nothing surfaced
+a capture until it had been refiled by hand.")
+
 (defun zetta-logseq-update-agenda-files ()
-  "Add all (todo) files and `zetta-extra-agenda-files' to org-agenda-files."
-  (let ((todo-files (zetta-logseq-todo-files)))
-    (dolist (file todo-files)
-      (add-to-list 'org-agenda-files file t)))
-  (dolist (file zetta-extra-agenda-files)
-    (when (file-exists-p file)
-      (add-to-list 'org-agenda-files file t))))
+  "Rebuild `org-agenda-files' from the active (todo) corpus.
+
+Rebuilt rather than appended: this also runs on a source toggle, and
+`add-to-list' would leave the previous corpus in place, so the agenda would
+show both sets at once."
+  (setq org-agenda-files nil)
+  (dolist (file (zetta-logseq-todo-files))
+    (add-to-list 'org-agenda-files file t))
+  ;; The inbox and the user's extra files are not part of either corpus, so
+  ;; they follow the real kb and stay out of a test session -- a fixture run
+  ;; that swept in real captures would put real work on a test plan.
+  (when (eq zetta-org-todo-source 'real)
+    (dolist (file (cons zetta-org-inbox-file zetta-extra-agenda-files))
+      (when (file-exists-p (expand-file-name file))
+        (add-to-list 'org-agenda-files (expand-file-name file) t)))))
+
+(defun zetta-org-toggle-todo-source (&optional source)
+  "Switch the (todo) corpus between the real kb and the test fixture.
+With SOURCE, select it directly rather than toggling.
+
+Rebuilds every reader of the corpus, not just the agenda: `hyrolo-file-list'
+follows too (`zetta-hyrolo-update-file-list' in modules/app/hyperbole.el),
+because a rolo left pointing at ~/kb/todo/ during a test session would
+reopen the both-corpora-live hole this toggle exists to close."
+  (interactive)
+  (setq zetta-org-todo-source
+        (or source (if (eq zetta-org-todo-source 'real) 'test 'real)))
+  (zetta-logseq-update-agenda-files)
+  ;; Guarded: the app category loads before this one, but a user who has
+  ;; excluded the hyperbole module should still be able to toggle.
+  (when (fboundp 'zetta-hyrolo-update-file-list)
+    (zetta-hyrolo-update-file-list))
+  (message "org todo source: %s (%d agenda file%s, %d rolo path%s)"
+           zetta-org-todo-source
+           (length org-agenda-files)
+           (if (= (length org-agenda-files) 1) "" "s")
+           (length (bound-and-true-p hyrolo-file-list))
+           (if (= 1 (length (bound-and-true-p hyrolo-file-list))) "" "s")))
 
 ;;; org-capture configuration (deferred until org loads)
 (with-eval-after-load 'org
@@ -552,6 +740,18 @@ Set this in ~/.private.el before modules load.")
            entry
            (file "~/kb/todo/(todo) email.org")
            "* TODO %:fromname: %:subject\n:PROPERTIES:\n:CREATED: %U\n:END:\n%a\n%?"
+           :prepend t)
+          ;; The one template that asks for metadata, and it asks for it
+          ;; at the only moment it is cheap: while you are still thinking
+          ;; about the thing.  %^G completes tags across the agenda files
+          ;; and %^{Effort}p offers the `Effort_ALL' list, so a task is
+          ;; BORN estimated and tagged rather than acquiring it in a
+          ;; triage session that never happens.  Still inbox-first --
+          ;; routing is C-c C-w, same as every other capture.
+          ("t" "Task (estimate and tags up front)"
+           entry
+           (file "~/kb/inbox.org")
+           "* TODO %^{Task} %^G\n:PROPERTIES:\n:CREATED: %U\n:END:\n%^{Effort}p%?"
            :prepend t)))
   (zetta-logseq-update-agenda-files))
 

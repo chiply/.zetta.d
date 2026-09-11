@@ -55,8 +55,19 @@
 ;;; Functions moved from bootstrap-zettafn.el
 
 (defface zetta-link-face
-  '((t :inherit link :foreground "purple"))
-  "Face for links."
+  '((t :inherit link :underline nil))
+  "Face for file paths in log output.
+
+Inherits `link\=' outright rather than overriding its colour.  It used to
+force `:foreground \"purple\"\=' -- a literal #a020f0 no theme ever chose, and
+the loudest thing in a compile buffer on any page that is not itself violet.
+Paths are most of the lines in one.
+
+Paths and URLs are both clickable and both belong to the theme\='s link
+colour, so the underline is what separates them: `link\=' keeps it and means
+an address you can open, this one drops it.  Same call as
+`zetta-vc-marker-ladder\=' -- a distinction a marker can carry by shape does
+not also need to be carried by hue."
   :group 'basic-faces)
 
 ;;; ------------------------------------------------------------------
@@ -69,12 +80,30 @@
 ;; as on any other theme.  A face symbol that names no face is not an
 ;; error, it is simply no attributes, which is why this failed silently.
 ;;
-;; The replacement is four hues -- the only four EVERY theme reliably
-;; defines, via `zetta-theme-color' -- at two strengths each.  Strength is
+;; The replacement is three hues and a neutral, at two strengths each.
+;;
+;; Three, not four, because a palette does not owe us four separable hues
+;; and doric-earth does not have them: it paints `error' at hue 0,
+;; `warning' at 23 and `accent' at 32, three quarters of its vocabulary
+;; inside 32 degrees, with `success' alone out at 120.  Asked for a fourth
+;; hue clear of the others, separation had to reach 79 degrees away to
+;; magenta -- a colour that theme uses nowhere, and the loudest thing on
+;; the screen for exactly the reason an over-saturated wash is.
+;;
+;; So `info' gives up its hue instead.  It is the slot that can afford to:
+;; error, warning and success are read at a glance from across the buffer,
+;; where `info' marks SELECT, COMMIT, a token, an arrow -- things you are
+;; already reading the word of.  Same call as `zetta-vc-marker-ladder',
+;; where a marker that names itself has nothing left for colour to encode.
+;; The three that remain then separate cleanly, at 47 and 50 degrees, and
+;; every one of them is a colour the theme actually paints.
+;;
+;; Strength is
 ;; the gradient step the wash is weighted against, so a strong wash is
 ;; further off the page than a subtle one on a light theme and a dark one
 ;; alike.  Eight slots covers the vocabulary below with room spare, and
-;; every slot is separable: hues by colour, strengths by lightness.
+;; every slot is separable: hues by colour, strengths by lightness AND
+;; chroma, both of which now come from that gradient step.
 ;;
 ;; This is not the same call as the VC gutter or the TODO keywords, which
 ;; deliberately carry no hue (see `zetta-vc-marker-ladder').  There the
@@ -88,40 +117,93 @@
     (zetta-highlight-warn-strong warning . brushup-bg-4)
     (zetta-highlight-good        success . brushup-bg-2)
     (zetta-highlight-good-strong success . brushup-bg-4)
-    (zetta-highlight-info        accent  . brushup-bg-2)
-    (zetta-highlight-info-strong accent  . brushup-bg-4))
-  "Log highlighter faces as (FACE THEME-COLOUR-KIND . WEIGHT-ANCHOR).")
+    (zetta-highlight-info        nil     . brushup-bg-2)
+    (zetta-highlight-info-strong nil     . brushup-bg-4))
+  "Log highlighter faces as (FACE THEME-COLOUR-KIND . WEIGHT-ANCHOR).
+
+KIND nil means the slot carries no hue at all and takes the page\='s own
+colour at the anchor\='s weight -- see `zetta-highlight--neutral-wash\='.")
 
 (dolist (slot zetta-highlight-slots)
   (custom-declare-face
    (car slot) '((t :inherit highlight))
    (format "Log highlighter: %s." (car slot)) :group 'zetta))
 
-(defvar zetta-highlight-saturation '(0.35 . 0.70)
-  "Saturation floor and ceiling for a highlighter wash.
-Louder than the org-remark pens, which sit inside prose and should stay
-quiet -- these sit in a wall of log output and have to be spotted from
-across the buffer.  Raising the ceiling further buys very little: the four
-washes are held to a common luminance, so they separate on chroma alone
-and that curve flattens fast.")
+;; There is no saturation knob here any more.  There used to be an HSL
+;; floor-and-ceiling pair, on the reasoning that log washes should sit
+;; louder than a wash inside prose, and it did not do what it said: HSL
+;; saturation is not an amount of colour, so a single clamp put the four
+;; washes between chroma 15 and chroma 61 on doric-earth -- warning over
+;; four times as saturated as the page, red half as saturated as green at
+;; the same nominal strength.  That spread was the clash.
+;;
+;; `zetta-hue-wash' now takes both lightness and chroma from the anchor, so
+;; how loud a wash is is decided in exactly one place: which gradient step
+;; a slot names below.  Want them louder?  Move a slot from `brushup-bg-2'
+;; to `brushup-bg-4'.  Want the whole family louder?  That is a question
+;; about the theme's gradient, which is the right place for it to be asked.
 
 (defvar zetta-highlight-hue-separation 0.13
   "Least distance, in turns of the colour wheel, between two highlighter hues.
 0.13 is a little under 50 degrees; four hues have 0.25 to play with, so this
-leaves a theme most of its own character and only bends a genuine collision.")
+leaves a theme most of its own character and only bends a genuine collision.
+
+This is what separation ASKS for.  What it may spend getting there is
+`zetta-highlight-hue-rotation\=', and on a crowded palette that cap binds
+first.")
+
+(defvar zetta-highlight-hue-rotation 0.125
+  "Furthest a highlighter hue may be rotated to clear its neighbours, in turns.
+0.125 is 45 degrees.
+
+Without a cap, separation will go as far around the wheel as it takes, and
+on a warm theme that means inventing a colour.  doric-earth paints `error\='
+at hue 0, `warning\=' at 23 and `accent\=' at 32 -- three of its four inside 32
+degrees -- so the nearest angle clearing 47 degrees for `accent\=' was 313,
+a magenta the theme uses nowhere.  It was the loudest thing on screen, and
+for the same reason an over-saturated wash is: nothing else on the page
+agrees with it.
+
+Capped, `accent\=' lands at 77 instead and the four read as a warm ramp --
+red, orange, gold -- plus green.  That is 30 degrees between the closest
+pair rather than the 47 asked for, which is the honest trade: a theme that
+does not have four separable hues cannot be made to have them, and the
+strengths are still there to tell a pair apart.  Raise it to let separation
+roam again, or set it to 0 to pin every wash to its theme hue outright.")
 
 (defun zetta-highlight-hues ()
-  "The four highlighter hues, spread apart wherever the theme crowds them.
+  "The three highlighter hues, spread apart wherever the theme crowds them.
 Ordered so `error' and `success' keep their own hue outright -- red for
 broken and green for fine are the two a reader decodes without thinking --
-and `warning' or `accent' is what moves when a palette has to give."
-  (let* ((kinds '(error success warning accent))
+and `warning' is what moves when a palette has to give.
+
+`accent' is deliberately absent: the fourth slot carries no hue.  See the
+commentary above `zetta-highlight-slots' for why."
+  (let* ((kinds '(error success warning))
          (colors (mapcar #'zetta-theme-color kinds))
          (hues (zetta-hue-separate (mapcar #'zetta-hue-of colors)
-                                   zetta-highlight-hue-separation)))
+                                   zetta-highlight-hue-separation
+                                   zetta-highlight-hue-rotation)))
     (cl-mapcar (lambda (kind color hue)
                  (cons kind (if hue (zetta-with-hue color hue) color)))
                kinds colors hues)))
+
+(defun zetta-highlight--neutral-wash (anchor)
+  "ANCHOR\='s weight in the page\='s own colour, carrying no hue of its own.
+
+Chroma comes from the page rather than from ANCHOR, which is what makes
+this read as a darker patch of the page instead of a fourth colour: the
+gradient steps are themselves tinted, and at ANCHOR\='s chroma this would
+come out a khaki as saturated as the hued washes and merely a different
+angle from them.
+
+Falls back to ANCHOR untouched if either colour cannot be read."
+  (let ((al (zetta-color--lch anchor))
+        (pl (and (boundp 'brushup-bg) (stringp brushup-bg)
+                 (zetta-color--lch brushup-bg))))
+    (if (and al pl)
+        (zetta-color--render (nth 0 al) (nth 1 pl) (nth 2 pl))
+      anchor)))
 
 (defun zetta-highlight-refresh-faces ()
   "Re-tint the log highlighter faces from the current theme."
@@ -129,9 +211,10 @@ and `warning' or `accent' is what moves when a palette has to give."
     (let ((hues (zetta-highlight-hues)))
       (pcase-dolist (`(,face ,kind . ,anchor) zetta-highlight-slots)
       (when (and (facep face) (boundp anchor))
-        (let ((wash (zetta-hue-wash (alist-get kind hues)
-                                    (symbol-value anchor)
-                                    zetta-highlight-saturation)))
+        (let ((wash (if kind
+                        (zetta-hue-wash (alist-get kind hues)
+                                        (symbol-value anchor))
+                      (zetta-highlight--neutral-wash (symbol-value anchor)))))
           (set-face-attribute
            face nil
            :background wash
@@ -179,8 +262,9 @@ and `warning' or `accent' is what moves when a palette has to give."
     ("200"               . zetta-highlight-good)
     ("201"               . zetta-highlight-good)
     ("Captured stdout call" . zetta-highlight-good)
-    ;; mutations -- notable rather than good, but they are the writes, so
-    ;; they take the strong end of the hue the reads sit on
+    ;; mutations -- notable rather than good, and the slot they share with
+    ;; the reads has no hue to tell them apart with, so the writes take its
+    ;; strong end and the reads its subtle one
     ("COMMIT"            . zetta-highlight-info-strong)
     ("INSERT"            . zetta-highlight-info-strong)
     ("UPDATE"            . zetta-highlight-info-strong)

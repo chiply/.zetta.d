@@ -112,7 +112,12 @@
   :demand t
   :config
   (gptel-make-anthropic "Claude" :stream t :key gptel-api-key)
-  (gptel-make-openai "OpenAI" :stream t :key openai-api-key)
+  ;; `openai-api-key' comes from ~/.private.el alone.  On a machine with
+  ;; no secrets (CI, the headless hub) it is unbound, and an unbound
+  ;; variable here aborts the whole :config -- so register the backend
+  ;; only when there is a key for it.
+  (when (bound-and-true-p openai-api-key)
+    (gptel-make-openai "OpenAI" :stream t :key openai-api-key))
 
   ;; ── OpenRouter ────────────────────────────────────────────────────
   (defvar zetta-openrouter-models-cache-file
@@ -344,6 +349,12 @@ tools like HyRolo or consult-grep open in the background to scan files."
   (add-hook 'prog-mode-hook #'zetta-copilot-maybe-enable)
 
   :config
+  ;; Debounce.  The package default is 0, which is a JSONRPC round trip to
+  ;; the node agent after EVERY keystroke in every prog buffer, plus the
+  ;; consing that goes with it -- and copilot is the highest-frequency stdio
+  ;; producer in the session.  See OPTIMIZATIONS.org item 4.
+  (setq copilot-idle-delay 0.3)
+
   ;; -32800 "Request was canceled" is routine — it means we typed past
   ;; an in-flight inlineCompletion request; don't echo it
   (define-advice copilot--log (:around (fn level format &rest args) zetta-silence-cancelled)

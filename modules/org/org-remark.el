@@ -322,70 +322,93 @@ Gmail moves around), so they make a durable source identity."
                        ;; new date every day
                        org-remark-highlight-date ,(my/org-remark-get-date)))
 
-  ;; Semantic pens beyond the generic default.  "question" marks
-  ;; brush-up-on-this-later passages in study guides; "important"
-  ;; separates truly-important highlights from the routine ones.  Both
-  ;; carry the same date-link property as the default pen.
+  ;; The one semantic pen beyond the generic default.  "question" marks
+  ;; brush-up-on-this-later passages in study guides, and carries the
+  ;; same date-link property as the default pen.
   ;;
-  ;; The defface specs below are a cold-start fallback only -- the live
-  ;; colours come from `zetta-org-remark-refresh-pens', off the theme's
+  ;; There were three pens for a while, with an "important" pen between
+  ;; these two, and two of the three could not be told apart.  A pen in
+  ;; prose has nothing but its own appearance to say which one it is --
+  ;; no letter, no glyph, no counts -- where the gutter marker, the modal
+  ;; badge and the flycheck pill can all leave colour to encode
+  ;; prominence alone because their shape or label has already named
+  ;; them.  Two slabs both far enough off the page to read as inverted
+  ;; are a couple of ladder rungs apart at most, and at that distance
+  ;; they read as one mark drawn twice.  Ruling one of them was the other
+  ;; way out and cost more than it returned: an overline is a single
+  ;; hairline on the NS port (`ns_draw_text_decoration\=' fills one pixel
+  ;; at the top of the row and ignores `overline-margin\='), and a box band
+  ;; is a lot of furniture to carry one bit.  A wash and a slab need no
+  ;; vocabulary at all.
+  ;;
+  ;; Highlights already made with the dropped pen still load:
+  ;; `org-remark-highlight-load\=' falls back to `org-remark-mark\=' when a
+  ;; stored label has no pen behind it, so they come back as regular
+  ;; marks.
+  ;;
+  ;; The defface spec below is a cold-start fallback only -- the live
+  ;; colours come from `zetta-org-remark-refresh-pens\=', off the theme's
   ;; own palette.
   (defface zetta-org-remark-question-face
-    '((((background light)) :background "#FFE9D2")
-      (t :background "#4A3A28"))
+    '((((background light)) :background "#353535" :foreground "#ffffff")
+      (t :background "#b0b0b0" :foreground "#101010"))
     "Highlight for the org-remark question pen.")
 
-  (defface zetta-org-remark-important-face
-    '((((background light)) :background "#EFE3F8")
-      (t :background "#403354"))
-    "Highlight for the org-remark important pen.")
+  (defvar zetta-org-remark-question-rung 'brushup-fg-3
+    "Ink-ladder rung the question pen fills its slab with.
 
-  (defvar zetta-org-remark-pen-hues
-    '((zetta-org-remark-question-face  . warning)
-      (zetta-org-remark-important-face . accent))
-    "Pen face -> `zetta-theme-color' key.  The default pen stays hueless.")
+The pen inverts the page: this rung fills, and the text is whatever reads
+on it (`zetta-readable-on\='), so a marked passage comes out as a slab of
+the theme\='s own ink rather than a tint the reader has to be told how to
+decode.
 
-  (defvar zetta-org-remark-pen-fill-saturation '(0.28 . 0.52)
-    "Saturation floor and ceiling for a pen fill, as a `(min . max)\=' pair.
-Clamped at both ends because the hue is whatever the theme hands back.  A
-theme that leaves `warning\=' at the Emacs default gives raw `yellow\=';
-unclamped that paints a block of primary colour over the text instead of
-tinting the page under it.  A muted theme can go the other way and hand
-back something near enough to grey that the pen stops reading as coloured
-at all.")
+Not the full foreground.  A slab at `brushup-fg\=' is the page inverted
+outright -- 21:1 on a black-on-white theme -- a hard edge to read a
+paragraph through, and louder than a highlight needs to be.  A few rungs
+down still reads as inverted and stops shouting.
 
-  (defvar zetta-org-remark-pen-edge-saturation '(0.45 . 0.85)
-    "Saturation floor and ceiling for a pen underline.
-Higher than the fill: the fills all weigh the same by construction, so the
-underline is the part carrying the hue.")
+A symbol, not a colour: it is resolved per call, after a theme change has
+rewritten the palette.")
 
   (defun zetta-org-remark-refresh-pens ()
-    "Re-tint every org-remark pen face from the current theme.
+    "Re-tint the org-remark pen faces from the current theme.
 
-All three pens are built on the same two gradient steps -- `brushup-bg-2\='
-for the fill, `brushup-bg-4\=' for the underline -- so they weigh the same
-as each other on any theme and differ only in hue.  The default pen takes
-those steps literally and stays hueless: it is the one in constant use,
-and a page of neutral marks with two coloured pens standing out of it
-reads better than three tints competing for the same attention.  It sits
-a step down the gradient from `symbol-overlay-default-face\=' (see
-modules/ui/symbol-overlay.el), the other faint wash that turns up in the
-same buffers."
-    (when (fboundp 'zetta-color--luminance)
+The default pen is the plain one -- `brushup-bg-2\=' filled, `brushup-bg-4\='
+underlined, no hue at all.  It is the one in constant use, so it stays a
+wash the text reads straight through, about what a marked region looks
+like, and it sits a step down the gradient from
+`symbol-overlay-default-face\=' (see modules/ui/symbol-overlay.el), the
+other faint wash that turns up in the same buffers.
+
+The question pen inverts instead, off the ink ladder at
+`zetta-org-remark-question-rung\='.  Both pens used to carry a hue --
+warning for question, accent for important, each washed down to the
+weight of the default fill.  That asked the reader to decode a colour
+vocabulary nobody had told them, and it had nothing to offer a
+deliberately monochrome theme, where the two washed out to the same grey.
+A wash and a slab need no vocabulary.
+
+Every attribute is written on each refresh rather than left alone,
+because `set-face-attribute\=' only writes what it is handed: a session
+already running on an older shape of this pen would otherwise keep its
+box, overline or underline under the new fill."
+    (when (fboundp 'zetta-readable-on)
       (when (facep 'org-remark-highlighter)
         (set-face-attribute 'org-remark-highlighter nil
                             :background brushup-bg-2
                             :underline `(:color ,brushup-bg-4)))
-      (pcase-dolist (`(,face . ,kind) zetta-org-remark-pen-hues)
-        (when (facep face)
-          (let ((hue (zetta-theme-color kind)))
-            (set-face-attribute
-             face nil
-             :background (zetta-hue-wash
-                          hue brushup-bg-2 zetta-org-remark-pen-fill-saturation)
-             :underline `(:color ,(zetta-hue-wash
-                                   hue brushup-bg-4
-                                   zetta-org-remark-pen-edge-saturation))))))))
+      (when (and (facep 'zetta-org-remark-question-face)
+                 (boundp zetta-org-remark-question-rung))
+        (let* ((fill (symbol-value zetta-org-remark-question-rung))
+               (ink (zetta-readable-on fill)))
+          (set-face-attribute 'zetta-org-remark-question-face nil
+                              :background fill
+                              :foreground ink
+                              :box nil
+                              :overline nil
+                              :underline nil
+                              :weight 'unspecified
+                              :inverse-video nil)))))
 
   ;; APPENDED, not prepended.  `brushup-init\=' -- which recomputes
   ;; brushup-bg and the gradient from the newly enabled theme -- sits
@@ -402,16 +425,12 @@ same buffers."
                      `(CATEGORY "question"
                        org-remark-highlight-date ,(my/org-remark-get-date)))
 
-  (org-remark-create "important"
-                     'zetta-org-remark-important-face
-                     `(CATEGORY "important"
-                       org-remark-highlight-date ,(my/org-remark-get-date)))
-
 
   ;; Re-pen the highlight at point: prompts with the OTHER pens only
   ;; (upstream org-remark-change includes the current one and offers
-  ;; raw function names).  Typical gestures: promote default →
-  ;; important, downgrade question → default once groked.
+  ;; raw function names).  With two pens that is one candidate either
+  ;; way: promote default → question, or downgrade question → default
+  ;; once groked.
   (defun zetta-org-remark-change-pen ()
     "Switch the pen of the highlight at point, excluding its current pen."
     (interactive)
@@ -442,7 +461,6 @@ same buffers."
 
   :bind (("C-c n m" . org-remark-mark-default)
          ("C-c n q" . org-remark-mark-question)
-         ("C-c n i" . org-remark-mark-important)
          ("C-c n l" . org-remark-mark-line)
          :map org-remark-mode-map
          ("C-c n o" . org-remark-open)

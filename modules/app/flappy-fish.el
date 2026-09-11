@@ -204,7 +204,21 @@
                                  :foreground brushup-fg-4
                                  :background brushup-bg))
 
-(fish-start-timer)
+(defcustom fish-animate nil
+  "Whether to run the fish animation timer at load.
+
+Off, and this is the whole of the fix in OPTIMIZATIONS.org item 2.  The
+timer runs `fish--next-frame' every 0.2s, ending in
+`force-mode-line-update', to animate `fish-mode-line-string' -- whose only
+consumer is `modules/ui/telephone-line.el', and telephone-line is not
+active (`mode-line-format' is the svg-line renderer).  So it was five
+forced full-chrome redisplays a second, across every live window, to
+animate a string nothing renders.
+
+`M-x fish-start-timer' still starts it by hand."
+  :type 'boolean :group 'fish)
+
+(when fish-animate (fish-start-timer))
 
 (provide 'fish)
 ;;; fish.el ends here

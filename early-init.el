@@ -32,6 +32,23 @@
 ;; Safe because we control when bytecode is compiled via `zetta install`.
 (setq load-prefer-newer nil)
 
+;; Never let Emacs's deferred native compilation touch the bootstrap.
+;; When a bootstrap .elc is loaded with no .eln beside it, Emacs queues
+;; the SOURCE for compilation in a bare `emacs -Q --batch' worker.  That
+;; worker has stock use-package and no elpaca, so `:ensure (:wait t)'
+;; expands to package.el semantics, and the resulting .eln, which Emacs
+;; prefers over the .elc at the NEXT start, aborts in bootstrap-keys
+;; ("Cannot load key-chord", then void-function general-define-key)
+;; before ~/.zetta.el is read -- a daemon with the default module list
+;; and none of it loaded.  Measured on the hub 2026-09-11 (second
+;; restart after a build), and it is why a batch `-l init.el' fails on
+;; any machine whose eln-cache carries these files.  The phase-2 .elc
+;; from `bin/zetta' is compiled inside an Emacs that has init.el loaded
+;; and is fine.  compile-angel already excludes this directory; this is
+;; the same exclusion for the built-in JIT.  Emacs 29 and 30+ names.
+(setq native-comp-deferred-compilation-deny-list '("/source/bootstrap/" "/source/init-data/")
+      native-comp-jit-compilation-deny-list '("/source/bootstrap/" "/source/init-data/"))
+
 ;; Suppress all rendering during init (restored automatically on frame creation)
 ;; Don't suppress messages in daemon mode — there's no frame, so
 ;; window-setup-hook never fires to restore them, and we want to see

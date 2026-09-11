@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.6](https://github.com/chiply/.zetta.d/compare/v0.2.5...v0.2.6) (2026-09-11)
+
+
+### Features
+
+* headless profile for the kb-hub, agenda/queue/gantt modules, emacs-nox CI row ([#140](https://github.com/chiply/.zetta.d/issues/140)) ([ae584a5](https://github.com/chiply/.zetta.d/commit/ae584a570d4358e1ca06dc748650923852c037ff))
+
 ## [0.2.5](https://github.com/chiply/.zetta.d/compare/v0.2.4...v0.2.5) (2026-09-06)
 
 

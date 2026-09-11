@@ -243,6 +243,52 @@ skipped by predicate, and the three existing rows pass under the
 tightened gate.  Wall clock, cold nox row 27 min; the warm rows 6, 9
 and 13 min (30.2, 31, 29.4).
 
+** Hub cutover [2026-09-11, measured]
+
+Phase D done the same night: =hub-deploy= (clone at f268f57, template
+installed, both units), =bin/zetta build= under nohup, restart, seeding.
+
+| Step                          | Measured                                                        |
+|-------------------------------+-----------------------------------------------------------------|
+| Cold build, 1 OCPU            | 63 min: packages 16 min (=ZETTA-OK packages=195 modules=178=), byte-compile, native-compile |
+| Restart to emacsclient ready  | 9 s; =emacs-init-time= 3.7 s (modules load byte-compiled)         |
+| Daemon after restart          | 178 modules, evil, corfu-terminal, org-agenda; svg nil; auth-sources nil; TZ EDT |
+| Seeding                       | 18 org ids over 1076 files; grammars python, tsx, typescript compiled with the new gcc |
+| =TimeoutStartSec=             | set to 300 (from the provisional 900)                           |
+
+Three things the first start found that neither CI nor the rehearsal
+could (all deferred or per-machine, Part 2 item 4), each fixed:
+
+- *Module file name versus library name.*  hyperbole's autoloads carry
+  =(eval-after-load "ibuffer" '(define-key ibuffer-mode-map ...))=, and
+  =eval-after-load= matches load-history by FILE name, which
+  =modules/core/ibuffer.el= satisfies the moment it loads.  On the GUI
+  profile all-the-icons-ibuffer had already loaded the real ibuffer; on
+  the hub it was still deferred behind =:commands=, so hyperbole's
+  =:defer 1= require died with void-variable =ibuffer-mode-map= and
+  hyperbole was simply absent.  Fix: =core/ibuffer.el= is =:demand t=.
+  The same trap waits for any module file named after a library that
+  something else =eval-after-load=s.
+- *A synced per-machine cache.*  =~/kb/wiki/.hywiki.eld= records
+  =hywiki-directory= as an absolute path.  A copy that reached the hub
+  in July, before the ignore rule, set the directory to
+  =/Users/charlieholland/kb/wiki/= on the hub, and hyperbole's config
+  died trying to create it.  The rule exists in =.stignore-shared=;
+  the stale file was deleted on the hub by hand.  Nothing in
+  =modules/= carries a =/Users= path; the audit's claim holds.
+- *Grammar ABI.*  tree-sitter-python v0.24+ emits ABI 15; Emacs 29
+  reads up to 14 ("version-mismatch: 15").  Pinned to v0.23.6 in
+  =lang/treesit.el=.
+
+One thing the build revealed about =bin/zetta= itself, pre-existing and
+shared with =install=: the native-compile phase runs without the
+config's load-path, so most packages fail with "Cannot open load file"
+inside the compile worker; 212 =.eln= files from 195 packages, 28 MB.
+The Mac's 0.7 GB eln cache came from run-time deferred compilation,
+never from that phase.  The hub will do the same, one worker at a
+time.  Follow-up: give phase 3 =-l init.el= plus =(elpaca-wait)= so
+the ahead-of-time compile actually compiles.
+
 * Part 1 -- What already works in our favour
 
 - *CI is the existence proof.*  =.github/workflows/ci.yml:74= runs the

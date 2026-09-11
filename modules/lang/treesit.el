@@ -5,7 +5,11 @@
   :ensure nil ;; its builtin to emacs
   :preface
   (setq treesit-language-source-alist
-        '((python "https://github.com/tree-sitter/tree-sitter-python")
+        ;; python pinned: v0.24+ emits tree-sitter ABI 15, which Emacs
+        ;; 29 cannot load ("version-mismatch: 15", measured on the hub's
+        ;; 29.3).  v0.23.6 is the last ABI-14 release and loads on every
+        ;; Emacs this config targets.
+        '((python . ("https://github.com/tree-sitter/tree-sitter-python" "v0.23.6"))
           ;;(css "https://github.com/tree-sitter/tree-sitter-css")
           ;;(javascript . ("https://github.com/tree-sitter/tree-sitter-javascript" "master" "src"))
           (tsx . ("https://github.com/tree-sitter/tree-sitter-typescript" "master" "tsx/src"))

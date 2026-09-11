@@ -243,6 +243,52 @@ skipped by predicate, and the three existing rows pass under the
 tightened gate.  Wall clock, cold nox row 27 min; the warm rows 6, 9
 and 13 min (30.2, 31, 29.4).
 
+** Keep-out sheet pass [2026-09-11]
+
+The owner's fill-in sheet (=~/headless-hub-plan.org=: every Mac/hub
+discrepancy as a row with Keep-out / Proposed / Notes) came back with
+no keep-out marks beyond the SVG rows and two edits: ghostel and
+magneto in.  Turned into one PR here plus =hub/= changes in .files:
+
+- *Template*: =:tools= gains grep, replace, wgrep, vc, git-link,
+  browse-at-remote, git-timemachine, blamer, dired-subtree,
+  dired-ranger, compile, treesit-fold, magneto, ghostel; =:app= gains
+  bookmark, bookmark-view, bookmark-in-project, dogears, olivetti,
+  activities (a stub today), define-word, eww.  bookmark+ is not a
+  module (=modules/app/disabled/=), so that row is the built-in.
+  Everything the sheet says "keep out" stays out.
+- *ghostel without zig*: its VT engine is a dynamic module built with
+  zig, which the hub has not got; the pinned 0.14.0 release carries
+  =ghostel-module-aarch64-linux.so=, so the profile sets
+  =ghostel-module-auto-install= to =download= (a tty prompt otherwise).
+- *OSC 52*: measured on the live frame, no =xterm--set-selection=:
+  under tmux Emacs runs =terminal-init-tmux= with the fixed list
+  =xterm-tmux-extra-capabilities= = (modifyOtherKeys), never the
+  probe.  The profile adds =setSelection=; tmux 3.4 forwards OSC 52 by
+  default (=set-clipboard external=), Blink receives.  =getSelection=
+  stays off (a yank would block on a reply).  Untested from Blink.
+- *custom-file*: the hub checkout was dirty after one session -- tramp
+  saved its connection-local profiles through Customize into init.el
+  (a reflow, same data), which blocks the next pull.  The profile now
+  points =custom-file= at =.data/custom.el=.
+- *Rehearsal* (same overlay method as above, Emacs 32.0.50, svg forced
+  nil): =ZETTA-OK packages=210 modules=200=, 192 loaded, the 8 SVG
+  files skipped, 0 use-package errors, 0 void-function.
+- *.files/hub*: =emacs.service= gets =Environment=PATH= with
+  =~/.local/bin= (fd was invisible to the daemon: unit PATH is
+  systemd's, not the shell's) and =/usr/local/bin= first, and resolves
+  =emacs=/=emacsclient= through =env= so the same unit runs apt's 29.3
+  today and a source build later; bootstrap adds =graphviz= (dot for
+  hywiki-graph) and =pandoc=; new =install-emacs-source.sh= builds the
+  pinned =emacs-31.1= tag (=--without-x=, native-comp, tree-sitter,
+  sqlite, gnutls, libsystemd) into =/usr/local=, apt's package kept
+  for the lean daemon and the CI floor, and prints the package rebuild
+  + restart steps.  Step 0 (running it) is the owner's.
+- *Not code*: 2 OCPU resize (Oracle console), the Phase C tests from
+  Blink, a new shell + new =e= for 24-bit colour (the July tmux server
+  already has =terminal-features RGB=; the frame opened before
+  =COLORTERM= existed reports 256).
+
 ** Hub cutover [2026-09-11, measured]
 
 Phase D done the same night: =hub-deploy= (clone at f268f57, template

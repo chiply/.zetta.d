@@ -229,6 +229,11 @@ cmd_build() {
     # eln-cache is kept: that is the point of this command.  Phase 2
     # regenerates the .elc.
     find "$ZETTA_DIR/modules" "$ZETTA_DIR/source" -name '*.elc' -delete 2>/dev/null || true
+    # And the bootstrap's .eln, which Emacs's deferred native compilation
+    # may have produced from the source in a worker without elpaca's
+    # use-package keywords (see early-init.el, the deny-list).  The rest
+    # of eln-cache is kept.
+    find "$ZETTA_DIR/eln-cache" \( -name 'bootstrap-*.eln' -o -name 'init-data-*.eln' \) -delete 2>/dev/null || true
 
     _info "Building Zetta Emacs packages (window ${timeout}s, stall limit ${stall}s, eln-cache kept)..."
     _elpaca_install "$timeout" "$stall" build
@@ -247,6 +252,7 @@ cmd_sync() {
 
     # Same purge as `build', for the same reason (see there).
     find "$ZETTA_DIR/modules" "$ZETTA_DIR/source" -name '*.elc' -delete 2>/dev/null || true
+    find "$ZETTA_DIR/eln-cache" \( -name 'bootstrap-*.eln' -o -name 'init-data-*.eln' \) -delete 2>/dev/null || true
 
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
         -l "$ZETTA_DIR/init.el" \

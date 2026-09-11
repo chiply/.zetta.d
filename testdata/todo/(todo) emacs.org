@@ -1,0 +1,289 @@
+#+TITLE: Emacs configuration and tooling
+#+CATEGORY: emacs
+#+PROPERTY: Effort_ALL 0 0:05 0:10 0:15 0:20 0:30 0:45 1:00 1:30 2:00 3:00 4:00 5:00 6:00 7:00
+#+COLUMNS: %40ITEM(Task) %TODO %3PRIORITY(P) %6IMPACT(Imp) %17Effort(Estimate){:} %CLOCKSUM(Clocked) %DEADLINE %SCHEDULED %TAGS
+#+FILETAGS: :emacs:
+
+* PROG [#A] Memoize svg-line renderers with a content hash [1/4]  :@deep:perf:@tired:
+SCHEDULED: <2026-10-01 Thu>
+:PROPERTIES:
+:ID:       FBF48200-8133-4B9D-BA14-86061C9C08D3
+:CREATED:  [2026-07-22 Wed]
+:Effort:   4:00
+:IMPACT:   3
+:END:
+:LOGBOOK:
+- State "PROG"       from "TODO"       [2026-09-06 Sun 09:00]
+- State "TODO"       from "PROG"       [2026-09-04 Fri 13:37]
+- State "PROG"       from "TODO"       [2026-09-04 Fri 13:00]
+- State "TODO"       from "PROG"       [2026-09-01 Tue 13:52]
+- State "PROG"       from              [2026-09-01 Tue 13:15]
+:END:
+
+`svg-line--render' rebuilds unconditionally on every call; the only
+cache is minibuffer-freeze. Measured ~6.4ms per redisplay pass across six
+windows, ~20x/second.
+
+See [[file:OPTIMIZATIONS.org][OPTIMIZATIONS.org]] for the measurements.
+
+** DONE Hash the built SVG string per (NAME . window)
+CLOSED: [2026-08-22 Sat 09:47]
+:PROPERTIES:
+:ID:       2C7E08DE-7EC0-458B-8685-DDB4D5662B40
+:Effort:   1:00
+:END:
+:LOGBOOK:
+- State "DONE"       from "PROG"       [2026-08-22 Sat 09:47]
+- State "PROG"       from              [2026-08-22 Sat 09:00]
+:END:
+
+** PROG Return the memoized display string on a match
+:PROPERTIES:
+:ID:       D70FB337-30ED-4ACC-9B39-C3E1E643DB5B
+:Effort:   1:00
+:END:
+
+** TODO Keep store-placements outside the short-circuit
+:PROPERTIES:
+:ID:       C32DE594-CA58-4E5D-88DB-233E5D675092
+:Effort:   0:30
+:END:
+
+** TODO Benchmark before and after
+:PROPERTIES:
+:ID:       F94E5528-1689-4B6F-BD5C-EBAA5D76DADF
+:Effort:   0:30
+:END:
+
+* DONE Drop the flappy-fish 5Hz mode-line timer  :@shallow:perf:@fresh:
+CLOSED: [2026-08-24 Mon 14:44] SCHEDULED: <2026-09-06 Sun>
+:PROPERTIES:
+:ID:       09A1453B-B867-468B-8C3D-F7A745F4EBAD
+:CREATED:  [2026-07-24 Fri]
+:Effort:   0:30
+:IMPACT:   3
+:END:
+:LOGBOOK:
+- State "DONE"       from "PROG"       [2026-08-24 Mon 14:44]
+- State "PROG"       from "TODO"       [2026-08-24 Mon 14:30]
+- State "TODO"       from "PROG"       [2026-08-21 Fri 16:28]
+- State "PROG"       from              [2026-08-21 Fri 16:15]
+:END:
+
+Five forced redisplays a second to animate a string
+nothing renders -- telephone-line is not active.
+
+* PROG [#A] Restore gc-cons-percentage in bootstrap-gcmh  :@shallow:perf:@fresh:
+SCHEDULED: <2026-09-08 Tue>
+:PROPERTIES:
+:ID:       34DB7683-7C16-4C44-906B-A1990BCA1986
+:CREATED:  [2026-09-01 Tue]
+:Effort:   0:15
+:IMPACT:   3
+:END:
+:LOGBOOK:
+- State "PROG"       from "TODO"       [2026-09-08 Tue 11:00]
+- State "TODO"       from "PROG"       [2026-09-01 Tue 14:35]
+- State "PROG"       from "TODO"       [2026-09-01 Tue 14:30]
+- State "TODO"       from "PROG"       [2026-08-31 Mon 16:35]
+- State "PROG"       from              [2026-08-31 Mon 16:30]
+:END:
+
+* IDEA [#B] Move read-process-output-max back to 4MB  :@shallow:perf:
+SCHEDULED: <2026-09-21 Mon>
+:PROPERTIES:
+:ID:       91228A7C-FDB0-4DB9-9A3D-CAE5194B6D48
+:CREATED:  [2026-09-01 Tue]
+:Effort:   0:10
+:END:
+
+* TODO [#B] Byte-compile modules instead of load-file [0/2]  :@deep:perf:
+SCHEDULED: <2026-09-25 Fri>
+:PROPERTIES:
+:ID:       2F95C7F0-6E8A-41FB-A0DD-1CE4A9D95E9A
+:CREATED:  [2026-08-29 Sat]
+:Effort:   4:00
+:IMPACT:   2
+:END:
+:LOGBOOK:
+- Rescheduled from "[2026-09-18 Fri]" on [2026-09-05 Sat 08:55]
+:END:
+
+662 of 702 zetta-* functions run interpreted. The .elc files exist
+and are fresh; `load-file' just can't prefer them.
+
+** TODO Prefer .elc with a per-file condition-case
+:PROPERTIES:
+:ID:       EB1D7CC8-17F5-4E18-B2FF-324DDA602E9F
+:Effort:   2:00
+:END:
+
+** TODO Verify as-elc goes 0 -> 294 via the load-history probe
+:PROPERTIES:
+:ID:       32FBB3CA-6486-4F69-A5D8-7C3EFCA191E6
+:Effort:   0:30
+:END:
+
+* TODO [#B] Replace vc segment shell-outs with filesystem reads  :@deep:perf:
+SCHEDULED: <2026-09-07 Mon>
+:PROPERTIES:
+:ID:       EF9AE782-1D97-4656-AAEE-53553DDFF19A
+:CREATED:  [2026-08-10 Mon]
+:Effort:   1:30
+:IMPACT:   4
+:BLOCKED_BY: BC900692-1BD3-433C-B925-7D68114E1FD2
+:END:
+
+- [X] first pass
+- [ ] second pass
+
+* TODO [#A] Make zetta-op-read lazy so startup stops blocking  :@deep:startup:@tired:
+DEADLINE: <2026-09-08 Tue>
+:PROPERTIES:
+:ID:       081338E0-FF8D-4F89-8D0B-25B299DD9F76
+:CREATED:  [2026-07-28 Tue]
+:Effort:   2:00
+:DEADLINE_TYPE: soft
+:END:
+
+Measured 1.05-1.21s of a 9.17s init, and that is with the
+vault already unlocked.
+
+* DONE Add :commands to pr-review and ein  :@shallow:startup:
+CLOSED: [2026-08-21 Fri 14:05] SCHEDULED: <2026-08-13 Thu>
+:PROPERTIES:
+:ID:       2AEC42DF-5E2D-4E85-8405-DC76A4369C41
+:CREATED:  [2026-07-30 Thu]
+:Effort:   0:05
+:IMPACT:   3
+:END:
+:LOGBOOK:
+CLOCK: [2026-08-19 Wed 16:00]--[2026-08-19 Wed 16:10] =>  0:10
+- State "DONE"       from              [2026-08-21 Fri 14:05]
+- Rescheduled from "[2026-08-06 Thu]" on [2026-09-05 Sat 08:55]
+:END:
+
+* NEXT [#A] Fix TLS trust config in security.el  :@deep:security:
+SCHEDULED: <2026-10-03 Sat> DEADLINE: <2026-10-16 Fri>
+:PROPERTIES:
+:ID:       AE192D42-914F-4E5F-8A4B-FDED7D8908FE
+:CREATED:  [2026-09-02 Wed]
+:Effort:   1:00
+:END:
+:LOGBOOK:
+- Rescheduled from "[2026-09-26 Sat]" on [2026-09-02 Wed 08:55]
+:END:
+
+gnutls-trustfiles is literally ("zsh:1: command not found: -m")
+while gnutls-verify-error is t.
+
+* TODO Wire org-other-agenda into the org module [0/2]  :@deep:org:
+SCHEDULED: <2026-10-02 Fri>
+:PROPERTIES:
+:ID:       44E84D2D-82BA-4C36-A8F5-BB8D17054D35
+:CREATED:  [2026-08-07 Fri]
+:IMPACT:   2
+:END:
+
+Needs TextUI vendored too -- not on MELPA.
+
+** TODO Add the textui elpaca recipe
+:PROPERTIES:
+:ID:       F5BF5C94-52A1-4CCE-845B-E68A26043C2A
+:Effort:   0:30
+:END:
+
+** TODO Configure org-other-agenda-series
+:PROPERTIES:
+:ID:       B403176F-207D-4F76-A68D-638C10C7EA3F
+:Effort:   1:00
+:END:
+
+* PROG [#A] Prototype org-transclusion live-sync task view  :@deep:org:@fresh:
+SCHEDULED: <2026-09-08 Tue>
+:PROPERTIES:
+:ID:       0C02B810-8C37-4733-A4D4-939C38DEECC9
+:CREATED:  [2026-08-05 Wed]
+:Effort:   6:00
+:IMPACT:   4
+:END:
+:LOGBOOK:
+- State "PROG"       from "TODO"       [2026-09-08 Tue 13:00]
+- State "TODO"       from "PROG"       [2026-08-31 Mon 14:30]
+- State "PROG"       from              [2026-08-31 Mon 13:00]
+:END:
+
+The only item in the plan with real design risk. Does live-sync
+feel first class, or does the modal `e' gesture grate?
+
+* HOLD Write ERT tests for the queue scorer  :@deep:org:test:@tired:
+:PROPERTIES:
+:ID:       28B2B04C-6139-4268-B7AB-415017BF84E0
+:CREATED:  [2026-09-02 Wed]
+:Effort:   1:30
+:IMPACT:   3
+:REVIEW_ON: [2026-10-14 Wed]
+:END:
+:LOGBOOK:
+- State "HOLD"       from "TODO"       [2026-08-22 Sat 16:40] \\
+  Waiting to see if this solves itself.
+:END:
+
+* HOLD [#C] Audit which of the 145 eager use-package blocks matter  :@deep:startup:@tired:
+DEADLINE: <2026-09-05 Sat -5d>
+:PROPERTIES:
+:ID:       54802101-EDE5-4070-B0D5-C62FF1656084
+:CREATED:  [2026-07-22 Wed]
+:Effort:   4:00
+:IMPACT:   4
+:REVIEW_ON: [2026-09-22 Tue]
+:END:
+:LOGBOOK:
+- State "HOLD"       from "TODO"       [2026-08-09 Sun 16:40] \\
+  Waiting to see if this solves itself.
+- New deadline from "[2026-08-26 Wed]" on [2026-09-04 Fri 12:30]
+:END:
+
+Parked until use-package-compute-statistics says whether
+they are actually the missing 7.7s.
+
+- [X] first pass
+- [ ] second pass
+
+* DONE [#C] Teach brushup about org-timegrid event rungs  :@shallow:ui:@tired:
+CLOSED: [2026-08-26 Wed 09:28] SCHEDULED: <2026-09-23 Wed>
+:PROPERTIES:
+:ID:       06C04EF4-5BA0-4E21-92C4-136FAA5F71EB
+:CREATED:  [2026-07-13 Mon]
+:IMPACT:   3
+:END:
+:LOGBOOK:
+- State "DONE"       from "PROG"       [2026-08-26 Wed 09:28]
+- State "PROG"       from "TODO"       [2026-08-26 Wed 09:00]
+- State "TODO"       from "PROG"       [2026-08-25 Tue 13:43]
+- State "PROG"       from              [2026-08-25 Tue 13:15]
+:END:
+
+* IDEA [#C] Cut dimmer-mode, keep solaire  :@shallow:ui:
+:PROPERTIES:
+:ID:       54B73461-976F-4871-8FBC-1321E374866B
+:CREATED:  [2026-08-31 Mon]
+:Effort:   0:05
+:END:
+
+* IDEA Kill the Spotify HTTP buffer leak  :@deep:perf:
+:PROPERTIES:
+:ID:       4F14FD99-5CFD-40A2-A0E1-0FD0C4D00EE4
+:CREATED:  [2026-08-11 Tue]
+:Effort:   3:00
+:END:
+
+51 of 86 buffers were *http api.spotify.com:443*.
+
+* QUES [#C] Should QUES entries be queueable at all?  :@deep:org:@fresh:
+:PROPERTIES:
+:ID:       F91A80D5-384B-41AF-8A9F-6BEAE231FE99
+:CREATED:  [2026-08-22 Sat]
+:WAITING_ON: Sam
+:END:
+

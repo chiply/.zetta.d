@@ -1,0 +1,807 @@
+#+title: Time Management — Design & Implementation Plan
+#+author: Charlie Holland
+#+startup: overview
+
+# Plan for rebuilding the task system on top of the (todo) files: a metadata
+# schema worth querying, a queueing algorithm that fills a day from the
+# backlog, and a set of views at every zoom level.  Same rule as TODO.org --
+# evidence stays with the claim, and inference is labelled as inference.
+#
+# Status [2026-09-08]: Milestones 0-4 are BUILT, plus the schema (Part 2)
+# and estimate calibration (milestone 7's code, waiting on real clock
+# data).  Milestone 5 (migrating the real files) has its tooling but has
+# deliberately not been run.  Milestone 6 is written and parked.
+# Milestone 8 is untouched.
+
+* Start here
+
+Orientation for picking this up cold, in a session that has none of the
+context that produced it.
+
+** What is already built [2026-09-08]
+
+| Thing                        | Where                                    | State           |
+|------------------------------+------------------------------------------+-----------------|
+| Test corpus (94 entries)     | =testdata/todo/(todo) *.org=               | *done*            |
+| Corpus generator             | =testdata/generate.py=                     | *done*            |
+| Agenda source toggle         | =modules/org/org.el=                       | *done*            |
+| Schema: Effort_ALL, COLUMNS  | =modules/org/org.el=                       | *done*            |
+| Schema: cookies down the ladder | =modules/org/org.el=                    | *done*            |
+| Capture template with effort | =modules/org/org.el=                       | *done*            |
+| Queue core + 41 ERT tests    | =source/zettapkg/org-queue/=               | *done*            |
+| Queue harvest + day command  | =source/zettapkg/org-queue/=               | *done*            |
+| Estimate calibration         | =source/zettapkg/org-queue/org-queue-core.el= | *done*, unproven  |
+| Agenda custom commands       | =modules/org/org-agenda.el=                | *done*            |
+| org-super-agenda groups      | =modules/org/org-super-agenda.el=          | *done*            |
+| Backlog browse (HyRolo)      | =modules/app/hyperbole.el=                 | *done*            |
+| Derived clock (intervals)    | =source/zettapkg/org-queue/org-queue-harvest.el= | *done*      |
+| Gantt chart + clock table    | =source/zettapkg/org-gantt/=               | *done*, 23 tests  |
+| Spent/planned week grids     | =source/zettapkg/org-gantt/org-gantt-timegrid.el= | *done*     |
+| Smart tree (transclusion)    | --                                       | tried, *removed*    |
+| File header + census + migration | =modules/org/org-todo-schema.el=       | *done*, not run   |
+| org-other-agenda (=,-o-b=)     | =modules/org/org-other-agenda.el=          | *done*            |
+| Deadline backpressure        | --                                       | not started     |
+
+No package was installed that was not already in =elpaca-lock.el=:
+=org-super-agenda= was already there as an =org-ql= dependency and only
+lacked a module.  The two GitHub packages =org-other-agenda= needs are the
+reason that module sits in =disabled/= -- see its README.
+
+** The commands you need
+
+#+begin_src sh
+python3 testdata/generate.py            # regenerate the corpus (deterministic)
+
+emacs -Q --batch -L source/zettapkg/org-queue \
+  -l source/zettapkg/org-queue/test/org-queue-core-test.el \
+  -f ert-run-tests-batch-and-exit       # 41 tests, no Org, no files
+
+emacs -Q --batch -L source/zettapkg/org-gantt \
+  -l source/zettapkg/org-gantt/test/org-gantt-core-test.el \
+  -f ert-run-tests-batch-and-exit       # 23 tests, no Org, no clock
+#+end_src
+
+#+begin_src emacs-lisp
+(zetta-org-toggle-todo-source)          ; flip agenda files test <-> real
+#+end_src
+
+In Emacs, under the =,-o= prefix:
+
+| key    | command                       | what it does                          |
+|--------+-------------------------------+---------------------------------------|
+| =,-o-Q=  | =org-queue-today=               | pack today, and say what it cut       |
+| =,-o-C=  | =org-queue-calibration=         | estimate versus clock, per category   |
+| =,-o-v=  | =org-agenda=                    | =d= day, =w= week, =u= untriaged            |
+| =,-o-V=  | =zetta-org-todo-rolo=           | HyRolo over the active corpus         |
+| =,-o-d=  | =zetta-hyrolo-day=              | every entry mentioning a given day    |
+| =,-o-w=  | =org-gantt=                     | planned over actual, with the numbers |
+| =,-o-W=  | =org-gantt-timegrid-composite=  | the same week as a grid, plan vs spent |
+
+and, not bound to keys because they are used once per file:
+=zetta-org-todo-census=, =zetta-org-insert-todo-header=,
+=zetta-org-migrate-checkboxes=.
+
+The toggle is =M-x zetta-org-toggle-todo-source=.  It *rebuilds*
+=org-agenda-files= rather than appending, so the two corpora can never both be
+live.  Verified: real -> 9 files, test -> 6 files.  Work against the test
+corpus for all of this; a half-planned day should not land in real notes.
+
+** What was changed in the config, and why
+
+Only one file: =modules/org/org.el=.
+
+- Added =zetta-org-todo-source=, =zetta-org-todo-test-dir=, =zetta-org-todo-dir=
+  and =zetta-org-toggle-todo-source=.
+- =zetta-logseq-update-agenda-files= was changed from appending with
+  =add-to-list= to *rebuilding* =org-agenda-files= from scratch.  This matters:
+  with the old behaviour a toggle left the previous corpus in place and the
+  agenda showed both at once.
+- =zetta-logseq-todo-files= now reads =(zetta-org-todo-dir)= rather than
+  =zetta-logseq-pages-dir= directly.
+
+** The first thing to do
+
+*Migrate one file.*  Everything below the views is now built and tested;
+what is missing is the data they read.
+
+Across the nine real (todo) files: 1650 headings, *2 SCHEDULED and 6
+DEADLINE*, zero `:Effort:'.  The most recent active timestamp anywhere is
+2026-08-26.  So the agenda's day view is empty, the queue has nothing to
+pack, and a rolo search for a date returns nothing -- not because any of
+them is wrong, but because there is nothing written down for them to find.
+
+The tooling exists and has never been pointed at a real file:
+
+- `zetta-org-todo-census' -- what each file has now
+- `zetta-org-insert-todo-header' -- the preamble that makes column view work
+- `zetta-org-migrate-checkboxes' -- `- [ ] x' -> `* TODO x', one buffer, asks
+  first, one undo puts it back
+
+Start with `(todo) emacs.org': 638 headings, the largest single source of
+the metadata everything else needs.  Convert it, live with it for a week,
+then decide whether the bookkeeping is worth it before touching the rest.
+That judgement -- not any remaining code -- is what this plan now turns on.
+
+The second thing is *capacity*: `org-queue-capacity' in
+`modules/org/org-queue.el' is five hours on a weekday and it is a guess.
+Clock normally for a fortnight and replace it.
+
+** If it turns out this needs real project tracking
+
+This repo does *not* have =backlog.org= or the =dev-agent-backlog= scaffolding
+initialised, and this plan deliberately did not add it -- design docs here
+live at the repo root alongside =text-search.org= and =TODO.org=, which is the
+existing convention.  If the work grows past what one org file can hold,
+=/backlog:setup= is the tool, and it would put design docs in =docs/design/=.
+
+* Part 1 — Where things actually stand
+
+Worth being blunt about the starting point, because it changes the size of
+the job.
+
+*The (todo) files are not task files yet.*  They are flat checkbox lists --
+=- [ ] tax return 25= -- not Org headings.  A census across all nine real
+files in =~/kb/todo/=:
+
+| Metadata     | Occurrences |
+|--------------+-------------|
+| =SCHEDULED=    |           2 |
+| =DEADLINE=     |           6 |
+| =:Effort:=     |           0 |
+| =[#B]= / =[#C]=  |      0 / 1  |
+
+So there is essentially no scheduling metadata to query.  Every part of this
+plan depends on metadata that does not exist yet, which makes *migration the
+first real milestone*, not an afterthought.
+
+** What is already in place
+
+- =org-ql= and =org-transclusion= are installed *and* have modules.  Both are
+  minimally configured (=modules/org/org-ql.el= sets only a display action;
+  =modules/org/org-transclusion.el= is one line).
+- =org-super-agenda= is installed as a dependency but has *no module and no
+  configuration*.
+- =calfw= and =org-timegrid= are configured and working.
+- =org-agenda= itself has *no* =org-agenda-custom-commands= anywhere in the
+  config.  The agenda is stock.
+- Logging is already right: =org-log-into-drawer t=, and refile, redeadline
+  and reschedule all logged, plus =zetta-org-log-initial-deadline/schedule=.
+  State changes will be captured from day one.
+- =org-todo-keywords= is a considered set already: TODO, PROG, WAIT, QUES,
+  HOLD, IDEA / DONE, NOPE (=modules/org/org.el:124=).
+
+** The risk this plan has to answer
+
+From your own backlog, in =(todo) todo.org=:
+
+#+begin_quote
+consider using time.org?  i wonder if the bookeeping will be too much, could
+kill the productivity... the freeness of the schedule and dead simple org
+features seem to be enough for now, but worth considering it
+#+end_quote
+
+That is the correct worry, and it is the main design constraint here.  A
+metadata-maximalist system only pays off if capturing the metadata is nearly
+free.  *Every schema decision in Part 2 is subordinate to that* -- if adding
+a task costs more than a few seconds, the system loses to a checkbox list.
+
+The mitigation is in three places: capture templates that pre-fill the
+drawer, an =Effort_ALL= list so effort is a single keypress in column view,
+and the queue itself never *requiring* a field -- an unestimated task still
+gets planned, just with a default estimate.
+
+* Part 2 — The metadata schema  [BUILT]
+
+** What every task carries
+
+| Field       | Where            | Required | Notes                                  |
+|-------------+------------------+----------+----------------------------------------|
+| TODO state  | heading          | yes      | existing eight-state sequence          |
+| Priority    | heading          | no       | =[#A]/[#B]/[#C]=; absent is a real value |
+| Tags        | heading          | no       | context (=@deep=, =@errand=) + topical     |
+| =SCHEDULED=   | planning line    | no       | "do it on/after this day"              |
+| =DEADLINE=    | planning line    | no       | "must be done by"                      |
+| =:Effort:=    | properties       | strongly | drives the packing                     |
+| =:CREATED:=   | properties       | yes      | already in the capture templates       |
+| =CLOCK=       | logbook          | auto     | actual, for calibration                |
+| State log   | logbook          | auto     | already configured                     |
+
+** On "can we stuff it all into the props?"
+
+From =time.org=.  The honest answer is *no, and it does not matter.*
+
+TODO state, priority cookie and tags are Org /syntax/ -- they have to live in
+the headline, and moving them into properties would cost every tool that
+reads them (agenda, =org-ql=, sorting, the queue).  Do not fight this.
+
+What you actually want is not to *look* at them, and that is a display
+problem with three real fixes:
+
+1. *Column view is the table.*  =#+COLUMNS= renders state, priority, effort,
+   clocksum, deadline and tags as columns, in any Org buffer.  The headline
+   noise stops mattering the moment you plan in column view.
+2. *Style the cookies down* via brushup, on the prominence ladder -- a
+   priority cookie should read as a faint marker, not a badge.
+3. The views in Part 4 all re-present headings; none of them show raw syntax.
+
+** File headers
+
+Every =(todo)= file gets the same preamble.  This is what makes column view
+work everywhere and what =time.org= was prototyping:
+
+#+begin_src org
+,#+TITLE: Emacs configuration and tooling
+,#+CATEGORY: emacs
+,#+PROPERTY: Effort_ALL 0 0:10 0:30 1:00 2:00 3:00 4:00 5:00 6:00 7:00
+,#+COLUMNS: %40ITEM(Task) %TODO %3PRIORITY(P) %17Effort(Estimate){:} %CLOCKSUM(Clocked) %DEADLINE %SCHEDULED %TAGS
+#+end_src
+
+=#+CATEGORY= matters more than it looks: it is what the agenda and the queue
+use to keep one noisy file from dominating a day (Part 3, fairness).
+
+** Making it cheap
+
+- Capture templates gain =%^{Effort}= against =Effort_ALL= and a =%^G= tag prompt,
+  so a captured task is born with metadata rather than acquiring it later.
+- =org-columns= (=C-c C-x C-c=) for bulk triage: set effort and priority across
+  a whole file with single keypresses, no drawer editing.
+- Deliberately *not* required: a task with no estimate is still queueable.
+
+** What was actually configured [2026-09-08]
+
+All in =modules/org/org.el=, except the file-header writer.
+
+- =org-global-properties= carries =Effort_ALL= and =org-columns-default-format=
+  carries the format above, so column view works in a file that has no
+  header yet -- which every real (todo) file currently is.
+- A *new capture template*, =t=, is the only one that asks for metadata:
+  =%^G= for tags and =%^{Effort}p= for the estimate, which offers the
+  =Effort_ALL= list rather than a free-text prompt.  It still lands in
+  =~/kb/inbox.org=; the inbox-first flow is unchanged and routing is still
+  =C-c C-w=.  The per-(todo)-file templates stay retired.
+- *Priority cookies go down the ink ladder*: A on the rung a state that
+  wants you sits on, B on the context rung, C on the finished rung, all at
+  normal weight (=zetta-org-priority-refresh-faces=, re-run on theme change
+  like the TODO keywords).  Absent priority is painted as nothing at all,
+  which is the honest rendering of a value the scorer treats as real.
+
+* Part 3 — The queueing algorithm  [BUILT]
+
+** Shape: a pure core with a thin Org shell
+
+This is the part you asked to keep standalone and testable, so the structure
+matters more than the formula.  Proposed as a first-party package under the
+existing =source/zettapkg/= convention:
+
+| File                         | Role                                     | Depends on Org? |
+|------------------------------+------------------------------------------+-----------------|
+| =org-queue-core.el=            | scoring + packing over plists            | *no*              |
+| =org-queue-harvest.el=         | =org-ql= query -> list of plists           | yes             |
+| =org-queue.el=                 | commands, buffer, keymap                 | yes             |
+| =test/org-queue-core-test.el=  | ERT over hand-built fixtures             | no              |
+
+The whole point of the split: =org-queue-core.el= takes a list of plists and
+returns a list of plists.  It can be tested in =emacs -Q --batch= with no Org
+files, no agenda, no clock -- which is what makes iterating on the formula
+tolerable.  Everything that touches Org lives in the other two files.
+
+A harvested task is a plist:
+
+#+begin_src emacs-lisp
+(:id "abc" :file "(todo) work.org" :category "work"
+ :title "Cut the 0.4.0 release" :state "TODO" :priority ?B
+ :scheduled 20260908 :deadline 20260912 :effort 120 :created 20260814
+ :tags ("@deep" "release") :clocked 0)
+#+end_src
+
+** Pipeline
+
+1. *Harvest* -- =org-ql= across =org-agenda-files=, every entry with a TODO
+   state, into plists.
+2. *Filter* -- drop DONE/NOPE and HOLD outright.  Drop WAIT unless its
+   deadline is inside the horizon (blocked work should nag, not occupy).
+   Drop tasks =SCHEDULED= in the future, unless the day underfills.
+3. *Split into committed and candidates.*  Committed = scheduled today, or
+   deadline today or earlier.  These are not scored; they are facts.
+4. *Score the candidates.*
+5. *Pack* against the day's capacity, committed first.
+6. *Report* -- the plan, plus what was cut and why.
+
+Step 6 is not decoration.  A planner you cannot interrogate gets distrusted
+and abandoned; "why is this not on my day" needs an answer.
+
+** Scoring
+
+#+begin_src
+score =  w_deadline * urgency(days_until_deadline)
+       + w_priority * priority_weight
+       + w_age      * log(1 + days_since_created)
+       + w_progress * (state == PROG)
+       + w_quick    * (effort <= 15min)
+       - w_glut     * (already_picked_from_this_category)
+#+end_src
+
+Decisions worth arguing about now rather than later:
+
+- =urgency= should be *convex*, not linear -- flat while a deadline is far,
+  steep in the last few days.  =1/(1+days)= with overdue pinned to the maximum.
+- *Absent priority is not lowest priority.*  Weight it between B and C.  Most
+  tasks will never be triaged, and a formula that buries everything untriaged
+  will quietly hide the backlog.
+- The *PROG boost* is what stops work-in-progress accumulating.  Finishing
+  beats starting.
+- The *category glut penalty* is what keeps one big file from eating the day.
+  This is why =#+CATEGORY= is in the schema.
+
+** Packing
+
+- =capacity= is per-weekday minutes, configurable -- Monday is not Saturday.
+- Reserve a *slack fraction* (start at 20%).  A plan with no slack is wrong
+  by lunchtime.
+- Unestimated tasks get a configurable default (suggest 30m) and are marked
+  as estimated-by-default in the report.
+- A *WIP limit* caps how many PROG items can be in one day.
+- If committed work alone exceeds capacity, *say so loudly and stop* -- do
+  not silently drop a commitment.  Overcommitment is information.
+
+** Recommended beyond what you listed
+
+1. *Estimate calibration.*  You are already collecting =CLOCK= data and
+   =:Effort:=.  Compare them on DONE tasks, per category, and derive a
+   correction factor.  If "emacs" tasks run 1.7x their estimate, the packer
+   should know that.  This is the highest-value feature here and it is almost
+   free given the schema.
+2. *Carry-over.*  Tasks planned yesterday and not finished get a boost today,
+   or an explicit rollover marker.  Without this the queue re-litigates the
+   same decision every morning.
+3. *Energy/context filtering.*  =@deep=, =@shallow=, =@errand=, =@call= as tags;
+   plan a day against the kind of time available, not just the quantity.
+4. *Dependencies.*  A =:BLOCKED_BY:= property holding an ID, filtered in the
+   core.  Simpler and far more testable than =org-edna=; revisit edna only if
+   this proves too weak.
+5. *Deadline backpressure* (phase 2, hardest).  A 6h task due Friday should
+   be spread across Tue/Wed/Thu, not dumped on Thursday night.  This turns
+   the queue from a day-filler into a scheduler; worth doing, worth doing
+   /last/.
+
+** Testing
+
+ERT over hand-built plists, in batch.  The cases that matter: overdue beats
+priority; committed always precedes scored; capacity is never exceeded; an
+unestimated task is planned; overcommitment is reported not swallowed; the
+glut penalty actually spreads categories; carry-over outranks a fresh task
+of equal score.
+
+*41 tests, all of the above plus the filter rules, the appointment rules,
+the date arithmetic across month/year/leap boundaries, the calibration
+shrinkage, and two invariants worth naming:* every task handed in comes
+back out in exactly one of =:planned=, =:cut=, =:dropped= or =:deferred=; and
+planning never mutates its input.
+
+** What changed while building it [2026-09-08]
+
+Five decisions the plan did not settle, and what they were settled to.
+Each is a real behaviour change, not an implementation detail.
+
+*** A stale SCHEDULED is not a commitment
+
+The plan says "Committed = scheduled today, or deadline today or earlier".
+Read literally that is an asymmetry -- an expired deadline binds, an
+expired schedule does not -- and the first implementation smoothed it away
+by treating =scheduled <= today= as committed.
+
+That was wrong, and the corpus showed it within a minute: every day came
+back *OVERCOMMITTED* before the scorer ran, because scheduled-and-not-done
+work accumulates forever and nothing ever leaves the committed pile.  A
+planner whose scoring code never executes is not a planner.
+
+So the literal reading stands.  A stale schedule is a plan you already
+broke, and it feeds the *carry-over* term instead
+(=org-queue-core-carried-p=): it outranks fresh work without outranking
+today's actual obligations.
+
+*** Plain timestamps are appointments, and they are not movable
+
+The plan's schema lists =SCHEDULED= and =DEADLINE= and no third kind of date.
+But =(todo) calendar.org= is thirteen entries and *none* of them has either
+-- they are plain active timestamps, half with repeaters.  Under the
+original design the file most able to eat a day contributed nothing to it.
+
+Harvest now reads plain timestamps too, rolling repeaters forward to the
+next occurrence (=org-time-string-to-absolute= with =prefer 'future=, so a
+weekly 1:1 stamped three weeks ago reports this week's).  An occurrence
+falling on today is a commitment.  One falling later is dropped with the
+reason =event-later= rather than deferred, because unlike scheduled work an
+appointment cannot be pulled forward to fill a quiet morning.  One that
+has already passed is dropped as =event-past=.
+
+*** Calibration shrinks toward the corpus, not toward 1.0
+
+Two finished tasks are not a calibration.  Each category's factor is the
+weighted mean of what it measured and a prior, with
+=org-queue-calibration-prior= phantom observations on the prior's side --
+and the prior is the *whole-corpus* factor rather than 1.0, on the
+reasoning that if everything you do runs long, a new category probably
+does too.  Clamped to [0.25, 4.0] so one mis-clocked task cannot quadruple
+a category.
+
+Measured on the test corpus: overall 1.19x, home 1.39x, emacs 1.06x.
+Those are the generator's invented numbers, not yours -- the feature is
+built, but it has nothing true to say until there are weeks of real clock
+data behind it.  That was always milestone 7's problem.
+
+*** The glut penalty is applied during packing, not before it
+
+"already_picked_from_this_category" is the one term in the formula that is
+not a property of the task, so scores cannot be computed once and sorted.
+The packer recomputes the top of the list on every pick.  With six
+candidates -- three category A at priority A, three category B at priority
+B -- turning the penalty off gives a day of A A A B, and leaving it on
+gives A B A B.  Both are tested.
+
+*** Deferred work is a second pass, not a filter
+
+"Drop tasks SCHEDULED in the future, unless the day underfills" is
+implemented as two runs of the same packing loop: the eligible pile first,
+then the deferred pile into whatever room is left, marked =pulled-forward=
+in the report so a day that reached into next week says so.
+
+* Part 4 — Views
+
+Each zoom level gets the tool that suits it.
+
+| Zoom               | View                        | Status                    |
+|--------------------+-----------------------------+---------------------------|
+| Today, packed      | =org-queue=                   | *built*                     |
+| Today, by the hour | =org-timegrid=                | configured                |
+| Today / week, list | =org-agenda= + =org-super-agenda= | *built* -- =,-o-v= then =d/w/u= |
+| Board, month       | =org-other-agenda= (=,-o-b=)    | *built* -- installed and pinned  |
+| Month grid         | =calfw=                       | configured                |
+| The whole backlog  | HyRolo (=,-o-V=)              | *built* -- smart tree abandoned |
+
+** The smart tree — answered, and abandoned [2026-09-08]
+
+*Milestone 1 is closed.  The answer is no.*
+
+The prototype was built and it worked as a /view/: `org-ql' selected the
+entries, a generated buffer of `#+transclude:' directives pulled the real
+content in, descendants were folded into their matching parents, and
+entries without an `:ID:' were addressed by `file:...::*Heading' so the
+real (todo) files -- which have no IDs at all -- could be gathered without
+being written to first.
+
+Editing is what failed.  `org-transclusion-live-sync' is the only
+mechanism that writes an edit back to its source, and it does not diff
+text: it clones the transcluded and source regions as two overlays that
+must correspond exactly, locating the source through `:parent' text
+properties left on the copied content.  In testing, `live-sync-exit'
+failed to complete in every case, leaving clone overlays behind that made
+the NEXT `live-sync-start' fail -- a stateful failure, not a
+configuration one.  In the buffer that surfaced as *the transcluded
+content being duplicated around whatever you typed*.
+
+A first attempt to blame `:level' (the promotion used to nest entries
+under category headings) did not survive an isolated matrix: the failures
+alternated with the order the cases ran in, not with `:level'.  That is
+the shape of state leaking between runs, and it is not a foundation for a
+daily workflow.
+
+There was a second, quieter finding: `org-transclusion-map' -- the
+package's own e/g/d/o menu on transcluded text -- is *unreachable under
+evil*.  It is attached as a `local-map' text property, which sits below
+`emulation-mode-map-alists' in the keymap search order.  So even browsing
+cost a detour.
+
+The module and its `,-o-x' key menu were removed on the same day they
+were written.  `org-transclusion' stays installed and unconfigured; it
+long predates this experiment and transcluding a section into a document
+by hand is a different, better-behaved use of it.
+
+*** What replaced it: HyRolo
+
+The doc's own fallback was "org-ql-view for browsing plus an indirect
+buffer for editing".  What we took instead was HyRolo, which was already
+installed and already configured to read `~/kb/todo/':
+
+- `,-o-V' (`zetta-org-todo-rolo') searches `org-agenda-files' -- the same
+  set the queue harvests -- and assembles matching entries, each with its
+  sub-entries, into `*HyRolo*'.  `C-u' skips the prompt and gathers every
+  entry in a not-done state: the whole open backlog.
+
+  The term is read through `hyrolo-grep-input', not `read-string'.  That
+  matters: with consult and vertico active it runs a live ripgrep with
+  completion and preview, and it is the function this config's
+  `zetta-hyrolo-fix-consult-handoff' advice is attached to.  Reading the
+  string directly -- the first version did -- silently opted out of both.
+- `e' there opens the entry in its own file.  The display buffer is
+  read-only, so this browses and jumps rather than editing in place --
+  which is the model the agenda already uses, and the one that works.
+- evil-collection ships a `hyrolo' module, so its keys are not shadowed
+  the way org-transclusion's were.
+
+*** The day search, and what it is and is not for
+
+`,-o-d' (`zetta-hyrolo-day') prompts with `org-read-date' -- so a weekday
+name, "today", "+2" or a full date all work -- and assembles every
+entry mentioning that day.
+
+Matching it took measuring rather than assuming, because the kb writes
+dates in two forms that share no substring:
+
+| where       | form                        | example                    |
+|-------------+-----------------------------+----------------------------|
+| =~/kb/todo/=  | org timestamps, ISO         | =<2026-09-08 Tue>=, =[2026-09-08 Sun 11:59:56]=, =SCHEDULED:= |
+| =~/kb/notes/= | Logseq journal links        | =[[Aug 12th, 2026]]=         |
+
+A bare ISO date covers every org form, brackets and planning keyword
+included.  The journal form shares nothing with it -- month abbreviation,
+ordinal day -- so it is alternated in, built with the same
+`zetta-logseq--ordinal-suffix' that writes them.  Measured: for
+2026-08-12, the ISO half alone finds 3 entries in the fixture and the
+journal half finds 8 across the kb.
+
+Scope follows the same split.  Narrow (the default) is `org-agenda-files'
+-- deliberately the same set `org-queue' harvests and every agenda command
+reads, so a browse and a plan can never disagree about what exists.  `C-u'
+widens to the whole rolo corpus: notes, wiki, readwise, and the journal
+links, which is where nearly all the dates currently are.
+
+Both scopes include `zetta-extra-agenda-files', the project files
+~/.private.el adds.  They were missing at first and it showed immediately:
+a day search for 2026-03-01 returned *nothing* while blog-posts.org
+carried `SCHEDULED: <2026-03-01 Sun>'.  With them folded in, the same
+search returns 22 entries.  In test mode they stay out, following the same
+rule `zetta-logseq-update-agenda-files' already applied to them.
+
+*What this is not is the agenda.*  A text match over-matches
+(`:CREATED:', `CLOCK:' and state-log lines all carry dates) and
+under-matches (repeaters that /occur/ on a day, overdue work, deadline
+warning windows).  Those belong to `org-agenda' and `org-queue', which
+implement the logic and are tested against the fixture.  This finds
+*mentions* of a day, which is a different and complementary question --
+and the only one that works at all until the (todo) files are migrated: 2
+SCHEDULED and 6 DEADLINE across all nine, the most recent active
+timestamp anywhere being 2026-08-26.
+
+** org-agenda + org-super-agenda  [BUILT]
+
+The stock agenda is unconfigured, which is most of why it is not being used.
+Needs: a custom command for "today's queue", one for "this week", one for
+the untriaged backlog, and =org-super-agenda-groups= to group by category and
+urgency rather than by file.
+
+Built as =modules/org/org-agenda.el= and =modules/org/org-super-agenda.el=.
+Three commands -- =d= day, =w= week, =u= untriaged -- plus the settings that
+were never made: effort in the agenda prefix (so the agenda answers "will
+this fit" the way the queue does in bulk), tags at column 0 to match
+=org-tags-column=, deadline prewarning suppressed once work is scheduled,
+and windows restored on quit.
+
+Two things worth knowing:
+
+- The *week view groups by nothing on purpose*.  =org-super-agenda= groups
+  across a whole block, which would dissolve exactly the day boundaries a
+  week view exists to show.
+- The *untriaged view uses org-ql blocks*, not Org's match syntax, because
+  Org reports an entry with no priority cookie as B -- it cannot express
+  "never triaged", which is the one thing that view is for.
+
+** org-other-agenda  [BUILT 2026-09-09]
+
+Installed live, pinned in =elpaca-lock.el=, bound to =,-o-b=.  Renders: tabs
+across the top (Today / Week / Agenda / Someday / Search / Tags), a search
+field, priority letters, tags, and a collapsed "9 overdue" row.
+
+Three things had to be got right, and two of them were wrong first:
+
+- *The =embark= version floor is skipped, not met.*  It declares
+  =(embark "1.2")=; this config pins 1.1, so elpaca refused the build
+  outright.  Upgrading embark is not a small change here -- embark-consult,
+  embark-vc, consult-gh-embark and the in-tree =embark-scope= all ride on it
+  -- so the recipe carries =:build (:not elpaca-check-version)=, on the
+  evidence that every embark symbol the package names is bound in 1.1.
+- *=org-other-agenda-series= is the BLOCK list, not the command list.*  Its
+  docstring says it "has the shape of the command list in
+  =org-agenda-custom-commands=", which reads as though the whole alist would
+  do; it will not -- an entry there is (KEY DESCRIPTION BLOCKS).  The module
+  hands it =(nth 2 (assoc "d" org-agenda-custom-commands))=, so the board
+  follows the Day command rather than duplicating it.
+- *HyRolo was leaving the agenda files in the wrong major mode* -- see below.
+
+*** The HyRolo major-mode collision
+
+Switching the board on is what exposed it, but it had nothing to do with
+the board.  HyRolo prepends =hyrolo-auto-mode-alist= to =auto-mode-alist=
+while it reads, so an .org file it opens gets =hyrolo-org-mode= -- an
+outline-mode derivative that exists to skip "the time-consuming
+initializations" of the real mode.  The let-binding is scoped to the read;
+*the buffer is not*.
+
+And hyrolo does =(put 'hyrolo-org-mode 'derived-mode-parent 'org-mode)=, so
+=derived-mode-p= answers yes while none of Org's buffer-locals exist.
+=org-todo-line-regexp= is nil there, and the first org function to touch such
+a buffer dies on =(looking-at nil)=.
+
+Measured after one =,-o-V= over the real corpus: *13 buffers left in
+=hyrolo-org-mode=, 3 of them agenda files*, and both =org-queue-harvest= and
+=org-other-agenda= then failed with =(wrong-type-argument stringp nil)=.  The
+queue broke in the same session that ran a rolo search.
+
+=zetta-hyrolo-use-real-org-mode= drops the .org entry from
+=hyrolo-auto-mode-alist=, so the rolo pays org-mode's startup cost on those
+files and everything downstream can read them.  Markdown and .otl keep the
+fast path -- nothing else here reads those.  =zetta-hyrolo-restore-org-buffers=
+repairs buffers already in that state.
+
+Board-style views over the same =org-agenda-files=, re-laid out with TextUI.
+It reads Org's own hidden agenda buffer and forwards editing keys to the
+native =org-agenda-*= commands, so state changes, logging and hooks all apply
+-- no separate write path to worry about.
+
+Two install notes: it needs *TextUI*, a separate library from the same author
+that is *not on MELPA*, and it needs =embark= (already installed here).
+
+#+begin_src emacs-lisp
+(use-package textui
+  :ensure (textui :host github :repo "yibie/textui"))
+
+(use-package org-other-agenda
+  :ensure (org-other-agenda :host github :repo "yibie/org-other-agenda")
+  :after (org textui embark)
+  :commands (org-other-agenda)
+  :config (setq org-other-agenda-series ...))   ; shaped like org-agenda-custom-commands
+#+end_src
+
+=org-other-agenda-series= takes the same shape as =org-agenda-custom-commands=,
+so the agenda work above is reused rather than duplicated.
+
+* Part 5 — Test corpus and the agenda toggle  [BUILT]
+
+Both exist as of [2026-09-08].
+
+** The corpus
+
+=testdata/generate.py= writes six =(todo)= files into =testdata/todo/=, centred
+on a pinned =TODAY= with a seeded RNG so it regenerates identically:
+
+#+begin_src sh
+python3 testdata/generate.py [--today 2026-09-08] [--seed N]
+#+end_src
+
+94 entries across emacs / work / home / learning / buy / calendar, verified
+by parsing them with Org itself rather than by eyeballing the text:
+
+| Property                | Count                                  |
+|-------------------------+----------------------------------------|
+| Entries                 | 94 (76 top-level, 18 subtasks)         |
+| States                  | all eight, TODO 46 / DONE 21 / PROG 7  |
+| =:ID:=                    | *94 of 94* -- every entry is transcludable |
+| =:Effort:=                | 81 -- the other 13 are deliberate        |
+| Priority cookies        | 41 (19 A / 17 B / 5 C)                 |
+| =:BLOCKED_BY:=            | 3                                      |
+| Statistics cookies      | 6 parents with =[n/m]=                   |
+| Entries with =CLOCK=      | 26, totalling 38h23m                   |
+| Bodies                  | 91 -- prose, links, checkbox lists       |
+| Timed ranges            | 11 (=<... 10:00-11:30>=)                 |
+| Multi-day spans         | 2 (=<...>--<...>=)                       |
+| Deadline warning periods | 3 (=-5d=)                               |
+| Repeaters               | 7 (=+1d=, =+1w=, =+2w=, =+3d=, =.+1m=)         |
+| Scheduled *today*         | 5                                      |
+| Overdue deadlines       | 3                                      |
+| Due within 7 days       | 6                                      |
+
+The shape is deliberate, not incidental:
+
+- *Every entry carries an =:ID:=*, because the smart tree in Part 4
+  transcluded by ID.  That requirement died with the smart tree -- and it
+  is worth recording WHY it mattered: because every entry in the fixture
+  had an ID and no entry in the real kb has one, the prototype passed
+  against the fixture and returned "Nothing matched" against real notes.
+  A fixture can only exercise what it resembles.
+- *Subtasks and statistics cookies* exist so column view has parents whose
+  effort sums from children, and so the tree view has depth to render.
+- *13 tasks carry no estimate* so the default-effort path is exercised, and
+  clocked actuals diverge from estimates by 0.5x-1.9x -- that spread is
+  exactly what the calibration feature is meant to learn from.
+- *Today is deliberately overcommitted.*  Five scheduled tasks plus three
+  meetings plus three overdue deadlines will not fit in a day, so the
+  packer's overcommitment path has something to trip on from the first run.
+- *Timed ranges, multi-day spans and repeaters* exist for timegrid and calfw,
+  which need durations rather than bare dates.
+
+*One gotcha worth carrying into the real migration.*  The first version of
+the calendar file put the plain active timestamp between the heading and the
+=:PROPERTIES:= drawer.  Org only recognises a property drawer immediately
+after the heading (or after a planning line), and a bare timestamp is body
+text -- so all 13 events had drawers that parsed as ordinary text, and every
+=:ID:= and =:Effort:= in them was silently dead.  It looked completely fine on
+screen.  Order is: heading, planning line, drawer, /then/ any timestamp.
+
+** The toggle
+
+=modules/org/org.el= now carries =zetta-org-todo-source= (='real= or ='test=) and
+=M-x zetta-org-toggle-todo-source=.
+
+=zetta-logseq-update-agenda-files= was changed to *rebuild* =org-agenda-files=
+rather than append to it -- with =add-to-list= a toggle would have left both
+corpora in the agenda at once.  =zetta-extra-agenda-files= follows the real kb
+and stays out of a test session.
+
+Verified in batch: real -> 9 files, test -> 6 files, and no leakage in either
+direction.
+
+* Part 6 — Suggested order
+
+Sequenced so each step is usable on its own and the risky item comes early.
+
+| # | Milestone                                | State [2026-09-08]                          |
+|---+------------------------------------------+---------------------------------------------|
+| 0 | Test corpus + toggle                     | *done*                                        |
+| 1 | Prototype the transclusion smart tree    | *answered: no* -- built, tried, removed       |
+| 2 | Configure =org-agenda= + =org-super-agenda=  | *done*                                        |
+| 3 | =org-queue-core.el= + ERT, no Org at all    | *done* -- 41 tests, green                     |
+| 4 | =org-queue-harvest.el= + the day command    | *done* -- verified against the 94-entry corpus |
+| 5 | Migrate the real (todo) files            | *tooling built, deliberately not run*         |
+| 6 | Install and configure =org-other-agenda=    | *done* -- installed live, pinned, renders     |
+| 7 | Estimate calibration from CLOCK data     | *code done*, waiting on real clock data       |
+| 8 | Deadline backpressure                    | not started -- see below                    |
+
+Note the ordering of 3 before 5: the queue can be developed entirely against
+the test corpus, so migration is not a blocker for it.  And 7 genuinely
+cannot be done early -- it needs history that does not exist yet.
+
+** On 5, 6 and 8, which are done differently or not at all
+
+*5, migration.*  =zetta-org-migrate-checkboxes= converts one buffer:
+=- [ ]= -> =* TODO=, =- [X]= -> =* DONE=, =- [-]= -> =* PROG=, nesting from the
+indent structure rather than a fixed step, text indented under an item
+de-indented into the heading's body, code blocks left alone.  It shows the
+count and asks first, and one undo puts the file back.  There is
+deliberately *no command that converts all nine files*: the mechanical half
+is easy and this does it, the judgement half is not, and doing nine files
+in a sitting is the failure mode the plan already named.
+=zetta-org-todo-census= is the census from Part 1, runnable rather than
+remembered, so you can tell when a migration is actually finished.
+
+*It has not been run on anything real.*  That is a decision to be taken at
+a keyboard, on =(todo) emacs.org= first, as the plan says.
+
+*6, org-other-agenda.*  Written and parked; see Part 4.
+
+*8, deadline backpressure.*  Not attempted, on the plan's own terms:
+"only worth it once 1-7 are trusted", and 1 is not yet judged, 5 has not
+been run and 7 has no data.  It is also the one item that changes what a
+plan /is/ -- spreading a six-hour task across three days means planning
+fractions of tasks, which every other part of the core currently assumes
+away.
+
+* Open questions
+
+All four are still open.  Three of them are now open /in code/ rather than
+on paper, which is the only progress available on them.
+
+- *Does live-sync feel first class?*  Unanswerable on paper, and still
+  unanswered -- but the prototype is built, so it is now answerable by
+  spending ten minutes in it.  =,-o-V=.
+- *What is a realistic daily capacity?*  Guessing is pointless; the honest
+  path is to clock normally for two weeks and read it off. Until then the
+  packer needs a placeholder, not a truth.  The placeholder is
+  =org-queue-capacity= in =modules/org/org-queue.el=: 5h Mon-Thu, 4h Fri,
+  1.5h at weekends.  It is a guess and is labelled as one in the source.
+- *Migration strategy for the real files.*  Nine files, mostly flat checkbox
+  lists, one 97k archive.  Mechanical conversion (=- [ ]= -> =* TODO=) is easy;
+  deciding what deserves an estimate and a deadline is not, and doing it in
+  one sitting is how this dies. Suggest converting one file (=(todo) emacs.org=)
+  by hand first and seeing how it feels before touching the rest.  The
+  mechanical half now has a tool; the deciding half is untouched and the
+  tool has not been pointed at a real file.
+- *Do QUES and IDEA belong in the queue at all?*  They are states for things
+  that are not yet commitments.  Current plan excludes IDEA and treats QUES
+  as low-weight; may be wrong.  Implemented exactly as written --
+  =org-queue-excluded-states= holds HOLD and IDEA, =org-queue-state-weights=
+  docks QUES by 1.5 -- so changing your mind is a =setq=, not a rewrite.
+- *Is the WIP limit of three right?*  New question, from building the
+  packer.  Three PROG items in a day is a guess in the same family as
+  capacity, and the corpus has seven PROG entries -- so the limit binds
+  immediately and is visible in the plan's cut list, which at least means
+  it will not go unnoticed.

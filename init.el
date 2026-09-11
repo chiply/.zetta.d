@@ -99,8 +99,14 @@ Returns a backend object when ENTRY is the symbol `zetta-op'."
     (add-hook 'auth-source-backend-parser-functions #'zetta-op-auth-source-parser)
   (advice-add 'auth-source-backend-parse :before-until #'zetta-op-auth-source-parser))
 
-;; Put 1Password first in auth-sources
-(setq auth-sources '(zetta-op))
+;; Put 1Password first in auth-sources -- but only where the `op' CLI
+;; exists.  Without it the backend can only ever return nothing, and
+;; setting it here unconditionally would also clobber whatever
+;; ~/.zetta.el (loaded above) chose: the headless template sets
+;; `auth-sources' to nil, which must survive to keep a secret-free hub
+;; from consulting a backend it does not have.
+(when (executable-find "op")
+  (setq auth-sources '(zetta-op)))
 
 ;; load private.el early (before config files that need API keys)
 (load-file "~/.private.el")

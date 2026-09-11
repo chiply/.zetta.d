@@ -39,15 +39,43 @@
   "Font size (px) for SVG mode-line text." :type 'integer :group 'zetta)
 (defcustom zetta-modeline-svg-line-pad 4
   "Extra vertical padding (px) per SVG mode-line line." :type 'integer :group 'zetta)
-(defcustom zetta-modeline-svg-char-advance 8
-  "Per-character advance (px) for rows laid out by run (pies/bars/segments).
-Match it to the SVG font's real glyph width as librsvg renders it (~8 for the
-bitmap Terminess Nerd Font Mono at 15px scaled).  Used to position progress
-pies/bars and interactive segments (clickable indicators) and to right-align
-their rows; plain all-text rows use exact font anchoring and ignore it.  If a
-clickable indicator's hover box sits too far left (overlapping the previous
-text) raise this; if it sits too far right (a gap before the text) lower it."
+(defcustom zetta-modeline-svg-char-advance-ratio 0.5
+  "Per-character advance, as a fraction of the font size, for run layout.
+Set from the bar's own font by `zetta-svg-line-derive-char-advance'; the
+default only stands in before that runs.  Used to position progress pies and
+bars and interactive segments (clickable indicators) and to right-align their
+rows; plain all-text rows use exact font anchoring and ignore it."
   :type 'number :group 'zetta)
+
+(define-obsolete-variable-alias 'zetta-modeline-svg-char-advance
+  'zetta-modeline-svg-char-advance-ratio "2026-09-07")
+(defcustom zetta-modeline-svg-seg-shape 'arrow
+  "Background shape for the mode line\'s chips.
+
+`arrow\' is a powerline chevron -- square left edge, right edge drawn to a
+point.  The tab line keeps its rounded pills (`round\'), and that difference
+is the point: the two bars carry different KINDS of thing.  A tab is an
+object you can click and switch to, and a rounded pill is the shape
+interfaces have used for a selectable token for decades.  A mode-line chip
+is a reading of state -- which mode, which branch, how far down the buffer
+-- and a chevron reads as a strip of readings rather than a row of buttons.
+
+`square\' and `slant\' are the other ways to not be a pill: see
+`svg-line--seg-box\'."
+  :type '(choice (const :tag "Rounded pill" round)
+                 (const :tag "Square" square)
+                 (const :tag "Powerline chevron" arrow)
+                 (const :tag "Parallelogram" slant))
+  :group 'zetta)
+
+(defcustom zetta-modeline-svg-seg-slant nil
+  "How deep the chevron cuts into a mode-line chip, in pixels.
+nil takes svg-line\'s default, ~0.3 of the row height.  The angle is cut
+INTO the chip, eating the padding its label already carries, so raising this
+eats into the label rather than into the gap after it."
+  :type '(choice (const :tag "Default (~0.3 row height)" nil) integer)
+  :group 'zetta)
+
 (defcustom zetta-modeline-svg-right-margin 8
   "Pixels of inset kept between right-aligned text and the window edge."
   :type 'integer :group 'zetta)
@@ -173,28 +201,73 @@ focused/unfocused distinction."
 ;;; ------------------------------------------------------------------
 
 ;;; ------------------------------------------------------------------
+;;; Extension points -- extra rows and extra spans from other modules
+;;; ------------------------------------------------------------------
+;; So a module that wants to put something on this bar does NOT have to be
+;; named here and this file does not have to know it exists.  Each hook
+;; holds functions of no arguments returning a LIST (of rows, or of span
+;; specs) to append; a function returning nil contributes nothing.
+;;
+;; Rows land after the two standard ones, spans after the progress pie.  A
+;; contributor that adds a row and a span for the same thing must decide
+;; both from ONE predicate: `:content' and `:spans' are called separately
+;; within a render, and a row with no span in it is a blank strip of bar.
+;;
+;; See `poimap.el' for the worked example (the buffer map).
+
+(defvar zetta-modeline-svg-extra-rows nil
+  "Functions returning extra `zetta-modeline-svg-lines' rows to append.")
+
+(defvar zetta-modeline-svg-extra-spans nil
+  "Functions returning extra `zetta-modeline-svg-spans' specs to append.")
+
+(defun zetta-modeline-svg--run-extras (var)
+  "Call each function in the list held by symbol VAR and append the results.
+
+A contributor that signals is REMOVED from VAR and reported once.  These run
+inside redisplay: left in place, a broken one would raise on every render of
+every window -- which in practice means the mode line stops drawing and the
+echo area fills faster than the error can be read.  Dropping it costs the
+one contribution and leaves the bar working and the reason on screen."
+  (let (out)
+    (dolist (f (symbol-value var))
+      (condition-case err
+          (setq out (append out (funcall f)))
+        (error
+         (set var (delq f (symbol-value var)))
+         (message "zetta-modeline: dropped %s from %s -- %s"
+                  f var (error-message-string err)))))
+    out))
+
+;;; ------------------------------------------------------------------
 ;;; Content -- rows of (LEFT-SEGMENTS . RIGHT-SEGMENTS)
 ;;; ------------------------------------------------------------------
 (defun zetta-modeline-svg-lines ()
   "Return the mode line as rows (cons LEFT . RIGHT, or :left/:center/:right)."
-  (list
-   ;; line 1:  [file] modal | ace | buffer   <progress pie>   mode | line:col
-   (list :left '(zetta-modeline-svg--buffer " "
-                 zetta-modeline-svg--ace " "
-                 zetta-modeline-svg--modal)
-         :center nil
-         :right '(zetta-modeline-svg--file-icon " "
-                  zetta-modeline-svg--mode "  " zetta-modeline-svg--point))
-   ;; line 2:  git:branch (clickable -> magit) | [copilot] lsp | flycheck | flags
-   ;;          ......   doc-position
-   ;; (the git + branch glyphs are folded into the clickable vc segment)
-   (cons '(zetta-modeline-svg--vc " "
-           zetta-modeline-svg--copilot-icon " " zetta-modeline-svg--checkers " "
-           zetta-modeline-svg--flycheck " " zetta-modeline-svg--indicators)
-         '(zetta-modeline-svg--docpos))))
+  (append
+   (list
+    ;; line 1:  buffer | modal ....... [file] mode | line:col | percent
+    ;; (no ace badge: the window key is a PROMPT, shown only while one is
+    ;; being asked for, and it is asked for in the tab line -- which every
+    ;; buffer has and not every buffer has one of these.  See
+    ;; `zetta-tab-line-svg--ace-item'.)
+    (list :left '(zetta-modeline-svg--buffer " "
+                  zetta-modeline-svg--modal)
+          :center nil
+          :right '(zetta-modeline-svg--file-icon " "
+                   zetta-modeline-svg--mode "  " zetta-modeline-svg--point))
+    ;; line 2:  git:branch (clickable -> magit) | [copilot] lsp | flycheck | flags
+    ;;          ......   doc-position   <progress pie, under the percent>
+    ;; (the git + branch glyphs are folded into the clickable vc segment)
+    (cons '(zetta-modeline-svg--vc " "
+            zetta-modeline-svg--copilot-icon " " zetta-modeline-svg--checkers " "
+            zetta-modeline-svg--flycheck " " zetta-modeline-svg--indicators)
+          '(zetta-modeline-svg--docpos)))
+   ;; line 3+: whatever another module asked for (the buffer map).
+   (zetta-modeline-svg--run-extras 'zetta-modeline-svg-extra-rows)))
 
-(defun zetta-modeline-svg--span-height ()
-  "Pixel height of a full-height (both rows) mode-line span.
+(defun zetta-modeline-svg--span-height (&optional rows)
+  "Pixel height of a ROWS-high mode-line span (one row by default).
 
 Mirrors svg-line\='s own arithmetic -- `svg-line--scaled\=' is
 \(round (* SIZE (svg-line--text-scale))), and a span\='s height is the row
@@ -203,8 +276,9 @@ makes svg-line splice it at scale 1.0, which is what keeps
 `zetta-modeline-svg-pie-ring-width\=' honest: any other size would multiply
 the hairline by the scale factor."
   (let ((sc (if (fboundp 'svg-line--text-scale) (svg-line--text-scale) 1.0)))
-    (max 8 (* 2 (+ (round (* zetta-modeline-svg-font-size sc))
-                   (round (* zetta-modeline-svg-line-pad sc)))))))
+    (max 8 (* (or rows 1)
+              (+ (round (* zetta-modeline-svg-font-size sc))
+                 (round (* zetta-modeline-svg-line-pad sc)))))))
 
 (declare-function svg-line--color "svg-line")
 
@@ -295,31 +369,67 @@ the ink is the one that recedes, and inverting the two needs no change here."
       color
     (zetta-svg-line--dim color 0.55)))
 
+(declare-function zetta-modeline-svg--docpos "line-utils")
+
+(defun zetta-modeline-svg--pie-gap ()
+  "Pixels to inset the pie from the right window edge.
+
+`zetta-modeline-svg-right-margin\=' -- so the pie\='s right edge lands on the
+same line as the percentage above it -- plus room for anything row 2 already
+right-aligns there.  That is `zetta-modeline-svg--docpos\=': empty in most
+buffers, the page counter in a PDF.  A span is an OVERLAY, so it does not
+push text aside the way another segment would; when there IS text there the
+pie steps left of it instead of over it.
+
+Scaled here, unlike the spec options: svg-line scales what it is given
+through `svg-line-define\=', but a span is handed to it already in its own
+pixel space."
+  (let* ((doc (and (fboundp 'zetta-modeline-svg--docpos)
+                   (zetta-modeline-svg--docpos)))
+         (text (cond ((stringp doc) doc)
+                     ((and (consp doc) (eq (car doc) :svg-seg)) (cadr doc))
+                     (t "")))
+         (sc (if (fboundp 'svg-line--text-scale) (svg-line--text-scale) 1.0)))
+    (round (* sc (+ zetta-modeline-svg-right-margin
+                    (if (> (length text) 0)
+                        ;; the counter plus a space, at the run layout\='s advance
+                        (* (1+ (length text))
+                           zetta-modeline-svg-font-size
+                           zetta-modeline-svg-char-advance-ratio)
+                      0))))))
+
 (defun zetta-modeline-svg-spans ()
-  "Centred overlay for the SVG mode line: a progress pie spanning both rows.
+  "Overlay for the SVG mode line: a progress pie at the right of row 2.
+
+It sits one row high directly under the percentage in
+`zetta-modeline-svg--point\=', which is the same reading in the other
+notation -- a number and a shape in one column at the right edge, rather
+than a disc floating in the middle of the line.
 
 A hairline ring holds the circle and only the filled wedge is painted inside
 it -- the unfilled remainder is the page (`zetta-modeline-svg-pie-track\=').
 The ring is what makes that safe: with the wedge alone, a buffer at its very
 top drew nothing at all and the indicator appeared to have broken.
 
-The pie dims when the window is not the selected one -- it is the largest
-piece of material left on a transparent mode line, and a bright one in every
-window would flatten the very distinction the bar backgrounds used to make.
-Which PART dims is decided by `zetta-modeline-svg--mute\=' from the colours
-themselves, so swapping the wedge and the ring does not need this rule
-rewritten to match."
+The pie dims when the window is not the selected one -- material on a
+transparent mode line is what carries the focused/unfocused distinction, and
+a bright pie in every window would flatten it.  Which PART dims is decided by
+`zetta-modeline-svg--mute\=' from the colours themselves, so swapping the
+wedge and the ring does not need this rule rewritten to match."
   (let* ((total (max 1 (- (point-max) (point-min))))
          (frac (/ (float (- (point) (point-min))) total))
          (activep (mode-line-window-selected-p))
          (mute (lambda (c) (if activep c (zetta-modeline-svg--mute c)))))
-    (list (list :image '(0 . 1)
+    (cons (list :image '(1 . 1)
                 (zetta-modeline-svg--pie-svg
                  frac
                  (funcall mute zetta-modeline-svg-pie-fill)
                  (funcall mute zetta-modeline-svg-pie-ring)
                  zetta-modeline-svg-pie-track
-                 (zetta-modeline-svg--span-height))))))
+                 (zetta-modeline-svg--span-height))
+                'right
+                (zetta-modeline-svg--pie-gap))
+          (zetta-modeline-svg--run-extras 'zetta-modeline-svg-extra-spans))))
 
 (svg-line-define 'zetta-mode-line
   :target 'mode-line
@@ -328,10 +438,12 @@ rewritten to match."
   :content #'zetta-modeline-svg-lines
   :spans #'zetta-modeline-svg-spans
   :active #'mode-line-window-selected-p
-  :font (lambda () zetta-svg-line-font)
+  :seg-shape (lambda () zetta-modeline-svg-seg-shape)
+  :seg-slant (lambda () zetta-modeline-svg-seg-slant)
+  :font (lambda () (zetta-svg-line-font-for :mode-line))
   :font-size (lambda () zetta-modeline-svg-font-size)
   :line-pad (lambda () zetta-modeline-svg-line-pad)
-  :char-advance (lambda () zetta-modeline-svg-char-advance)
+  :char-advance-ratio (lambda () zetta-modeline-svg-char-advance-ratio)
   :right-margin (lambda () zetta-modeline-svg-right-margin)
   :pad (lambda () zetta-modeline-svg-left-pad)
   :pad-y (lambda () zetta-modeline-svg-pad-y)
@@ -342,6 +454,85 @@ rewritten to match."
                                       (face-foreground 'mode-line-inactive nil t) "#777777"))
   :background (lambda () zetta-modeline-svg-bg-active)
   :inactive-background (lambda () zetta-modeline-svg-bg-inactive))
+
+;;; ------------------------------------------------------------------
+;;; A bare variant: the ace badge and nothing else.
+;;; ------------------------------------------------------------------
+;; For buffers you glance at and dismiss -- *Messages*, *Backtrace*,
+;; *Warnings*.  Almost nothing on the full line has anything to say about
+;; one of those: no file, no VC, no checkers, and a position that means
+;; nothing because you are not editing.  The ace key is the exception, and
+;; the reason this is a bare line rather than no line: those are precisely
+;; the windows you want to jump OUT of, so the one thing worth showing is
+;; how to leave.
+;;
+;; Defined but deliberately never `svg-line-activate\='d -- activating a
+;; `mode-line\=' line makes it the DEFAULT for every buffer.  This one is
+;; installed per buffer, by `zetta-window-chrome-rules\='
+;; (modules/ui/window-chrome.el).
+
+(defvar-local zetta-modeline-svg-bare-extra nil
+  "Segments appended after the ace badge in the bare mode line.
+
+A list in the same form as a side of `zetta-modeline-svg-lines': strings,
+function symbols, or `svg-line-seg' tokens.  Buffer-local, so a buffer that
+wants the minimal line PLUS one thing of its own -- the treemacs sidebar
+and its directory -- can say so without needing a whole mode line of its
+own.  See `treemacs.el'.")
+
+(defun zetta-modeline-svg-bare-lines ()
+  "Content for the bare mode line: one row of `zetta-modeline-svg-bare-extra'.
+
+Which used to be the ace badge plus that.  The badge has moved to the tab
+line and shows only while a window is being picked
+\(`zetta-tab-line-svg--ace-item'), so what is left here is whatever the
+buffer itself asked for -- and for most buffers that is nothing, which is
+why `zetta-modeline-svg-bare-format' returns nil rather than an empty bar."
+  (list (list :left zetta-modeline-svg-bare-extra
+              :center nil :right nil)))
+
+(svg-line-define 'zetta-mode-line-bare
+  :target 'mode-line
+  :layout 'lines
+  :width 'window
+  :content #'zetta-modeline-svg-bare-lines
+  :active #'mode-line-window-selected-p
+  :seg-shape (lambda () zetta-modeline-svg-seg-shape)
+  :seg-slant (lambda () zetta-modeline-svg-seg-slant)
+  ;; Same measurements and colours as the full line: this is the SAME bar
+  ;; with less in it, and a badge that changed size or tone between buffers
+  ;; would read as a different kind of window rather than a quieter one.
+  :font (lambda () (zetta-svg-line-font-for :mode-line))
+  :font-size (lambda () zetta-modeline-svg-font-size)
+  :line-pad (lambda () zetta-modeline-svg-line-pad)
+  :char-advance-ratio (lambda () zetta-modeline-svg-char-advance-ratio)
+  :right-margin (lambda () zetta-modeline-svg-right-margin)
+  :pad (lambda () zetta-modeline-svg-left-pad)
+  :pad-y (lambda () zetta-modeline-svg-pad-y)
+  :margin-y (lambda () zetta-modeline-svg-margin-y)
+  :foreground (lambda () (or zetta-modeline-svg-fg-active
+                             (face-foreground 'mode-line nil t) "#cccccc"))
+  :inactive-foreground (lambda () (or zetta-modeline-svg-fg-inactive
+                                      (face-foreground 'mode-line-inactive nil t) "#777777"))
+  :background (lambda () zetta-modeline-svg-bg-active)
+  :inactive-background (lambda () zetta-modeline-svg-bg-inactive))
+
+(defun zetta-modeline-svg-bare-format ()
+  "Return a `mode-line-format' rendering this buffer's minimal mode line.
+
+Nil when the buffer has nothing to put on one -- and a nil
+`mode-line-format' is the only way to have NO bar: a format that renders
+an empty image still occupies a row.  So a buffer that wanted the minimal
+line only for the ace badge now gets no mode line at all, which is the
+point: the key is in the tab line, and the tab line is the bar every
+buffer has.
+
+`svg-line-define' names each line's renderer `svg-line--render-NAME' and
+wraps it in exactly this form when it installs one.  We build the same form
+by hand because we want it in ONE buffer, not as the default -- which is
+all `svg-line-activate' can do for a `mode-line' target."
+  (and zetta-modeline-svg-bare-extra
+       '((:eval (svg-line--render-zetta-mode-line-bare)))))
 
 ;;; ------------------------------------------------------------------
 ;;; Switching between SVG and telephone-line.

@@ -59,7 +59,7 @@ in the order they appear in the `zetta-modules!' declaration.")
     (completion . ("completion.el" "cape.el" "dabbrev.el" "recursion-indicator.el"
                    "helm.el" "marginalia.el" "orderless.el" "embark.el"
                    "embark-consult.el" "consult.el" "tap.el"
-                   "vertico.el" "corfu.el" "prescient.el" "mono-complete.el"
+                   "vertico.el" "corfu.el" "corfu-terminal.el" "prescient.el" "mono-complete.el"
                    "consult-gh.el" "consult-dash.el" "consult-ls-git.el"))
     (ui . ("display.el" "hud.el" "highlight-indent-guides.el" "ultra-scroll.el"
            "color-identifiers-mode.el" "volatile-highlights.el"
@@ -74,6 +74,10 @@ in the order they appear in the `zetta-modules!' declaration.")
            ;; builds; see the elfeed/elfeed-protocol precedent).
            "avy.el" "ace-window.el" "treemacs.el"
            "all-the-icons-dired.el" "all-the-icons-ibuffer.el" "theme.el"
+           ;; solaire AFTER theme.el: it caches "does this theme define
+           ;; solaire-default-face?" the first time it sees a theme, and
+           ;; re-asks on load — so it wants the theme already enabled.
+           "solaire-mode.el" "window-chrome.el"
            "modern-fringes.el" "rainbow-mode.el" "image-mode.el" "browse-url.el"
            "mermaid-mode.el" "minimap.el" "unicode-fonts.el" "spinner.el"
            "nyan-mode.el" "popper.el" "window.el"
@@ -122,7 +126,18 @@ in the order they appear in the `zetta-modules!' declaration.")
             "mastodon.el" "erc.el" "eww.el" "nano-mu4e.el" "mu4e-dashboard.el"
             "org-msg.el" "flappy-fish.el" "speed-type.el"
             "spray.el" "touchtype.el" "key-quiz.el"))
-    (org . ("org.el" "org-ql.el" "org-capture.el" "org-ref.el" "ob-mermaid.el"
+    ;; org.el first: it defines the (todo) corpus functions and the todo
+    ;; source toggle that the agenda, the schema tools and the queue all
+    ;; read.  org-super-agenda.el before org-agenda.el, because the
+    ;; grouping variables it defines are what the custom commands there
+    ;; name.
+    (org . ("org.el" "org-todo-schema.el"
+            "org-super-agenda.el" "org-agenda.el" "org-other-agenda.el"
+            ;; org-queue.el before org-gantt.el: the chart takes its
+            ;; working-state vocabulary from the queue's, and reads the
+            ;; queue's plan history for the planned rail.
+            "org-queue.el" "org-gantt.el"
+            "org-ql.el" "org-capture.el" "org-ref.el" "ob-mermaid.el"
             "pdf-tools.el" "biblio.el" "citar.el" "org-remark.el"
             "org-tree-slide.el" "org-transclusion.el"))
     (term . ("shell.el" "foreman.el" "foreman-conf.el" "vterm.el")))
@@ -259,21 +274,73 @@ Examples:
 
 ;;; Init-critical utility functions
 
+(defun zetta--svg-available-p ()
+  "Non-nil when this Emacs can render SVG images.
+Nil on a build without librsvg (apt's emacs-nox, for one), where every
+piece of SVG chrome would fail at its first render."
+  (image-type-available-p 'svg))
+
+(defvar zetta-module-conditions
+  ;; The SVG chrome stack: mode line, header line, tab bar, tab line and
+  ;; the margin gutter are all IMAGES, so a build that cannot render SVG
+  ;; has nothing to show for them.  Three of these files use `:wait t',
+  ;; which would block the elpaca queue on a package that can never draw.
+  ;; The predicate, not a profile exclusion, so the same user config is
+  ;; right on the GUI daily driver and on a headless box, and becomes
+  ;; right again the day the headless box gets an SVG-capable build.
+  (mapcar (lambda (file) (cons file #'zetta--svg-available-p))
+          '("ui/svg-line.el" "ui/svg-lib.el" "ui/svg-margin.el"
+            "ui/modeline-svg.el" "ui/header-line-svg.el"
+            "ui/tab-bar-svg.el" "ui/tab-line-svg.el" "ui/poimap.el"))
+  "Alist of (MODULE-FILE . PREDICATE) for conditionally loaded modules.
+
+MODULE-FILE is the same \"category/file.el\" string used in `user-files'.
+PREDICATE is called with no arguments; the module is loaded only when it
+returns non-nil, and skipped silently otherwise.
+
+This exists because some modules need a capability the running Emacs may
+not have.  Guarding inside the file itself is the obvious alternative and
+is wrong here: wrapping a file of definitions in `(when ...)' makes them
+non-top-level, at which point `defsubst' stops inlining and
+`defvar-local' warns -- and a pixel loop whose helpers stopped inlining
+allocates per call, which is exactly the garbage-collection stall the
+canvas work went to some trouble to remove.
+
+Test the capability, not `emacs-major-version': it is what actually
+decides, it stays correct for a backport, and it needs no revisiting when
+the version number moves on.")
+
+(defun zetta-module-supported-p (file)
+  "Non-nil if module FILE should be loaded on this Emacs."
+  (let ((pred (alist-get file zetta-module-conditions nil nil #'equal)))
+    (or (null pred) (funcall pred))))
+
 (defun zetta-load-config-file (file)
   "Load a module FILE relative to `zetta-modules-dir'."
   (interactive)
-  (message file)
-  (let* ((emacsdir (expand-file-name user-emacs-directory))
-         (sourcefile-path (format "%smodules/%s" emacsdir file))
-         (file-extension (file-name-extension file))
-         (root (file-name-sans-extension file)))
-    (cond
-     ((string= "el" file-extension)
-      (load-file sourcefile-path))
-     ((string= "org" file-extension)
-      (let* ((tanglefile-path (format "%smodules/tangled/%s.el" emacsdir root)))
-        (org-babel-tangle-file sourcefile-path tanglefile-path)
-        (load-file tanglefile-path))))))
+  (if (not (zetta-module-supported-p file))
+      (message "%s (skipped: its capability predicate is nil on this Emacs %s build)"
+               file emacs-version)
+    (message file)
+    (let* ((emacsdir (expand-file-name user-emacs-directory))
+           (sourcefile-path (format "%smodules/%s" emacsdir file))
+           (file-extension (file-name-extension file))
+           (root (file-name-sans-extension file)))
+      (cond
+       ((string= "el" file-extension)
+        (load-file sourcefile-path))
+       ((string= "org" file-extension)
+        (let* ((tanglefile-path (format "%smodules/tangled/%s.el" emacsdir root)))
+          (org-babel-tangle-file sourcefile-path tanglefile-path)
+          (load-file tanglefile-path)))))))
+
+;; NOTE: `load-file' takes an exact filename, so this loads every module
+;; INTERPRETED even though a fresh .elc and .eln sit beside it -- the whole
+;; config runs interpreted, and its compiled artefacts go unused.  Switching to
+;; extensionless `load' was measured to fix that (modules come back as
+;; BYTECODE) but breaks startup: loading org/org.el compiled stops the module
+;; sequence there and silently drops the remaining 16 modules.  Worth fixing
+;; properly, but it is not a one-line change.  See TODO.org.
 
 (defun zetta-touch-maybe (path)
   "Create file or directory at PATH if it doesn't already exist.

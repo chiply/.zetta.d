@@ -71,10 +71,19 @@
   :config
   (consult-gh-embark-mode +1))
 
+;; `:after forge' as well as consult-gh, because consult-gh-forge.el opens
+;; with a bare `(require 'forge)'.  forge is a separate elpaca package and
+;; is not on `load-path' until elpaca activates it, which happens when
+;; modules/tools/forge.el is read -- long after :completion.  Waiting only
+;; on consult-gh means whatever loads consult-gh first decides whether that
+;; require finds forge, and when it does not the file-missing error escapes
+;; use-package's `(require 'consult-gh-forge nil t)' (NOERROR covers a
+;; missing consult-gh-forge, not an error raised while loading it) and
+;; takes the whole init down with it.
 (use-package consult-gh-forge
   :if (executable-find "gh")
   :ensure nil
-  :after consult-gh
+  :after (consult-gh forge)
   :config
   (consult-gh-forge-mode +1))
 ;;; consult-gh.el ends here

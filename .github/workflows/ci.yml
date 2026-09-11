@@ -83,14 +83,44 @@ jobs:
           # unstable to gate on.  Swap for a pinned 31.1 once it
           # ships.
           - release-snapshot
+        include:
+          # The kb-hub's exact package: apt emacs-nox on Ubuntu 24.04
+          # (1:29.3+1), a build with no window system and no librsvg.
+          # The other rows are setup-emacs builds that have both, so
+          # they load every SVG module and never exercise the capability
+          # predicates in `zetta-module-conditions'.  This row loads the
+          # headless profile (templates/zetta.headless.el), the file the
+          # hub bootstrap installs verbatim, so a module added to that
+          # profile is proven on the hub's Emacs before it reaches the
+          # hub.  The label is the cache-key discriminator.
+          - os: ubuntu-latest
+            emacs-version: nox-29.3
+            emacs-nox: true
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Emacs
+        if: '!matrix.emacs-nox'
         uses: jcs090218/setup-emacs@master
         with:
           version: ${{ matrix.emacs-version }}
+
+      - name: Set up emacs-nox (apt)
+        if: matrix.emacs-nox
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y emacs-nox
+          # The row only proves anything about the hub if this Emacs is
+          # as capability-poor as the hub's: no SVG, no window system.
+          emacs --version | head -1
+          emacs -Q --batch --eval '(progn
+            (message "svg: %s  window-system-support: %s"
+                     (image-type-available-p (quote svg))
+                     (fboundp (quote set-fringe-bitmap-face)))
+            (when (image-type-available-p (quote svg))
+              (message "this Emacs renders SVG; the nox row would not test the headless predicates")
+              (kill-emacs 1)))'
 
       - name: Restore elpaca cache
         # Restore-only (paired with the explicit save at the end of the
@@ -115,10 +145,14 @@ jobs:
             elpaca-v3-${{ matrix.emacs-version }}-
 
       - name: Create stub files
+        # The nox row gets the headless profile, every other row the
+        # full one.  Both must exist before bin/zetta runs: ci-sync and
+        # ci-test substitute the full-profile example when ~/.zetta.el
+        # is missing.
         run: |
           touch ~/.dir-locals.el
           echo ";;" > ~/.private.el
-          cp templates/zetta.example.el ~/.zetta.el
+          cp templates/${{ matrix.emacs-nox && 'zetta.headless.el' || 'zetta.example.el' }} ~/.zetta.el
 
       - name: Sync missing packages
         if: steps.cache-elpaca.outputs.cache-hit != 'true'
@@ -186,14 +220,44 @@ jobs:
           # unstable to gate on.  Swap for a pinned 31.1 once it
           # ships.
           - release-snapshot
+        include:
+          # The kb-hub's exact package: apt emacs-nox on Ubuntu 24.04
+          # (1:29.3+1), a build with no window system and no librsvg.
+          # The other rows are setup-emacs builds that have both, so
+          # they load every SVG module and never exercise the capability
+          # predicates in `zetta-module-conditions'.  This row loads the
+          # headless profile (templates/zetta.headless.el), the file the
+          # hub bootstrap installs verbatim, so a module added to that
+          # profile is proven on the hub's Emacs before it reaches the
+          # hub.  The label is the cache-key discriminator.
+          - os: ubuntu-latest
+            emacs-version: nox-29.3
+            emacs-nox: true
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Emacs
+        if: '!matrix.emacs-nox'
         uses: jcs090218/setup-emacs@master
         with:
           version: ${{ matrix.emacs-version }}
+
+      - name: Set up emacs-nox (apt)
+        if: matrix.emacs-nox
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y emacs-nox
+          # The row only proves anything about the hub if this Emacs is
+          # as capability-poor as the hub's: no SVG, no window system.
+          emacs --version | head -1
+          emacs -Q --batch --eval '(progn
+            (message "svg: %s  window-system-support: %s"
+                     (image-type-available-p (quote svg))
+                     (fboundp (quote set-fringe-bitmap-face)))
+            (when (image-type-available-p (quote svg))
+              (message "this Emacs renders SVG; the nox row would not test the headless predicates")
+              (kill-emacs 1)))'
 
       - name: Restore elpaca cache
         id: cache-elpaca
@@ -205,10 +269,14 @@ jobs:
             elpaca-v3-${{ matrix.emacs-version }}-
 
       - name: Create stub files
+        # The nox row gets the headless profile, every other row the
+        # full one.  Both must exist before bin/zetta runs: ci-sync and
+        # ci-test substitute the full-profile example when ~/.zetta.el
+        # is missing.
         run: |
           touch ~/.dir-locals.el
           echo ";;" > ~/.private.el
-          cp templates/zetta.example.el ~/.zetta.el
+          cp templates/${{ matrix.emacs-nox && 'zetta.headless.el' || 'zetta.example.el' }} ~/.zetta.el
 
       - name: Sync missing packages
         if: steps.cache-elpaca.outputs.cache-hit != 'true'

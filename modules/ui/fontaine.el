@@ -29,10 +29,11 @@ time.  There is no evaluation to control and no new syntax to introduce, so
 a macro would buy nothing and cost debuggability.
 
 `:svg-line-family\=' deliberately does NOT default to FAMILY.  The SVG chrome
-needs a font that advances Nerd icons and text identically, and almost
-nothing does -- see FONTS.org.  It defaults to the known-good Terminess;
-pass your own if you have checked it with
-`zetta-svg-line--uniform-advance-p\='."
+needs a font that CONTAINS the Nerd icons and advances them exactly as it
+advances text; a font with no icons at all cannot (it falls back per glyph,
+at whatever width the substitute happens to have).  It defaults to the
+known-good Terminess; pass your own if it passes
+`zetta-svg-line--uniform-advance-p\=' -- most Nerd-patched families do."
   (append
    overrides
    (list :default-family family
@@ -81,9 +82,9 @@ metric apparatus -- terminal grids, box-drawing alignment, the SVG chrome
   "Build a uniform preset for every installed monospaced family.
 
 Each gets its own family on all faces.  `:svg-line-family\=' is the family
-itself only when it advances Nerd icons like text; otherwise it falls back
-to Terminess, because the SVG chrome cannot be laid out on a font whose
-icons sit on a different advance -- see FONTS.org.
+itself only when it carries the Nerd icons and advances them like text;
+otherwise it falls back to Terminess, because the SVG chrome cannot be laid
+out on a font whose icons sit on a different advance -- see FONTS.org.
 
 Skips names already taken by `zetta-fontaine-curated-presets\=', so a
 hand-tuned preset always wins over a generated one.
@@ -140,6 +141,11 @@ always take precedence over a generated one of the same name."
   ;; a font that has just appeared or vanished invalidates them.
   (when (fboundp 'zetta-font-forget-metrics)
     (zetta-font-forget-metrics))
+  ;; The librsvg advance measurements are keyed by family name, and a family
+  ;; that has just appeared, vanished or been replaced on disk invalidates
+  ;; its entry -- fontconfig will now resolve that name to a different file.
+  (when (fboundp 'zetta-svg-line-forget-em-ratios)
+    (zetta-svg-line-forget-em-ratios))
   (setq zetta-fontaine-generated-presets (zetta-fontaine-generate-font-presets))
   ;; the `t' entry is fontaine's fallback and must come last
   (let* ((fallback (assq t zetta-fontaine-curated-presets))
@@ -184,19 +190,43 @@ always take precedence over a generated one of the same name."
   ;; means switching back from `monaspace-mixed' would strand the mode line
   ;; and header line on Monaspace.
   ;;
-  ;; `:svg-line-family' stays on Terminess for every preset, and that is not
-  ;; laziness.  The SVG renderers lay icons and text on ONE fixed grid, so
-  ;; the chrome font must advance both identically.  Measured at height 150:
+  ;; The Monaspace presets drive the chrome with Monaspace, which this file
+  ;; long said was impossible.  It said so on a bad measurement.  The old
+  ;; note recorded, at face height 150:
   ;;
   ;;   Terminess Nerd Font Mono      text 8.0   icons 8.0   uniform
   ;;   Monaspace Krypton NF          text 9.0   icons 8.0
-  ;;   MonaspiceKr Nerd Font Mono    text 9.0   icons 8.0   (nerd-fonts build)
   ;;
-  ;; Nerd glyphs are drawn on a fixed 8px design grid; Terminus-derived fonts
-  ;; work only because their text is also 8px.  No Monaspace-derived build is
-  ;; uniform -- not even the "Mono" variant -- so pointing the chrome at one
-  ;; makes every icon under-fill its cell and the masthead, tab line and mode
-  ;; line drift and overlap.
+  ;; and concluded that no Monaspace build advances icons like text.  But
+  ;; those came from `string-pixel-width', which answers for EMACS: a face
+  ;; spec naming a family only binds it for the characters it covers, and
+  ;; for a Private-Use codepoint Emacs consults the fontset and substitutes.
+  ;; The "icons 8.0" was Terminess leaking into the probe.
+  ;;
+  ;; Measured through LIBRSVG instead -- the renderer that actually draws
+  ;; these images, see `zetta-svg-line-em-ratio' -- at any font size:
+  ;;
+  ;;   Terminess Nerd Font Mono      text 0.5000 em   icons 0.5000 em
+  ;;   Monaspace {Neon,Argon,Xenon,  text 0.7775 em   icons 0.7775 em
+  ;;              Krypton,Radon} NF
+  ;;   Terminus (TTF)                text 0.8892 em   icons 0.9445 em
+  ;;
+  ;; All five Monaspace families are exactly uniform across every Nerd range
+  ;; the chrome draws.  Plain Terminus is the one that genuinely fails, and
+  ;; for the obvious reason: it carries no icons, so each one falls back to
+  ;; whatever font the substitution finds.
+  ;;
+  ;; The second half of the fix was on the layout side.  Emacs and librsvg
+  ;; disagree about Monaspace's em by a factor of 1.254 -- it declares 2000
+  ;; units per em in `head' while its CFF `FontMatrix' implies ~1596, and
+  ;; FreeType believes the matrix where CoreText believes `head'.  So the
+  ;; grid was being built at 9 px/char for text librsvg drew at 11.66, and
+  ;; the bars overlapped.  Both numbers now come from the same renderer.
+  ;;
+  ;; `:svg-line-fonts' takes this further: a plist of per-bar families, so
+  ;; the tab bar can run a different font from the mode line.  Nothing is
+  ;; shared between bars any more -- each derives its own grid from its own
+  ;; font -- so mixing costs nothing.
   ;;
   ;; `:svg-line-family' is not a fontaine property.  Fontaine merges presets
   ;; with plain `plist-get', so unknown keys pass through untouched and can
@@ -236,7 +266,7 @@ always take precedence over a generated one of the same name."
            :line-number-family "Monaspace Neon NF"
            :italic-family "Monaspace Neon NF"
            :bold-family "Monaspace Neon NF"
-           :svg-line-family "Terminess Nerd Font Mono")
+           :svg-line-family "Monaspace Neon NF")
 
           ;; The reason to run a superfamily: the five are metrically
           ;; compatible, so different families can carry different roles
@@ -266,7 +296,14 @@ always take precedence over a generated one of the same name."
            ;; handwriting instead.
            :italic-family "Monaspace Neon NF"
            :bold-family "Monaspace Neon NF"
-           :svg-line-family "Terminess Nerd Font Mono")
+           ;; The mixed preset mixes the CHROME too, which is the whole
+           ;; point of it: Krypton (mechanical) carries the bars that read
+           ;; as instrumentation, Xenon (slab) the header line that reads as
+           ;; a title.  Each bar derives its own layout grid from its own
+           ;; family, so these need not be the same width -- though, being
+           ;; one superfamily, they are.
+           :svg-line-family "Monaspace Krypton NF"
+           :svg-line-fonts (:header-line "Monaspace Xenon NF"))
 
           ;; Prose-leaning, for org.  Argon is the humanist face; Neon stays
           ;; on `fixed-pitch' so source blocks and tables keep the same
@@ -286,7 +323,7 @@ always take precedence over a generated one of the same name."
            :line-number-family "Monaspace Neon NF"
            :italic-family "Monaspace Argon NF"
            :bold-family "Monaspace Argon NF"
-           :svg-line-family "Terminess Nerd Font Mono")
+           :svg-line-family "Monaspace Argon NF")
 
           ;; Deliberately loud: as much of the Monaspace superfamily as one
           ;; buffer can show.  All five are metrically identical -- measured
@@ -578,7 +615,8 @@ Three things need doing that `fontaine-set-preset' does not:
       (let* ((preset fontaine-current-preset)
              (family (fontaine--get-preset-property preset :default-family))
              (height (fontaine--get-preset-property preset :default-height))
-             (svg (fontaine--get-preset-property preset :svg-line-family)))
+             (svg (fontaine--get-preset-property preset :svg-line-family))
+             (svg-fonts (fontaine--get-preset-property preset :svg-line-fonts)))
         ;; Fontaine installs its faces with `custom-theme-set-faces' under a
         ;; theme it never enables.  That applies them once, but any later
         ;; `clear-face-cache' re-realizes faces from their SPECS -- and with
@@ -590,6 +628,11 @@ Three things need doing that `fontaine-set-preset' does not:
         (when (and family height)
           nil)
         (when svg (setq zetta-svg-line-font svg))
+        ;; Assigned unconditionally, nil included: a preset that says nothing
+        ;; about per-bar fonts means it wants none, so switching away from a
+        ;; mixed preset must CLEAR the overrides rather than strand the tab
+        ;; bar in the font that preset chose for it.
+        (setq zetta-svg-line-fonts (copy-sequence svg-fonts))
         ;; Metrics first: it clears the face cache, so asserting the frame
         ;; font before this would just be undone.
         (when (fboundp 'zetta-font-apply-metric-corrections)

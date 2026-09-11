@@ -5,15 +5,48 @@
 # that day, so the version CI tested is not the version a fresh install
 # gets.  Freeze in the same PR that adds the package:  bin/zetta freeze
 #
+# Declarations marked `:ensure nil' are exempt: those are built-ins, elpaca
+# installs nothing for them and they never appear in the lockfile, so there
+# is nothing to freeze and demanding it only teaches people --no-verify.
+#
 # Activate once per clone:   git config core.hooksPath .githooks
 # Bypass deliberately with:  git commit --no-verify
 set -euo pipefail
 
-added=$(git diff --cached -U0 -- 'modules/*.el' 'modules/**/*.el' 'source/**/*.el' \
-  | grep -E '^\+[^+]' | grep -cE '\(use-package |\(elpaca |:ensure \(' || true)
-lock_staged=$(git diff --cached --name-only | grep -c '^elpaca-lock\.el$' || true)
+paths=(modules/*.el modules/**/*.el source/**/*.el)
 
-if [ "${added:-0}" -gt 0 ] && [ "${lock_staged:-0}" -eq 0 ]; then
+lock_staged=$(git diff --cached --name-only | grep -c '^elpaca-lock\.el$' || true)
+[ "${lock_staged:-0}" -gt 0 ] && exit 0
+
+added=$(git diff --cached -U0 -- "${paths[@]}" | grep -E '^\+[^+]' || true)
+[ -z "$added" ] && exit 0
+
+# An explicit recipe or a raw (elpaca ...) always means an installed package.
+hard=$(printf '%s\n' "$added" | grep -cE '\(elpaca |:ensure \(' || true)
+
+# A bare (use-package NAME ...) counts unless that form says `:ensure nil'.
+# Read the STAGED file to decide -- the keyword is usually on a later line
+# than the one the diff shows, so the diff alone cannot answer it.
+files=$(git diff --cached --name-only --diff-filter=ACM -- "${paths[@]}" || true)
+soft=0
+for name in $(printf '%s\n' "$added" \
+                | sed -nE 's/.*\(use-package[[:space:]]+([^][[:space:]()]+).*/\1/p' \
+                | sort -u); do
+    exempt=0
+    for f in $files; do
+        if git show ":$f" 2>/dev/null | awk -v pkg="$name" '
+              index($0, "(use-package " pkg) == 1 { inpkg = 1; next }
+              inpkg && /^\(/                     { inpkg = 0 }
+              inpkg && /:ensure[[:space:]]+nil/  { found = 1 }
+              END { exit !found }'; then
+            exempt=1
+            break
+        fi
+    done
+    [ "$exempt" -eq 1 ] || soft=$((soft + 1))
+done
+
+if [ $((hard + soft)) -gt 0 ]; then
     echo "pre-commit: staged elisp adds package declarations, but elpaca-lock.el is not staged." >&2
     echo "  New/changed packages stay unpinned until 'bin/zetta freeze' runs." >&2
     echo "  Freeze in this PR, or bypass deliberately: git commit --no-verify" >&2

@@ -5,6 +5,7 @@
 #
 # Commands:
 #   install   Install packages and native-compile
+#   build     Same phases, multi-hour window, no cache purge (slow boxes, updates)
 #   sync      Re-evaluate config, install new packages
 #   freeze    Write lockfile and optionally commit
 #   update    Pull all packages (backs up lockfile first)
@@ -37,6 +38,105 @@ _sha256() {
     if command -v sha256sum &>/dev/null; then sha256sum "$1" | cut -d' ' -f1
     else shasum -a 256 "$1" | cut -d' ' -f1; fi
 }
+
+# ——————————————————————————————————————————
+# build phases (shared by install and build)
+# ——————————————————————————————————————————
+
+# Phase 1: drive elpaca to completion under a progress timer.  TIMEOUT
+# is the wall-clock window and STALL the seconds of no progress
+# tolerated, both in seconds; LABEL prefixes the progress lines.  Ends
+# with the same ELPACA-FAILED report and ZETTA-OK marker as ci-test, so
+# a log from an unattended run can be judged with one grep.
+_elpaca_install() {
+    local timeout="$1" stall="$2" label="$3"
+    "$EMACS" --init-directory="$ZETTA_DIR" --batch \
+        -l "$ZETTA_DIR/init.el" \
+        --eval "(defvar zetta--install-timer nil)" \
+        --eval "(defvar zetta--install-prev-done 0)" \
+        --eval "(defvar zetta--install-stall-since nil)" \
+        --eval "(let* ((start (float-time))
+                       (timeout $timeout)
+                       (stall-limit $stall))
+                  (setq zetta--install-timer
+                        (run-with-timer 10 10
+                         (lambda ()
+                           (let ((pending 0) (failed 0) (total 0) (done 0) (stuck nil))
+                             (dolist (entry (elpaca--queued))
+                               (cl-incf total)
+                               (pcase (elpaca<-status (cdr entry))
+                                 ('failed (cl-incf failed))
+                                 ((or 'finished 'blocked) (cl-incf done))
+                                 (_ (cl-incf pending)
+                                    (push (format \"%s [%s]\" (car entry)
+                                                  (elpaca<-status (cdr entry)))
+                                          stuck))))
+                             (message \"$label: %d/%d done, %d pending, %d failed (%.0fs)\"
+                                      done total pending failed
+                                      (- (float-time) start))
+                             (if (> done zetta--install-prev-done)
+                                 (progn (setq zetta--install-prev-done done)
+                                        (setq zetta--install-stall-since nil))
+                               (when (and stuck (not zetta--install-stall-since))
+                                 (setq zetta--install-stall-since (float-time)))
+                               (when (and zetta--install-stall-since
+                                          (> (- (float-time) zetta--install-stall-since) stall-limit))
+                                 (message \"$label: no progress for %ds, giving up on: %s\"
+                                          stall-limit (string-join stuck \", \"))
+                                 (cancel-timer zetta--install-timer)
+                                 (throw 'elpaca-timeout nil))))
+                           (when (> (- (float-time) start) timeout)
+                             (message \"INSTALL-TIMEOUT after %ds\" timeout)
+                             (cancel-timer zetta--install-timer)
+                             (throw 'elpaca-timeout nil)))))
+                  (catch 'elpaca-timeout
+                    (unwind-protect (elpaca-wait) (cancel-timer zetta--install-timer)))
+                  (message \"Package installation finished in %.0fs\" (- (float-time) start)))" \
+        --eval "(let ((failed-pkgs (cl-remove-if-not
+                                    (lambda (e) (eq (elpaca<-status (cdr e)) 'failed))
+                                    (elpaca--queued))))
+                  (if failed-pkgs
+                      (progn
+                        (message \"ELPACA-FAILED %d packages:\" (length failed-pkgs))
+                        (dolist (e failed-pkgs) (message \"  %s\" (car e))))
+                    (message \"ZETTA-OK packages=%d modules=%d\"
+                             (length (elpaca--queued)) (length user-files))))" \
+        2>&1 | while IFS= read -r line; do
+            echo "  $line"
+        done
+}
+
+# Phase 2: byte-compile the modules and the bootstrap.
+_byte_compile_modules() {
+    _info "Byte-compiling modules and bootstrap..."
+    find "$ZETTA_DIR/modules" "$ZETTA_DIR/source" -name '*.elc' -delete
+    "$EMACS" --init-directory="$ZETTA_DIR" --batch \
+        -l "$ZETTA_DIR/init.el" \
+        --eval "(elpaca-wait)" \
+        --eval "(byte-recompile-directory \"$ZETTA_DIR/modules\" 0)" \
+        --eval "(byte-recompile-directory \"$ZETTA_DIR/source/bootstrap\" 0)" \
+        2>&1 | while IFS= read -r line; do
+            echo "  $line"
+        done
+    _ok "Module byte-compilation complete"
+}
+
+# Phase 3: native-compile every built package ahead of time.  Files
+# whose .eln is already current are skipped, so on a warm tree this is
+# minutes, not hours.
+_native_compile_packages() {
+    _info "Native-compiling packages (this may take a while)..."
+    "$EMACS" --init-directory="$ZETTA_DIR" --batch \
+        --eval "(require 'comp)" \
+        --eval "(native-compile-async \"$ZETTA_DIR/elpaca/builds\" 'recursively)" \
+        --eval "(while (or comp-files-queue
+                        (> (hash-table-count comp-async-compilations) 0))
+                  (sleep-for 1))" \
+        2>&1 | while IFS= read -r line; do
+            echo "  $line"
+        done
+}
+
 
 # ——————————————————————————————————————————
 # install
@@ -79,76 +179,10 @@ cmd_install() {
     find "$ZETTA_DIR/modules" "$ZETTA_DIR/source" -name '*.elc' -delete 2>/dev/null || true
 
     _info "Starting Emacs to install and build packages..."
-    "$EMACS" --init-directory="$ZETTA_DIR" --batch \
-        -l "$ZETTA_DIR/init.el" \
-        --eval "(defvar zetta--install-timer nil)" \
-        --eval "(defvar zetta--install-prev-done 0)" \
-        --eval "(defvar zetta--install-stall-since nil)" \
-        --eval "(let* ((start (float-time))
-                       (timeout 600)
-                       (stall-limit 600))
-                  (setq zetta--install-timer
-                        (run-with-timer 10 10
-                         (lambda ()
-                           (let ((pending 0) (failed 0) (total 0) (done 0) (stuck nil))
-                             (dolist (entry (elpaca--queued))
-                               (cl-incf total)
-                               (pcase (elpaca<-status (cdr entry))
-                                 ('failed (cl-incf failed))
-                                 ((or 'finished 'blocked) (cl-incf done))
-                                 (_ (cl-incf pending)
-                                    (push (format \"%s [%s]\" (car entry)
-                                                  (elpaca<-status (cdr entry)))
-                                          stuck))))
-                             (message \"install: %d/%d done, %d pending, %d failed (%.0fs)\"
-                                      done total pending failed
-                                      (- (float-time) start))
-                             (if (> done zetta--install-prev-done)
-                                 (progn (setq zetta--install-prev-done done)
-                                        (setq zetta--install-stall-since nil))
-                               (when (and stuck (not zetta--install-stall-since))
-                                 (setq zetta--install-stall-since (float-time)))
-                               (when (and zetta--install-stall-since
-                                          (> (- (float-time) zetta--install-stall-since) stall-limit))
-                                 (message \"install: no progress for %ds, giving up on: %s\"
-                                          stall-limit (string-join stuck \", \"))
-                                 (cancel-timer zetta--install-timer)
-                                 (throw 'elpaca-timeout nil))))
-                           (when (> (- (float-time) start) timeout)
-                             (message \"INSTALL-TIMEOUT after %ds\" timeout)
-                             (cancel-timer zetta--install-timer)
-                             (throw 'elpaca-timeout nil)))))
-                  (catch 'elpaca-timeout
-                    (unwind-protect (elpaca-wait) (cancel-timer zetta--install-timer)))
-                  (message \"Package installation finished in %.0fs\" (- (float-time) start)))" \
-        2>&1 | while IFS= read -r line; do
-            echo "  $line"
-        done
-
+    _elpaca_install 600 600 install
     _ok "Package installation complete"
-
-    _info "Byte-compiling modules and bootstrap..."
-    find "$ZETTA_DIR/modules" "$ZETTA_DIR/source" -name '*.elc' -delete
-    "$EMACS" --init-directory="$ZETTA_DIR" --batch \
-        -l "$ZETTA_DIR/init.el" \
-        --eval "(elpaca-wait)" \
-        --eval "(byte-recompile-directory \"$ZETTA_DIR/modules\" 0)" \
-        --eval "(byte-recompile-directory \"$ZETTA_DIR/source/bootstrap\" 0)" \
-        2>&1 | while IFS= read -r line; do
-            echo "  $line"
-        done
-    _ok "Module byte-compilation complete"
-
-    _info "Native-compiling packages (this may take a while)..."
-    "$EMACS" --init-directory="$ZETTA_DIR" --batch \
-        --eval "(require 'comp)" \
-        --eval "(native-compile-async \"$ZETTA_DIR/elpaca/builds\" 'recursively)" \
-        --eval "(while (or comp-files-queue
-                        (> (hash-table-count comp-async-compilations) 0))
-                  (sleep-for 1))" \
-        2>&1 | while IFS= read -r line; do
-            echo "  $line"
-        done
+    _byte_compile_modules
+    _native_compile_packages
 
     _ok "Zetta Emacs installed successfully"
     echo ""
@@ -157,6 +191,43 @@ cmd_install() {
     echo "  2. Edit ~/.private.el to add API keys (see .private.sample.el)"
     echo "  3. Start Emacs!"
 }
+
+# ——————————————————————————————————————————
+# build
+# ——————————————————————————————————————————
+# The install path for a slow machine and the update path for every
+# machine.  `install' gives up after ten minutes and purges eln-cache
+# on every run: on a one-core VPS that is a cold build that can never
+# finish, and an update that native-recompiles everything.  This runs
+# the same three phases with a four-hour window, a thirty-minute stall
+# limit and no purge, so `git pull && bin/zetta build' rebuilds only
+# what changed.  It never substitutes a user config: a headless box
+# must have chosen its profile before anything loads init.el, or the
+# full profile gets built.
+cmd_build() {
+    local timeout="${ZETTA_BUILD_TIMEOUT:-14400}"
+    local stall="${ZETTA_BUILD_STALL:-1800}"
+
+    if [[ ! -f ~/.zetta.el ]]; then
+        _error "No ~/.zetta.el -- choose a profile first:"
+        echo "  full:      cp $ZETTA_DIR/templates/zetta.example.el ~/.zetta.el"
+        echo "  headless:  cp $ZETTA_DIR/templates/zetta.headless.el ~/.zetta.el"
+        return 1
+    fi
+    touch ~/.dir-locals.el
+    if [[ ! -f ~/.private.el ]]; then
+        _warn "Creating empty ~/.private.el"
+        echo ";;" > ~/.private.el
+    fi
+
+    _info "Building Zetta Emacs packages (window ${timeout}s, stall limit ${stall}s, eln-cache kept)..."
+    _elpaca_install "$timeout" "$stall" build
+    _ok "Package build complete"
+    _byte_compile_modules
+    _native_compile_packages
+    _ok "Zetta Emacs build complete"
+}
+
 
 # ——————————————————————————————————————————
 # sync
@@ -429,6 +500,17 @@ cmd_test() {
         done
     fi
 
+    # use-package reports a failed :init/:config as a warning, not an
+    # error, and the filter above drops it -- see ci-test for the gate.
+    local up_errors
+    up_errors=$(echo "$messages" | grep "Error (use-package)" || true)
+    if [[ -n "$up_errors" ]]; then
+        _error "use-package errors (a :init or :config body signalled):"
+        echo "$up_errors" | while IFS= read -r line; do
+            echo "  $line"
+        done
+    fi
+
     # Report stats
     local pkg_count
     pkg_count=$(emacsclient -s "$daemon_name" -e '(length (elpaca--queued))' 2>&1)
@@ -696,6 +778,23 @@ cmd_ci_test() {
         return 1
     fi
 
+    # use-package wraps every :init and :config body in a condition-case
+    # and reports a failure as a warning, "Error (use-package): NAME/:config:
+    # ...", so the config loads to completion and ZETTA-OK prints with a
+    # module silently unconfigured.  The filter below deliberately drops
+    # use-package lines (a "Cannot load" is expected on a fresh install),
+    # which made these invisible: ef-themes failed on every 29.x run for
+    # months (an Emacs 31 face set unguarded) and nobody saw it.  Gate on
+    # the warning text itself.
+    local up_errors
+    up_errors=$(grep "Error (use-package)" "$logfile" || true)
+    if [[ -n "$up_errors" ]]; then
+        _error "use-package errors (a :init or :config body signalled):"
+        echo "$up_errors"
+        rm -f "$logfile"
+        return 1
+    fi
+
     # Check for serious errors (void-function, wrong-type-argument, debug-early)
     # These indicate real bugs even if the config loaded to completion.
     # "Cannot load" errors from use-package are expected on fresh installs.
@@ -724,6 +823,7 @@ cmd_help() {
     echo ""
     echo "Commands:"
     echo "  install          Install packages and native-compile"
+    echo "  build            Same phases, 4 h window, no eln-cache purge (slow boxes, updates)"
     echo "  sync             Re-evaluate config, install new packages"
     echo "  freeze [--commit]  Write lockfile (optionally commit)"
     echo "  update           Pull all packages (backs up lockfile)"
@@ -736,6 +836,8 @@ cmd_help() {
     echo "Environment:"
     echo "  EMACS              Path to Emacs binary (default: emacs)"
     echo "  ZETTA_DIR          Path to Zetta config (default: auto-detected)"
+    echo "  ZETTA_BUILD_TIMEOUT  build: wall-clock window in seconds (default: 14400)"
+    echo "  ZETTA_BUILD_STALL    build: no-progress limit in seconds (default: 1800)"
 }
 
 # ——————————————————————————————————————————
@@ -743,6 +845,7 @@ cmd_help() {
 # ——————————————————————————————————————————
 case "${1:-help}" in
     install) cmd_install ;;
+    build)   cmd_build ;;
     sync)    cmd_sync ;;
     freeze)  cmd_freeze "${2:-}" ;;
     update)  cmd_update ;;

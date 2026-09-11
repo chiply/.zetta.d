@@ -55,7 +55,8 @@ so a notification is never silently lost to a bad read."
                          (zetta-notify--focus-active-p))))
               (file (zetta-notify--sound-file name)))
     ;; Async: a notification must never block the command loop.
-    (start-process "zetta-notify-sound" nil "afplay" file)))
+    (when (executable-find "afplay")
+      (start-process "zetta-notify-sound" nil "afplay" file))))
 
 (use-package alert
   :defer t)
@@ -72,7 +73,11 @@ so a notification is never silently lost to a bad read."
 ;; of this file, which is also what makes it re-evaluable from emacsclient.
 
 (with-eval-after-load 'alert
-  (setq alert-default-style 'osx-notifier)
+  ;; Only where osascript exists: on Linux the notifier below could
+  ;; only fail, so alert's own default (`message') stays in force and
+  ;; `zetta-notify' degrades to the echo area.
+  (when (executable-find "osascript")
+    (setq alert-default-style 'osx-notifier))
 
   (defun alert-osx-notifier-notify (info)
     ;; Deliberately *not* via `alert-encode-string': that returns a unibyte

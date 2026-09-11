@@ -1,12 +1,52 @@
 ;;; vertico.el --- Configure vertico -*- lexical-binding: t; -*-
 
+;; Posframe is NOT a global display: `vertico-posframe-mode' stays off
+;; and posframe is opted into per command through
+;; `vertico-multiform-commands' (M-x, see the vertico block below), or
+;; reached inside any live session with M-P
+;; (`vertico-multiform-posframe', which the package binds into
+;; `vertico-multiform-map').
+;;
+;; Demanded rather than deferred: the :brushup form below names faces
+;; that only exist once the package is loaded, and brushup re-applies
+;; its styles on every theme change -- including ones that happen long
+;; before the first posframe would autoload it.
 (use-package vertico-posframe
+  :demand t
+
+  :brushup
+  (add-to-list 'brushup-styles
+               '(progn
+                  ;; the panel is the same material as the page: what
+                  ;; says "floating" is the border, not a slab of
+                  ;; contrasting background
+                  (set-face-attribute 'vertico-posframe nil
+                                      :background brushup-bg
+                                      :foreground brushup-fg)
+                  ;; recursion depth climbs the ink ladder.  Upstream
+                  ;; defaults are gray/red/green/blue, which reads as a
+                  ;; status signal it isn't -- depth is prominence.
+                  (set-face-attribute 'vertico-posframe-border nil
+                                      :background brushup-bg-3)
+                  (set-face-attribute 'vertico-posframe-border-2 nil
+                                      :background brushup-bg-4)
+                  (set-face-attribute 'vertico-posframe-border-3 nil
+                                      :background brushup-bg-5)
+                  (set-face-attribute 'vertico-posframe-border-4 nil
+                                      :background brushup-bg-6)
+                  (set-face-attribute 'vertico-posframe-border-fallback nil
+                                      :background brushup-bg-6)))
+
   :config
-  ;;(vertico-posframe-mode 1)
+  ;; the fringes are the panel's only internal padding -- `fringe'
+  ;; carries the theme background (see `zetta-brushup-base-faces'), so
+  ;; they read as margin rather than as chrome
   (setq vertico-posframe-parameters
-        '((left-fringe . 0)
-          (right-fringe . 0)))
-  ;; TODO compute this dynamically
+        '((left-fringe . 8)
+          (right-fringe . 8)))
+  ;; nil hands sizing to `vertico-posframe-get-size': `vertico-count' + 1
+  ;; rows -- constant, because the pad-height advice below fills short
+  ;; candidate lists -- by 0.62 of the frame width.
   (setq vertico-posframe-width nil)
   (setq vertico-posframe-height nil))
 
@@ -26,6 +66,22 @@
            ;; NEED to do both here
            (vertico-flat-mode . -1)
            (vertico-vertical-mode . 1))
+
+          ;; M-x as a floating command palette.  A regexp rather than
+          ;; the bare symbol because multiform keys are matched against
+          ;; `this-command': reached through the window menu ("x" in
+          ;; `menu-window-map') that is the `repeatable-wrap-' wrapper,
+          ;; not the command itself.  The same pattern picks up
+          ;; `execute-extended-command-for-buffer'.
+          ("\\`\\(?:repeatable-wrap-\\)?execute-extended-command"
+           ;; flat is the global default; the posframe wants the
+           ;; vertical list back.  `:not' calls the mode function, so
+           ;; multiform switches flat back on when the session ends.
+           (:not flat)
+           posframe
+           ;; a palette belongs at the top of the frame, clear of the
+           ;; point; the global default stays `frame-center'
+           (vertico-posframe-poshandler . posframe-poshandler-frame-top-center))
           ;;(t flat)
           ))
 

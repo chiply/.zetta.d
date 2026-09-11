@@ -20,10 +20,15 @@
         (cl-set-difference zetta-devdocs-langs-to-install
                            zetta-devdocs-installed-langs :test 'string=))
 
-  ;; install all missing devdocs
-  ;; TODO -- might be running into API errors here
-  (dolist (lang zetta-devdocs-uninstalled-langs)
-    (devdocs-install lang))
-
-  )
+  ;; Install the missing doc sets.  Each is a network fetch, so: never
+  ;; in batch (CI and `bin/zetta build' have no use for 36 downloads,
+  ;; and one flaky fetch failed the Emacs 31 CI row once the use-package
+  ;; error gate was tightened), and one failure must not abort the rest
+  ;; of this :config or the other sets.
+  (unless noninteractive
+    (dolist (lang zetta-devdocs-uninstalled-langs)
+      (condition-case err
+          (devdocs-install lang)
+        (error (message "devdocs: could not install %s: %s"
+                        lang (error-message-string err)))))))
 ;;; devdocs.el ends here

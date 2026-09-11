@@ -15,7 +15,11 @@
   :ensure nil
   :load-path "source/zettapkg/treesit-tap"
   :config
-  (treesit-tap-setup)
+  ;; The setup registers thing-at-point providers through
+  ;; `bounds-of-thing-at-point-provider-alist', which Emacs 30 added;
+  ;; on 29 the variable is void and the call aborts this :config.
+  (when (boundp 'bounds-of-thing-at-point-provider-alist)
+    (treesit-tap-setup))
 
   ;; Zetta-specific things in the picker.  `brick' is defined below;
   ;; `orgtree' is defined in `modules/org/org.el'.

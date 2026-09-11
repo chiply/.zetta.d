@@ -1,0 +1,221 @@
+#+TITLE: Household, admin and errands
+#+CATEGORY: home
+#+PROPERTY: Effort_ALL 0 0:05 0:10 0:15 0:20 0:30 0:45 1:00 1:30 2:00 3:00 4:00 5:00 6:00 7:00
+#+COLUMNS: %40ITEM(Task) %TODO %3PRIORITY(P) %6IMPACT(Imp) %17Effort(Estimate){:} %CLOCKSUM(Clocked) %DEADLINE %SCHEDULED %TAGS
+#+FILETAGS: :home:
+
+* QUES [#A] Renew British passport [1/3]  :@errand:admin:@tired:
+:PROPERTIES:
+:ID:       ED8E8BEF-EC2E-4254-9779-FDE6B5B14974
+:CREATED:  [2026-08-06 Thu]
+:IMPACT:   3
+:WAITING_ON: legal
+:END:
+
+Needs photos and the old passport.
+
+** DONE Get passport photos
+CLOSED: [2026-08-26 Wed 14:57]
+:PROPERTIES:
+:ID:       1F70C437-DC5D-4DC9-9529-0B56A6E3BE84
+:Effort:   0:30
+:END:
+:LOGBOOK:
+- State "DONE"       from "PROG"       [2026-08-26 Wed 14:57]
+- State "PROG"       from              [2026-08-26 Wed 14:15]
+:END:
+
+** TODO Fill in the online form
+:PROPERTIES:
+:ID:       A1F59DDA-E325-40E2-9F73-BB424970A7B1
+:Effort:   1:00
+:END:
+
+** TODO Post the old passport
+:PROPERTIES:
+:ID:       9B943AEA-6714-4003-A8ED-EE6D5130E18A
+:Effort:   0:30
+:END:
+
+* TODO [#A] File the 2025 tax return  :@deep:admin:finance:
+DEADLINE: <2026-09-03 Thu>
+:PROPERTIES:
+:ID:       4CA256CE-49FE-4196-AA9D-625359147101
+:CREATED:  [2026-07-30 Thu]
+:Effort:   5:00
+:DEADLINE_TYPE: soft
+:END:
+
+* WAIT [#A] Chase the GeneDx HSA reimbursement  :@call:finance:@fresh:
+:PROPERTIES:
+:ID:       88A1053C-D03A-4CC5-BDBC-58075E5FFE8C
+:CREATED:  [2026-08-12 Wed]
+:Effort:   1:30
+:IMPACT:   2
+:WAITING_ON: the vendor
+:END:
+:LOGBOOK:
+- State "WAIT"       from "TODO"       [2026-08-22 Sat 11:20] \\
+  Blocked until they come back from leave.
+:END:
+
+Third time asking. Claim ref in the email thread.
+
+* NEXT [#B] Track down the old TIAA 401k  :@call:finance:
+SCHEDULED: <2026-09-04 Fri>
+:PROPERTIES:
+:ID:       74D55581-F27E-49E8-B8AE-72EAD5D70B3A
+:CREATED:  [2026-07-25 Sat]
+:Effort:   3:00
+:IMPACT:   3
+:END:
+
+* QUES [#A] Cancel Hodinkee insurance before renewal  :@call:admin:
+DEADLINE: <2026-09-12 Sat>
+:PROPERTIES:
+:ID:       9533D6E5-75DD-4327-96BB-3A22AF50A550
+:CREATED:  [2026-07-25 Sat]
+:Effort:   0:15
+:IMPACT:   1
+:END:
+
+Covered through 2027-02-09, so cancel well before.
+
+- [X] first pass
+- [ ] second pass
+
+* HOLD Cancel HBO Max  :@shallow:admin:@tired:
+:PROPERTIES:
+:ID:       FCA36D28-D684-49BB-A4D7-F20867159EB8
+:CREATED:  [2026-07-27 Mon]
+:Effort:   0:10
+:IMPACT:   3
+:END:
+:LOGBOOK:
+- State "HOLD"       from "TODO"       [2026-08-16 Sun 16:40] \\
+  Waiting to see if this solves itself.
+:END:
+
+Not until Game of Thrones is finished.
+
+* DONE [#C] Clean out the freezer  :@errand:
+CLOSED: [2026-08-14 Fri 16:44] SCHEDULED: <2026-09-20 Sun>
+:PROPERTIES:
+:ID:       C6B20425-42AD-4763-9E45-1A74F835D031
+:CREATED:  [2026-08-09 Sun]
+:Effort:   0:15
+:IMPACT:   2
+:END:
+:LOGBOOK:
+CLOCK: [2026-08-12 Wed 13:00]--[2026-08-12 Wed 13:10] =>  0:10
+CLOCK: [2026-08-14 Fri 13:00]--[2026-08-14 Fri 13:11] =>  0:11
+- State "DONE"       from              [2026-08-14 Fri 16:44]
+:END:
+
+* DONE [#C] Replace the missing Rolex bracelet link  :@errand:
+CLOSED: [2026-08-30 Sun 14:50] SCHEDULED: <2026-09-01 Tue>
+:PROPERTIES:
+:ID:       6C926CC3-E4A2-4395-AB88-7E19F7A1C4C3
+:CREATED:  [2026-08-16 Sun]
+:IMPACT:   5
+:END:
+:LOGBOOK:
+- State "DONE"       from "PROG"       [2026-08-30 Sun 14:50]
+- State "PROG"       from "TODO"       [2026-08-30 Sun 14:30]
+- State "TODO"       from "PROG"       [2026-08-29 Sat 16:48]
+- State "PROG"       from "TODO"       [2026-08-29 Sat 16:30]
+- State "TODO"       from "PROG"       [2026-08-27 Thu 13:48]
+- State "PROG"       from              [2026-08-27 Thu 13:30]
+- Rescheduled from "[2026-08-25 Tue]" on [2026-09-06 Sun 08:55]
+:END:
+
+* DONE [#B] Book the dentist  :@call:health:
+CLOSED: [2026-09-07 Mon 13:40] SCHEDULED: <2026-09-09 Wed>
+:PROPERTIES:
+:ID:       E5C18CD1-5376-4925-8105-E5E518064AE6
+:CREATED:  [2026-08-09 Sun]
+:Effort:   0:15
+:END:
+:LOGBOOK:
+- State "DONE"       from "PROG"       [2026-09-07 Mon 13:40]
+- State "PROG"       from "TODO"       [2026-09-07 Mon 13:30]
+- State "TODO"       from "PROG"       [2026-09-04 Fri 13:40]
+- State "PROG"       from              [2026-09-04 Fri 13:30]
+- Rescheduled from "[2026-09-02 Wed]" on [2026-09-03 Thu 08:55]
+:END:
+
+* TODO [#C] Service the car  :@errand:
+SCHEDULED: <2026-09-08 Tue>
+:PROPERTIES:
+:ID:       515E6584-786C-489B-801E-83454FCAFFBF
+:CREATED:  [2026-08-05 Wed]
+:Effort:   1:30
+:END:
+:LOGBOOK:
+- Rescheduled from "[2026-09-01 Tue]" on [2026-09-05 Sat 08:55]
+:END:
+
+- [X] first pass
+- [ ] second pass
+
+* IDEA [#B] Sort out the unemployment paperwork  :@deep:admin:
+:PROPERTIES:
+:ID:       64198804-F661-4CC9-8A10-AEEDD5AC1E0C
+:CREATED:  [2026-07-22 Wed]
+:Effort:   3:00
+:IMPACT:   4
+:END:
+
+* IDEA [#A] Hang the picture frames  :@errand:
+DEADLINE: <2026-09-22 Tue>
+:PROPERTIES:
+:ID:       86FBEC87-A51E-431E-A48C-8534E7A21D94
+:CREATED:  [2026-09-01 Tue]
+:Effort:   0:05
+:END:
+
+* IDEA Deep clean the garage  :@errand:
+DEADLINE: <2026-09-19 Sat -5d>
+:PROPERTIES:
+:ID:       B9949FC8-3B49-424A-8A54-0870DDAB75A8
+:CREATED:  [2026-07-04 Sat]
+:Effort:   6:00
+:IMPACT:   3
+:END:
+
+* DONE Water the plants  :@errand:@fresh:
+CLOSED: [2026-09-05 Sat 14:29] SCHEDULED: <2026-09-08 Tue +3d>
+:PROPERTIES:
+:ID:       5A4BD758-34B1-4E88-B2A8-C967D5EA987B
+:CREATED:  [2026-07-18 Sat]
+:Effort:   0:15
+:LAST_REPEAT: [2026-09-05 Sat]
+:END:
+:LOGBOOK:
+- State "DONE"       from "PROG"       [2026-09-05 Sat 14:29]
+- State "PROG"       from              [2026-09-05 Sat 14:15]
+- Rescheduled from "[2026-09-01 Tue]" on [2026-09-03 Thu 08:55]
+:END:
+
+* DONE Take the bins out  :@errand:@fresh:
+CLOSED: [2026-08-22 Sat 11:08] SCHEDULED: <2026-09-06 Sun +1w>
+:PROPERTIES:
+:ID:       D5BEBD2C-1EA4-4570-B1F9-3D6B4143885A
+:CREATED:  [2026-07-26 Sun]
+:Effort:   0:20
+:IMPACT:   4
+:LAST_REPEAT: [2026-09-05 Sat]
+:END:
+:LOGBOOK:
+- State "DONE"       from "PROG"       [2026-08-22 Sat 11:08]
+- State "PROG"       from "TODO"       [2026-08-22 Sat 11:00]
+- State "TODO"       from "PROG"       [2026-08-21 Fri 10:08]
+- State "PROG"       from "TODO"       [2026-08-21 Fri 10:00]
+- State "TODO"       from "PROG"       [2026-08-18 Tue 13:38]
+- State "PROG"       from              [2026-08-18 Tue 13:30]
+- Rescheduled from "[2026-08-30 Sun]" on [2026-09-07 Mon 08:55]
+:END:
+
+- [X] first pass
+- [ ] second pass
+

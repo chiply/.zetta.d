@@ -1,0 +1,30 @@
+
+* org-remark
+:PROPERTIES:
+:org-remark-file: org-remark.el
+:END:
+
+
+** use-package
+:PROPERTIES:
+:org-remark-id: f394b730
+:org-remark-label: default
+:org-remark-highlight-date: [[Aug 23rd, 2026]]
+:org-remark-beg: 11851
+:org-remark-end: 11862
+:org-remark-link: [[file:org-remark.el::274]]
+:org-remark-original-text: use-package
+:CATEGORY: important
+:END:
+
+** use-package
+:PROPERTIES:
+:org-remark-id: 58b536dc
+:org-remark-label: question
+:org-remark-highlight-date: [[Aug 23rd, 2026]]
+:org-remark-beg: 11759
+:org-remark-end: 11770
+:org-remark-link: [[file:org-remark.el::272]]
+:org-remark-original-text: use-package
+:CATEGORY: question
+:END:

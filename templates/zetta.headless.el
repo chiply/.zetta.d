@@ -87,6 +87,85 @@
 ;; may never send.  modifyOtherKeys is what lets C-, reach Emacs at all.
 (setq xterm-tmux-extra-capabilities '(modifyOtherKeys setSelection))
 
+;;; ————————————————————————————————————————————————
+;;; Evil on a tty
+;;; ————————————————————————————————————————————————
+
+;; On a tty the Tab key and C-i are the same byte (0x09): there is no
+;; separate <tab> event the way there is in a GUI frame.  Evil binds C-i
+;; to `evil-jump-forward' in `evil-motion-state-map' (`evil-want-C-i-jump'
+;; defaults to t), and a state map outranks `org-mode-map', so in normal
+;; state Tab ran the jump instead of `org-cycle' (measured 2026-09-11 in
+;; ~/kb/inbox.org).  Nothing in the tmux/Blink chain can separate them:
+;; even with modifyOtherKeys on, xterm.el decodes a modified C-i back to
+;; the character 9.  Read before evil loads, this leaves C-i alone and Tab
+;; falls through to the major mode everywhere; the jump keeps its C-o
+;; partner on C-M-o (ESC C-o, which always arrives).
+(setq evil-want-C-i-jump nil)
+(with-eval-after-load 'evil
+  (define-key evil-motion-state-map (kbd "C-M-o") #'evil-jump-forward))
+
+;; Same family: C-m is RET and C-[ is ESC on a tty.  Evil handles ESC
+;; itself (`evil-esc-mode'); RET is not rebound by evil; the config binds
+;; neither C-m nor C-[ anywhere (checked 2026-09-11).
+
+;;; ————————————————————————————————————————————————
+;;; Super and the chords with no byte (tty frames only)
+;;; ————————————————————————————————————————————————
+
+;; Goal: the same chords in GUI and headless.  The real Cmd key stays.
+;; Three routes, all landing on the same `s-' events the config binds:
+;;
+;; - Blink (iPad), mosh or ssh: Cmd in the "8-bit" modifier role (Config >
+;;   Keyboard > Modifiers) sends the character +128 -- Cmd-b is U+00E2, as
+;;   one UTF-8 character; mosh, tmux and Emacs's utf-8 keyboard coding all
+;;   pass it through -- and the first loop below maps each Latin-1
+;;   character U+00A1..U+00FE back to `s-<char>' (case preserved, so
+;;   Cmd-Shift-b is `s-B' as in the GUI).  The cost: those characters
+;;   cannot be TYPED while the map is active (é is s-i, ñ is s-q, ü is
+;;   s-u, ç is s-g).  Narrow the range to the characters the config binds
+;;   if typing accents on the hub ever matters.  Bracketed paste is read
+;;   with `read-event', which does not consult `input-decode-map', so a
+;;   pasted "é" is still text.
+;; - A Mac terminal (Ghostty, kitty, WezTerm, iTerm2): the kitty keyboard
+;;   protocol, core/kkp.el.
+;; - Anything else: `C-c s <key>' is `s-<key>', the built-in modifier
+;;   prefix (`event-apply-super-modifier', the same thing `C-x @ s' does)
+;;   on a shorter chord.  Two keystrokes, zero terminal cooperation.
+;;
+;; The chords with no byte at all -- C-, C-tab C-S-<letter> -- come as
+;; xterm's modifyOtherKeys encoding, injected by Blink "Custom presses"
+;; (the enable request Emacs sends dies in mosh, so the client injects
+;; the encoding itself).  xterm.el decodes that table for punctuation
+;; and tab; the letters (C-S-a/d/s/w windmove, C-S-t, C-S-r...) need the
+;; second loop.  The Blink half -- modifier roles, shortcut reassignments,
+;; the custom-press byte table -- is in hub-issues.org.
+;;
+;; `input-decode-map' and `local-function-key-map' are terminal-local, so
+;; `tty-setup-hook' is the right place: it runs once per tty terminal,
+;; after term/xterm.el's own decode table, and never for a GUI frame.
+
+(defun zetta-headless-tty-keys ()
+  "Decode the 8-bit Super role, C-S-<letter>, and bind the Super prefix."
+  ;; Cmd as the 8-bit role: U+00A1..U+00FE -> s-<char>.
+  (let ((c #xA1))
+    (while (<= c #xFE)
+      (define-key input-decode-map (vector c)
+                  (vector (logior (- c 128) #x800000)))
+      (setq c (1+ c))))
+  ;; C-S-<letter> in both modifyOtherKeys forms (modifier 6 = Ctrl+Shift;
+  ;; xterm sends the shifted keysym, so the code is the uppercase letter).
+  (dotimes (i 26)
+    (let* ((code (+ ?A i))
+           (event (kbd (format "C-S-%c" (+ ?a i)))))
+      (define-key input-decode-map (format "\e[27;6;%d~" code) event)
+      (define-key input-decode-map (format "\e[%d;6u" code) event)))
+  ;; The floor: C-c s <key> reads as s-<key> on any terminal.
+  (define-key local-function-key-map (kbd "C-c s")
+              #'event-apply-super-modifier))
+
+(add-hook 'tty-setup-hook #'zetta-headless-tty-keys)
+
 ;; ghostel's terminal engine is a dynamic module (libghostty-vt, built
 ;; with zig, which this box does not have).  Its releases carry a
 ;; prebuilt aarch64-linux .so for the pinned module version, so fetch

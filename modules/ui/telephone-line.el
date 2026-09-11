@@ -1,25 +1,65 @@
 ;;; telephone-line.el --- Configure telephone-line -*- lexical-binding: t; -*-
 
+(defun zetta-telephone-line-evil-tag-faces ()
+  "Put the evil state tag on the brushup ink ladder.
+
+telephone-line ships the tag as a stoplight (red normal, green insert,
+orange visual...).  Here the colour says how far the state is from rest:
+normal is the page, insert is the loudest thing on the mode line (ink pill,
+page text), the transient states sit between.  On a tty frame this tag is
+the one state indicator the terminal cannot strip -- mosh drops the cursor
+shape (see `zetta-evil-tty-cursor') -- so it has to be readable without
+being read.  Prominence only; no hue names a state."
+  (when (facep 'telephone-line-evil)
+    (set-face-attribute 'telephone-line-evil nil
+                        :inherit 'mode-line :weight 'bold
+                        :foreground brushup-fg :background brushup-bg)
+    (dolist (spec `((telephone-line-evil-normal   ,brushup-fg   ,brushup-bg)
+                    (telephone-line-evil-motion   ,brushup-fg-3 ,brushup-bg)
+                    (telephone-line-evil-operator ,brushup-fg   ,brushup-bg-2)
+                    (telephone-line-evil-visual   ,brushup-fg   ,brushup-bg-3)
+                    (telephone-line-evil-replace  ,brushup-bg   ,brushup-fg-3)
+                    (telephone-line-evil-emacs    ,brushup-bg   ,brushup-fg-3)
+                    (telephone-line-evil-god      ,brushup-bg   ,brushup-fg-3)
+                    (telephone-line-evil-insert   ,brushup-bg   ,brushup-fg)))
+      (when (facep (car spec))
+        (set-face-attribute (car spec) nil
+                            :foreground (nth 1 spec)
+                            :background (nth 2 spec))))))
+
 (use-package telephone-line
   :config
 
+  ;; Every segment below that reaches for another module guards the
+  ;; call, the way `zt-flycheck-segment' always has.  telephone-line
+  ;; catches a segment's error so the mode line still draws, but on the
+  ;; headless profile (no all-the-icons, no parrot, no nyan-mode) that
+  ;; was three signals per redisplay on one core and a *Messages* buffer
+  ;; full of "Error during redisplay" -- measured 2026-09-11 on the hub
+  ;; daemon, 206 lines within minutes.  On the Mac every one of these is
+  ;; loaded, so the guards change nothing there.
+
   (telephone-line-defsegment zt-ace-1 ()
-    (propertize
-     (window-parameter (selected-window) 'ace-window-path)
-     'face 'ef-themes-heading-0))
+    ;; `ace-window-path' is only set once `aw-update' has run for the
+    ;; window; a fresh tty frame can be drawn before that.
+    (when-let* ((path (window-parameter (selected-window) 'ace-window-path)))
+      (propertize path 'face 'ef-themes-heading-0)))
 
   (telephone-line-defsegment zt-icon-file-or-buffer ()
-    (let ((fname (buffer-file-name)))
-      (if fname
-          (all-the-icons-icon-for-file fname)
-        (all-the-icons-icon-for-mode major-mode))))
+    (when (fboundp 'all-the-icons-icon-for-mode)
+      (let ((fname (buffer-file-name)))
+        (if fname
+            (all-the-icons-icon-for-file fname)
+          (all-the-icons-icon-for-mode major-mode)))))
 
   (telephone-line-defsegment zt-icon-lsp ()
-    (when (and (boundp 'lsp-mode) lsp-mode)
+    (when (and (bound-and-true-p lsp-mode)
+               (fboundp 'all-the-icons-icon-for-mode))
       (all-the-icons-icon-for-mode 'lsp-mode)))
 
   (telephone-line-defsegment zt-icon-copilot ()
-    (when (and (boundp 'copilot-mode) copilot-mode)
+    (when (and (bound-and-true-p copilot-mode)
+               (fboundp 'all-the-icons-octicon))
       ;; `all-the-icons-icon-for-mode' only maps MAJOR modes, so for the
       ;; copilot-mode minor mode it returned the symbol instead of an icon.
       ;; Use the real Copilot octicon directly (SVG, like the siblings).
@@ -37,7 +77,8 @@
       "foo"))
 
   (telephone-line-defsegment zt-vc-segment-repo-icon ()
-    (when (vc-git-root (or (buffer-file-name) default-directory))
+    (when (and (fboundp 'all-the-icons-icon-for-mode)
+               (vc-git-root (or (buffer-file-name) default-directory)))
       (all-the-icons-icon-for-mode 'magit-status-mode)))
 
   (telephone-line-defsegment zt-vc-segment-repo ()
@@ -92,22 +133,21 @@
               (cdr iedit-mode-line)))))
 
   (telephone-line-defsegment zt-nyan ()
-    (when (eq major-mode 'magit-status-mode) (nyan-create)))
+    (when (and (eq major-mode 'magit-status-mode) (fboundp 'nyan-create))
+      (nyan-create)))
 
   (telephone-line-defsegment zt-parrot ()
-    (when (or
-           (and
-            (equal zetta-parrot-window (selected-window))
-            (equal zetta-parrot-buffer (current-buffer))
-            (string= (symbol-name major-mode) "org-mode"))
-           (and
-            (string= (symbol-name major-mode) "magit-status-mode")
-            (equal zetta-parrot-window (selected-window))
-            (equal zetta-parrot-buffer (current-buffer))))
+    (when (and (fboundp 'parrot-create)
+               (boundp 'zetta-parrot-window)
+               (boundp 'zetta-parrot-buffer)
+               (equal zetta-parrot-window (selected-window))
+               (equal zetta-parrot-buffer (current-buffer))
+               (memq major-mode '(org-mode magit-status-mode)))
       (parrot-create)))
 
   (telephone-line-defsegment zt-popper-popup ()
-    (if (and (boundp 'popper-popup-status) popper-popup-status)
+    (if (and (bound-and-true-p popper-popup-status)
+             (fboundp 'all-the-icons-vscode-codicons))
         (all-the-icons-vscode-codicons "layout-sidebar-left") ;; NOTE requires svg branch
       ""))
 
@@ -187,5 +227,7 @@
                   (set-face-attribute 'telephone-line-face-inactive nil
                                       :inherit nil
                                       :foreground 'unspecified
-                                      :background brushup-bg))))
+                                      :background brushup-bg)
+                  (zetta-telephone-line-evil-tag-faces))))
+
 ;;; telephone-line.el ends here

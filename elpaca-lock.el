@@ -2071,6 +2071,17 @@
                      :type git :protocol https :inherit t :depth
                      treeless :ref
                      "b7069a4b0126321c263552d5f6133a503bf4a68f"))
+ (kkp :source "elpaca-menu-lock-file" :recipe
+      (:package "kkp" :fetcher github :repo "benjaminor/kkp" :files
+                ("*.el" "*.el.in" "dir" "*.info" "*.texi" "*.texinfo"
+                 "doc/dir" "doc/*.info" "doc/*.texi" "doc/*.texinfo"
+                 "lisp/*.el" "docs/dir" "docs/*.info" "docs/*.texi"
+                 "docs/*.texinfo"
+                 (:exclude ".dir-locals.el" "test.el" "tests.el" "*-test.el"
+                           "*-tests.el" "LICENSE" "README*" "*-pkg.el"))
+                :source "elpaca-menu-lock-file" :id kkp :type git :protocol
+                https :inherit t :depth treeless :ref
+                "82b7443e10a2ba287467b62e90b6adb6dd93dc99"))
  (know-your-http-well :source "elpaca-menu-lock-file" :recipe
                       (:package "know-your-http-well" :fetcher github
                                 :repo "for-GET/know-your-http-well"

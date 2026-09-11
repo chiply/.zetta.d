@@ -592,17 +592,25 @@ theme was handing ghostel much the same muddy `term-color-*'.
 
 Pushing again from here fixes the order, because this runs late in
 `brushup-styles'.  Compares first so that the other styles in that list
-do not each trigger a repaint."
-  (let ((now (mapcar (lambda (name)
-                       (face-attribute (intern (format "ghostel-color-%s" name))
-                                       :foreground nil 'default))
-                     zetta-ghostel--ansi-names)))
-    (unless (equal now zetta-ghostel--pushed-palette)
-      (let ((was zetta-ghostel--pushed-palette))
-        (setq zetta-ghostel--pushed-palette now)
-        (when (fboundp 'ghostel-sync-theme)
-          (ghostel-sync-theme))
-        (when was (zetta-ghostel--remap-scrollback was now))))))
+do not each trigger a repaint.
+
+Nothing to push until ghostel has defined its faces: the package is
+autoloaded, so before the first `M-x ghostel' the sixteen
+`ghostel-color-*' faces do not exist, and reading them logged \"Invalid
+face: ghostel-color-black\" on every theme pass (seen on the hub, where
+nothing loads ghostel early).  The faces are defined together, so one
+`facep' answers for all sixteen."
+  (when (facep 'ghostel-color-black)
+    (let ((now (mapcar (lambda (name)
+                         (face-attribute (intern (format "ghostel-color-%s" name))
+                                         :foreground nil 'default))
+                       zetta-ghostel--ansi-names)))
+      (unless (equal now zetta-ghostel--pushed-palette)
+        (let ((was zetta-ghostel--pushed-palette))
+          (setq zetta-ghostel--pushed-palette now)
+          (when (fboundp 'ghostel-sync-theme)
+            (ghostel-sync-theme))
+          (when was (zetta-ghostel--remap-scrollback was now)))))))
 
 (defcustom zetta-ghostel-remap-scrollback-limit 2000000
   "Largest ghostel buffer whose scrollback is recoloured on a theme change.

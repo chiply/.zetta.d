@@ -86,7 +86,14 @@ in the order they appear in the `zetta-modules!' declaration.")
            "svg-margin.el"
            "breadcrumb.el" "parrot.el" "hl-block.el" "awesome-tray.el"
            "telephone-line.el" "ef-themes.el" "doric-themes.el"
-           "adaptive-wrap.el" "svg-lib.el" "explain-pause-mode.el" "spacetree.el"))
+           "adaptive-wrap.el" "svg-lib.el" "explain-pause-mode.el" "spacetree.el"
+           ;; tab-line.el (the system: global-tab-line-mode, keys, faces)
+           ;; must precede tab-line-svg.el (the renderer), and the
+           ;; alphabetical tail puts them the other way round: hyphen
+           ;; sorts before dot, so "tab-line-svg.el" < "tab-line.el".
+           ;; Listing the base here is enough -- listed files load before
+           ;; every unlisted one.
+           "tab-line.el"))
     (editor . ("super-save.el" "editing.el" "smartparens.el"
                "hungry-delete.el" "vimish-fold.el" "narrow.el" "ov.el" "iedit.el"
                "dumb-jump.el" "snippets.el" "ace-mc.el" "move-text.el"
@@ -288,10 +295,18 @@ piece of SVG chrome would fail at its first render."
   ;; The predicate, not a profile exclusion, so the same user config is
   ;; right on the GUI daily driver and on a headless box, and becomes
   ;; right again the day the headless box gets an SVG-capable build.
-  (mapcar (lambda (file) (cons file #'zetta--svg-available-p))
-          '("ui/svg-line.el" "ui/svg-lib.el" "ui/svg-margin.el"
-            "ui/modeline-svg.el" "ui/header-line-svg.el"
-            "ui/tab-bar-svg.el" "ui/tab-line-svg.el" "ui/poimap.el"))
+  (append
+   (mapcar (lambda (file) (cons file #'zetta--svg-available-p))
+           '("ui/svg-line.el" "ui/svg-lib.el" "ui/svg-margin.el"
+             "ui/modeline-svg.el" "ui/header-line-svg.el"
+             "ui/tab-bar-svg.el" "ui/tab-line-svg.el" "ui/poimap.el"))
+   ;; corfu-terminal draws corfu's popup with overlays where a tty frame
+   ;; cannot have a child frame.  Emacs 31 grew tty child frames (the
+   ;; `tty-child-frames' feature, which corfu itself tests), and the
+   ;; package then warns at load that it is not needed.  Skip it on that
+   ;; capability, so CI's nox row (29.3) still exercises it.
+   (list (cons "completion/corfu-terminal.el"
+               (lambda () (not (featurep 'tty-child-frames))))))
   "Alist of (MODULE-FILE . PREDICATE) for conditionally loaded modules.
 
 MODULE-FILE is the same \"category/file.el\" string used in `user-files'.

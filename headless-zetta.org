@@ -293,6 +293,32 @@ first cold build had accidentally enjoyed.  Why the compiled bootstrap
 only works on the daemon path is still unexplained; the purge sidesteps
 it for a few seconds of recompilation.
 
+*The bytecode mystery, solved, and it was a daemon bug too.*  The
+second restart after a build came up with the config half loaded:
+=user-files= at the hardcoded 251, no evil, and the journal carrying
+the batch runs' signature, "Cannot load key-chord" then void-function
+=general-define-key=, raised while loading init.el, before
+=~/.zetta.el= is read.  =subr-native-elisp-p= on a bootstrap function
+said the bootstrap had loaded from =.eln=, and =eln-cache= held
+=bootstrap-keys-*.eln= written minutes after the previous start.  The
+producer is Emacs's own deferred native compilation, not compile-angel
+(which already excludes the directory): when a =.elc= is loaded with no
+=.eln= beside it, Emacs queues the SOURCE for compilation in a bare
+=emacs -Q --batch= worker.  That worker has stock use-package and no
+elpaca, so =:ensure (:wait t)= expands to package.el semantics, and the
+.eln, which Emacs prefers over the .elc at the next start, cannot get
+past =bootstrap-keys=.  The phase-2 .elc is fine because that Emacs has
+init.el loaded when it compiles.  So: every restart re-created the bad
+.eln, and the restart after it failed, on the hub and, latently, on the
+Mac (its daemon restarted 02:03, a fresh =bootstrap-keys.eln= appeared
+02:12).  Fix: =early-init.el= deny-lists =source/bootstrap/= and
+=source/init-data/= for the JIT (Emacs 29 and 30+ variable names), and
+=build= / =sync= purge any such .eln before phase 1.  Verified on the
+hub: a restart with the deny-list loads the bootstrap as bytecode, and
+no bootstrap .eln reappears.  The Mac's were deleted by hand; its next
+restart gets the deny-list from the working tree.  The Mac batch
+failure (the "overlay" workaround above) was the same file.
+
 One thing the build revealed about =bin/zetta= itself, pre-existing and
 shared with =install=: the native-compile phase runs without the
 config's load-path, so most packages fail with "Cannot open load file"

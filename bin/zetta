@@ -220,6 +220,16 @@ cmd_build() {
         echo ";;" > ~/.private.el
     fi
 
+    # Module and bootstrap bytecode must go BEFORE the phase-1 Emacs starts,
+    # as `install' does: with source/bootstrap/*.elc present, a batch
+    # `-l init.el' fails in bootstrap-keys ("Cannot load key-chord", then
+    # void-function general-define-key) -- the compiled use-package forms
+    # only work on the daemon path, where queues drain at after-init.
+    # Measured on the hub's first warm build (2026-09-11) and on the Mac.
+    # eln-cache is kept: that is the point of this command.  Phase 2
+    # regenerates the .elc.
+    find "$ZETTA_DIR/modules" "$ZETTA_DIR/source" -name '*.elc' -delete 2>/dev/null || true
+
     _info "Building Zetta Emacs packages (window ${timeout}s, stall limit ${stall}s, eln-cache kept)..."
     _elpaca_install "$timeout" "$stall" build
     _ok "Package build complete"
@@ -234,6 +244,9 @@ cmd_build() {
 # ——————————————————————————————————————————
 cmd_sync() {
     _info "Syncing Zetta Emacs configuration..."
+
+    # Same purge as `build', for the same reason (see there).
+    find "$ZETTA_DIR/modules" "$ZETTA_DIR/source" -name '*.elc' -delete 2>/dev/null || true
 
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
         -l "$ZETTA_DIR/init.el" \

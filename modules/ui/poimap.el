@@ -168,6 +168,11 @@ a small object floating on a row and the box tells you which pixels are it."
 Called with no arguments in the buffer being rendered."
   :type 'function :group 'zetta)
 
+(defcustom zetta-poimap-shell-modes '(eshell-mode term-mode vterm-mode eat-mode)
+  "Major modes that are interactive shells without deriving from `comint-mode'.
+Comint shells are recognised by `zetta-poimap-interactive-shell-p' itself."
+  :type '(repeat symbol) :group 'zetta)
+
 (defcustom zetta-poimap-resolution 600
   "Horizontal buckets used to drop marks that would land on the same pixel.
 
@@ -333,9 +338,33 @@ composites against the desktop and drifts with the wallpaper."
 ;;; Adapter: svg-margin providers -> poimap POIs
 ;;; ------------------------------------------------------------------
 
+(defun zetta-poimap-interactive-shell-p (&optional buffer)
+  "Whether BUFFER (default: the current one) is an interactive shell.
+
+One of `zetta-poimap-shell-modes', or a `comint-mode' buffer that is a
+prompt rather than the output of one command.  Command output is left
+alone because it is worth annotating: an `async-shell-command' buffer
+\(named from `shell-command-buffer-name-async'; a custom name given to
+the command is not recognised) and a `compile' run in comint mode
+\(`compilation-shell-minor-mode')."
+  (with-current-buffer (or buffer (current-buffer))
+    (or (derived-mode-p zetta-poimap-shell-modes)
+        (and (derived-mode-p 'comint-mode)
+             (not (bound-and-true-p compilation-shell-minor-mode))
+             (not (string-prefix-p (if (boundp 'shell-command-buffer-name-async)
+                                       shell-command-buffer-name-async
+                                     "*Async Shell Command*")
+                                   (buffer-name)))))))
+
 (defun zetta-poimap-default-predicate ()
-  "Default `zetta-poimap-predicate': a non-empty file-visiting buffer."
-  (and buffer-file-name (> (buffer-size) 0)))
+  "Default `zetta-poimap-predicate'.
+A non-empty buffer that visits a file or holds the output of a command:
+`compilation-mode', or the comint buffers `zetta-poimap-interactive-shell-p'
+does not count as shells (`async-shell-command', comint `compile')."
+  (and (> (buffer-size) 0)
+       (not (zetta-poimap-interactive-shell-p))
+       (or buffer-file-name
+           (derived-mode-p '(compilation-mode comint-mode)))))
 
 (defun zetta-poimap--shape-fn (shape)
   "Return the poimap shape function named by SHAPE."
@@ -709,13 +738,18 @@ there is somewhere else in the file to be."
 ;; A text change in a buffer no window shows cannot need the map: the map is
 ;; drawn per window, and `window-buffer-change-functions' forces a fresh
 ;; update the moment such a buffer is displayed.  So the hook is made a
-;; no-op there.  The kill-buffer hook covers the remaining case -- a
-;; displayed buffer killed inside the 0.1s window -- so nothing is left
-;; behind in the timer list.
+;; no-op there, and in interactive shells, which the predicate declines
+;; anyway.  The kill-buffer hook covers the remaining case -- a displayed
+;; buffer killed inside the 0.1s window -- so nothing is left behind in the
+;; timer list.
 
 (defun zetta-poimap--displayed-p (&rest _)
-  "Whether the current buffer is shown in some window, on any frame."
-  (get-buffer-window (current-buffer) t))
+  "Whether the current buffer is shown in some window and is not a shell.
+Interactive shells (`zetta-poimap-interactive-shell-p') never get a map,
+so they should not pay for the timer either: a busy prompt streams
+output continuously and would otherwise re-arm it on every chunk."
+  (and (not (zetta-poimap-interactive-shell-p))
+       (get-buffer-window (current-buffer) t)))
 
 (defun zetta-poimap--cancel-idle-timer ()
   "Drop the buffer's pending poimap idle timer, for `kill-buffer-hook'."

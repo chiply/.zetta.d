@@ -691,6 +691,44 @@ there is somewhere else in the file to be."
   (when (fboundp 'poimap-update-all) (poimap-update-all)))
 
 ;;; ------------------------------------------------------------------
+;;; Guard: no idle timers for buffers nobody can see
+;;; ------------------------------------------------------------------
+;;
+;; `poimap-mode' puts `poimap--request-idle-update-for-buffer-text-change'
+;; on the GLOBAL `after-change-functions', and a request allocates one
+;; buffer-local idle timer per buffer that changes.  That includes every
+;; `with-temp-buffer' anywhere in Emacs -- `url-generic-parse-url' makes one
+;; per call -- and a temp buffer is killed before its 0.1s timer can fire,
+;; so the timer is never cancelled and sits in `timer-idle-list' until the
+;; next idle moment.  Each new timer costs a walk of that list
+;; (`timer--activate'), so N temp buffers in one non-idle stretch cost
+;; O(N^2).  On 2026-09-12 a single elfeed-protocol fever batch parsed three
+;; URLs for each of tens of thousands of entries and wedged the daemon for
+;; hours; `kill -USR2' only nested debuggers that hit the same walk.
+;;
+;; A text change in a buffer no window shows cannot need the map: the map is
+;; drawn per window, and `window-buffer-change-functions' forces a fresh
+;; update the moment such a buffer is displayed.  So the hook is made a
+;; no-op there.  The kill-buffer hook covers the remaining case -- a
+;; displayed buffer killed inside the 0.1s window -- so nothing is left
+;; behind in the timer list.
+
+(defun zetta-poimap--displayed-p (&rest _)
+  "Whether the current buffer is shown in some window, on any frame."
+  (get-buffer-window (current-buffer) t))
+
+(defun zetta-poimap--cancel-idle-timer ()
+  "Drop the buffer's pending poimap idle timer, for `kill-buffer-hook'."
+  (when (timerp (bound-and-true-p poimap--idle-update-timer))
+    (cancel-timer poimap--idle-update-timer)
+    (setq poimap--idle-update-timer nil)))
+
+(with-eval-after-load 'poimap
+  (advice-add 'poimap--request-idle-update-for-buffer-text-change
+              :before-while #'zetta-poimap--displayed-p)
+  (add-hook 'kill-buffer-hook #'zetta-poimap--cancel-idle-timer))
+
+;;; ------------------------------------------------------------------
 ;;; Activation
 ;;; ------------------------------------------------------------------
 

@@ -43,14 +43,14 @@ The rituals in the order you meet them.  Each has its own section below.
 |-------------------------+---------------------+------------------------------------------------------------------------------|
 | 05:30, plan the day     | =,-o-Q=               | today packed against the routine's capacity; the second line says whether yesterday was closed; the third what the chains in flight will cost |
 |                         | =N= / =S= on a line    | up to three picks; a placement                                              |
-| a block starts          | =,-o-t p=             | into PROG: the derived clock starts; inside the dip a timer starts too       |
+| a block starts          | =C-c C-t p=             | into PROG: the derived clock starts; inside the dip a timer starts too       |
 |                         | =,-o-i=               | kick a prompt to an agent; the entry goes AGENT                              |
 | at a switch             | =,-o-o j=             | a journal line, linked to what is in PROG                                    |
-| a pomodoro break        | Day view / =,-o-v a=  | what landed (NEXT from AGENT), what is asking; =,-o-t p= to review           |
+| a pomodoro break        | Day view / =,-o-v a=  | what landed (NEXT from AGENT), what is asking; =C-c C-t p= to review           |
 | the admin slot          | =,-o-f= then =,-o-v i= | the inbox decorated; =C-c a= accepts each proposal, =C-c r= rejects           |
 | before a new deadline   | =,-o-I= (or just =,-o-D=) | what the date costs, against the window's capacity                       |
 | the fixed stop          | =,-o-x=               | close: carried, done, the PROG sweep, tomorrow's draft, the phrase           |
-| Monday, thirty minutes  | =,-o-m=               | the pack; =y= on a raised item -- keep, park or dismiss; =w= writes two lines |
+| Monday, thirty minutes  | =,-o-m=               | the pack; =y= on a raised item -- keep, park or dismiss; =w= writes the three answers |
 | once a season           | =,-o-n=               | last quarter's walk beside the horizons file; the theme and three missions   |
 | any time                | =,-o-M= / =,-o-R=       | a note becomes a wiki page with its reason; a quiet page resurfaces        |
 
@@ -113,8 +113,12 @@ Defined in =modules/org/org.el=.
 | DONE  | =d=   | finished                                             | excluded; feeds calibration           |
 | NOPE  | =n=   | abandoned; asks for a note                          | excluded; feeds calibration           |
 
-Change a state with =,-o-t= on the heading.  The states you leave work in
-(WAIT, QUES, HOLD, NOPE) prompt for a one-line note; PROG and DONE do not.
+Change a state with =C-c C-t= on the heading, then the state's key.  The
+states you leave work in (WAIT, QUES, HOLD, NOPE) prompt for a one-line
+note; PROG and DONE do not.  There is no =,-o-t= for this yet: the key is
+bound to the Logseq todo search (=org-capture.el= loads after =org.el= and
+rebinds it), and the command =org.el= meant for it calls =zetta-org-todo=,
+which is defined nowhere.
 
 * Keys
 
@@ -141,7 +145,7 @@ agendas alike.
 |--------+-------------------------------+------------------------------------------------|
 | =,-o-P=  | =org-queue-horizon=             | simulate a range of days, read-only            |
 | =,-o-p=  | =org-queue-propose=             | propose placements for a range, review, apply  |
-| =,-o-m=  | =org-queue-review-week=         | Monday: the review pack; =w= writes the answers |
+| =,-o-m=  | =org-queue-review-week=         | Monday: the review pack; =w= writes the three answers |
 | =,-o-y=  | =org-queue-still-worth-it=      | one parked entry's evidence; =k= keep, =p= park, =d= dismiss |
 | =,-o-n=  | =org-queue-season=              | the season: last quarter's walk beside the horizons file |
 | =,-o-C=  | =org-queue-calibration=         | estimate versus derived clock, per category    |
@@ -206,7 +210,7 @@ agendas alike.
 
 | key    | command          | what it does                                |
 |--------+------------------+---------------------------------------------|
-| =,-o-t=  | todo with prefix | change the state                            |
+| =C-c C-t= | =org-todo=         | change the state; the fast-selection key follows |
 | =,-o-S=  | =org-schedule=     | set SCHEDULED; =C-u= removes it               |
 | =,-o-D=  | =org-deadline=     | set DEADLINE; =C-u= removes it                |
 | =,-o-z=  | =org-add-note=     | add a LOGBOOK note                          |
@@ -424,7 +428,7 @@ How to read it:
 - The tally line accounts for every entry: committed + cut + excluded +
   deferred is the whole corpus.
 - The fix is triage, not tuning: move each overdue deadline (=,-o-D=), close
-  what is done (=,-o-t d=), park what you are consciously not doing (=H= on
+  what is done (=C-c C-t d=), park what you are consciously not doing (=H= on
   the line), un-NEXT what you no longer mean, then =g=.
 
 * Buckets
@@ -578,7 +582,7 @@ Look at the note on the line first; it tells you which lever applies.
   stays a commitment forever otherwise.
 - *Start by today* → the deadline is the lever; or accept that the day is
   the day.
-- *NEXT* → =,-o-t= and set it back to TODO.
+- *NEXT* → =C-c C-t= and set it back to TODO.
 - *Chosen by score* → there is no "skip today" gesture.  =H= parks it with a
   note until you change it back.  WAIT with no deadline in the next 7 days
   is also excluded.  Lowering priority nudges the score but may not be
@@ -594,15 +598,15 @@ the bucket and the plan will say so in as many words.
 
 ** Push something back to the backlog
 
-=U= removes a SCHEDULED; =C-u ,-o-D= removes a DEADLINE; =,-o-t t= takes it
+=U= removes a SCHEDULED; =C-u ,-o-D= removes a DEADLINE; =C-c C-t t= takes it
 back to TODO.  Leaving a stale SCHEDULED alone is also fine; it only adds a
 carry-over bonus.
 
 ** Start and finish work
 
-- =,-o-t p= moves it to PROG.  The timestamp on that transition is when the
+- =C-c C-t p= moves it to PROG.  The timestamp on that transition is when the
   derived clock starts.
-- =,-o-t d= moves it to DONE and stops the clock.  Leaving PROG for any
+- =C-c C-t d= moves it to DONE and stops the clock.  Leaving PROG for any
   other state also stops it.
 - A task left in PROG overnight keeps accruing.  The gantt marks such a
   row =~= (provisional) rather than capping it.  Move it out of PROG when
@@ -613,7 +617,7 @@ carry-over bonus.
 - =,-o-o j= at a switch writes a journal line linked to the PROG entry;
   any other capture made meanwhile records what it interrupted.
 - =,-o-i= hands the entry to an agent: AGENT while it runs, back as NEXT
-  (review it: =,-o-t p=) or QUES.  See "Chains".
+  (review it: =C-c C-t p=) or QUES.  See "Chains".
 
 * The day's frame
 
@@ -679,7 +683,7 @@ At the fixed stop.  One buffer:
   sweep; =,-o-z= on the entry adds one.
 - *Tomorrow's routine* and *appointments*, the *inbox* count.
 - *Tomorrow's draft* -- the same packer run for tomorrow, so it respects
-  tomorrow's capacity.  =N= marks a line NEXT; the third is refused
+  tomorrow's capacity.  =N= marks a line NEXT; a fourth is refused
   (=org-queue-pick-limit= 3, counted over every open NEXT).
 - The phrase.  Printed, not asked.
 
@@ -691,7 +695,7 @@ line.
 ** Dormant projects: =,-o-v j= and =M-x org-queue-dormant-check=
 
 A project is a heading with a child that has a TODO keyword.  It is
-*live* when a child is open and not parked (TODO, NEXT, PROG, WAIT, QUES)
+*live* when a child is open and not parked (TODO, NEXT, PROG, AGENT, WAIT, QUES)
 or the project carries a plain timestamp within =org-queue-dormant-days=
 (14); *finished?* when every child is DONE or NOPE; *dormant* otherwise.
 The check tags dormant projects =:dormant:= and clears the tag from the

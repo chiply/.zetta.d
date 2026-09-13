@@ -1,0 +1,940 @@
+#+title: Work profile — a code-only Zetta and a gated .files for an employer-managed Mac
+#+author: Charlie Holland
+#+startup: overview
+
+# Design and implementation plan for installing .zetta.d and .files on a
+# work machine: nearly the full GUI config, minus the personal apps, with
+# a secrets layer that can adopt whatever vault the employer turns out to
+# use.  Written [2026-09-13]; companion to work-security-audit.org, which
+# lists what must be scrubbed before either repo is cloned at work.  Same
+# rules as headless-zetta.org: evidence stays with the claim, inference is
+# labelled, dates are absolute.
+#
+# Status: BUILT [2026-09-13] -- Phase 1 (WP-Z1..Z12, Z9 included) on
+# .zetta.d dev and Phase 2 (WP-F1..F9) on .files dev, one commit per
+# task, nothing pushed.  The evidence sits under each phase's table and
+# the summary is "Implementation status" at the end.  Assumptions still
+# unverified until the machine exists: a Mac with admin rights, Homebrew
+# permitted, GitHub reachable, the employer's vault unknown.  Part 9
+# lists what the owner still decides.
+
+* Start here
+
+** Verdict [2026-09-13]
+
+*Feasible with one new template, about ten small refactors, and a profile
+switch in .files.*  The module system needs no change: =zetta-modules!=
+already expresses the profile, and its one parser rule (per category,
+all inclusions or all exclusions) only shapes the =:app= list.  The
+interaction check (Part 2.3) found every cross-module reference to an
+excluded feature already guarded -- =fboundp=, =:after=,
+=locate-library=, or advice on a function that need not exist -- so
+excluding them cannot break startup.  The four mail modules are inert
+even when loaded (=:if (executable-find "mu")=); excluding them saves
+four package builds and the =elpaca-ignored-dependencies= mutation.
+
+What does need code, in order of consequence:
+
+1. the secrets backend switch -- =init.el= decides on the 1Password
+   backend before anything in ~/.zetta.el can veto it (Part 4);
+2. the employer identifiers out of =jira.el= and =slack.el=, the host
+   list out of =remote.el=, the personal AI backends behind a gate
+   (Part 5);
+3. =core/security.el=, which breaks behind a corporate proxy (audit S6);
+4. =.files=: a =DOTFILES_PROFILE= switch, an exclude manifest for
+   =main.py=, gates in =bootstrap.sh= and the Brewfile, and the alias
+   files restored (Part 6);
+5. phase 2, after the install works: one variable for the kb root
+   (Part 3), so the 40 literal =~/kb= paths stop being a convention.
+
+** The profile in one screen
+
+| Category    | In                                                                                    | Out                                                                                                               |
+|-------------+---------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------|
+| :core       | everything                                                                            | --                                                                                                                |
+| :completion | everything else, including copilot-isr                                                | chiply-isr (personal semantic index), consult-mu (mail), consult-omni (web search on personal keys)                |
+| :ui         | everything (GUI, SVG chrome, themes, fonts, the toys nyan and parrot)                 | --                                                                                                                |
+| :editor     | everything                                                                            | --                                                                                                                |
+| :lang       | everything                                                                            | --                                                                                                                |
+| :tools      | everything else: magit/forge/gha/pr-review, lsp/dap, docker/kubernetes/tilt, ai, jira, slack (parameterised) | gnus (news), irs (personal retrieval backend), signel (Signal)                                           |
+| :app        | reference lookups, bookmarks and dogears, olivetti, activities, eww, eca, hyperbole + hywiki | mail (nano-mu4e, mu4e-dashboard, org-msg), feeds and read-later (elfeed, wombag, pocket-reader, nov), social and chat (mastodon, bluesky, md4rd, reddigg, erc), music (spot, spot4e), kb pipelines (llm-convo, yt-transcript), whisper, say, wttrin, anki, the five games |
+| :org        | everything else: the task system, agenda, capture, org-remark, literature, pdf-tools  | pdfnote (iPad annotations -> Logseq)                                                                              |
+| :term       | everything                                                                            | --                                                                                                                |
+
+Measured: 277 module files load, 32 are excluded (Part 7 has the list).
+
+** The two machines
+
+| Capability          | Personal Mac (today)                                              | Work Mac (assumed)                                                        |
+|---------------------+-------------------------------------------------------------------+---------------------------------------------------------------------------|
+| Emacs               | source-built 32.0.50 (canvas), emacs-plus@31 beside it            | emacs-plus@31 on day one (the CI-tested line); source build optional later |
+| Secrets             | 1Password CLI, service-account token, 33 items from =Dev=         | no personal vault; ~/.authinfo.gpg, or the employer's vault via Part 4    |
+| Notes               | ~/kb synced by Syncthing to the hub and the iPad                  | ~/kb local, unsynced, work content only                                   |
+| Mail, feeds, social | mu/mbsync, elfeed+Miniflux, mastodon, reddit, Signal              | none                                                                      |
+| Git hosting         | github.com, personal account, forge + gh                          | github.com or GitHub Enterprise, work account; forge via =forge-alist=    |
+| AI                  | OpenRouter (personal key), local router on :8765, Ollama, Claude   | whatever the employer allows: Claude via auth-source, or a gateway         |
+| Shell               | zsh, atuin (=auto_sync = false=), starship, tmux                  | same; atuin stays local                                                   |
+| Window manager      | AeroSpace + simple-bar + JankyBorders                             | same, if the MDM permits accessibility permissions                        |
+| Proxy / TLS         | none                                                              | unknown; audit S6 assumes an intercepting proxy is possible               |
+
+** Installing at work, in order
+
+Assumes the tasks in Part 8 have landed on =main= in both repos.  Part
+7 has the checks for each step.
+
+1. Admin account, Xcode command-line tools, =gh auth login= with the
+   work GitHub account (=GH_HOST= for GitHub Enterprise).
+2. =git clone https://github.com/chiply/.files ~/.files=.
+3. Create =~/.zshenv.local= from the work example in Part 6 --
+   =DOTFILES_PROFILE=work=, the three =INCLUDE_*= gates off.  No
+   1Password token, ever.
+4. =~/.files/bootstrap.sh=: with the profile set it links everything
+   but the manifest, brews everything but the personal list, registers
+   no Syncthing folder, installs no LaunchAgent, clones .zetta.d and
+   copies =templates/zetta.work.el= to =~/.zetta.el=.
+5. Confirm =~/.zetta.el= is the work template (=head -3=).  If the
+   bootstrap ran before WP-F3 landed: =cp ~/.zetta.d/templates/zetta.work.el ~/.zetta.el=.
+6. Write =~/.private.el= from the draft in Part 3 and =~/.authinfo.gpg=
+   with the work GitHub token (and an LLM key if the employer allows
+   one).  =chmod 600= both.
+7. =cd ~/.zetta.d && bin/zetta install= (about an hour: every package
+   builds locally), then =bin/zetta test= and =bin/zetta doctor=.
+8. First GUI launch; run the day-one checks (Part 7).
+9. =git config --global github.user <work login>=; =M-x copilot-login=
+   if there is a seat; =M-x org-jira-get-issues= once
+   =zetta-jira-url= is set.
+
+If the machine must be set up before Part 8 lands, the manual path is
+the same list with step 4 replaced by: run =main.py= after deleting the
+manifest's paths from a scratch copy of =files/=, =brew bundle= on a
+Brewfile with the personal block removed, clone .zetta.d by hand, and
+skip every LaunchAgent.  Not recommended: the tasks are small.
+
+* Part 1 — What "work" means here
+
+The headless profile was capability-driven (no SVG, no toolchain) and
+lives in predicates (=zetta-module-conditions=), so one user file is
+right on every machine.  The work profile is policy-driven: the modules
+are perfectly able to run; they must not.  Policy belongs in the user
+file, hence a template and not a predicate.
+
+Three rules sorted every module (Part 2.1 applies them):
+
+- R1 -- it reads or writes a *personal account or service*: mail, feeds,
+  read-later, social, chat, music, dictation, web search on personal API
+  keys.  Out.
+- R2 -- it moves data between this machine and *personal
+  infrastructure*: Syncthing, the hub, the personal retrieval servers,
+  the kb pipelines, Logseq/iPad sync.  Out.
+- R3 -- it is a *toy*, or it reveals *location*.  Out.  (The two
+  cosmetic toys in =:ui= stay: they draw a cat and a bird.)
+
+Everything else stays, by the owner's decision of 2026-09-13: the org
+task system and hyperbole/hywiki (re-rooted on a work kb, Part 3), the
+AI stack (on work keys, Part 5), Jira and Slack (parameterised, Part 5;
+Slack's token model is the one thing to clear with the employer, Part 9).
+
+* Part 2 — Module decisions
+
+** 2.1 Excluded (32 files)
+
+| Module                                   | Rule | Note                                                                                                     |
+|------------------------------------------+------+----------------------------------------------------------------------------------------------------------|
+| completion/chiply-isr                    | R2   | =emacs-startup-hook= indexes ~/org and ~/src into a local vector DB and starts a FastAPI server (=chiply-isr.el:250=) |
+| completion/consult-mu                    | R1   | mail search; =:after mu4e=                                                                                |
+| completion/consult-omni                  | R1   | web search on personal Google, Brave, YouTube, StackExchange, PubMed keys (=.private.el= lines 109-116)   |
+| tools/gnus                               | R1   | news reader (gmane)                                                                                       |
+| tools/irs                                | R2   | spawns =uv run irs serve= from =~/source_code/information-retrieval-service=                              |
+| tools/signel                             | R1   | =(signel-start)= at load (=signel.el:68=); plaintext history under =signel-history/=                      |
+| app/nano-mu4e, mu4e-dashboard, org-msg   | R1   | mail; all three =:if (executable-find "mu")= + =:after mu4e=; two of them mutate =elpaca-ignored-dependencies= at top level |
+| app/elfeed, wombag, pocket-reader, nov   | R1   | feeds and read-later; nov writes under =~/logseq/assets=                                                 |
+| app/mastodon, bluesky, md4rd, reddigg, erc | R1 | social and chat                                                                                          |
+| app/spot, spot4e                         | R1   | Spotify                                                                                                  |
+| app/llm-convo, yt-transcript             | R2   | ChatGPT shares and YouTube transcripts into ~/kb via hub scripts                                          |
+| app/whisper, say                         | R1   | microphone dictation (whisper.cpp), text-to-speech with a personal data file                              |
+| app/wttrin                               | R3   | weather for a configured city                                                                             |
+| app/anki                                 | R1   | flashcard reviewer against a personal deck                                                                |
+| app/flappy-fish, speed-type, spray, touchtype, key-quiz | R3 | games                                                                                        |
+| org/pdfnote                              | R2   | native PDF annotations (iPad) -> Logseq notes                                                             |
+
+** 2.2 Kept with conditions
+
+| Module(s)                                   | Condition                                                                                                                              | Task   |
+|---------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------+--------|
+| tools/ai                                    | the personal OpenRouter backend, its idle catalogue fetch and the local router on :8765 go behind =zetta-ai-personal-backends= (nil at work); the default backend comes from ~/.private.el | WP-Z6 |
+| app/eca-emacs                               | keys come from the environment (=exec-path-from-shell=); nothing personal in the module                                                | none   |
+| completion/copilot-isr                      | drives =@github/copilot-language-server= (installed by bootstrap); needs a Copilot seat on the work account                            | none   |
+| tools/jira                                  | URL and JQLs from =zetta-jira-url= / =zetta-jira-jqls= in ~/.private.el; the module ships nil                                          | WP-Z4  |
+| tools/slack                                 | workspaces from =zetta-slack-teams= in ~/.private.el; emacs-slack needs a browser-scraped =xoxc= token and =d= cookie (=slack.md=), which many workspace policies forbid -- owner clears it with the employer | WP-Z3 |
+| core/remote                                 | =zetta-ssh= offers the =Host= entries of ~/.ssh/config, or =zetta-ssh-hosts= when set; the two personal names leave the module          | WP-Z5  |
+| app/hyperbole, hywiki-alias, hywiki-graph   | rolo and wiki on the work ~/kb (Part 3); =zetta-hyrolo-base-file-list= is a defcustom, =hywiki-directory= a literal (=hyperbole.el:547=) | WP-Z9 (phase 2) |
+| org/* (queue, routine, daylog, gantt, timegrid, knowledge, chain, decorate, agenda, capture) | on the work ~/kb; =org-decorate= defaults to a local Ollama (=org-decorate.el:15=) -- at work either install Ollama or set =org-decorate-backend= to =claude= in ~/.private.el | WP-Z9 |
+| tools/forge, gha, pr-review; completion/consult-gh | token via auth-source (=api.github.com=, or the GHE host); GitHub Enterprise needs a =forge-alist= entry and =GH_HOST= for the =gh= CLI (Part 3 draft) | none |
+| org/org-ref, citar, biblio; org/pdf-tools   | read =zetta-literature-dir=; inert without a bibliography                                                                              | none   |
+| tools/sql                                   | endpoints only from =zetta-sql-endpoint-files= in ~/.private.el (=sql.el:259-265=); nothing personal in the module                     | none   |
+| app/pubmed, sx, helm-wikipedia, define-word, mw-thesaurus | reference lookups; no account, keys optional                                                                              | none   |
+| tools/kubel, kubernetes-el, tilt, docker, convention | work clusters and containers; nothing personal                                                                                | none   |
+| tools/alert                                 | macOS notifications; Claude Code's hook calls =zetta-notify= over emacsclient                                                          | none   |
+
+** 2.3 Interaction check
+
+For each excluded feature, every other file that names it (measured
+2026-09-13: =grep= over =modules/=, =source/bootstrap/=,
+=source/zettapkg/=, =init.el=, the templates), and how the reference is
+guarded.
+
+| Excluded feature | Referenced by                                       | Guard                                                                                                   | Verdict |
+|------------------+-----------------------------------------------------+---------------------------------------------------------------------------------------------------------+---------|
+| mu4e             | =core/line-utils.el:1426-1436=                      | =(fboundp 'mu4e--modeline-string)= plus =ignore-errors=                                                 | safe    |
+|                  | =ui/tab-bar-svg.el:211=                             | calls the line-utils helpers above                                                                      | safe    |
+|                  | =org/org.el:725=                                    | =(when (locate-library "mu4e-org") ...)=                                                                | safe    |
+|                  | =editor/evil-collection.el:10=                      | removes =mu4e= from =evil-collection-mode-list= -- a list edit, no load                                 | safe    |
+|                  | =zettapkg/org-queue/org-queue-mail.el=              | requires only =cl-lib=, =org= and its own core; mu4e functions are called at runtime, from mail buffers | safe    |
+|                  | consult-mu, nano-mu4e, mu4e-dashboard, org-msg      | =:after mu4e= and =:if (executable-find "mu")= -- inert without mu; excluded anyway                     | n/a     |
+| elfeed           | =org/org-remark.el:88-116=                          | a minor mode and functions that touch elfeed only when called; =advice-add= on =elfeed-show-entry= (line 108) is legal on an undefined function | safe |
+|                  | =completion/consult.el:52,71,73=                    | comments; =zetta-consult-elfeed= is defined in elfeed.el itself                                        | safe    |
+|                  | =org/org-capture.el=                                | no reference (measured: zero matches)                                                                   | safe    |
+|                  | =core/line-utils.el=                                | comment                                                                                                 | safe    |
+| spot / spot4e    | =core/line-utils.el:288-290=                        | =(fboundp 'spot-mode-line-string)=                                                                      | safe    |
+|                  | =ui/tab-bar-svg.el:213,308=                         | calls the guarded helper                                                                                | safe    |
+| signel           | nothing outside =bootstrap-modules.el='s load-order list and a comment in the headless template | -- | safe |
+| chiply-isr, irs  | =completion/vertico.el=                             | comments only                                                                                           | safe    |
+|                  | =tools/irs.el=                                      | =with-eval-after-load 'gptel= -- and irs is excluded                                                    | n/a     |
+| hyperbole (kept) | =org/org.el:711=                                    | =(when (fboundp 'zetta-hyrolo-update-file-list) ...)= -- already written for the case it is excluded    | safe    |
+| consult-omni     | =completion/cape.el=, =core/keys.el=                | key bindings to autoloaded commands; =void-function= only if pressed, and the module is out              | safe    |
+| swagg, yaml order | =bootstrap/bootstrap-elpaca.el:168-174=            | the ordering note exists because the *personal* ~/.private.el declares swagg; the work private file declares no packages | n/a |
+
+Nothing unguarded.  The only load-order-sensitive fact is that =:app= is
+an inclusion list, which the parser loads in the written order; the
+template follows =zetta--default-file-order= (measured in Part 7).
+
+** 2.4 Why an inclusion list for :app
+
+=zetta--resolve-module-spec= treats a list with any =-name= as
+exclusions and any other list as inclusions; mixing is an error.  =:app=
+keeps 17 of 42 files, so the inclusion form is shorter and, more to the
+point, *closed*: a new personal app added to =modules/app/= later does
+not silently join the work profile.  The three exclusion lists
+(=:completion=, =:tools=, =:org=) are open in the other direction, which
+is the right default for developer tooling.
+
+* Part 3 — The template, the kb, and the work private file
+
+** 3.1 =templates/zetta.work.el=, block by block
+
+| Block                     | What it sets                                                              | Why                                                                                              |
+|---------------------------+---------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------|
+| =zetta-profile 'work=     | a marker                                                                  | informational; =doctor= prints it after WP-Z10; policy stays in the module lists                  |
+| kb                        | =zetta-logseq-dir "~/kb/todo/"= and a skeleton: =todo/ notes/ wiki/ org-remark/ inbox.org= | the kept org and hyperbole modules read these paths (3.2); created idempotently at every start |
+| =custom-file=             | =.data/custom.el=                                                         | audit S3: Customize wrote a laptop's host name into the tracked init.el                          |
+| backups, auto-saves       | under =.data/=                                                            | keeps work trees clean; lockfiles stay default                                                   |
+| =zetta-secrets-backend 'authinfo= | the backend decision, effective after WP-Z2                       | Part 4; until then the private file sets =auth-sources=                                          |
+| =zetta-ai-personal-backends nil= | no OpenRouter, no local router, effective after WP-Z6              | Part 5                                                                                           |
+| =zetta-svg-line-fonts=    | the same tab-bar font as the personal file                                | the Brewfile installs it on both                                                                 |
+| =zetta-modules!=          | the lists in Part 2                                                       |                                                                                                  |
+
+Two settings the headless template has and this one does not: the
+native-compilation throttle (a work Mac has cores) and =create-lockfiles
+nil= (that was for a synced folder; here the default is fine).
+
+** 3.2 ~/kb at work: same path, different tree
+
+Measured 2026-09-13: 40 literal =~/kb= references across 20 files under
+=modules/= and =source/zettapkg/=, ten of them in =app/hyperbole.el=.
+Most are defcustom defaults and therefore overridable from the private
+file: =org-routine-file=, =org-queue-reviews-file=,
+=org-queue-horizons-file=, =zetta-org-journal-file=,
+=org-knowledge-directory=, =zetta-hyrolo-base-file-list=,
+=zetta-org-timegrid-file=.  Some are not: the four capture templates
+(=org/org.el:736-761=), =zetta-org-inbox-file= (=org.el:671=, a defvar),
+=hywiki-directory= (=hyperbole.el:547=), =org-decorate-inbox-file=
+(=org-decorate.el:37=), the eww download directories (=eww.el:97,188=).
+
+Two ways to make the org stack work at work:
+
+- (a) keep the path; make the tree different.  ~/kb on the work machine
+  is a local directory holding work notes only: never registered with
+  Syncthing (the bootstrap gate in Part 6), no hub, no =hub-deploy=.
+  Zero refactor.  The risk is habit: nothing on the work machine can
+  sync it, so the risk is only the reverse -- pointing a personal device
+  at it -- and that needs a deliberate pairing.
+- (b) a =zetta-kb-dir= root with every default derived from it, and the
+  literals in (3.2) replaced.  One variable, ~20 edits, a test that
+  greps for the literal.
+
+Day one takes (a); phase 2 does (b) as WP-Z9, because (b) is hygiene
+the personal machine also wants (the =test= corpus toggle in =org.el=
+already had to work around one literal).  The template creates the
+skeleton so the first capture, agenda and wiki page all have somewhere
+to go; a starter routine table is =testdata/routine.org=, copied to
+=~/kb/notes/schedule.org= when org-routine first asks.
+
+** 3.3 The work ~/.private.el (draft)
+
+Nothing in it is copied from the personal file.  Works today; the
+lines marked "after WP-Zn" are no-ops until that task lands.
+
+#+begin_src emacs-lisp
+;;; ~/.private.el -- WORK machine  -*- lexical-binding: t; -*-
+;; No personal vault.  No mail.  Credentials live in ~/.authinfo.gpg
+;; (or the employer's vault: work-profile.org Part 4).
+
+;; Needed today: init.el enables the 1Password backend whenever `op' is
+;; on PATH (init.el:108).  Redundant after WP-Z2, harmless to keep.
+(setq auth-sources '("~/.authinfo.gpg"))
+
+;; GitHub.  forge, gha, pr-review and consult-gh read the token from
+;; auth-source: machine api.github.com login <work-login>^forge password <token>
+;; GitHub Enterprise: one more forge-alist row and GH_HOST for the gh CLI.
+;; (with-eval-after-load 'forge
+;;   (push '("github.example.com" "github.example.com/api/v3"
+;;           "github.example.com" forge-github-repository)
+;;         forge-alist))
+
+;; AI: the work-approved backend only.  Claude's key is read by gptel from
+;; auth-source (machine api.anthropic.com login apikey password <key>).
+;; After WP-Z6 ai.el registers nothing personal; before it, this still
+;; makes Claude the default.
+(with-eval-after-load 'gptel
+  (setq gptel-backend (alist-get "Claude" gptel--known-backends nil nil #'equal)
+        gptel-model   'claude-sonnet-5))
+;; org-decorate: no local Ollama here.
+(setq org-decorate-backend 'claude)
+
+;; Jira (after WP-Z4).
+;; (setq zetta-jira-url  "https://<employer>.atlassian.net"
+;;       zetta-jira-jqls '((:jql "assignee = currentUser() and sprint in openSprints() ORDER BY priority DESC"
+;;                          :limit 200 :filename "My sprint")))
+
+;; Slack (after WP-Z3), only if the workspace permits a browser-token client.
+;; Token and cookie: machine <ws>.slack.com login <email> / <email>^cookie.
+;; (setq zetta-slack-teams '((:name "acme" :host "acme.slack.com"
+;;                            :user "me@acme.example" :default t)))
+
+;; Hosts for `zetta-ssh' (after WP-Z5); default is ~/.ssh/config's Host list.
+;; (setq zetta-ssh-hosts '("dev-box" "bastion"))
+
+;; Work databases, if any: files that MERGE into sql-connection-alist /
+;; lsp-sqls-connections (modules/tools/sql.el).
+;; (setq zetta-sql-endpoint-files '("~/work/db-endpoints.el"))
+
+;; Repositories whose commits may name inbox entries (org-decorate evidence).
+;; (setq zetta-git-repos '("~/work/repo-a"))
+#+end_src
+
+=~/.authinfo.gpg= needs a GPG key on the work machine
+(=gpg --quick-gen-key=); Emacs's =epa= prompts through pinentry.  A
+plain =~/.authinfo= at mode 600 is the fallback if GPG is more friction
+than the employer's setup tolerates -- it is what the personal machine
+does today (audit S5), and =doctor= will warn about it.
+
+* Part 4 — Secrets: a backend the employer's vault can plug into
+
+Owner's requirement (2026-09-13): the employer may use a different
+vault; make things amenable to adopting it without knowing what it is.
+
+** Requirements
+
+- R-S1: no personal token on the work machine, ever.
+- R-S2: an unknown work vault -- 1Password Business, Bitwarden, HashiCorp
+  Vault, AWS Secrets Manager, =pass=, or just =~/.authinfo.gpg= -- is
+  adoptable by editing ~/.zetta.el and ~/.private.el only.
+- R-S3: the decision is made *per machine* (in ~/.zetta.el), and
+  =init.el= honours it rather than sniffing for an =op= binary.
+- R-S4: the personal machine keeps today's behaviour with no edit.
+- R-S5: CI and the hub keep theirs (=auth-sources nil=).
+
+** Design
+
+Today (=init.el:19-109=): a cache filled by =zetta-op-load= (which
+~/.private.el calls at line 30), read by =zetta-op-read=, and an
+auth-source backend =zetta-op= that serves the same cache to forge,
+gptel, slack, erc and mastodon through =zetta-op-auth-source-entries=.
+The design keeps all of it and adds one decision variable and one
+generic loader.
+
+In =bootstrap-modules.el= (the user-variables section, so ~/.zetta.el
+can set them):
+
+#+begin_src emacs-lisp
+(defvar zetta-secrets-backend nil
+  "How ~/.private.el and auth-source get their secrets.  Set in ~/.zetta.el.
+nil        pick `op' when the `op' binary and `zetta-op-template-file'
+           both exist, else `authinfo'.  (Today's behaviour.)
+op         1Password CLI: one `op inject' over `zetta-op-template-file'.
+command    run `zetta-secrets-command'; it prints KEY=VALUE lines.
+authinfo   Emacs's own auth-source files; no cache, no subprocess.
+none       no secrets at all: `auth-sources' is nil (CI, the hub).")
+
+(defvar zetta-op-template-file
+  (expand-file-name "source/op-secrets.env.tpl" user-emacs-directory)
+  "Template `op inject' resolves.  A work vault points this outside the
+repo, e.g. ~/.config/zetta/secrets.env.tpl with op://<WorkVault>/... refs.")
+
+(defvar zetta-secrets-command nil
+  "Shell command for the `command' backend.  Must print KEY=VALUE lines.")
+#+end_src
+
+In =init.el=: =zetta-secrets-load= replaces the body of =zetta-op-load=
+(op builds the command as =op inject -i TEMPLATE=; =command= uses the
+variable; both parse the same =KEY=VALUE= lines into the same cache);
+=zetta-op-load= and =zetta-op-read= become aliases, so the personal
+private file needs no edit (R-S4).  The auth-source parser is
+registered, and =auth-sources= set to =(zetta-op)=, only for =op= and
+=command=; =authinfo= leaves =auth-sources= at Emacs's default
+(=~/.authinfo=, =~/.authinfo.gpg=, =~/.netrc=); =none= sets it nil.  The
+decision reads =(zetta-secrets-effective-backend)= -- the variable, or
+the nil rule -- *after* ~/.zetta.el has loaded, which it already does
+(line 18 loads the user file; the backend block is at 102-109).
+
+The private file's contract is unchanged: it calls =(zetta-op-load)=
+(or the new name) when it wants the cache, and =zetta-op-read= for
+each value; with =authinfo= it calls =auth-source-pick-first-password=
+directly, or nothing, because the consumers do.
+
+** What adopting each kind of vault looks like
+
+| Employer vault            | ~/.zetta.el                                                                           | Where the references live                                              |
+|---------------------------+---------------------------------------------------------------------------------------+------------------------------------------------------------------------|
+| none issued               | =(setq zetta-secrets-backend 'authinfo)= (the template's default)                      | =~/.authinfo.gpg=                                                      |
+| 1Password Business        | =(setq zetta-secrets-backend 'op zetta-op-template-file "~/.config/zetta/secrets.env.tpl")= | that untracked template, =op://<WorkVault>/...=; =op signin= with the work account (desktop-app unlock, no service token) |
+| Bitwarden                 | ='command=, =zetta-secrets-command= = =bw get item emacs-secrets --raw | jq -r '.fields[] | "\(.name)=\(.value)"'= | a Bitwarden item with custom fields                    |
+| HashiCorp Vault           | ='command=, =vault kv get -format=json secret/emacs | jq -r '.data.data | to_entries[] | "\(.key)=\(.value)"'= | a KV secret                                        |
+| AWS Secrets Manager       | ='command=, =aws secretsmanager get-secret-value --secret-id emacs --query SecretString --output text | jq -r 'to_entries[] | "\(.key)=\(.value)"'= | a JSON secret |
+| =pass=                    | ='command=, =pass show emacs/env=                                                      | one entry with KEY=VALUE lines                                         |
+
+The auth-source bridge (=zetta-op-auth-source-entries= in
+~/.private.el) is what lets forge, gptel and slack find a work token in
+any of these; the table in =secrets.md= is the same table with the vault
+column changed.
+
+** Consequences
+
+- =secrets.md= is rewritten around the table above (SEC-C4), with the
+  paragraph the audit asks for: the personal service-account token is
+  for personal machines only.
+- =bin/zetta doctor= prints the effective backend and whether it
+  resolves (=op inject= exit status, or the command's; for =authinfo=,
+  whether the file exists and is mode 600).
+- The headless template changes one line: =(setq auth-sources nil)=
+  becomes =(setq zetta-secrets-backend 'none)=, and =init.el= no longer
+  needs the =(executable-find "op")= special case that was added for it
+  (headless-zetta.org, "Deviations").
+
+* Part 5 — Parameterising the work-tool modules
+
+Each row: what the module does today, what changes, what the private
+file supplies, and how it is verified.  The identifiers themselves are
+audit S3; the mechanism is the same in every row -- a =zetta-= variable
+with a nil default and a docstring, read at =:config= time.
+
+| Module          | Today                                                                              | Change                                                                                                                    | Private file supplies                          | Done when                                                                                  | Task  |
+|-----------------+------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------------------------------+-------|
+| tools/slack     | two =slack-register-team= forms with literal names and hosts (=slack.el:10-29=)   | =(dolist (team zetta-slack-teams) (slack-register-team ...))=; token and cookie via =auth-source-pick-first-password= on the plist's host and user; =:if zetta-slack-teams= on the =use-package= | =zetta-slack-teams=: plists =(:name :host :user [:default])= | no workspace name in the module; =slack-start= works with one team from the private file | WP-Z3 |
+| tools/jira      | =jiralib-url= and =org-jira-custom-jqls= literal (=jira.el:6-12=)                 | read =zetta-jira-url= / =zetta-jira-jqls=; =:if zetta-jira-url=; =org-jira-working-dir= under the kb                     | both variables                                 | no host in the module; =org-jira-get-issues= works                                         | WP-Z4 |
+| core/remote     | =completing-read= over two literal host names (=remote.el:18,28=)                  | candidates = =zetta-ssh-hosts= when set, else the =Host= names parsed from =~/.ssh/config= (skipping wildcards)           | optional =zetta-ssh-hosts=                     | no host name in the module; =zetta-ssh= lists the config's hosts                            | WP-Z5 |
+| tools/ai        | OpenRouter backend + idle catalogue fetch + local router on :8765 unconditional; OpenRouter is the default (=ai.el:122-203=) | wrap the three in =(when zetta-ai-personal-backends ...)= (defvar, default t); default backend = OpenRouter when personal, else the Claude backend; =zetta-openrouter-api-key= unchanged | =gptel-backend= / =gptel-model= if the default is not wanted | with the variable nil: =gptel--known-backends= holds Claude (and OpenAI if keyed) only; no idle timer; no reference to =~/source_code/my-ai= is evaluated | WP-Z6 |
+| org/org-decorate | Ollama at =localhost:11434= by default                                            | none in the module; document the =claude= backend in the template's private draft                                          | =org-decorate-backend=                         | =org-decorate-inbox= on the work machine calls the chosen backend                          | --    |
+| app/eca-emacs   | keys from the environment                                                          | none                                                                                                                      | environment                                    | --                                                                                         | --    |
+| tools/forge, gha, pr-review, completion/consult-gh | auth-source on =api.github.com=; =gh= CLI                       | none in the modules; GHE is a =forge-alist= row and =GH_HOST= (Part 3 draft)                                              | the row, the token                             | =forge-pull= on a work repo                                                                | --    |
+
+* Part 6 — .files: a profile switch
+
+Today =.files= has no profile: =main.py= links every file under
+=files/=, =bootstrap.sh= is one linear script, the Brewfile has two env
+gates (=INCLUDE_EMACS_MAC=, =INCLUDE_EMACS_SRC=, lines 179 and 464), and
+the hub is a separate tree because it is a different OS.  The work
+machine is the same OS with a subset, so the mechanism is the existing
+env-gate pattern made general, plus one manifest.
+
+** 6.1 The switch
+
+=DOTFILES_PROFILE=, values =personal= (default) and =work=.  Set once in
+=~/.zshenv.local= (untracked; =.zshenv:2= already sources it before
+anything else) and exported by =bootstrap.sh --profile work= for the
+run.  Read by =main.py=, =bootstrap.sh=, the Brewfile
+(=ENV.fetch("DOTFILES_PROFILE", "personal")=), =.zshrc= and =.zshenv=.
+
+Work =~/.zshenv.local= (the whole file):
+
+#+begin_src sh
+# work machine -- never the personal 1Password token
+export DOTFILES_PROFILE=work
+export INCLUDE_EMACS_MAC=f          # the experimental fork: personal only
+export INCLUDE_EMACS_SRC=f          # emacs-plus@31 on day one; flip to t later
+export INCLUDE_OTHER_DISTROS=f      # no Spacemacs/Doom/Prelude/Centaur
+# export GH_HOST=github.example.com # GitHub Enterprise, if any
+#+end_src
+
+For this to work, =.zshrc:27,45= must stop *forcing* the two gates:
+=export INCLUDE_EMACS_MAC="${INCLUDE_EMACS_MAC:-t}"= (same for SRC), so
+the local file's value survives.  Today the =.zshrc= line overwrites it
+(measured: unconditional =export ...=t=).
+
+** 6.2 The exclude manifest
+
+=profiles/work.exclude=, gitignore-style globs relative to =files/=,
+read by =main.py= when =DOTFILES_PROFILE=work=:
+
+#+begin_example
+# files/ paths the work profile never links into $HOME
+.msmtprc                     # personal mail (untracked after SEC-B7; listed for the example too)
+.msmtprc.example
+.gnus.el
+.mpd/**                      # music daemon
+.config/signal-cli/**        # Signal LaunchAgent
+.config/wallpaper/**         # wallpaper rotation, Aura frame sync
+.local/bin/hub-deploy        # personal VPS
+.local/bin/st-ensure-folder  # Syncthing folder registration
+#+end_example
+
+Kept on purpose: =.claude/**= (hooks, plugins, theme; the emacs-eval
+skill's hub section is inert without the host), =.config/tmuxinator/**=,
+=.aws/shell=, =.config/gh/config.yml=, =.local/bin/my_snowsql=
+(generic), =.config/emacs-src/revision= (harmless without the build).
+
+** 6.3 =main.py=
+
+- reads the manifest and skips matches (=fnmatch= over the relative
+  path), printing what it skipped;
+- before =ln -s -f=, moves an existing *regular* file at the target to
+  =~/.dotfiles-backup/<timestamp>/<path>= (audit S8: an MDM-provisioned
+  =.zshrc= is otherwise lost silently); existing symlinks are replaced
+  as today;
+- =--dry-run= prints the plan.
+- the alias files come back as regular files first (WP-F6, audit S10);
+  otherwise =main.py= keeps re-creating the loop.
+
+** 6.4 =bootstrap.sh= gates
+
+A helper at the top:
+
+#+begin_src sh
+DOTFILES_PROFILE="${DOTFILES_PROFILE:-personal}"
+[ "${1:-}" = "--profile" ] && { export DOTFILES_PROFILE="$2"; shift 2; }
+personal() { [ "$DOTFILES_PROFILE" != work ]; }
+#+end_src
+
+and =if personal; then ... fi= around the personal blocks:
+
+| Block (line today)                                   | personal | work              | Note                                                                              |
+|------------------------------------------------------+----------+-------------------+-----------------------------------------------------------------------------------|
+| Syncthing folder =kb= (=st-ensure-folder=, 87)      | yes      | *never*           | audit S7; the work ~/kb is local                                                   |
+| signal-cli LaunchAgent (217)                         | env      | never             | already gated on =SIGNAL_PHONE=; the profile makes it impossible                   |
+| wallpapers download + rotate agent (227-232)         | yes      | no                | 500 downloads and a LaunchAgent                                                    |
+| Aura frame sync (239)                                | env      | never             | mails images through msmtp                                                        |
+| =snowflake-snowsql= cask (256)                       | yes      | opt-in            | =INCLUDE_SNOWFLAKE=t=; a previous job's tool, maybe the next's                     |
+| =install_emacs_distros.sh= (141)                     | yes      | yes, gated inside | the other four distros behind =INCLUDE_OTHER_DISTROS= (default t personal, f work); emacs-mac and src by their gates |
+| lolipop cursor module (150-157)                      | yes      | yes               | needs emacs-plus include; harmless                                                |
+| zetta clone (167)                                    | yes      | yes, plus         | when =work= and =~/.zetta.el= is missing: =cp templates/zetta.work.el ~/.zetta.el= -- the same rule the hub bootstrap uses |
+| Claude Code hooks (176)                              | yes      | yes               |                                                                                   |
+| AWS CLI pkg (112), tlmgr (133), LSP servers, k9s skins, simple-bar | yes | yes         |                                                                                   |
+| =touch ~/.localsecrets ~/.tokens= (16)               | yes      | no                | legacy, empty on this Mac (measured: neither exists); drop for both                |
+
+** 6.5 Brewfile
+
+=personal = ENV.fetch("DOTFILES_PROFILE", "personal") != "work"= at the
+top, and =if personal ... end= around: =isync= (52), =mosh= (69), =mu=
+(70), =oci-cli= (73), =mpv= and =yt-dlp= (105-106), =syncthing= with its
+=restart_service= (115), =mpc= and =mpd= (145-146), the
+=jump-desktop-connect= and =elgato-stream-deck= casks (450, 452).  The
+=1password= and =1password-cli= casks (169-170) go behind
+=personal || ENV["INCLUDE_OP"] == "t"=: an employer that uses 1Password
+installs its own, or sets the flag.  Add =gitleaks= unconditionally
+(audit SEC-C3).  Browsers, fonts, the terminal toys and the whole
+developer list stay for both.
+
+** 6.6 =.zshenv=
+
+The =linode-cli= wrapper (=.zshenv:6-12=) reads a personal 1Password
+item; wrap it in =if [[ "${DOTFILES_PROFILE:-personal}" != work ]]=.
+Nothing else in the tracked shell files is personal (measured: the
+identifier sweep in the audit).
+
+** 6.7 What stays untracked and per-machine
+
+=~/.zshenv.local=, =~/.claude/settings.json= (account keys),
+=~/.private.el=, =~/.zetta.el=, =~/.authinfo.gpg=, =~/.ssh/config=.
+The README's "Bootstrap side-effects" section gains the profile table.
+
+* Part 7 — Verification
+
+** 7.1 Batch resolution rehearsal [2026-09-13, measured]
+
+=emacs -Q --batch= with =HOME= pointed at a scratch directory, loading
+=source/bootstrap/bootstrap-modules.el= and then
+=templates/zetta.work.el=, then resolving the full profile for the diff:
+
+| Result                              | Value                                                                 |
+|-------------------------------------+-----------------------------------------------------------------------|
+| files resolved                      | 277 (full profile: 309)                                               |
+| missing on disk                     | none                                                                  |
+| in work but not in full             | none                                                                  |
+| excluded                            | 32: the list in Part 2.1                                              |
+| =:app= order                        | matches =zetta--default-file-order= for the 17 kept files             |
+| kb skeleton under the scratch HOME  | =inbox.org notes/ org-remark/ todo/ wiki/=                            |
+| =custom-file=                       | =.data/custom.el= under the config dir                                |
+| byte-compile                        | clean (free-variable warnings suppressed, as for the headless file)   |
+
+** 7.2 Full rehearsal (before the install; same recipe as the headless one)
+
+An =.elc=-free overlay of the working tree with =elpaca/= symlinked in
+(headless-zetta.org, "The local batch rehearsal needed an overlay":
+on this Mac the source =.elc= files break =-l init.el= in batch), =HOME=
+pointed at a scratch directory holding =templates/zetta.work.el= as
+=.zetta.el= and a =.private.el= containing only the =auth-sources= line
+from Part 3, then =EMACS=<emacs-plus 31> bin/zetta ci-test=.  Done when
+the log ends in =ZETTA-OK=, has no =ELPACA-FAILED=, and no "Error
+(use-package)" line -- the gate CI's rows use since PR #140.  Then the
+same run with =op= on =PATH= and a template that resolves nothing, to
+prove the private file's =auth-sources= line wins (until WP-Z2 makes the
+test moot).
+
+** 7.3 Day-one checks on the work machine
+
+- =bin/zetta doctor=: profile =work=, backend =authinfo=, no 644
+  warning, bytecode all compiled by the running Emacs.
+- Tab bar: no mail glyph, no Spotify row (the guarded helpers return
+  nil).
+- =,= (launch-map): no =M= binding (mu4e-dashboard is out); =,-o-P=
+  opens the queue on the empty work kb; a capture lands in
+  =~/kb/inbox.org=.
+- =M-x gptel=: only the work backend(s) in the backend list; no
+  "OpenRouter", no "LLM-Router".
+- =M-x zetta-ssh=: the work hosts from =~/.ssh/config=, no personal
+  names.
+- =M-x forge-pull= in a work checkout; =M-x copilot-login= if there is
+  a seat.
+- Behind a proxy: =(url-retrieve-synchronously "https://github.com")=
+  succeeds after the =security.el= rewrite (audit S6); if not,
+  =zetta-extra-trust-files= gets the corporate root.
+- =brew services list=: no syncthing; =launchctl list | grep zetta=:
+  only simple-bar entries.
+- =atuin status=: not logged in, =auto_sync= false.
+
+** 7.4 CI
+
+No new CI row: a work-profile row on the 30.2 job would add a warm-cache
+run per PR (billed), and the profile is a subset of what the full rows
+already load.  Instead =bin/zetta ci-test= reads =ZETTA_TEMPLATE=
+(=example= | =headless= | =work=) so a manual =workflow_dispatch= can
+exercise it when wanted (WP-Z10).  =.files='s =test_install.yml= runs the
+whole bootstrap on =macos-latest= for every push and PR already; a
+=DOTFILES_PROFILE=work= input on its =workflow_dispatch= is enough
+(WP-F9); owner's call whether to make it a second matrix entry.
+
+* Part 8 — Tasks
+
+Ordered; "Done when" is the acceptance test.  =SEC-= tasks are in
+work-security-audit.org and are referenced, not repeated.
+
+** Phase 0 -- before anything is cloned at work
+
+Audit groups B (scrub) and C (harden).  In particular SEC-B1/B2
+(= WP-Z3/Z4), SEC-B3 (= WP-Z8), SEC-C1 (= WP-Z7).  Groups A (rotation)
+and D (history rewrite) are separate steps that do not gate the install
+(owner, 2026-09-13).
+
+** Phase 1 -- .zetta.d (one PR on =dev=, or two: secrets first)
+
+| Id     | Task                                                                                                                                  | Done when                                                                                                                       |
+|--------+---------------------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------|
+| WP-Z1  | =templates/zetta.work.el= (drafted 2026-09-13)                                                                                        | Part 7.1 numbers hold after every later task; the file loads in =emacs -Q --batch= with =bootstrap-modules.el=                   |
+| WP-Z2  | Secrets backend (Part 4): three defvars in =bootstrap-modules.el=; =zetta-secrets-load= / aliases / effective-backend in =init.el=; headless template to ='none=; =secrets.md= (SEC-C4); =.private.sample.el= shows the =command= form | personal Mac unchanged (=op= still resolves 33 keys); with ='authinfo= no =op= subprocess is spawned (measured with =strace=-equivalent: =process-list= empty of op, or a stub =op= on PATH that fails loudly); CI's nox row green |
+| WP-Z3  | =slack.el= on =zetta-slack-teams= (Part 5)                                                                                             | =git grep= for the old workspace name empty; =slack-start= with one team from the private file                                  |
+| WP-Z4  | =jira.el= on =zetta-jira-url= / =zetta-jira-jqls=                                                                                      | =git grep= for the old host empty; =org-jira-get-issues= with values from the private file                                      |
+| WP-Z5  | =remote.el= hosts from =~/.ssh/config= or =zetta-ssh-hosts=                                                                            | =zetta-ssh= lists this Mac's one config host; no literal host in the module                                                     |
+| WP-Z6  | =ai.el= behind =zetta-ai-personal-backends=                                                                                            | nil: only Claude/OpenAI registered, no idle timer, no =my-ai= path evaluated; t: identical to today                              |
+| WP-Z7  | =core/security.el= rewrite (= SEC-C1)                                                                                                  | SEC-C1's batch test                                                                                                             |
+| WP-Z8  | =custom-file= in =templates/zetta.example.el=; delete the machine entry from =init.el= (= SEC-B3)                                       | a Customize save on the personal Mac lands in =.data/custom.el=; =git status= stays clean                                      |
+| WP-Z9  | phase 2: =zetta-kb-dir= root, defaults derived, the literals in Part 3.2 replaced; a test that greps =modules/= and =zettapkg/= for =~/kb= | the grep finds only docstrings and comments; the org-queue, org-routine, org-decorate and hywiki-graph suites still pass |
+| WP-Z10 | =bin/zetta=: =install --profile work= copies the work template; =ci-test= honours =ZETTA_TEMPLATE=; =doctor= prints =zetta-profile= and the backend (= SEC-C2); the help text lists the third profile | =bin/zetta install --profile work= on a scratch =HOME= writes the work template; =doctor= output as in Part 7.3 |
+| WP-Z11 | Docs: README "Profiles" section (example / headless / work), =docs/modules.md= marks the work-excluded modules, =templates/= headers cross-reference | =docs/modules.md= and the templates agree                                                                        |
+| WP-Z12 | Full rehearsal (Part 7.2)                                                                                                              | =ZETTA-OK=, no use-package error                                                                                                |
+
+*** Evidence [2026-09-13]
+
+Commits on .zetta.d =dev=.  Batch means =emacs -Q --batch=; the
+rehearsal is Part 7.2's overlay under the source-built Emacs 32.0.50,
+the build that compiled every package here (bytecode census: 1669 .elc
+by 32.0.50, 2 by 31.0.91).
+
+- *WP-Z1* -- 0c725b9 (the :app order; the draft had eww before
+  eca-emacs, the default order the other way).  After every later task
+  including Z9: 277 of 309 files resolve, 0 missing, 0 extra, 32
+  excluded, :app order equal to the default order restricted to the
+  kept files, kb skeleton =inbox.org notes org-remark todo wiki=
+  created, custom-file under .data/.
+- *WP-Z2* -- d036c02.  Six batch cases: nil rule with the real =op= ->
+  =op=, the cache holds 29 of the template's 29 keys, auth-sources
+  =(zetta-op)= (R-S4); ='authinfo= with a stub =op= on PATH that logs
+  and fails -> the stub is never spawned, cache 0, auth-sources left at
+  Emacs's default; ='none= -> nil; ='command= with a printf -> cache 2
+  and the auth-source bridge returns the value; nil rule without =op=,
+  and with =op= but no template -> =authinfo=.  CI's nox row is the
+  owner's to trigger.
+- *WP-Z3* -- ae30cfa (SEC-B2's evidence).
+- *WP-Z4* -- 8f051bd (SEC-B1's evidence).
+- *WP-Z5* -- 06245b8.  This Mac's config yields its one host; a scratch
+  config with an Include, a wildcard, a negation, a two-alias Host line
+  and a duplicate yields the included host, the bastion and the two
+  aliases in order; =zetta-ssh-hosts= overrides; 0 literal hosts in the
+  module.
+- *WP-Z6* -- 5ab032b.  Batch over the gptel form: nil -> backends
+  ("Claude"), default Claude with the backend's first model, no
+  =zetta-openrouter-refresh-models= idle timer, the key-reading function
+  undefined; t -> ("LLM-Router" "OpenRouter" "Claude"), default
+  OpenRouter, timer present.  Rehearsal probe under the work template:
+  the same nil picture with the whole config loaded.
+- *WP-Z7* -- 050b696 (SEC-C1's evidence).
+- *WP-Z8* -- 99db731 (SEC-B3's evidence; the save itself is the owner's
+  interactive check, batch implies -q).
+- *WP-Z9* -- b990c82.  =check-kb-root.el= reads 378 files and finds 0
+  code literals (a planted one is reported); run-tests.sh: 19 suites,
+  307 tests, 0 unexpected, smoke OK; the Part 7.1 numbers unchanged.
+  Rehearsal probe with =zetta-kb-dir= moved to =~/work-kb/=: every
+  derived path followed except the (todo) corpus, which
+  bootstrap-modules.el had derived before the user file loaded; 0939e3e
+  adds =zetta-kb-follow-root=, called by init.el after ~/.zetta.el, and
+  the re-run shows 0 derived paths under ~/kb (the status section's
+  table).  Unit test: root moved -> corpus follows; corpus set
+  explicitly -> kept; nothing set -> default.
+- *WP-Z10* -- 386d0ff.  =install --profile work= on a scratch HOME
+  (EMACS=false, so the run stops at the build step) writes a ~/.zetta.el
+  identical to the template; an unknown profile is refused; an existing
+  file is left alone with a message; =ci-test= with
+  =ZETTA_TEMPLATE=headless= on an empty HOME writes the headless
+  template.  =doctor=: this Mac "Profile: full", "Secrets backend: op
+  (29 of 29 keys resolve ...)"; scratch HOMEs "work" / authinfo,
+  "headless" / none, and with a command override "command (1 KEY=VALUE
+  lines)" plus a mode warning on a planted 644 authinfo file.  ci.yml
+  parses; shellcheck on bin/zetta unchanged from HEAD.
+- *WP-Z11* -- 95e2409.  A batch check parses the 32 rows of
+  docs/modules.md's table and compares them with the set the template
+  excludes: both differences empty.
+- *WP-Z12* -- no commit of its own; the runs are in the status
+  section's table.  Both templates reach =ZETTA-OK= with zero "Error
+  (use-package)" lines and zero void-function or wrong-type lines.
+  =bin/zetta ci-test= still exits 1 on a separate, pre-existing gate:
+  =LOCK-MISSING= for poimap (queued since fd2d1c7, no lock entry) --
+  the owner's =bin/zetta freeze=.  =bin/zetta test= from the real tree
+  under the source build: daemon started and responding, 346 packages,
+  309 modules, no warning, no use-package error.
+
+** Phase 2 -- .files (one PR on =dev=)
+
+| Id     | Task                                                                                                                | Done when                                                                                                     |
+|--------+---------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------|
+| WP-F1  | =DOTFILES_PROFILE= read everywhere (6.1); =.zshrc= gates become defaults; =.zshenv= linode wrapper gated             | with =DOTFILES_PROFILE=work= in =~/.zshenv.local=, =echo $INCLUDE_EMACS_SRC= prints =f= in a new shell         |
+| WP-F2  | =main.py=: manifest, backup, =--dry-run= (6.3)                                                                      | dry run on this Mac lists 4 skips for =work=, 0 for =personal=; a planted regular file at a target is backed up |
+| WP-F3  | =bootstrap.sh= gates (6.4) + the work-template copy after the zetta clone                                            | =bash -n= passes (hub-ci does this); a =--profile work= dry read of the script shows no Syncthing/LaunchAgent lines executed (test by running with =DRY_RUN=1= that echoes instead of executes, or by inspection) |
+| WP-F4  | Brewfile gates (6.5) + =gitleaks=                                                                                    | =brew bundle list --file=... = under each profile: the personal list absent for work                           |
+| WP-F5  | =install_emacs_distros.sh=: =INCLUDE_OTHER_DISTROS=                                                                  | with =f=, no clone of Spacemacs/Doom/Prelude/Centaur                                                            |
+| WP-F6  | restore =files/.aliases/*= from =b02c1f8~1= (= SEC-B9)                                                              | =source ~/.aliases/index= defines =l= and =zefresh=                                                            |
+| WP-F7  | untrack =.msmtprc=, add the example (= SEC-B7); aura default (= SEC-B8)                                              | audit B's grep                                                                                                 |
+| WP-F8  | README + CLAUDE.md: profile section, the manifest, the work =~/.zshenv.local= example; drop =mcp_servers/=            | docs match                                                                                                     |
+| WP-F9  | =test_install.yml=: =workflow_dispatch= input for the profile                                                       | a manual run with =work= completes on =macos-latest=                                                           |
+
+*** Evidence [2026-09-13]
+
+Commits on .files =dev=.
+
+- *WP-F1* -- b865d36.  A new interactive shell on this Mac with
+  ~/.zshenv.local untouched: profile personal, both gates t, linode-cli
+  a function (unchanged).  A scratch HOME whose ~/.zshenv.local is the
+  work example (6.1): profile work, both gates f, linode-cli not a
+  function; with only =DOTFILES_PROFILE=work= in it: both gates f; with
+  an empty file: personal and t.  The whole .zshrc sourced with the work
+  profile: both gates f, and an explicit =INCLUDE_EMACS_SRC=t= survives.
+- *WP-F2* -- 0c2ec08 and 500d026.  Personal dry run on this Mac: no
+  skip but the example file and no backup; work dry run: 13 manifest
+  skips (not 4: the wallpaper directory alone holds five files) plus the
+  example.  Scratch HOME with a planted regular ~/.zshrc, real work run:
+  backed up (contents verified), 74 linked, none of the manifest paths
+  present; a second run: 75 kept, nothing changed.  The follow-up:
+  ~/.aliases here is a symlink to the repo directory, so the alias
+  files ARE the repo's -- a target that resolves to its source is now
+  "kept" instead of moved aside (the 2026-03 alias loop's mechanism).
+- *WP-F3* -- bd20a14.  =bash -n= passes; shellcheck's pre-existing set
+  minus two SC2046; an awk pass shows every st-ensure-folder,
+  download-wallpapers, launchctl and snowsql line inside a
+  personal-gated block except the two simple-bar agents (both
+  profiles); the helper block sourced in bash: default -> personal
+  true, =--profile work= -> false, =DOTFILES_PROFILE=work= -> false.  A
+  =DRY_RUN= mode was not added: the gates are four =if personal= blocks
+  and one helper, inspected instead.
+- *WP-F4* -- 188084e.  =brew bundle list --formula --cask=: personal
+  394 entries, work 381; the 13 missing at work are the 11 personal
+  entries and the two 1password casks; gitleaks in both;
+  =HOMEBREW_INCLUDE_OP=t= restores the casks at work.  See audit S12 for
+  why the variables travel as =HOMEBREW_= mirrors.
+- *WP-F5* -- 02c8c35.  Sandbox HOME with stubbed git and curl: with
+  =f= the script attempts one clone (chemacs); with =t= chemacs,
+  Spacemacs, Doom, the Prelude installer and Centaur.
+- *WP-F6* -- a83a4af (SEC-B9's evidence).
+- *WP-F7* -- 915176f (SEC-B7/B8's evidence).
+- *WP-F8* -- cbbf5fa (with SEC-B10).  No stale mention remains; both
+  docs name the manifest, the hook and the example file.
+- *WP-F9* -- 7d1150b.  The workflow parses; the dispatch is the owner's
+  to run.
+
+** Phase 3 -- install day
+
+The runbook in "Start here"; Part 7.3.
+
+** Phase 4 -- afterwards
+
+WP-Z9 (kb root); the separate steps of audit group A (rotation) and
+then D (history rewrite); optionally the source build at work
+(=INCLUDE_EMACS_SRC=t=, then =bin/zetta install= under it).
+
+* Part 9 — Questions
+
+** Settled (owner, 2026-09-13)
+- Keep the AI stack, the org task system with hyperbole/hywiki, Jira and
+  Slack.
+- Credential rotation and the history rewrite are separate steps, not
+  part of the work prep.
+- Secrets: no personal vault at work; the backend must be adoptable for
+  an employer vault of unknown type (Part 4).
+- The design docs live in .zetta.d, value-free.
+
+** Defaulted (change if wrong)
+- ~/kb at work is a local tree at the same path (3.2 option a); the root
+  variable is phase 2.
+- emacs-plus@31 on day one; the source build later.
+- consult-omni out; pubmed, sx, helm-wikipedia in; the games out; nyan
+  and parrot in.
+- No new CI row; =ZETTA_TEMPLATE= on manual dispatch.
+- =~/.authinfo.gpg= over a plaintext =~/.authinfo=.
+
+** Owner's call
+- Slack: confirm with the employer that a browser-token client is
+  permitted before setting =zetta-slack-teams=; if not, leave it nil
+  (the module then never loads).
+- The AI default backend at work: Claude direct, or an employer gateway
+  (a =gptel-make-openai= against the gateway's URL in the private file).
+- Copilot: whether there is a seat; =copilot-isr= is harmless without one.
+- Whether =INCLUDE_SNOWFLAKE= is on.
+- When to flip =INCLUDE_EMACS_SRC= at work.
+
+* Implementation status [2026-09-13]
+
+Built the same day, in both repos, on the =dev= branches, one commit
+per task id, nothing pushed.  What is done, what deviated from the plan
+and why, and what is left to the owner.
+
+** Done
+
+- *Phase 0* -- audit groups B and C (work-security-audit.org,
+  "Implementation status").
+- *Phase 1, .zetta.d* -- WP-Z1..Z12: the template (0c725b9), the
+  secrets backend with bootstrap-secrets.el and secrets.md (d036c02),
+  slack (ae30cfa), jira (8f051bd), remote (06245b8), ai (5ab032b),
+  security (050b696), custom-file (99db731), bin/zetta and ci.yml
+  (386d0ff), the docs (95e2409), the rehearsal (below), and WP-Z9 last
+  and alone (b990c82, plus the follow-up 0939e3e the rehearsal asked
+  for): =zetta-kb-dir= with every kb path derived, the =check-kb-root=
+  test in run-tests.sh.
+- *Phase 2, .files* -- WP-F1..F9: b865d36, 0c2ec08 + 500d026, bd20a14,
+  188084e, 02c8c35, a83a4af, 915176f, cbbf5fa, 7d1150b.
+- *One fix outside the plan* -- 97d028c: since b14463b (2026-09-12)
+  org-decorate's :init requires its package as soon as org-capture is
+  up, that package requires org-ql, and org-ql's elpaca order was not
+  yet processed, so batch startup reported "Error (use-package):
+  org-decorate/:init: Cannot open load file: org-ql" under BOTH
+  templates and on the pre-change tree (422f10d) -- a latent bug of the
+  unpushed waves that would meet the daemon on its next start.  org-ql
+  now carries =:ensure (:wait t)= and sits after its dependency
+  org-super-agenda in the default order.  Found because WP-Z12's gate
+  is exactly the line it produced.
+
+** Deviations from the plan, with reasons
+
+- *The secrets code lives in =source/bootstrap/bootstrap-secrets.el=*,
+  required by init.el at the point the plan put it (after ~/.zetta.el),
+  not inline in init.el: a file of its own can be loaded alone by the
+  batch tests and by =doctor=.  =zetta-secrets-effective-backend= is in
+  bootstrap-modules.el next to the variables, for the same reason.
+- *=zetta-ai-personal-backends= is a defvar in ai.el*, not in
+  bootstrap-modules.el: the template's setq runs before the module, so
+  the defvar keeps the value, and the variable stays next to what it
+  gates.
+- *WP-Z9 uses one fallback idiom instead of a root variable per
+  package*: the standalone zettapkg packages default their files under
+  =(or (bound-and-true-p zetta-kb-dir) "~/kb/")=, the config's root when
+  loaded there and ~/kb under =emacs -Q= for their tests.  The checker
+  recognises that form structurally and reports every other literal;
+  the doc had left the mechanism open.
+- *=doctor= reads the profile and backend through a batch Emacs*
+  (bootstrap-modules.el then ~/.zetta.el, no module), not by parsing
+  the file: a =setq= inside a condition would defeat a grep, and it is
+  the same code init.el runs.  Consequence: the user file must load
+  standalone; the templates do.
+- *The rehearsal ran under the source-built Emacs 32.0.50*, not
+  emacs-plus 31 as Part 7.2 says: the elpaca builds are compiled by 32
+  (bytecode census), and 31 against them replays the version-skew saga.
+  The full profile's run got a private copy of ~/kb (300 MB) in its
+  scratch HOME rather than a symlink, so nothing could write into the
+  synced tree.
+- *The Brewfile gates needed a new mechanism* (audit S12): =brew=
+  filters the environment, so the profile and the two build gates
+  travel as =HOMEBREW_*= mirrors exported by .zshenv, .zshrc and
+  bootstrap.sh.  The two existing gates had never fired under =brew
+  bundle=.
+- *No =DRY_RUN= in bootstrap.sh* (WP-F3's done-when offered inspection
+  as the alternative): four =if personal= blocks and one helper,
+  verified by an awk pass and a unit test of the helper.
+- *=python3= for main.py in bootstrap.sh* and a =#!/bin/bash= on the
+  distros script: one-word robustness fixes met on the way.
+- *WP-F2's "4 skips" is 13*: the manifest's wallpaper glob alone
+  matches five files, and the untracked news-reader state is listed
+  too.
+- *WP-Z12's ci-test exits 1 on a gate that is not the rehearsal's*:
+  =LOCK-MISSING= for poimap, unpinned since fd2d1c7 (2026-09-12).  Both
+  templates reach ZETTA-OK with zero use-package errors, which is the
+  done-when; the pin is the owner's =bin/zetta freeze= in the PR.
+
+** Left to the owner
+
+1. Push both =dev= branches, =bin/zetta freeze= for poimap, open the
+   PRs (the two design docs are the descriptions), trigger the two
+   manual dispatches: ci.yml with =template=work=, test_install.yml
+   with =profile=work=.
+2. Live checks batch cannot do: gptel and forge with ~/.authinfo
+   retired; a Customize save landing in =.data/custom.el=; the tab bar
+   and mail (nothing in this work touches them, and =bin/zetta test=
+   started the full profile clean).
+3. The personal ~/.private.el needs nothing: the previous employer's
+   Jira and Slack registrations left with the modules' literals, and
+   neither is wanted on this machine.  To use either again here, set
+   =zetta-jira-url= / =zetta-jira-jqls= or =zetta-slack-teams=
+   (.private.sample.el has the shape).
+4. Install day: the runbook in "Start here" and the checks in Part
+   7.3, with =~/.zshenv.local= from Part 6.1 and =bootstrap.sh --profile
+   work=.
+5. Part 9's calls: Slack with the employer, the AI default at work,
+   Copilot, =INCLUDE_SNOWFLAKE=, when to flip =INCLUDE_EMACS_SRC=.
+
+** Rehearsal [2026-09-13, measured]
+
+Part 7.2's recipe: an =.elc=-free overlay of the working tree (b990c82
+for the ci-test rows, 0939e3e for the moved-root probe) with =elpaca/=
+symlinked in, HOME on a scratch directory
+holding a =;;= private file (and, for the full profile, a copy of
+~/kb), =EMACS= the source-built 32.0.50, =ZETTA_TEMPLATE= selecting the
+profile, =bin/zetta ci-test=; then the work profile again with
+=-l init.el= and a probe file after =(elpaca-wait)=.
+
+| Run                              | Result                                                                                                                                   |
+|----------------------------------+------------------------------------------------------------------------------------------------------------------------------------------|
+| ci-test, example (full)          | =ZETTA-OK packages=340 modules=309=; 0 "Error (use-package)"; 0 void-function / wrong-type; 1 skipped by predicate (corfu-terminal); exit 1 on LOCK-MISSING poimap; 76 s |
+| ci-test, work                    | =ZETTA-OK packages=306 modules=277=; 0 / 0 / 1 as above; exit 1 on LOCK-MISSING poimap; 58 s                                             |
+| probes, work                     | profile work, backend authinfo, auth-sources at Emacs's default; gptel backends ("Claude"), default Claude, no OpenRouter idle timer, the key-reading function undefined; slack and org-jira not loaded, their variables nil; ssh hosts from the scratch HOME's (absent) config: nil; gnutls-trustfiles ("/etc/ssl/cert.pem"), verify-error t; mu4e, elfeed, signel, chiply-isr not loaded; custom-file under the overlay's .data/, init.el byte-identical after a save attempt; kb skeleton present with inbox.org |
+| probes, work, kb root moved      | ~/.zetta.el = the work template preceded by =(setq zetta-kb-dir "~/work-kb/")=, tree at 0939e3e: the skeleton is created under work-kb/ and no ~/kb appears in that HOME; inbox, queue inbox, decorate inbox, PDF and image directories, journal, routine note, the three capture targets and the five rolo entries all under work-kb/; =zetta-logseq-dir= work-kb/todo/ (it stayed at ~/kb/todo/ before 0939e3e); 0 derived paths mention ~/kb; 0 use-package errors |
+| =bin/zetta test=, real tree      | daemon =zetta-test-<pid>= started and responding; 346 packages, 309 modules; no warning, no use-package error                             |
+| =run-tests.sh=, real tree        | 19 suites, 307 tests, 0 unexpected; smoke-modules OK; check-kb-root 378 files, 0 code literals                                            |
+
+What it does not prove: anything on Emacs 29.4 / 30.2 / 31 (CI's
+rows), the GUI behaviour of Part 7.3 (the day-one list is the owner's),
+or an employer's proxy.

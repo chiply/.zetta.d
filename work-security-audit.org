@@ -1,0 +1,683 @@
+#+title: Work-machine security audit — .zetta.d and .files
+#+author: Charlie Holland
+#+startup: overview
+
+# Audit of both repos and of the machine state they install, done on
+# [2026-09-13] ahead of installing them on an employer-managed Mac.  The
+# companion, work-profile.org, is the profile that acts on what is found
+# here; templates/zetta.work.el is its first artefact.  Nothing in either
+# repo was changed by this audit.
+#
+# Same rule as headless-zetta.org and TODO.org: evidence stays with the
+# claim -- a file and line, a commit and date, or "measured" with how.
+# One rule on top, because this file is committed to a PUBLIC repo: it
+# is value-free.  No secret, no fingerprint, no prefix of any credential
+# appears here.  Findings name the variable and the commit, never the
+# value.  The replacements list a history rewrite needs is built locally
+# from the commits cited and is never committed.
+#
+# Groups B (scrub) and C (harden) were built on [2026-09-13], on the =dev=
+# branches of both repos, one commit per task; the evidence sits under
+# each group's table and the summary is "Implementation status" at the
+# end, with the Part 1 scan re-run over the finished trees.
+
+* Start here
+
+** Verdict [2026-09-13]
+
+Both repos are public (measured, =gh api=: .zetta.d 13 stars, 1 fork;
+.files 4 stars, 0 forks).  *Nothing secret is in either tracked tree
+today* (measured: value-pattern scan over every tracked file in both
+repos, zero hits beyond the documented placeholders in S11).  *The history
+is another matter*: four credentials were committed in the clear and are
+still reachable from =main= in both repos (S1).  They are all personal
+services; none belongs to an employer.
+
+Beyond the history the risks are of a different kind, and they are what
+an employer-managed laptop changes: identifiers of a previous employer in
+tracked files (S3), personal e-mail addresses (S4), plaintext credential
+files on the current Mac (S5), a TLS override that breaks behind a
+corporate proxy (S6), and a handful of things that start themselves or
+move data to personal infrastructure (S7).  The install scripts are
+destructive by design (S8), the alias files have been silently broken for
+six months (S10), and there is no secret scanner anywhere in the loop
+(S9).
+
+The work, in order: scrub identifiers and PII from tracked files (one
+PR per repo); harden =security.el=, file modes and the pre-commit hook;
+adopt the profile in work-profile.org.  Rotating the four credentials
+and rewriting history are *separate steps*, deliberately outside the
+work prep (owner, 2026-09-13): the values are already public, and
+cloning the repos onto one more machine changes nothing about that.
+Part 3 has the tasks with a "done when" each; group A specifies the
+rotation for when it is done.
+
+** The one-screen action list
+
+Work prep -- what happens before either repo is cloned at work:
+
+| # | Action                                                             | Where    | Effort |
+|---+--------------------------------------------------------------------+----------+--------|
+| 1 | =chmod 600= the four plaintext files in =$HOME=; retire ~/.authinfo | this Mac | 5 min  |
+| 2 | Scrub PR, .zetta.d: jira, slack, init.el custom block, lsp.el, fixture | .zetta.d | 1 h |
+| 3 | Scrub PR, .files: untrack .msmtprc, aura default, restore aliases  | .files   | 30 min |
+| 4 | Rewrite core/security.el (system trust, validated certifi path)    | .zetta.d | 1 h    |
+| 5 | gitleaks in .githooks/pre-commit; doctor permission check          | both     | 1 h    |
+| 6 | The profile itself: work-profile.org Part 8, Phases 1 and 2        | both     | days   |
+
+Separate steps, deliberately not part of the work prep (owner,
+2026-09-13):
+
+| #  | Action                                                             | Where             | Effort |
+|----+--------------------------------------------------------------------+-------------------+--------|
+| 7  | Reset the Spotify app's client secret; update the 1Password item   | Spotify dashboard | 10 min |
+| 8  | Change the Wallabag password; delete and recreate its API client   | Wallabag          | 10 min |
+| 9  | Change the Miniflux password; regenerate its API key               | Miniflux          | 10 min |
+| 10 | Change the local PostgreSQL role password from the old DSN         | local psql        | 5 min  |
+| 11 | History rewrite of both repos, coordinated                         | both + hub        | 2 h    |
+
+Items 7-10 are the only ones that close the live exposure in S1, and
+they are sufficient on their own: item 11 cannot reach the one fork of
+.zetta.d (measured).  Neither gates the install.  The values are public
+today and exactly as public after a clone; the work prep changes what
+the *work machine* holds, not what the history holds.  Part 3 A and D
+carry the details for when the steps are taken.
+
+* Part 1 — Scope and method
+
+** What was audited
+
+- The tracked trees at the =dev= heads: .zetta.d at 422f10d (595 tracked
+  files, 320 of them modules) and .files (121 tracked files, three
+  modified in the working tree).
+- The full history of every branch: .zetta.d 1083 commits, .files 249
+  (measured, =git rev-list --all --count=).
+- The untracked machine state the install expects: ~/.private.el,
+  ~/.zshenv.local, ~/.authinfo, ~/.mbsyncrc, the ~/.msmtprc symlink,
+  ~/.maildir, ~/kb, ~/.ssh/config (host names only).
+- GitHub repository settings: visibility, forks, secret scanning
+  (measured, =gh api repos/<owner>/<repo>=).
+
+** How
+
+Tracked trees: =git grep= over every tracked file, both repos, excluding
+the lockfiles.  History: =git log --all -p= filtered to added AND removed
+lines (a removed secret was once an added one), the same patterns.  Two
+pattern families:
+
+- provider shapes -- Slack =xox*= tokens and =d=xoxd= cookies, GitHub
+  =ghp_= / =gho_= / =github_pat_=, OpenAI =sk-=, AWS =AKIA=, 1Password
+  =ops_=, Google =AIza=, JWTs, PEM private-key headers, =Bearer= headers,
+  credentials embedded in URLs, =authinfo= machine/login/password lines;
+- elisp shapes -- =setq= / =defvar= / =defcustom= / plist keys binding a
+  symbol whose name ends in =password=, =passwd=, =secret=, =token=,
+  =api-key=, =client-id= or =cookie= to a string literal.  (The first
+  family alone misses every =(setq foo-password "...")=; this one caught
+  all of S1.)
+
+Identifier sweep over the tracked trees: e-mail addresses, phone numbers,
+IPv4 and Tailscale ranges, host names, the two previous employers' names,
+the previous laptop's host name, absolute home paths.  Reviewed by hand:
+every module under =modules/= that names a URL, a port or a =~/= path
+(measured list in work-profile.org Part 2), every file under
+=.files/files/=, =bootstrap.sh=, =main.py=, the Brewfile, the
+LaunchAgents, and both CI workflows.
+
+No dedicated scanner was available: =gitleaks=, =trufflehog=,
+=git-secrets= and =detect-secrets= are all absent (measured, =which=);
+S9 puts one in the loop.
+
+** Limits
+
+- Text diffs only.  The PDFs once tracked under =.lit/pdf/= in .files
+  were not content-scanned (they are papers; the concern is size and
+  copyright, not secrets).
+- The fork of .zetta.d is outside our control; whatever it holds stays.
+- The employer's environment (MDM, proxy, vault) is unknown; S2, S6 and
+  S7 are written for the general case.
+
+* Part 2 — Findings
+
+Severity: *High* = credential exposure, or would compromise the work
+machine; *Medium* = identifier or PII disclosure, or breakage likely at
+work; *Low* = hygiene; *Info* = confirmed non-issue, recorded so it is not
+re-derived.
+
+** S1 [High] Four credentials are in the public history of both repos
+
+| Credential                              | Variable(s)                                          | Repo     | Introduced                                   | Removed                                   | Reachable from                            |
+|-----------------------------------------+------------------------------------------------------+----------+----------------------------------------------+-------------------------------------------+-------------------------------------------|
+| Spotify app client id + client secret   | =spot4e-client-id/-secret=, later =spot-client-id/-secret= | .files | 8a7b569 (2022-11-05); again as =spot-*= in 01edfee (2025-08-01) | 155e91e (2026-02-18), 049807e (2026-02-20) | =main=, =dev=, seven other branches (measured, =git branch -a --contains=) |
+|                                         |                                                      | .zetta.d | 2526089, the initial commit (2026-02-20)     | 8220392 / 3347f9e / 2b33f3d (2026-02-23)   | =origin/main=, =dev=, the release branch, the fork |
+| Wallabag account password + API client id + client secret | =wombag-password=, =wombag-client-id=, =wombag-client-secret= | .files | before 155e91e (present at 155e91e~1; introduction not pinned) | 155e91e | =main= |
+| Miniflux (Fever) password               | =elfeed-protocol-feeds= =:password=                  | .files   | 9cd073c (2025-08-11); re-edited 1e11609, dca7a2e | 155e91e                                 | =main=                                    |
+| Local PostgreSQL DSN with password      | =lsp-sqls-connections= =dataSourceName=              | .files   | before 155e91e                               | 155e91e                                   | =main=                                    |
+
+Measured, and the reason items 2 and 3 of the action list are one job:
+the Miniflux password literal and the Wallabag password literal in that
+history are byte-identical.  One value opens two services.
+
+Also in the pre-2026-02-18 tree: the Wallabag host and username, and a
+=lsp-yaml-schemas= entry whose path had already been redacted by hand.
+The Spotify *refresh token* was never committed (measured: no match in
+either history).  Two further copies of the .zetta.d initial commit
+(bf486bc, ac4293f) exist as dangling objects on this clone only; they
+are not on any branch and were never pushed.
+
+Impact: the Spotify secret lets anyone mint tokens for that app (scope:
+the personal account); the Wallabag and Miniflux values give read/write
+access to personal reading lists; the DSN is local.  None touches an
+employer.  GitHub's secret scanning is enabled on .zetta.d with push
+protection (measured) but covers provider patterns only; none of these
+four is a provider pattern, so no alert ever fired, and "non-provider
+patterns" is disabled.
+
+Fix: rotate (Part 3 A); rewrite history (Part 3 D).  Rotation is the only
+complete fix because of the fork.  Both are deferred as separate steps
+outside the work prep (owner, 2026-09-13); nothing in the work install
+depends on them.
+
+** S2 [High for the work machine] The secrets design assumes one personal vault, unlocked by a long-lived token
+
+Evidence: =init.el:108-109= sets =auth-sources= to the 1Password backend
+whenever an =op= binary is on =PATH=; =source/op-secrets.env.tpl=
+resolves 33 items from the personal =Dev= vault in one =op inject=;
+=secrets.md= tells a new machine to export =OP_SERVICE_ACCOUNT_TOKEN=
+from ~/.zshenv.local, which is how this Mac is set up (measured; the
+file is mode 644, S5).
+
+Impact at work: an employer-managed Mac (MDM, EDR, backup agents) that
+holds that token can read every personal credential -- mail app
+passwords, Reddit, Mastodon, Spotify, the works.  If the employer
+installs 1Password CLI for its own vault, =init.el= silently switches
+the backend on and =op inject= runs against the wrong account at every
+start.  And the reverse: a work vault of unknown type has no way in
+short of editing =init.el=.
+
+Fix: work-profile.org Part 4 -- a =zetta-secrets-backend= chosen in
+~/.zetta.el, a template path that can point outside the repo, and a
+=command= backend for any vault that can print =KEY=VALUE= lines.  The
+work profile never carries the personal token (its template sets the
+backend to =authinfo=).
+
+** S3 [Medium] Previous-employer identifiers in tracked, public files
+
+| Where                                   | What                                                                       | Fix                                                        |
+|-----------------------------------------+----------------------------------------------------------------------------+------------------------------------------------------------|
+| =modules/tools/jira.el:6,9=             | =jiralib-url= is a previous employer's Atlassian host; the JQL names its project key | URL and JQLs move to =zetta-jira-url= / =zetta-jira-jqls=, read from ~/.private.el; the module ships nil with a docstring (WP-Z4) |
+| =modules/tools/slack.el:22-29=; =slack.md:25-45= | a =slack-register-team= for a previous employer's workspace (name and host) | teams become =zetta-slack-teams= in ~/.private.el; the doc's example uses example.slack.com (WP-Z3) |
+| =init.el:138=                           | a =connection-local-criteria-alist= entry naming a machine -- a corporate laptop host name, written there by Customize | =custom-file= for every profile (the headless template already sets one); delete the entry (WP-Z8) |
+| =modules/tools/lsp.el:7=                | a commented debugging call naming a repository from a previous job          | delete the line                                            |
+| =testdata/generate.py:154=, =testdata/todo/(todo) home.org:49= | a fixture task naming a previous employer and a personal reimbursement | neutral text; regenerate the fixture (=python3 testdata/generate.py=) |
+| =elfeed.org:30=                         | a Google Alert feed on a previous employer's name, with the alert's feed id | drop the line and delete the alert (the feed id is a capability URL); owner's call |
+
+=elfeed.org:18,125-127= also carry a former employer's *public* feeds
+(YouTube, repository commits and releases); public information, no action.
+
+Impact: employment history and an internal project key are disclosed,
+and the identifiers would travel to the next employer's machine.  Low
+direct risk; the fix is mostly the parameterisation the work profile
+needs anyway.
+
+** S4 [Medium] Personal PII in tracked files
+
+- =.files/files/.msmtprc= (tracked, symlinked into =$HOME=): three
+  personal Gmail addresses at lines 22, 30 and 38, and the default
+  account at 43.  No passwords (=passwordeval= through =op=).  Fix:
+  =git rm --cached=, gitignore it, ship =files/.msmtprc.example= with
+  example.com addresses; the profile manifest excludes it at work
+  (WP-F7).  The existing ~/.msmtprc symlink keeps working locally.
+- =.files/files/.config/wallpaper/aura-sync.sh:14,42= and
+  =bootstrap.sh:242=: the default msmtp account name embeds a personal
+  address.  Fix: no default; require =AURA_MSMTP_ACCOUNT=.
+- =.files/files/.simplebarrc:310=: the weather widget curls wttr.in for
+  the home city.  Low; a placeholder or leave it.
+- =.zetta.d=: the owner's e-mail in ten =source/zettapkg/*= package
+  headers -- deliberate authorship, keep.
+- =.zetta.d/chiply-isr/corpus/*.org= look like personal notes; the README
+  states they are sample files written for the demo (measured).  No action.
+
+Already right: =.files/.gitignore= excludes =fetch_mail.sh= and
+=files/.newsrc*= (lines 9-11); =.zetta.d/.gitignore= excludes
+=private.el=, =*.plstore=, =network-security.data=, =signel-history/=,
+=elfeed/= and =.data/=.
+
+** S5 [Medium] Plaintext credential files on the current Mac, world-readable
+
+Measured [2026-09-13], =ls -la=:
+
+| File               | Mode | Holds                                                                 |
+|--------------------+------+-----------------------------------------------------------------------|
+| ~/.authinfo        | 644  | one live =machine api.openai.com= line; the rest commented out         |
+| ~/.zshenv.local    | 644  | the 1Password service-account token                                   |
+| ~/.private.el      | 644  | mail accounts, every =zetta-op-read= call, auth-source entries         |
+| ~/.mbsyncrc        | 644  | three IMAP accounts; passwords via =PassCmd= + =op= (no literals)      |
+| ~/.zmc-cache.yaml  | 644  | 211 KB of compile-command history (arguments may carry values)        |
+
+Impact: any process running as the user reads them regardless, but 644
+also exposes them to other local accounts and to backup or sync tools
+that honour modes.  ~/.authinfo is a second, unencrypted credential
+store that the 1Password backend was meant to replace; its one live
+entry is also served by the backend (=OPENAI_API_KEY= is in the template,
+measured).
+
+Fix: =chmod 600= all five; delete ~/.authinfo once its live line is
+confirmed redundant; =bin/zetta doctor= gains a check (Part 3 C).  None
+of these files travel to the work machine (Part 4).
+
+** S6 [Medium; breaks at work] core/security.el pins TLS trust to certifi, and can pin it to an error message
+
+Evidence: =modules/core/security.el:16-28=.  It shells out =python -m
+certifi= and installs the printed path as the *only* trust file
+(=gnutls-trustfiles=, and =tls-program= for the external =gnutls-cli=),
+with =gnutls-verify-error t=.  =shell-command-to-string= captures stderr
+together with stdout, so when =python= exists but certifi is not
+installed, the "trust file" is the interpreter's error text -- the exact
+failure the file's own comment describes for the no-python case, one
+step over.  Line 5 requires the obsolete =cl=.
+
+Measured on this Mac: =python= is not on =PATH= (only =python3=), so the
+block is inert here.  pyenv shims, a Homebrew =python= or an employer's
+tooling make it live.  Behind a corporate TLS-intercepting proxy the
+certifi bundle lacks the corporate root, so every =url-retrieve= (gptel,
+forge, elpaca menu fetches, devdocs) fails while =git= (system trust)
+keeps working -- a confusing split that looks like "Emacs is broken".
+
+Fix (Part 3 C, WP-Z7): default to system trust (Emacs's gnutls already
+reads the macOS and Homebrew bundles), only use the certifi path when
+=file-exists-p= says it is a file, add =zetta-extra-trust-files= for a
+corporate CA, keep =gnutls-verify-error t=, drop the =tls-program=
+override and the =cl= require.
+
+** S7 [Medium; wrong on a work machine] Things that start themselves or move data
+
+| What                        | Where                                                              | Trigger            | Why it matters at work                                                                 | Resolution                                  |
+|-----------------------------+--------------------------------------------------------------------+--------------------+----------------------------------------------------------------------------------------+---------------------------------------------|
+| Syncthing folder "kb"       | =bootstrap.sh= (=st-ensure-folder kb ~/kb=); Brewfile:115 with =restart_service= | every bootstrap | pairs the personal notes tree with a work laptop: a two-way channel; work notes would reach personal devices and the hub | profile gate: never at work (WP-F3); ~/kb at work is a local tree (work-profile.org Part 3) |
+| chiply-isr auto-index       | =modules/completion/chiply-isr.el:250= (=emacs-startup-hook=)      | every start        | indexes ~/org and ~/src into a local vector DB and starts a FastAPI server              | excluded from the work profile              |
+| signel                      | =modules/tools/signel.el:68= =(signel-start)= at load              | every start        | Signal daemon; plaintext message history under the config dir (=signel-history/=, 40 KB here, measured) | excluded                        |
+| irs backend                 | =tools/irs.el=, =zettapkg/irs= =irs-ensure-server=                 | on command         | spawns =uv run irs serve= from a personal checkout                                     | excluded                                    |
+| llm-convo                   | =modules/app/llm-convo.el=                                         | on command         | writes ChatGPT shares into ~/kb through a hub script                                   | excluded                                    |
+| mail                        | ~/.private.el (mu4e, 300 s update timer, =fetch_mail.sh=)          | every start        | personal mail on a work machine                                                        | the work private file has none of it        |
+| OpenRouter catalogue fetch  | =modules/tools/ai.el:188= (idle timer, 10 s)                       | every start        | an outbound call to a personal AI vendor; harmless, unneeded                           | gated with the backend (WP-Z6)              |
+| atuin                       | =files/.config/atuin/config.toml:20= =auto_sync = false= (measured) | --                | shell history must not sync from a work machine                                        | keep false; noted in the profile            |
+| Claude Code hooks           | =files/.claude/claude-landing.sh= -> =~/.zetta.d/.data/org/agent-landings.el= | every Stop | logs the assistant's last message under the config dir; =.data/= is gitignored         | keep; never =git add -f .data=              |
+| hub-deploy, linode-cli, jump-desktop-connect, mosh, stream deck | =.files= (=files/.local/bin=, =files/.zshenv:6=, Brewfile:69,450,452) | bootstrap / brew | personal infrastructure and remote-access surfaces (a remote-desktop *host* on a work laptop) | profile gates and the exclude manifest (WP-F3/F4) |
+
+** S8 [Low] bootstrap.sh is destructive and trusts the network
+
+- =main.py:30= symlinks with =ln -s -f= over whatever is there (the
+  README warns); =bootstrap.sh= keeps =sudo= alive for the run; the
+  Homebrew, uv and Poetry installers are =curl | sh= at floating
+  versions (nvm is pinned); the AWS CLI is a =sudo installer= pkg;
+  =tlmgr= runs as root.
+- =install_emacs_distros.sh= (run unconditionally at =bootstrap.sh:141=)
+  clones chemacs, Spacemacs, Doom, Prelude and Centaur and runs Doom's
+  installer (lines 9-56, measured).  Five Emacs distributions arrive on
+  a work machine uninvited.
+- At work an MDM-provisioned ~/.zshrc or ~/.gitconfig is replaced
+  silently.
+
+Fix: =main.py= backs up non-symlink targets to =~/.dotfiles-backup/<stamp>/=
+and gains =--dry-run= (WP-F2); the extra distros go behind
+=INCLUDE_OTHER_DISTROS= (WP-F5); the =curl | sh= installers stay,
+documented, optionally pinned.
+
+** S9 [Low] Tooling gaps
+
+- No secret scanner locally (measured) and the pre-commit hook only
+  nags about the lockfile (=.githooks/pre-commit=).  Fix: a =gitleaks
+  protect --staged= step in that hook (=gitleaks= added to the
+  Brewfile), with a =.gitleaks.toml= allow-list for the documented
+  placeholders in S11.  A CI step is possible but billed; the hook is
+  the cheap layer and catches the case that matters (a value typed into
+  a module).
+- GitHub: secret scanning and push protection are on for .zetta.d
+  (measured); confirm the same for .files; enable "non-provider
+  patterns" on both -- it is the setting that would have caught S1.
+- =custom-file= is unset in the default and example profiles, so
+  Customize writes into the tracked =init.el= -- that is how the host
+  name in S3 got there.  WP-Z8.
+
+** S10 [Low] .files/.aliases/* are tracked as symlinks to themselves
+
+Evidence: =git ls-files -s files/.aliases= shows mode 120000 for all
+four files; each target is an absolute path into the same checkout, so
+=~/.aliases/index= -> =~/.files/files/.aliases/index= -> itself ("Too
+many levels of symbolic links", measured).  Since b02c1f8 (2026-03-06,
+"chore: convert alias files to symlinks"); the regular files before it
+were 28, 32, 23 and 11 lines.  =.zshrc:396= sources the index behind
+=[[ -f ]]=, which is false for a broken link, so every alias has been
+silently gone for six months -- and on a machine whose user name is not
+this one the absolute target is wrong twice over.
+
+Fix: =git checkout b02c1f8~1 -- files/.aliases=, commit, re-run
+=main.py= (WP-F6).
+
+** S11 [Info] Confirmed non-findings
+
+Recorded so the next scan does not re-derive them.
+
+- =modules/tools/ai.el:199=: the "key" given to the local router backend
+  is a placeholder string the proxy ignores (gptel requires a non-empty
+  key).  Allow-list it in the scanner.
+- =slack.md:21-29=: =xoxc-<token>= and =d=<cookie-value>= are
+  documentation placeholders.
+- =source/op-secrets.env.tpl=: 1Password *references* plus two item ids;
+  references and ids are not secrets (the file's own comment explains
+  the ids).
+- =.github/workflows/release.yml:20= uses a repository secret
+  (=RELEASE_TOKEN=) -- normal.
+- =elfeed.org=: 196 feed URLs, none with a token, key or auth parameter
+  (measured).
+- =ede-projects.el= and =elgrep-data.el= are empty caches (measured).
+- =.zetta.d/.gitignore= already covers the runtime credential stores:
+  =network-security.data=, =forge-database.sqlite=, =*.plstore=,
+  =.lsp-session*=, =tramp=, =url/=.
+
+** S12 [Low, fixed] The Brewfile's environment gates never fired
+
+Found while building WP-F4.  =brew= filters the environment before it
+runs Ruby: only =HOMEBREW_*= variables and a short fixed list reach a
+Brewfile (measured 2026-09-13 with =brew ruby=: =DOTFILES_PROFILE= and
+=INCLUDE_EMACS_MAC= arrive as nil, a =HOMEBREW_X= as set).  So the
+=INCLUDE_EMACS_MAC= and =INCLUDE_EMACS_SRC= blocks (Brewfile 179, 464)
+had never installed anything under =brew bundle=, and a profile gate
+written the same way would have been dead too.  Fix (.files 188084e, WP-F4):
+the Brewfile reads =HOMEBREW_<NAME>= first and the plain name second;
+=.zshenv=, =.zshrc= and =bootstrap.sh= export the mirrors.  Measured:
+=HOMEBREW_INCLUDE_EMACS_SRC=t= adds the source build's 25-formula block,
+which the plain variable never did.
+
+* Part 3 — Resolution plan
+
+Task ids: =SEC-<group><n>=.  "Owner" marks work that is not code.
+
+** A. Rotate (owner; a separate step, not part of the work prep)
+
+Deferred on 2026-09-13.  The values are already public; the work
+install neither widens nor narrows that.  Kept here, fully specified,
+for when the step is taken.
+
+| Id     | Task                                                                                            | Done when                                                                 |
+|--------+-------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------|
+| SEC-A1 | Spotify developer dashboard: reset the app's client secret; update =Dev/Spotify= (client-secret, and the refresh token if the reset invalidates it) | =op inject -i source/op-secrets.env.tpl= resolves; spot4e still plays |
+| SEC-A2 | Wallabag: change the account password; delete the API client, create a new one; update =Dev/Wallabag= (password, client-id, client-secret) | wombag logs in with the new values |
+| SEC-A3 | Miniflux: change the password (it equalled the old Wallabag one); regenerate the API key; update both =Dev/Miniflux= items and collapse them into one, then simplify the two id-based lines in the template (its comment already asks for this) | elfeed-protocol updates; the tpl has name-based Miniflux refs |
+| SEC-A4 | Local PostgreSQL: =ALTER ROLE ... PASSWORD= for the role in the old DSN; update =Dev/PostgreSQL-Local= | =lsp-sqls= connects                                                       |
+
+** B. Scrub tracked files (one PR per repo, on =dev=)
+
+| Id      | Repo     | Task                                                                                                    | Done when                                                                                  |
+|---------+----------+---------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------|
+| SEC-B1  | .zetta.d | =jira.el=: =zetta-jira-url= / =zetta-jira-jqls= (nil defaults, docstrings); =.private.sample.el= shows the shape (= WP-Z4) | module has no host name; =org-jira= works with values from ~/.private.el |
+| SEC-B2  | .zetta.d | =slack.el=: iterate =zetta-slack-teams= from ~/.private.el; =slack.md= example on example.slack.com (= WP-Z3) | module has no workspace name                                                       |
+| SEC-B3  | .zetta.d | =init.el=: delete the machine entry from =custom-set-variables=; set =custom-file= in the example template and the work template (= WP-Z8) | =git grep= for the host name is empty; Customize saves land in =.data/custom.el= |
+| SEC-B4  | .zetta.d | =lsp.el:7=: delete the comment                                                                          | =git grep= for the repository name is empty                                                |
+| SEC-B5  | .zetta.d | =testdata/generate.py:154=: neutral text; regenerate the fixture                                        | no employer name under =testdata/=; the org-queue tests still pass (=run-tests.sh=)        |
+| SEC-B6  | .zetta.d | =elfeed.org:30=: drop the alert feed (owner: delete the alert too)                                      | owner's call                                                                               |
+| SEC-B7  | .files   | =git rm --cached files/.msmtprc=; add =files/.msmtprc.example=; gitignore the real one; README note (= WP-F7) | no personal address in the tracked tree except the zettapkg headers                |
+| SEC-B8  | .files   | =aura-sync.sh= / =bootstrap.sh=: no default account; require =AURA_MSMTP_ACCOUNT=                       | =git grep gmail-= is empty                                                                 |
+| SEC-B9  | .files   | restore =files/.aliases/*= from =b02c1f8~1= (= WP-F6)                                                   | =source ~/.aliases/index= defines =l=, =zefresh=, ...                                      |
+| SEC-B10 | .files   | =CLAUDE.md= / README: drop the stale =mcp_servers/= mention; note the profile switch                    | docs match the tree                                                                        |
+
+Done when, for the group: =git grep -i -E '<employer names>|<project key>|<host name>'=
+over both tracked trees returns nothing; =git grep -E '[a-z0-9._-]+@gmail\.com'=
+returns only the ten zettapkg author headers.
+
+*** Evidence [2026-09-13]
+
+Commits are on =dev=; .zetta.d unless marked.  Batch means
+=emacs -Q --batch= (31.0.91) against the elpaca builds.
+
+- *SEC-B1* -- 8f051bd.  The module names no host; the group grep for
+  the host and the project key is empty.  Batch: with =zetta-jira-url=
+  nil org-jira is not loaded; with an example URL and one JQL plist,
+  =jiralib-url= and =org-jira-custom-jqls= take exactly those values and
+  the working directory is created.  =org-jira-get-issues= against a
+  live instance: owner, on the work machine (no Jira here).
+- *SEC-B2* -- ae30cfa.  No workspace name in the module or in slack.md
+  (example.slack.com).  Batch: nil leaves slack unloaded; one team with
+  no credential loads slack with zero teams and a message; the same
+  team with a token in a scratch authinfo registers under its name.
+  =slack-start= against a workspace: owner.
+- *SEC-B3* -- 99db731.  The group grep for the host name is empty.
+  =custom-file= defaults to =.data/custom.el= in init.el before
+  ~/.zetta.el loads and is loaded after the modules.  Rehearsal probe
+  (Part 7.2 of work-profile.org): =custom-file= is that path and init.el
+  is byte-identical after a Customize save is attempted.  The save
+  itself cannot run in batch (=--batch= implies =-q=: "Setting ...
+  temporarily since emacs -q would overwrite customizations"), so one
+  =M-x customize-save-variable= in the live session is the owner's
+  check.
+- *SEC-B4* -- cd4344a.  The grep for the repository name is empty.
+- *SEC-B5* -- 2c31dd1.  =python3 testdata/generate.py --today 2026-09-12=
+  reproduces the committed corpus byte-for-byte except the one heading
+  (measured against a scratch copy; =--today= defaults to today, so the
+  pinned day matters).  =run-tests.sh=: 19 suites, 307 tests, 0
+  unexpected; module smoke OK.
+- *SEC-B6* -- skipped, owner's.
+- *SEC-B7* -- .files 915176f.  =files/.msmtprc= untracked and
+  gitignored (the file and the ~/.msmtprc symlink stay on this Mac);
+  =files/.msmtprc.example= with example.com addresses.  The address grep
+  over .files' tracked tree is empty.
+- *SEC-B8* -- same commit.  =git grep gmail-= is empty; aura-sync.sh and
+  the bootstrap block require =AURA_MSMTP_ACCOUNT= (a message and a skip
+  when unset); =bash -n= and shellcheck clean on aura-sync.sh, no
+  warning in the edited bootstrap block.
+- *SEC-B9* -- .files a83a4af.  =zsh -c 'source ~/.aliases/index'= defines
+  38 aliases, among them =l=, =zefresh=, =tk=, =p=.
+- *SEC-B10* -- .files cbbf5fa (with WP-F8).  No mention of
+  =mcp_servers=, =.localsecrets= or =.tokens= remains in README.md,
+  CLAUDE.md or bootstrap.sh.
+- *Group grep, measured on the finished trees*: the identifier grep
+  finds only =elfeed.org= lines 18, 30 and 125-127 (the alert feed of
+  SEC-B6 and the public feeds, both the owner's); nothing in .files.
+  The address grep finds the owner's address in author headers -- 46
+  zettapkg files and two =plan-*.md= documents, not "ten": the audit
+  undercounted -- and example placeholders; the two plan documents are
+  authorship like the headers and were left alone.
+
+** C. Harden
+
+| Id     | Repo     | Task                                                                                                                       | Done when                                                                                                   |
+|--------+----------+----------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------|
+| SEC-C0 | this Mac | =chmod 600 ~/.authinfo ~/.zshenv.local ~/.private.el ~/.mbsyncrc ~/.zmc-cache.yaml=; move ~/.authinfo aside to =~/.authinfo.retired= (mode 600) once its one live entry is confirmed served by the backend -- move, do not delete | =ls -la= shows 600 on all; no ~/.authinfo; gptel and forge still authenticate |
+| SEC-C1 | .zetta.d | Rewrite =core/security.el= per S6 (= WP-Z7): system trust by default; certifi only if the path exists; =zetta-extra-trust-files=; keep =gnutls-verify-error t=; drop =tls-program= and =(require 'cl)= | batch test: =gnutls-trustfiles= is nil or a list of existing files with and without a =python= on PATH; =(url-retrieve-synchronously "https://github.com")= succeeds |
+| SEC-C2 | .zetta.d | =bin/zetta doctor=: warn on mode != 600 for ~/.private.el, ~/.authinfo*, ~/.zshenv.local; warn when ~/.authinfo (plaintext) exists; report the secrets backend and whether it resolves; print =zetta-profile= | =doctor= on this Mac shows the warnings before SEC-C0 and none after |
+| SEC-C3 | both     | =gitleaks= in the Brewfile; =.githooks/pre-commit= runs =gitleaks protect --staged --redact= (skipped with a message when the binary is absent); =.gitleaks.toml= allow-listing S11 | a staged =(setq x-secret "AKIA...")= is refused; the S11 lines pass                                          |
+| SEC-C4 | .zetta.d | =secrets.md= rewrite for the backend abstraction (work-profile.org Part 4), with a "never on a managed machine" paragraph for the service-account token | doc matches init.el                                                                                         |
+| SEC-C5 | owner    | GitHub: enable non-provider secret scanning on both repos; confirm push protection on .files                                | settings page shows both on                                                                                 |
+
+*** Evidence [2026-09-13]
+
+- *SEC-C0* -- this Mac, no commit.  Measured =stat -f %Lp=: 644 before,
+  600 after on all five files; ~/.authinfo moved to ~/.authinfo.retired
+  (600), so =ls ~/.authinfo= fails.  Its one live entry is the
+  =api.openai.com= key, which ~/.private.el maps in
+  =zetta-op-auth-source-entries= to the template key the backend serves,
+  and =auth-sources= on this Mac is =(zetta-op)=, so the file was never
+  on the search path.  gptel and forge in the live session: owner (no
+  evaluation into the live daemon from here).
+- *SEC-C1* -- 050b696.  Batch, five cases: no python on PATH ->
+  =("/etc/ssl/cert.pem")=; a python whose certifi is missing (stderr
+  only) -> the same list, no error text; a python printing an existing
+  bundle -> appended; a python printing a missing path -> ignored;
+  =zetta-extra-trust-files= with one existing and one missing file ->
+  only the existing one appended.  In every case every entry exists and
+  =gnutls-verify-error= is t; =(url-retrieve-synchronously
+  "https://github.com")= returned HTTP/1.1 200 OK under the module.
+- *SEC-C2* -- d171d22 (modes) and 386d0ff (profile and backend, with
+  WP-Z10).  =doctor= before SEC-C0: "Mode 644" on ~/.private.el,
+  ~/.authinfo and ~/.zshenv.local, plus the plaintext-authinfo warning;
+  after: "Mode 600" lines only.  It also prints "Profile: full" and
+  "Secrets backend: op (29 of 29 keys resolve from ...)" on this Mac.
+- *SEC-C3* -- cc9bb06 (.zetta.d), .files 7c0fa3b.  A staged
+  =(setq x-secret "AKIA...")= with a valid key shape is refused (exit
+  1, value redacted; a first probe with an invalid shape was not, which
+  is the rule working, not failing); slack.md staged passes; =gitleaks
+  dir= over a clean export of HEAD finds nothing in either tree (597 and
+  124 files).  Both clones have =core.hooksPath= set, and every commit
+  of this work went through the hook.  gitleaks 8.30.1 was installed
+  here with brew for the test; it is in the Brewfile.
+- *SEC-C4* -- d036c02 (with WP-Z2).  secrets.md describes exactly what
+  bootstrap-secrets.el does: the backend table, the vault-adoption table
+  and the "never on a managed machine" section.
+- *SEC-C5* -- owner.
+
+** D. History rewrite (later, deliberate; after A, as its own step)
+
+Preconditions: A complete (the values are dead), B merged (so the
+rewrite is the last time anyone touches the old content), no open PRs,
+the hub idle, this Mac's working trees clean.
+
+| Id     | Task                                                                                                                                   | Done when                                                                                                        |
+|--------+----------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------|
+| SEC-D1 | Build the replacements file locally from the commits in S1 (=git show <hash>= for each), one line per value, ===>***REMOVED***=.  Never commit it; keep it outside both repos | the file exists under =~/.local/state/= only                                                          |
+| SEC-D2 | Fresh mirror clones of both repos; =git filter-repo --replace-text <file>=; for .files also =--path .lit/pdf --invert-paths= (papers, size and copyright) | =git log --all -p | grep -F -f <file>= is empty in both mirrors                                     |
+| SEC-D3 | Force-push every branch and tag (release-please tags included); re-run =bin/zetta ci-test= on a fresh clone                            | CI green on =main=; =git ls-remote --tags= unchanged in count                                                    |
+| SEC-D4 | Re-clone on every machine: this Mac (both repos; the =zetta-mac= trial dir if kept), the hub (=hub/README.org= "Updating zetta" gains the note that a plain =git pull= cannot cross a rewrite: =git fetch && git reset --hard origin/main=) | =git status= clean everywhere; the hub daemon restarts on the new tree                                |
+| SEC-D5 | Ask GitHub support to purge unreachable objects; accept that the fork keeps its copy                                                   | support confirms                                                                                                 |
+| SEC-D6 | Verify =release-please= still resolves its manifest and that the CHANGELOG's old-hash links are the only casualties                    | next release PR opens normally                                                                                   |
+
+Cost of not doing D: the four values stay readable to anyone who
+inspects history, but they are dead after A.  Cost of doing it: every
+clone is invalidated once; CHANGELOG links to pre-rewrite hashes stop
+resolving; the fork is untouched.
+
+** E. Ongoing rules
+
+- No value in a tracked file, ever; a variable's *shape* goes in
+  =.private.sample.el=, its value in ~/.private.el or the vault.
+- An employer's identifier never lives in a module; it lives in the
+  private file the module reads.
+- Customize never writes to =init.el= (=custom-file= is set in every
+  profile).
+- This audit is re-run before every new machine: the scan in Part 1 is
+  two commands and takes under a minute per repo.
+
+* Part 4 — What must not travel to the work machine
+
+Clone both repos fresh at work.  Never copy a home directory, and never
+copy =~/.zetta.d= (it is 3.6 GB of build products plus the runtime state
+below).
+
+| Never copy                                    | Why                                                          |
+|-----------------------------------------------+--------------------------------------------------------------|
+| ~/.private.el                                 | mail accounts, every personal secret lookup                  |
+| ~/.zshenv.local                               | the personal 1Password service-account token                 |
+| ~/.authinfo, ~/.authinfo.gpg                  | personal credentials                                         |
+| ~/.mbsyncrc, ~/.msmtprc, ~/.maildir           | personal mail                                                |
+| ~/.ssh/config (=kb-hub=), its keys            | personal infrastructure                                      |
+| ~/.config/readwise                            | personal token                                               |
+| ~/kb                                          | the synced personal tree; the work tree is a fresh, local ~/kb |
+| ~/.rolo.org, ~/.zmc-cache.yaml, ~/.cmds.yaml  | personal notes and command history                           |
+| ~/.zetta.d/.data, signel-history/, elfeed/ (277 MB), forge-database.sqlite, network-security.data, bookmarks, var/, url/, transient/, hackernews/, touchtype/, eln-cache/, elpaca/ | runtime state and caches; rebuilt by =bin/zetta install= |
+
+* Part 5 — Questions
+
+** Settled
+- Credential rotation and the history rewrite are separate steps,
+  outside the work prep; rotation first, then the rewrite (owner,
+  2026-09-13).
+- The audit lives in the public repo and stays value-free (owner,
+  2026-09-13).  The replacements file for D is the one document that
+  holds values, and it is never committed.
+
+** Defaulted (change if wrong)
+- gitleaks as a pre-commit hook, not a CI step (CI is billed).
+- The elfeed alert line (S3) is dropped rather than kept.
+- The ~/.authinfo file is moved aside rather than encrypted: its one
+  live entry is already served by the backend.
+
+** Owner's call
+- SEC-C5: non-provider secret scanning on GitHub (free for public repos;
+  noisier).
+- SEC-D2: whether to drop the =.lit/pdf= blobs from .files history in
+  the same rewrite.
+- Whether the previous laptop's host name and the employer names should
+  be added to the SEC-D1 replacements (they are identifiers, not
+  secrets; B removes them from the tree, D would remove them from
+  history).
+
+* Implementation status [2026-09-13]
+
+Groups B and C built the same day, on the =dev= branches of both
+repos, one commit per task id, nothing pushed.  What is done, what
+deviated and why, what is left to the owner, and the Part 1 scan
+re-run over the finished trees.
+
+** Done
+
+- *Group B* -- SEC-B1..B5 and B7..B10 (B6 is the owner's).  .zetta.d:
+  8f051bd, ae30cfa, 99db731, cd4344a, 2c31dd1.  .files: 915176f,
+  a83a4af, cbbf5fa.  The group grep over both finished trees finds the
+  identifiers only in =elfeed.org= (B6 and the public feeds) and the
+  address only in author headers and example placeholders.
+- *Group C* -- SEC-C0 (this Mac: five files at 600, ~/.authinfo moved
+  aside), C1 (050b696), C2 (d171d22 + 386d0ff), C3 (cc9bb06 and .files
+  7c0fa3b), C4 (in d036c02).  C5 is the owner's.
+- *A new finding*, S12, fixed with WP-F4: the Brewfile's environment
+  gates had never worked.
+- *The profile*, work-profile.org Part 8, Phases 1 and 2, including
+  WP-Z9 -- see that file's own status section.
+
+** Deviations from the plan, with reasons
+
+- *SEC-C4 rides in WP-Z2's commit (d036c02)* rather than its own:
+  its done-when is "doc matches init.el", and the doc describes the
+  backend switch, so it could only be written once the switch existed.
+- *SEC-C2 is two commits*: the file-mode and plaintext-authinfo
+  warnings (d171d22, before SEC-C0 so the before/after could be
+  measured) and the profile-and-backend report, which needs the
+  variables WP-Z2 introduces and so landed with WP-Z10 (386d0ff).
+- *The Aura frame sync came along with SEC-B7/B8* (.files 915176f).
+  Its script, plist, bootstrap block and README lines were uncommitted
+  in the working tree, and the fix edits exactly those lines, so the
+  hunks could not be separated.  The plist carries placeholders only;
+  the example address in the script's comment is a placeholder word.
+- *The restored alias file =emacs= was edited* (a83a4af): every alias
+  pointed at the emacs-plus@29 keg, which no longer exists, and an alias
+  to a missing binary would have shadowed the =emacs= on PATH.  The
+  other three files are byte-identical to b02c1f8~1.
+- *Two numbers in the audit were wrong*, corrected above: the template
+  holds 29 keys, not 33; the owner's address is in 46 zettapkg author
+  headers and two plan documents, not ten.
+- *gitleaks was installed on this Mac* (brew) to run SEC-C3's
+  acceptance test; the Brewfile now carries it for every machine.
+
+** Left to the owner
+
+1. Group A (rotation) and group D (history rewrite), as decided.
+2. SEC-B6 (the alert feed line and the alert itself) and SEC-C5 (GitHub
+   non-provider scanning, push protection on .files).
+3. Live checks that batch cannot do: gptel and forge authenticate with
+   ~/.authinfo moved aside; one =M-x customize-save-variable= lands in
+   =.data/custom.el= and leaves =git status= clean.
+4. Push =dev= in both repos and open the PRs; the two design docs are
+   committed value-free and double as the descriptions.  Before the
+   PR, =bin/zetta freeze=: =ci-test= reports =LOCK-MISSING= for poimap,
+   queued since fd2d1c7 (2026-09-12) with no lock entry -- pre-existing,
+   and the only gate the rehearsal still fails.
+5. The hub's ~/.zetta.el is the pre-switch headless template (it is
+   never overwritten); under the new init its =(setq auth-sources nil)=
+   still holds, because the nil rule on a box without =op= chooses
+   =authinfo= and leaves =auth-sources= as the template set it.  Nothing
+   to do; recorded so it is not re-derived.
+
+** Part 1 scan, re-run [2026-09-13, measured over the finished trees]
+
+Same method as Part 1, over =git ls-files= at .zetta.d b990c82 (598
+files, lockfile excluded) and .files 7d1150b (126 files), plus
+=gitleaks dir= over clean exports of both HEADs.
+
+| Family                        | .zetta.d                                                                                                                                                                                       | .files                                                       |
+|-------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------|
+| gitleaks (default rules)      | 0 findings, 597 files                                                                                                                                                                          | 0 findings, 124 files                                        |
+| provider shapes (regex)       | only non-values: .gitleaks.toml's own allow-list regexes, slack.md's =xoxc-<token>= / =d=<cookie>= placeholders, =${password}= template variables in convention-lang-info.el, and three false positives of the =sk-= pattern on "-task-" slugs (a URL in productivity.org, two test names) | one commented DSN example in the pgcli config (=[user[:password]@]=) |
+| elisp shapes                  | only the =YOUR_...= placeholders of .private.sample.el                                                                                                                                         | none                                                         |
+| e-mail addresses              | the owner's in 48 author headers (46 zettapkg files, two plan documents); example.com placeholders; three third-party package or feed authors; nothing else                                    | example.com in the msmtp example; a placeholder word in aura-sync.sh |
+| phone numbers                 | none (the sample's 555 number excluded)                                                                                                                                                        | none                                                         |
+| IPv4 / Tailscale ranges       | two dotted quads inside chiply-isr's =uv.lock= (package metadata)                                                                                                                              | none                                                         |
+| absolute home paths           | three =plan-*.md= documents and headless-zetta.org (pre-existing prose; the user name, not a secret)                                                                                            | none                                                         |
+| employer / project key / host | =elfeed.org= 18, 30, 125-127 only (SEC-B6, owner; public feeds)                                                                                                                                | none                                                         |

@@ -45,4 +45,13 @@ for suite in "${suites[@]}"; do
   fi
   rm -f "$log"
 done
+# The modules against a copy of the fixture, last: not ERT, but a failed
+# assertion is a non-zero exit like any other.
+if timeout -s KILL "$TIMEOUT" emacs -Q --batch -l source/zettapkg/smoke-modules.el 2>&1 \
+     | grep -q "SMOKE ALL OK"; then
+  printf '%-30s %s\n' "smoke-modules" "OK"
+else
+  status=1
+  printf '%-30s FAILED\n' "smoke-modules"
+fi
 exit $status

@@ -42,6 +42,11 @@
 ;; Logseq pages directory for org-capture integration
 ;; (setq zetta-logseq-dir "~/logseq/pages/")
 
+;; Where Customize saves.  init.el defaults this to .data/custom.el under
+;; the config directory (gitignored), so a `M-x customize' save never
+;; edits the tracked init.el.  Point it elsewhere if you prefer.
+;; (setq custom-file (expand-file-name ".data/custom.el" user-emacs-directory))
+
 ;;; ————————————————————————————————————————————————
 ;;; Package management
 ;;; ————————————————————————————————————————————————

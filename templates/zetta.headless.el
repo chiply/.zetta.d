@@ -60,8 +60,6 @@
 ;; per-machine saves in .data/ instead; the block already in init.el
 ;; still evaluates, so nothing is lost.
 (setq custom-file (expand-file-name ".data/custom.el" user-emacs-directory))
-(when (file-exists-p custom-file)
-  (load custom-file nil 'nomessage))
 
 ;;; ————————————————————————————————————————————————
 ;;; Terminal

@@ -11,6 +11,13 @@
 ;; install mandatory config files
 (-each zetta-files-that-need-creating 'zetta-touch-maybe)
 
+;; Customize writes to `custom-file', and into the init file when that
+;; is unset -- which is how a laptop's host name once landed in this
+;; tracked file (work-security-audit.org S3).  Default it under .data/
+;; (gitignored) before ~/.zetta.el loads, so a profile may still choose
+;; another path.  It is loaded at the end of this file, after the modules.
+(setq custom-file (expand-file-name ".data/custom.el" user-emacs-directory))
+
 ;; load user module config (~/.zetta.el) if it exists
 ;; this can call `zetta-modules!' to override the default user-files
 (let ((zetta-config (expand-file-name "~/.zetta.el")))
@@ -135,8 +142,6 @@ Returns a backend object when ENTRY is the symbol `zetta-op'."
  '(connection-local-criteria-alist
    '(((:application tramp :machine "localhost")
       tramp-connection-local-darwin-ps-profile)
-     ((:application tramp :machine "REMOVED-HOST")
-      tramp-connection-local-darwin-ps-profile)
      ((:application tramp)
       tramp-connection-local-default-system-profile
       tramp-connection-local-default-shell-profile)
@@ -228,4 +233,11 @@ Returns a backend object when ENTRY is the symbol `zetta-op'."
  ;; If there is more than one, they won't work right.
  '(cursor ((t (:background "gray"))))
  '(header-line-inactive ((t (:background unspecified :foreground unspecified :inherit header-line)))))
+
+;; Per-machine Customize saves, loaded last so they win over the modules.
+;; The directory must exist for `custom-save-all' to write there.
+(when (stringp custom-file)
+  (make-directory (file-name-directory custom-file) t)
+  (when (file-exists-p custom-file)
+    (load custom-file nil 'nomessage)))
 ;;; init.el ends here

@@ -78,7 +78,10 @@ the live theme, which is exactly what a calendar wants."
         org-use-fast-todo-selection 'expert
         org-attach-store-link-p 'file
         org-hide-leading-stars nil
-        org-archive-location "(todo) archive.org::* From %s"
+        ;; A datetree, so the done log reads chronologically (composite.org,
+        ;; the small adoptions): archived entries land under the day they
+        ;; were archived rather than under one heading per source file.
+        org-archive-location "(todo) archive.org::datetree/* From %s"
         org-agenda-files '()
         org-persist-directory (expand-file-name
                                ".data/org-persist"

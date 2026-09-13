@@ -26,9 +26,12 @@
 ;; composite.org (pomodoros in the dip only, or also block one's first
 ;; two hours) is `org-routine-dip-first-hours', default nil: the dip only.
 
+(require 'cl-lib)
+
 (defvar zetta-org-todo-source)
 (defvar org-queue-close-routine-function)
 (defvar org-queue-daylog-blocks-function)
+(defvar org-queue-review-expected-function)
 (declare-function org-routine-apply-to-queue "org-routine" (&optional quiet))
 (declare-function org-routine-routine "org-routine" (&optional force))
 (declare-function org-routine-core-fixed "org-routine-core" (routine weekday &optional variant))
@@ -75,6 +78,28 @@
 
 (defvar org-routine-file)
 
+(defun zetta-org-routine-expected (from to)
+  "Return the routine's minutes per bucket over the days FROM to TO, for the pack."
+  (when-let* ((routine (org-routine-routine)))
+    (let ((day from) expected)
+      (while (<= day to)
+        (dolist (block (org-routine-core-active-blocks
+                        routine (zetta-org-routine--weekday day) (org-routine-variant day)))
+          (when (or (memq (plist-get block :kind) '(focus dip admin))
+                    (plist-get block :habit))
+            (when-let* ((bucket (org-routine-core-bucket-of block)))
+              (cl-incf (alist-get bucket expected 0) (plist-get block :minutes)))))
+        (setq day (org-routine--date-add day 1)))
+      expected)))
+
+(declare-function org-routine-core-bucket-of "org-routine-core" (block))
+
+(defun org-routine--date-add (date days)
+  "Return DATE, YYYYMMDD, moved by DAYS."
+  (let ((time (encode-time 0 0 12 (% date 100) (% (/ date 100) 100) (/ date 10000))))
+    (let ((decoded (decode-time (time-add time (* days 86400)))))
+      (+ (* 10000 (nth 5 decoded)) (* 100 (nth 4 decoded)) (nth 3 decoded)))))
+
 (defun zetta-org-routine-follow-source (&rest _)
   "Point org-routine at the active corpus's table and re-derive the buckets."
   (require 'org-routine)
@@ -96,7 +121,8 @@
   (with-eval-after-load 'org-queue
     (require 'org-routine)
     (setq org-queue-close-routine-function #'zetta-org-routine-fixed-rows
-          org-queue-daylog-blocks-function #'zetta-org-routine-blocks))
+          org-queue-daylog-blocks-function #'zetta-org-routine-blocks
+          org-queue-review-expected-function #'zetta-org-routine-expected))
   (advice-add 'zetta-org-toggle-todo-source :after #'zetta-org-routine-follow-source))
 
 ;; Hide the contexts that need the outside world when the routine says

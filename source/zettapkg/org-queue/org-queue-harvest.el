@@ -345,6 +345,47 @@ people is a worse problem than a typo."
   (when-let* ((last (car (last (org-queue-state-log)))))
     (cons (car last) (org-queue-harvest--date (cdr last)))))
 
+(defun org-queue-harvest--transitions ()
+  "Return every state change of the entry as (STATE . DATE), oldest first."
+  (mapcar (lambda (entry) (cons (car entry) (org-queue-harvest--date (cdr entry))))
+          (org-queue-state-log)))
+
+(defun org-queue-harvest--touched ()
+  "Return the newest date stamped anywhere in the entry, LOGBOOK included.
+Nil when the entry carries no timestamp at all.  Staleness means
+\"nothing has happened to this\", not \"this has no planning date\"."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (org-back-to-heading t)
+      (let ((end (save-excursion (outline-next-heading) (point)))
+            latest)
+        (while (re-search-forward "[[<]\\([0-9]\\{4\\}\\)-\\([0-9]\\{2\\}\\)-\\([0-9]\\{2\\}\\)" end t)
+          (let ((date (+ (* 10000 (string-to-number (match-string 1)))
+                         (* 100 (string-to-number (match-string 2)))
+                         (string-to-number (match-string 3)))))
+            (when (or (null latest) (> date latest))
+              (setq latest date))))
+        latest))))
+
+(defun org-queue-harvest--rotten ()
+  "Return how many times the entry was rescheduled, from the LOGBOOK.
+`org-log-reschedule' writes one \"Rescheduled from\" line per move;
+Koenig's ROTTEN count is that number."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (org-back-to-heading t)
+      (let ((end (save-excursion (outline-next-heading) (point))))
+        (count-matches "^[ \t]*- Rescheduled from" (point) end)))))
+
+(defun org-queue-harvest--integer (property)
+  "Return PROPERTY as an integer, 0 when absent or not a number."
+  (let ((raw (org-entry-get (point) property)))
+    (if (and raw (string-match-p "\\`[0-9]+\\'" (string-trim raw)))
+        (string-to-number raw)
+      0)))
+
 (defun org-queue-harvest--interrupted ()
   "Return the ID of the entry a capture interrupted, from INTERRUPTED."
   (when-let* ((raw (org-entry-get (point) "INTERRUPTED")))
@@ -399,6 +440,14 @@ TODAY, a YYYYMMDD integer, anchors repeating timestamps."
           :placed (org-queue-harvest--placed)
           :closed (org-queue-harvest--closed)
           :last-transition (org-queue-harvest--last-transition)
+          :transitions (org-queue-harvest--transitions)
+          :touched (org-queue-harvest--touched)
+          :rotten (org-queue-harvest--rotten)
+          :surfaced (org-queue-harvest--integer "SURFACED")
+          :kept (org-queue-harvest--timestamp-date (org-entry-get (point) "KEPT"))
+          :dismissed (org-queue-harvest--timestamp-date (org-entry-get (point) "DISMISSED"))
+          :parent (save-excursion
+                    (when (org-up-heading-safe) (org-get-heading t t t t)))
           :interrupted (org-queue-harvest--interrupted)
           :dormant-parent (org-queue-harvest--dormant-parent-p)
           :timestamp (car stamps)
@@ -497,6 +546,16 @@ queue stops re-litigating the same decision every morning."
                                       (< (plist-get entry :date) today))
                                     (org-queue-history))))
     (plist-get previous :ids)))
+
+;;;; An org-ql predicate over the score
+
+(org-ql-defpred queue-score (&optional min)
+  "Return the entry's queue score when it is at least MIN.
+Exposes `org-queue-core-score' to any agenda block, so a block can be
+sorted or filtered by what the packer would think of it."
+  :body (let ((score (org-queue-core-score (org-queue-harvest-entry)
+                                           (org-queue-core-today))))
+          (and (>= score (or min 0)) score)))
 
 (provide 'org-queue-harvest)
 ;;; org-queue-harvest.el ends here

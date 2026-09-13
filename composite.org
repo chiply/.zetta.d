@@ -11,8 +11,8 @@
 # queue has buckets, habits, a horizon, an apply layer and a proposal
 # buffer -- several gaps got smaller.
 #
-# Status [2026-09-12]: wave 1 BUILT the same day (see "As built" under
-# each wave); waves 2-6 follow in order, each with its own note.
+# Status [2026-09-12]: waves 1 and 2 BUILT the same day (see "As built"
+# under each wave); waves 3-6 follow in order, each with its own note.
 
 * Start here
 
@@ -280,6 +280,35 @@ What changes now: all three keys are apply actions (=property= and
 with decoration, because they share the irs call.
 
 Tests: the first three in the assay.
+
+** As built [2026-09-12]
+
+- Harvest: =:transitions= (every state change), =:touched= (newest stamp
+  anywhere in the entry, the Neglected view's rule), =:rotten=
+  ("Rescheduled from" lines), =:surfaced=, =:kept=, =:dismissed=, =:parent=;
+  and the =queue-score= org-ql predicate.
+- =org-queue-review-core= (14 batch tests): the evidence tuple, the
+  dismissal rule and Forster's questions, "came back" by normalised
+  title against a finished or dismissed twin, the five stalled buckets
+  as a partition, chase by touch, parked-due raised once (a KEPT on or
+  after REVIEW_ON means it was looked at), the template rows (under /
+  on / over at 0.5 and 1.5) and the floor rows in hours (ready for G5),
+  the calibration gate, ROTTEN, and the fixed section order.
+- =org-queue-review= (=,-o-m=): the buffer; the dormant check runs inside
+  the pack; time by category and by bucket come from =org-gantt-harvest=
+  summarised over the window (the "time table" is the same rows the
+  gantt draws, grouped here rather than through a dynamic block); the
+  routine's expected minutes per bucket from
+  =zetta-org-routine-expected=; =w= writes the answers into the
+  reviews.org datetree; surfacings counted in one apply.  The Parked
+  agenda view does NOT count surfacings (no finalize hook was added);
+  the pack is the counter.
+- =org-queue-worth= (=,-o-y=): the evidence buffer with =k= / =p= / =d=, all
+  applies; dismissal keeps the entry.
+- Small adoptions: the datetree archive location; =queue-score=.
+- Fixture: parked entries carry =SURFACED= (three at the threshold) and
+  some a =KEPT=.  2 file tests added to the rituals suite; the smoke run
+  draws the pack.
 
 * Wave 3 — Clarify  (G1, G7b, G13c)
 

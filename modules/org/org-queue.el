@@ -19,7 +19,8 @@
   :load-path "source/zettapkg/org-queue"
   :commands (org-queue-today org-queue-calibration org-queue-plan
              org-queue-undo-apply org-queue-horizon org-queue-propose
-             org-queue-close org-queue-dormant-check org-queue-day-log)
+             org-queue-close org-queue-dormant-check org-queue-day-log
+             org-queue-review-week org-queue-still-worth-it)
 
   :brushup
   ;; The plan is a prominence ladder, not a colour scheme: the date at the
@@ -67,7 +68,8 @@
     (require 'org-queue-propose)
     (require 'org-queue-close)
     (require 'org-queue-dormant)
-    (require 'org-queue-daylog))
+    (require 'org-queue-daylog)
+    (require 'org-queue-review))
   ;; The close counts the inbox; the queue itself never plans from it.
   (setq org-queue-inbox-file "~/kb/inbox.org")
 
@@ -122,5 +124,7 @@
  "u" 'org-queue-undo-apply
  "P" 'org-queue-horizon    ; the read-only many-day view; h/H are org-metaleft
  "p" 'org-queue-propose
- "x" 'org-queue-close)     ; close the day; the smart tree's old key
+ "x" 'org-queue-close      ; close the day; the smart tree's old key
+ "m" 'org-queue-review-week   ; Monday: the pack
+ "y" 'org-queue-still-worth-it)
 ;;; org-queue.el ends here

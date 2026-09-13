@@ -227,6 +227,7 @@ SCHEDULED: <2026-09-11 Fri> DEADLINE: <2026-10-13 Tue>
 :CREATED:  [2026-09-01 Tue]
 :IMPACT:   5
 :REVIEW_ON: [2026-09-16 Wed]
+:SURFACED: 2
 :END:
 :LOGBOOK:
 - State "HOLD"       from "TODO"       [2026-09-06 Sun 16:40] \\
@@ -236,51 +237,47 @@ SCHEDULED: <2026-09-11 Fri> DEADLINE: <2026-10-13 Tue>
 Parked until use-package-compute-statistics says whether
 they are actually the missing 7.7s.
 
-* DONE [#C] Teach brushup about org-timegrid event rungs  :@shallow:ui:@tired:
-CLOSED: [2026-09-06 Sun 14:35] SCHEDULED: <2026-09-24 Thu>
+* DONE [#A] Teach brushup about org-timegrid event rungs  :@shallow:ui:
+CLOSED: [2026-08-24 Mon 09:33] SCHEDULED: <2026-09-25 Fri> DEADLINE: <2026-10-07 Wed>
 :PROPERTIES:
-:ID:       11C73B4E-8A2E-4883-A2A8-1A8534DB6886
-:CREATED:  [2026-07-31 Fri]
-:Effort:   0:05
+:ID:       D702AFD6-95EE-489D-8755-6C6B160CCC2A
+:CREATED:  [2026-08-18 Tue]
+:Effort:   0:15
 :END:
 :LOGBOOK:
-- State "DONE"       from "PROG"       [2026-09-06 Sun 14:35]
-- State "PROG"       from "TODO"       [2026-09-06 Sun 14:30]
-- State "TODO"       from "PROG"       [2026-09-04 Fri 09:05]
-- State "PROG"       from              [2026-09-04 Fri 09:00]
-- Rescheduled from "[2026-09-17 Thu]" on [2026-09-07 Mon 08:55]
+- State "DONE"       from "PROG"       [2026-08-24 Mon 09:33]
+- State "PROG"       from              [2026-08-24 Mon 09:15]
 :END:
 
-* IDEA Cut dimmer-mode, keep solaire  :@shallow:ui:
+* IDEA [#B] Cut dimmer-mode, keep solaire  :@shallow:ui:
 :PROPERTIES:
-:ID:       F90ACE09-9131-4D30-B3D9-AB7FDB2CBF43
-:CREATED:  [2026-08-02 Sun]
-:Effort:   0:10
-:IMPACT:   4
+:ID:       ACE913C4-863D-4FB0-A1D8-389C9E5C91CD
+:CREATED:  [2026-07-06 Mon]
+:Effort:   0:30
+:SURFACED: 3
 :END:
 
-- [X] first pass
-- [ ] second pass
-
-* WAIT [#C] Kill the Spotify HTTP buffer leak  :@deep:perf:
+* QUES [#C] Kill the Spotify HTTP buffer leak  :@deep:perf:@fresh:
 :PROPERTIES:
-:ID:       81F3C85E-BF82-4108-A2DF-881ECAE0ADD8
-:CREATED:  [2026-08-03 Mon]
+:ID:       F91A80D5-384B-41AF-8A9F-6BEAE231FE99
+:CREATED:  [2026-08-26 Wed]
 :Effort:   1:30
-:WAITING_ON: IT
-:END:
-:LOGBOOK:
-- State "WAIT"       from "TODO"       [2026-09-07 Mon 11:20] \\
-  Third ask. Escalate if nothing by Friday.
+:WAITING_ON: Sam
 :END:
 
 51 of 86 buffers were *http api.spotify.com:443*.
 
-* QUES Should QUES entries be queueable at all?  :@deep:org:@fresh:
+* QUES [#B] Should QUES entries be queueable at all?  :@deep:org:
+SCHEDULED: <2026-10-02 Fri> DEADLINE: <2026-10-07 Wed -5d>
 :PROPERTIES:
-:ID:       D2F24E9E-979F-4C51-BC8B-005CF30D65EE
-:CREATED:  [2026-08-12 Wed]
-:Effort:   0:15
+:ID:       97EEA58D-87DC-41EA-9F35-A313BA8CAC18
+:CREATED:  [2026-07-24 Fri]
+:Effort:   0:10
+:IMPACT:   2
+:DEADLINE_TYPE: soft
 :WAITING_ON: legal
 :END:
+
+- [X] first pass
+- [ ] second pass
 

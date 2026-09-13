@@ -4,119 +4,111 @@
 #+COLUMNS: %40ITEM(Task) %TODO %3PRIORITY(P) %6IMPACT(Imp) %17Effort(Estimate){:} %CLOCKSUM(Clocked) %DEADLINE %SCHEDULED %TAGS
 #+FILETAGS: :home:
 
-* TODO [#A] Renew British passport [1/3]  :@errand:admin:@tired:
-DEADLINE: <2026-10-18 Sun>
+* TODO [#A] Renew British passport [1/3]  :@errand:admin:
+SCHEDULED: <2026-09-15 Tue>
 :PROPERTIES:
-:ID:       669CC5D7-7A47-4CA3-8EC7-F8BAFF5C257B
-:CREATED:  [2026-07-04 Sat]
-:DEADLINE_TYPE: soft
-:END:
-:LOGBOOK:
-- New deadline from "[2026-10-08 Thu]" on [2026-09-09 Wed 12:30]
+:ID:       CED26681-7AF0-43FA-9162-849F8A5D35EA
+:CREATED:  [2026-08-31 Mon]
+:Effort:   1:30
 :END:
 
 Needs photos and the old passport.
 
 ** DONE Get passport photos
-CLOSED: [2026-08-27 Thu 09:52]
+CLOSED: [2026-08-26 Wed 11:06]
 :PROPERTIES:
-:ID:       5162849F-8A5D-45EA-A193-49F8DD030FB5
+:ID:       76508A80-FCA3-4D28-9684-C9BB64D7F208
 :Effort:   0:30
 :END:
 :LOGBOOK:
-- State "DONE"       from "PROG"       [2026-08-27 Thu 09:52]
-- State "PROG"       from              [2026-08-27 Thu 09:15]
+- State "DONE"       from "PROG"       [2026-08-26 Wed 11:06]
+- State "PROG"       from              [2026-08-26 Wed 10:30]
 :END:
 
 ** TODO Fill in the online form
 :PROPERTIES:
-:ID:       64D7F208-6715-4EB8-BBD6-8B02E3FB4D48
+:ID:       B8566667-F1F8-43EB-8F2A-1F59424B6B0E
 :Effort:   1:00
 :END:
 
 ** TODO Post the old passport
 :PROPERTIES:
-:ID:       FB7CDBDB-7650-4A80-BCA3-6D28D684C9BB
+:ID:       5EC63FF3-C696-459B-8449-F80EC9C82F6C
 :Effort:   0:30
 :END:
 
-* PROG [#A] File the 2025 tax return  :@deep:admin:finance:@tired:
-DEADLINE: <2026-09-21 Mon -5d>
+* TODO [#A] File the 2025 tax return  :@deep:admin:finance:
+DEADLINE: <2026-09-21 Mon>
 :PROPERTIES:
-:ID:       91CC6B7B-C9C9-4F43-8BCF-E2B44612EA13
-:CREATED:  [2026-08-07 Fri]
+:ID:       C8EC54DE-2C35-4183-B01F-EC403E68DB39
+:CREATED:  [2026-07-20 Mon]
 :Effort:   6:00
-:IMPACT:   4
-:END:
-:LOGBOOK:
-- State "PROG"       from "TODO"       [2026-09-11 Fri 13:00]
-- State "TODO"       from "PROG"       [2026-09-07 Mon 14:31]
-- State "PROG"       from              [2026-09-07 Mon 11:00]
 :END:
 
-* WAIT [#C] Chase the REMOVED-EMPLOYER HSA reimbursement  :@call:finance:@fresh:
+* WAIT [#A] Chase the REMOVED-EMPLOYER HSA reimbursement  :@call:finance:@tired:
+SCHEDULED: <2026-09-18 Fri>
 :PROPERTIES:
-:ID:       149A17EB-6E7A-494E-89A6-985781BB7A66
-:CREATED:  [2026-08-08 Sat]
-:Effort:   2:00
-:IMPACT:   2
-:WAITING_ON: my accountant
+:ID:       FB2B8617-F885-4194-94E3-9E4EA0FF099B
+:CREATED:  [2026-07-22 Wed]
+:Effort:   1:30
+:WAITING_ON: legal
 :END:
 :LOGBOOK:
-- State "WAIT"       from "TODO"       [2026-08-28 Fri 11:20] \\
-  Sent the details, waiting on confirmation.
+- State "WAIT"       from "TODO"       [2026-08-25 Tue 11:20] \\
+  Third ask. Escalate if nothing by Friday.
+- Rescheduled from "[2026-09-11 Fri]" on [2026-09-11 Fri 08:55]
 :END:
 
 Third time asking. Claim ref in the email thread.
 
-- [X] first pass
-- [ ] second pass
-
-* NEXT Track down the old TIAA 401k  :@call:finance:@fresh:
+* NEXT [#B] Track down the old TIAA 401k  :@call:finance:@tired:
+DEADLINE: <2026-10-18 Sun>
 :PROPERTIES:
 :ID:       A7369EB5-9DFE-470A-B4AB-BCF56F8DFDF0
-:CREATED:  [2026-08-06 Thu]
+:CREATED:  [2026-07-17 Fri]
 :IMPACT:   4
 :END:
 
-* TODO [#A] Cancel Hodinkee insurance before renewal  :@call:admin:
-DEADLINE: <2026-09-16 Wed>
+* TODO [#A] Cancel Hodinkee insurance before renewal  :@call:admin:@fresh:
+DEADLINE: <2026-09-16 Wed -5d>
 :PROPERTIES:
-:ID:       1E964C8B-5F6E-480D-9557-1BBC370352BC
-:CREATED:  [2026-07-30 Thu]
-:Effort:   0:20
-:IMPACT:   2
-:END:
-:LOGBOOK:
-- New deadline from "[2026-09-06 Sun]" on [2026-09-06 Sun 12:30]
+:ID:       0105E5E5-1806-4AE6-BF14-57D8DBEB314E
+:CREATED:  [2026-08-13 Thu]
+:Effort:   0:15
+:IMPACT:   4
+:DEADLINE_TYPE: soft
 :END:
 
 Covered through 2027-02-09, so cancel well before.
 
-* HOLD [#A] Cancel HBO Max  :@shallow:admin:
+* HOLD [#C] Cancel HBO Max  :@shallow:admin:@tired:
 :PROPERTIES:
-:ID:       9E82745C-684C-4536-9797-05A27FE141DB
-:CREATED:  [2026-07-17 Fri]
-:Effort:   0:15
-:IMPACT:   4
+:ID:       5545E263-D35A-4C23-A196-71D67C1B2A3F
+:CREATED:  [2026-07-08 Wed]
+:Effort:   0:10
+:IMPACT:   2
+:REVIEW_ON: [2026-10-02 Fri]
 :END:
 :LOGBOOK:
-- State "HOLD"       from "TODO"       [2026-08-28 Fri 16:40] \\
-  Not worth doing before the migration lands.
+- State "HOLD"       from "TODO"       [2026-09-06 Sun 16:40] \\
+  Waiting to see if this solves itself.
 :END:
 
 Not until Game of Thrones is finished.
 
+- [X] first pass
+- [ ] second pass
+
 * DONE Clean out the freezer  :@errand:
-CLOSED: [2026-08-30 Sun 16:05] SCHEDULED: <2026-08-23 Sun>
+CLOSED: [2026-08-31 Mon 16:20] SCHEDULED: <2026-08-23 Sun>
 :PROPERTIES:
-:ID:       BDD59D65-964A-4147-BE2E-331D84922F4B
-:CREATED:  [2026-07-29 Wed]
-:Effort:   0:15
+:ID:       B5C0C2AD-5A69-477F-B448-202364198804
+:CREATED:  [2026-07-26 Sun]
+:Effort:   0:30
 :END:
 :LOGBOOK:
-CLOCK: [2026-08-28 Fri 16:00]--[2026-08-28 Fri 16:14] =>  0:14
-- State "DONE"       from              [2026-08-30 Sun 16:05]
+CLOCK: [2026-08-29 Sat 16:00]--[2026-08-29 Sat 16:28] =>  0:28
+- State "DONE"       from              [2026-08-31 Mon 16:20]
 :END:
 
 * TODO [#C] Replace the missing Rolex bracelet link  :@errand:
@@ -134,39 +126,36 @@ SCHEDULED: <2026-09-29 Tue>
 :CREATED:  [2026-07-07 Tue]
 :Effort:   0:30
 :REVIEW_ON: [2026-08-28 Fri]
+:SURFACED: 3
 :END:
 
 * IDEA Sort the recycling  :@shallow:housekeeping:
-SCHEDULED: <2026-09-26 Sat>
 :PROPERTIES:
-:ID:       476280BD-E429-4652-B62C-6510E46A59AA
-:CREATED:  [2026-07-30 Thu]
-:Effort:   0:05
-:IMPACT:   3
+:ID:       8639E08C-4373-4722-8762-80BDE4299652
+:CREATED:  [2026-07-06 Mon]
+:Effort:   0:10
+:IMPACT:   5
 :END:
 
-* DONE Book the dentist  :@call:health:
-CLOSED: [2026-08-28 Fri 11:22] SCHEDULED: <2026-09-13 Sun>
+* DONE [#A] Book the dentist  :@call:health:@fresh:
+CLOSED: [2026-09-07 Mon 10:45] SCHEDULED: <2026-08-14 Fri>
 :PROPERTIES:
-:ID:       B397A56A-8BAB-4B01-A203-75B6821AA468
-:CREATED:  [2026-08-18 Tue]
-:Effort:   0:20
+:ID:       096A2C26-322A-4B5A-A09A-061076541142
+:CREATED:  [2026-08-25 Tue]
+:Effort:   0:15
+:IMPACT:   5
 :END:
 :LOGBOOK:
-- State "DONE"       from "PROG"       [2026-08-28 Fri 11:22]
-- State "PROG"       from              [2026-08-28 Fri 11:00]
-- Rescheduled from "[2026-09-06 Sun]" on [2026-09-11 Fri 08:55]
+- State "DONE"       from "PROG"       [2026-09-07 Mon 10:45]
+- State "PROG"       from              [2026-09-07 Mon 10:30]
 :END:
 
-- [X] first pass
-- [ ] second pass
-
-* TODO [#C] Service the car  :@errand:@tired:
+* TODO Service the car  :@errand:
 SCHEDULED: <2026-09-15 Tue>
 :PROPERTIES:
 :ID:       8AF122DE-6C56-4B86-ACED-D027B99D6EA6
-:CREATED:  [2026-07-27 Mon]
-:Effort:   0:45
+:CREATED:  [2026-07-31 Fri]
+:Effort:   2:00
 :END:
 :LOGBOOK:
 - Rescheduled from "[2026-09-08 Tue]" on [2026-09-11 Fri 08:55]
@@ -186,33 +175,40 @@ SCHEDULED: <2026-09-15 Tue>
 :CREATED:  [2026-08-16 Sun]
 :Effort:   0:10
 :IMPACT:   3
+:SURFACED: 1
 :END:
 
-* IDEA Deep clean the garage  :@errand:
+* IDEA [#C] Deep clean the garage  :@errand:@fresh:
+SCHEDULED: <2026-10-04 Sun>
 :PROPERTIES:
-:ID:       E3DD26BA-C44F-4210-B59F-15D2515035D8
-:CREATED:  [2026-08-30 Sun]
-:Effort:   5:00
+:ID:       83D32CC6-1566-4AE0-B850-A2D704CC8F36
+:CREATED:  [2026-08-04 Tue]
+:Effort:   4:00
+:REVIEW_ON: [2026-09-14 Mon]
+:SURFACED: 1
+:END:
+:LOGBOOK:
+- Rescheduled from "[2026-09-27 Sun]" on [2026-09-07 Mon 08:55]
 :END:
 
-* TODO Water the plants  :@errand:
-SCHEDULED: <2026-09-12 Sat +3d>
+* HOLD [#C] Water the plants  :@errand:
+SCHEDULED: <2026-09-17 Thu +3d>
 :PROPERTIES:
-:ID:       64C599CC-90F9-4F49-9E32-FFA7257A3008
-:CREATED:  [2026-08-19 Wed]
-:Effort:   0:10
-:IMPACT:   3
+:ID:       F2A1B9BC-ED47-4A86-8AA7-23C3DD437D7B
+:CREATED:  [2026-08-13 Thu]
+:Effort:   0:30
+:SURFACED: 1
+:END:
+:LOGBOOK:
+- State "HOLD"       from "TODO"       [2026-09-02 Wed 16:40] \\
+  Waiting to see if this solves itself.
 :END:
 
-* TODO [#B] Take the bins out  :@errand:@tired:
+* TODO Take the bins out  :@errand:
 SCHEDULED: <2026-09-10 Thu +1w>
 :PROPERTIES:
-:ID:       2924387E-97C2-4B61-9AA1-443AF350E983
-:CREATED:  [2026-08-03 Mon]
-:Effort:   0:20
-:IMPACT:   3
+:ID:       0EDD6BB9-FFFF-4B6C-B33A-C5260D78A43B
+:CREATED:  [2026-08-13 Thu]
+:Effort:   0:10
 :END:
-
-- [X] first pass
-- [ ] second pass
 

@@ -89,6 +89,8 @@ All under the =,-o= prefix (=launch-map= → =menu-org-map=).
 | =,-o-d=  | =zetta-hyrolo-day=              | every entry that mentions a given day          |
 | =,-o-x=  | =org-queue-close=               | close the day: carried, done, PROG sweep, tomorrow's draft |
 | =,-o-E=  | =org-queue-day-log=             | the day's evidence in time order, with the gaps |
+| =,-o-m=  | =org-queue-review-week=         | Monday: the review pack, one buffer, =w= writes the answers |
+| =,-o-y=  | =org-queue-still-worth-it=      | one parked entry's evidence; =k= keep, =p= park, =d= dismiss |
 | =,-o-v j= | =org-agenda= "Dormant"         | projects with no next step, and finished ones  |
 | =M-x org-routine-report= |                | today's blocks, windows and dip from the routine table |
 
@@ -587,7 +589,66 @@ other capture made while something is in PROG records that entry's ID as
 =2026-09-12= or =Sep 12th, 2026= -- is a Hyperbole button opening that day
 in the rolo; inside an Org timestamp the button stands aside.
 
-* Working against the test data
+* The week
+
+Built 2026-09-12 (composite.org wave 2).
+
+** The review pack: =,-o-m=
+
+Monday, thirty minutes.  One buffer, sections in a fixed order so two
+packs diff readably, assembled from what the files already say:
+
+- the three questions at the top (=w= asks for the answers and writes
+  them under today in the datetree of =~/kb/notes/reviews.org=);
+- *Moved* and *Finished* in the window (seven days,
+  =org-queue-review-window=);
+- *Neglected*: every open, unparked item in exactly one bucket by its
+  last touch (month, quarter, longer, never; this week's are not drawn);
+- *Chase*: WAIT and QUES untouched for =org-queue-chase-days= (7), by
+  who has it;
+- *Parked, due for another look*: HOLD and IDEA whose =REVIEW_ON= has
+  arrived and were not kept since -- raised once;
+- *Untriaged*: no estimate, no priority, or no date of any kind;
+- the inbox count with its age split; *Dormant projects* and *Finished?*
+  (the check runs as part of the pack; =D= reruns it);
+- *Still worth it?*: items surfaced =org-queue-dismiss-after= (3) times
+  without a pull, proposed for dismissal -- proposed, never automatic;
+- *Calibration* when at least =org-queue-calibration-prior= tasks finished;
+- *Time by category* from the derived clock, *Against the routine* per
+  bucket (under half, over one and a half, or on), and, once horizons
+  exist, areas against their floors;
+- *Rescheduled*: the ROTTEN count, the sum of "Rescheduled from" lines,
+  worst first;
+- the chains' week, once there are chains.
+
+Showing a parked item counts as surfacing it: the pack bumps =SURFACED=
+on every parked-due and proposed item, in one apply (so =,-o-u= right
+after the pack undoes the counters, not a decision).  =g= redraws
+without counting again.  =y= on any line asks the question.
+
+** Still worth it?  =,-o-y=
+
+On an entry in an Org buffer, or on any queue line.  Age, plans that
+carried it, times surfaced, days since anything happened to it,
+reschedules, when it was last kept, and Forster's four questions.  One
+key:
+
+| key | writes                                              |
+|-----+-----------------------------------------------------|
+| =k=   | =KEPT= stamped today, =SURFACED= removed                |
+| =p=   | =HOLD= with =REVIEW_ON= a season out (=org-queue-season-days=, 90) |
+| =d=   | =NOPE= with =DISMISSED= stamped; the state asks for its note |
+| =q=   | nothing                                             |
+
+Each is an apply.  Dismissed is a state, not a deletion: the entry stays
+in its file and is never proposed again.
+
+** Small adoptions
+
+=org-archive-location= is a datetree now, so =(todo) archive.org= reads
+chronologically.  =(queue-score N)= is an org-ql predicate over the
+packer's score, for any agenda block.
+
 
 The fixture is seven =(todo)= files under =testdata/todo/=, with full
 metadata: efforts, dates, LOGBOOK transitions, IDs, five habits in
@@ -628,6 +689,7 @@ A first session that touches every lever:
 8. =,-o-w= for the derived clock; =,-o-C= for calibration.
 9. =,-o-x=.  Read the sections; =T= on a PROG line, =C-c C-c=; =,-o-u=.
    =,-o-v j= for the dormant project; =,-o-E= for the day.
+10. =,-o-m=.  Read the pack; =y= on a parked line, =k=; =,-o-u=.
 
 * Working against the real files
 
@@ -696,9 +758,8 @@ From =scheduling.org=:
   two-miss alert (step 8).
 
 From =composite.org= (the plan for the assay's remaining gaps, in six
-waves; keys already reserved there).  Wave 1 is built (above).
+waves; keys already reserved there).  Waves 1 and 2 are built (above).
 
-- Wave 2: the weekly review pack (=,-o-m=), "still worth it?" (=,-o-y=).
 - Wave 3: AI decoration of the inbox (=,-o-f=), duplicates, commits as
   evidence of DONE.
 - Wave 4: agent chains (=,-o-i=, the AGENT state, landings).

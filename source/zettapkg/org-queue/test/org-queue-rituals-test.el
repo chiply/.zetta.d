@@ -29,6 +29,7 @@
       (when (file-directory-p dir) (add-to-list 'load-path dir)))))
 (require 'org-queue-close)
 (require 'org-queue-dormant)
+(require 'org-queue-review)
 
 (defconst oqr-corpus
   "#+CATEGORY: test
@@ -92,6 +93,23 @@ CLOSED: [2026-09-12 Sat 16:00]
 :END:
 :LOGBOOK:
 - State \"PROG\"       from \"TODO\"       [2026-09-12 Sat 14:00]
+:END:
+
+* HOLD Parked and surfaced enough
+:PROPERTIES:
+:ID:       T-WORTH
+:SURFACED: 3
+:REVIEW_ON: [2026-09-10 Thu]
+:CREATED:  [2026-06-01 Mon]
+:END:
+
+* WAIT Old wait  :work:
+:PROPERTIES:
+:ID:       T-WAIT
+:WAITING_ON: Sam
+:END:
+:LOGBOOK:
+- State \"WAIT\"       from \"TODO\"       [2026-08-20 Thu 11:20]
 :END:
 ")
 
@@ -236,6 +254,56 @@ CLOSED: [2026-09-12 Sat 16:00]
              (close (org-queue-close-compute 20260912)))
         (should (= 3 (plist-get close :inbox-count)))
         (should (= 2 (plist-get (car (plist-get close :prog)) :interruptions)))))))
+
+
+;;;; The review pack and "still worth it?"
+
+(ert-deftest oqr/the-pack-reads-the-corpus-and-counts-surfacings-once ()
+  (oqr-with-corpus
+    (let* ((org-queue-review-count-surfacings t)
+           (pack (org-queue-review-compute 20260914)))
+      (should (equal '("T-WAIT") (mapcar (lambda (task) (plist-get task :id)) (plist-get pack :chase))))
+      (should (equal '("T-WORTH") (mapcar (lambda (task) (plist-get task :id)) (plist-get pack :parked-due))))
+      (should (equal '("T-WORTH") (mapcar (lambda (task) (plist-get task :id)) (plist-get pack :worth))))
+      (should (= 1 (length (plist-get pack :dormant))))
+      (should (= 1 (length (plist-get pack :finished-projects))))
+      ;; Showing it counts as surfacing it: once, in one apply.
+      (org-queue-review--count-surfacings pack)
+      (should (equal "4" (oqa-property-of file "T-WORTH" "SURFACED")))
+      (should (= 2 (length (org-queue-apply--log)))))))   ; the dormant check's tag, then this
+
+(defun oqa-property-of (file id property)
+  (with-temp-buffer
+    (insert-file-contents file)
+    (org-mode)
+    (goto-char (point-min))
+    (re-search-forward (concat ":ID:\\s-+" (regexp-quote id)))
+    (org-back-to-heading t)
+    (org-entry-get (point) property)))
+
+(ert-deftest oqr/keep-park-and-dismiss-are-applies ()
+  (oqr-with-corpus
+    (let ((task (cl-find "T-WORTH" (org-queue-harvest (list file) 20260914)
+                         :key (lambda (task) (plist-get task :id)) :test #'equal)))
+      (with-current-buffer (get-buffer-create "*org-queue worth*")
+        (org-queue-worth-mode)
+        (setq org-queue--worth-task task)
+        (cl-letf (((symbol-function 'quit-window) #'ignore))
+          (org-queue-worth-keep)))
+      (should (oqa-property-of file "T-WORTH" "KEPT"))
+      (should-not (oqa-property-of file "T-WORTH" "SURFACED"))
+      (org-queue-undo-apply)
+      (should (equal "3" (oqa-property-of file "T-WORTH" "SURFACED")))
+      (with-current-buffer (get-buffer-create "*org-queue worth*")
+        (setq org-queue--worth-task task)
+        (cl-letf (((symbol-function 'quit-window) #'ignore))
+          (org-queue-worth-dismiss)))
+      (should (oqa-property-of file "T-WORTH" "DISMISSED"))
+      (should (equal "NOPE" (plist-get (cl-find "T-WORTH" (org-queue-harvest (list file) 20260914)
+                                                :key (lambda (task) (plist-get task :id)) :test #'equal)
+                                       :state)))
+      ;; Dismissed is a state: the entry is still in the file.
+      (should (oqa-property-of file "T-WORTH" "ID")))))
 
 (provide 'org-queue-rituals-test)
 ;;; org-queue-rituals-test.el ends here

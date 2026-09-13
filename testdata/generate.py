@@ -346,6 +346,13 @@ def render_task(rng, today, spec, level, cat):
         P.append(f":WAITING_ON: {rng.choice(WAITING)}")
     if st in ("HOLD", "IDEA") and rng.random() < 0.45:
         P.append(f":REVIEW_ON: {ina(today + dt.timedelta(days=rng.randint(-20, 60)))}")
+    # The still-worth-it counters (G7): how often the Parked view and the
+    # review pack have shown a parked item without it being pulled, and
+    # when it was last kept.  A few are at the dismissal threshold.
+    if st in ("HOLD", "IDEA") and rng.random() < 0.6:
+        P.append(f":SURFACED: {rng.choices([1, 2, 3, 4], weights=[4, 3, 2, 1])[0]}")
+        if rng.random() < 0.3:
+            P.append(f":KEPT:     {ina(today - dt.timedelta(days=rng.randint(10, 80)))}")
     if spec.get("blocked"): P.append(f":BLOCKED_BY: {oid(rng)}")
     if spec.get("repeat") and st == "DONE":
         P.append(f":LAST_REPEAT: {ina(today - dt.timedelta(days=3))}")

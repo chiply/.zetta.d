@@ -23,6 +23,10 @@
 ;; Parser rule (bootstrap-modules.el): within one category the list is
 ;; either all inclusions or all exclusions, never both.  :app has more out
 ;; than in, so it is an inclusion list, written in the default load order.
+;;
+;; Siblings (README.md, "Profiles"): zetta.example.el is the full profile,
+;; zetta.headless.el the tty-only one (headless-zetta.org).  The excluded
+;; files are tabulated in docs/modules.md, "Work profile exclusions".
 
 ;;; ————————————————————————————————————————————————
 ;;; Which machine this is
@@ -147,14 +151,14 @@
  :tools (-gnus -irs -signel)
  ;; Inclusion list, in the default load order.  Reference lookups first
  ;; (network, no account), then bookmarks and places, prose width,
- ;; workspaces, the browser, the editor-code-assistant, and hyperbole with
+ ;; workspaces, the editor-code-assistant, the browser, and hyperbole with
  ;; its two hywiki helpers.  Out: anki, bluesky, elfeed, erc, flappy-fish,
  ;; key-quiz, llm-convo, mastodon, md4rd, mu4e-dashboard, nano-mu4e, nov,
  ;; org-msg, pocket-reader, reddigg, say, speed-type, spot, spot4e, spray,
  ;; touchtype, whisper, wombag, wttrin, yt-transcript.
  :app (unidecode define-word mw-thesaurus sx pubmed helm-wikipedia
        bookmark-view bookmark bookmark-in-project dogears
-       olivetti activities eww eca-emacs
+       olivetti activities eca-emacs eww
        hyperbole hywiki-alias hywiki-graph)
  ;; pdfnote is the iPad-annotations -> Logseq sync.  pdf-tools itself
  ;; stays (a PDF viewer is a PDF viewer); so do the literature modules,

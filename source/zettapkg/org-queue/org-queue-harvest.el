@@ -480,10 +480,23 @@ heading there is checked against the title and the ID is the fallback
           (setq position
                 (or found
                     (when id
-                      (when-let* ((marker (org-id-find id t)))
+                      (when-let* ((marker (ignore-errors (org-id-find id t))))
                         (and (eq (marker-buffer marker) buffer)
                              (marker-position marker))))
-                    position))
+                    ;; org-id may not track globally, or not know this
+                    ;; ID yet; the file itself always does.
+                    (when id
+                      (save-excursion
+                        (goto-char (point-min))
+                        (when (re-search-forward
+                               (concat "^[ \t]*:ID:[ \t]+" (regexp-quote id) "[ \t]*$") nil t)
+                          (org-back-to-heading t)
+                          (point))))
+                    ;; No ID and the title does not match: the recorded
+                    ;; position is a guess about a file that has changed.
+                    ;; Writing to whatever heading sits there now would be
+                    ;; worse than refusing.
+                    (and (null id) position)))
           (unless position (user-error "Cannot find %s" (plist-get task :title)))
           (cons buffer position))))))
 

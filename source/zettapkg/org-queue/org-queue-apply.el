@@ -71,6 +71,9 @@
 ;;   (:action property   :task TASK :name "KEPT" :value STRING-OR-NIL)   nil removes
 ;;   (:action tag        :task TASK :tag "dormant" :add BOOL)
 ;;   (:action refile     :task TASK :to FILE :heading STRING-OR-NIL)
+;;   (:action deadline   :task TASK :to DATE-OR-NIL)                     nil removes
+;;   (:action timestamp  :task TASK :to "2026-09-10 Thu 14:00")          a plain active stamp
+;;   (:action body-line  :task TASK :text STRING :remove BOOL)           a line at the end of the body
 ;; TASK is a harvested plist, or the smaller reference the log keeps.
 
 (defun org-queue-apply--ref (task)
@@ -84,6 +87,7 @@
   "Return what the entry at point says now, for ACTION's reverse."
   (append
    (list :scheduled (org-entry-get (point) "SCHEDULED")
+         :deadline (org-entry-get (point) "DEADLINE")
          :placed (org-entry-get (point) org-queue-placed-property)
          :state (org-get-todo-state)
          :tags (org-get-tags nil t)
@@ -105,8 +109,10 @@ Nil when ACTION changed nothing."
              :scheduled (plist-get before :scheduled)
              :placed (plist-get before :placed)))
       ('state
-       (unless (equal (plist-get action :to) (plist-get before :state))
-         (list :action 'state :task ref :to (plist-get before :state))))
+       ;; An entry with no keyword reverses to "", never to nil: `org-todo'
+       ;; with nil cycles interactively, and in batch that waits forever.
+       (unless (equal (or (plist-get action :to) "") (or (plist-get before :state) ""))
+         (list :action 'state :task ref :to (or (plist-get before :state) ""))))
       ('property
        (unless (equal (plist-get action :value) (plist-get before :value))
          (list :action 'property :task ref
@@ -118,6 +124,19 @@ Nil when ACTION changed nothing."
            (list :action 'tag :task ref
                  :tag (plist-get action :tag)
                  :add (not (plist-get action :add))))))
+      ('deadline
+       (unless (equal (and (plist-get action :to) (org-queue-core-iso (plist-get action :to)))
+                      (and (plist-get before :deadline)
+                           (substring (plist-get before :deadline) 1 11)))
+         (list :action 'deadline-restore :task ref :to (plist-get before :deadline))))
+      ('deadline-restore
+       (list :action 'deadline-restore :task ref :to (plist-get before :deadline)))
+      ('timestamp
+       (list :action 'body-line :task ref :text (org-queue-apply--timestamp-text action)
+             :remove t))
+      ('body-line
+       (list :action 'body-line :task ref :text (plist-get action :text)
+             :remove (not (plist-get action :remove))))
       ('refile
        (list :action 'refile
              ;; The entry now lives in the destination; the reference
@@ -153,9 +172,46 @@ Nil when ACTION changed nothing."
             (error "No heading %S in %s" heading (file-name-nondirectory file)))
           (list heading file nil position))))))
 
+(defun org-queue-apply--timestamp-text (action)
+  "Return the active timestamp line ACTION writes."
+  (format "<%s>" (plist-get action :to)))
+
+(defun org-queue-apply--body-end ()
+  "Move to the end of the entry's body, before the next heading.
+After the planning line and the drawers, past the last text line."
+  (org-end-of-meta-data t)
+  (let ((end (save-excursion (outline-next-heading) (point))))
+    (goto-char end)
+    (skip-chars-backward " \t\n")
+    (unless (bolp) (forward-line 1))
+    (point)))
+
 (defun org-queue-apply--perform (action)
   "Carry out ACTION on the entry at point."
   (pcase (plist-get action :action)
+    ('deadline
+     (if (plist-get action :to)
+         (org-deadline nil (org-queue-core-iso (plist-get action :to)))
+       (org-deadline '(4))))
+    ('deadline-restore
+     (if (plist-get action :to)
+         (org-deadline nil (plist-get action :to))
+       (org-deadline '(4))))
+    ('timestamp
+     (save-excursion
+       (org-end-of-meta-data t)
+       (insert (org-queue-apply--timestamp-text action) "\n")))
+    ('body-line
+     (save-excursion
+       (let ((text (plist-get action :text)))
+         (if (plist-get action :remove)
+             (let ((end (save-excursion (outline-next-heading) (point))))
+               (when (search-forward text end t)
+                 (delete-region (line-beginning-position)
+                                (min end (1+ (line-end-position))))))
+           (goto-char (org-queue-apply--body-end))
+           (unless (bolp) (insert "\n"))
+           (insert text "\n")))))
     ('schedule
      (org-schedule nil (org-queue-core-iso (plist-get action :to)))
      (if (plist-get action :placed)
@@ -176,8 +232,9 @@ Nil when ACTION changed nothing."
          (org-entry-put (point) org-queue-placed-property (plist-get action :placed))
        (org-entry-delete (point) org-queue-placed-property)))
     ('state
-     (unless (equal (plist-get action :to) (org-get-todo-state))
-       (org-todo (plist-get action :to))))
+     (let ((to (or (plist-get action :to) "")))
+       (unless (equal to (or (org-get-todo-state) ""))
+         (org-todo (if (string-empty-p to) 'none to)))))
     ('property
      (if (plist-get action :value)
          (org-entry-put (point) (plist-get action :name) (plist-get action :value))
@@ -223,16 +280,22 @@ Nil when ACTION changed nothing."
   "Apply ACTIONS to their entries, all or none, save, and log them.
 
 NOTE is kept with the log entry.  Returns the log entry, whose
-`:reverse' is the list of actions that undoes this one, or nil when
-every action turned out to be a no-op (nothing is written or logged)."
+`:reverse' is the list of actions that undoes this one, last action
+first, or nil when every action turned out to be a no-op (nothing is
+written or logged)."
   (let ((org-queue-apply--touched nil)
         done reverse)
-    ;; Every buffer first, so a dirty one is found before anything is written.
+    ;; Every buffer first, so a dirty one is found before anything is
+    ;; written.  The files, not the entries: an undo of a refile sequence
+    ;; has entries that are not yet where their reverses expect them.
     (dolist (action actions)
-      (let ((buffer (car (org-queue-harvest-locate (plist-get action :task)))))
-        (when (buffer-modified-p buffer)
-          (user-error "%s has unsaved changes; save it before applying"
-                      (buffer-name buffer)))))
+      (dolist (file (delq nil (list (plist-get (plist-get action :task) :file)
+                                    (and (eq (plist-get action :action) 'refile)
+                                         (plist-get action :to)))))
+        (when-let* ((buffer (find-buffer-visiting (expand-file-name file))))
+          (when (buffer-modified-p buffer)
+            (user-error "%s has unsaved changes; save it before applying"
+                        (buffer-name buffer))))))
     (condition-case err
         (dolist (action actions)
           (let* ((task (plist-get action :task))
@@ -265,7 +328,9 @@ every action turned out to be a no-op (nothing is written or logged)."
                                 (plist-put (copy-sequence action) :task
                                            (org-queue-apply--ref (plist-get action :task))))
                               (nreverse done))
-             :reverse (nreverse reverse))))))
+             ;; Last action first: a refile must be undone before the
+             ;; reverses that expect the entry back in its old file.
+             :reverse reverse)))))
 
 ;;;###autoload
 (defun org-queue-undo-apply ()

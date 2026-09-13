@@ -224,5 +224,25 @@ SCHEDULED: <2026-09-20 Sun>
       (insert-file-contents file)
       (should (string-match-p "- Placed on \\[.*\\] by proposal" (buffer-string))))))
 
+(ert-deftest oqa/deadline-timestamp-and-body-line-are-reversible ()
+  (oqa-with-corpus
+    (let ((org-log-redeadline nil))
+      (org-queue-apply-actions
+       (list (list :action 'deadline :task (oqa-task file "OQA-1") :to 20260930)
+             (list :action 'timestamp :task (oqa-task file "OQA-1") :to "2026-09-20 Sun 14:00")
+             (list :action 'body-line :task (oqa-task file "OQA-1") :text "Related: [[id:X]]")))
+      (should (equal "<2026-09-30 Wed>" (oqa-property file "OQA-1" "DEADLINE")))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (should (string-match-p "^<2026-09-20 Sun 14:00>$" (buffer-string)))
+        (should (string-match-p "^Related: \\[\\[id:X\\]\\]$" (buffer-string))))
+      (should (= 20260920 (plist-get (oqa-task file "OQA-1") :timestamp)))
+      (org-queue-undo-apply)
+      (should-not (oqa-property file "OQA-1" "DEADLINE"))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (should-not (string-match-p "2026-09-20 Sun 14:00" (buffer-string)))
+        (should-not (string-match-p "Related:" (buffer-string)))))))
+
 (provide 'org-queue-apply-test)
 ;;; org-queue-apply-test.el ends here

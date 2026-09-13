@@ -128,7 +128,13 @@
            ((org-ql-block '(level 1)
                           ((org-ql-block-header "Inbox")
                            (org-super-agenda-groups
-                            zetta-org-agenda-inbox-groups))))
+                            zetta-org-agenda-inbox-groups)))
+            ;; Commits as evidence of DONE (G13c): open entries a recent
+            ;; commit named by ID, over the whole corpus, with the same
+            ;; accept key -- C-c a marks the entry DONE.
+            (org-ql-block '(and (todo) (property "EVIDENCE_DONE"))
+                          ((org-ql-block-header "Commit evidence -- C-c a marks DONE")
+                           (org-agenda-files (org-agenda-files)))))
            ;; An org-ql block, not `alltodo': the `n' and `N' templates
            ;; capture a bare heading with no TODO keyword, and `alltodo'
            ;; cannot see those at all -- which is most of why the inbox

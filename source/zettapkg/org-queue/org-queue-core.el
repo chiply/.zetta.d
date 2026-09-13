@@ -265,6 +265,12 @@ Kept for calibration, never planned."
   :type '(repeat string)
   :group 'org-queue)
 
+(defcustom org-queue-agent-states '("AGENT")
+  "States meaning an agent holds the entry.
+Excluded from the queue with reason `in-flight'; never human capacity."
+  :type '(repeat string)
+  :group 'org-queue)
+
 (defcustom org-queue-excluded-states '("HOLD" "IDEA")
   "States that are not commitments and never enter the queue.
 
@@ -543,6 +549,11 @@ pulled back in if the day underfills.  `:dropped' is an alist of
                ((org-queue-core-done-p task) 'done)
                ((org-queue-core-habit-p task) 'habit)
                ((member state org-queue-excluded-states) 'state)
+               ;; A child of a project the check found dormant is not a
+               ;; next step anyone chose; the project needs one first.
+               ((plist-get task :dormant-parent) 'dormant-project)
+               ;; An agent has the ball: no human minutes until it lands.
+               ((member state org-queue-agent-states) 'in-flight)
                ((cl-some (lambda (id) (member id open-ids)) blockers) 'blocked)
                ((and (equal state "WAIT")
                      (not (and deadline

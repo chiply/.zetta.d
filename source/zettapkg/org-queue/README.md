@@ -129,6 +129,52 @@ An accepted placement is a SCHEDULED stamp with `:PLACED:`, so the day
 packer treats it as a commitment on its day and `,-o-Q` reads it back like
 anything a person wrote.
 
+## The rituals
+
+Three more buffers, all drawn in `org-queue-mode` with the same columns
+and jump keys:
+
+**Close the day** (`M-x org-queue-close`). What was planned and not
+finished (carried, with the count), what finished (once each, planned
+or not), overdue and due tomorrow, what is still in PROG with the
+captures that interrupted it, tomorrow's routine and appointments, the
+inbox count, and a draft of tomorrow from the same packer -- so the
+draft respects tomorrow's capacity. `N` on a draft line marks it NEXT
+and the third is refused (`org-queue-pick-limit`); `T` and `W` mark PROG
+lines for TODO or WAIT and `C-c C-c` applies the sweep together, undone
+together. Closing stamps the day in the plan history; the morning
+report says whether yesterday was closed. The phrase is printed, never
+asked.
+
+**The project invariant** (`M-x org-queue-dormant-check`). A project is
+a heading with a child that has a keyword: live when a child is open
+and not parked, or the project carries a timestamp inside
+`org-queue-dormant-days`; finished? when every child is done; dormant
+otherwise. The check tags dormant projects `:dormant:` and clears the
+tag from the rest, through the apply layer, so an unchanged corpus
+writes nothing. The packer drops a dormant parent's children with
+reason `dormant-project`. `dormant-project` and `project-status` are
+org-ql predicates, so an agenda block can list them without the check.
+
+**The day log** (`M-x org-queue-day-log`). One day's evidence in time
+order: the intervals the state log opens and closes, the captures made
+that day (each joined to the PROG entry it interrupted, by property or
+by time), journal lines, and whatever `org-queue-daylog-extra-functions`
+add. Under it, the stretches inside a working block with nothing in
+PROG longer than `org-queue-daylog-gap-threshold`, and interruptions
+per block, internal against external.
+
+## Writes
+
+Every write goes through `org-queue-apply-actions`: all or none, saved,
+logged with its reverse, undone by `org-queue-undo-apply`. The action
+kinds are `schedule`, `unschedule`, `state`, `property` (set or remove
+one property), `tag` (add or remove one tag) and `refile`. An action
+that changes nothing -- a tag already set -- is a no-op and leaves no
+log entry. A placement writes `- Placed on [stamp] by proposal` into
+the LOGBOOK, because Org keeps one pending reschedule note per command
+and the apply layer batches many.
+
 ## How it decides
 
 **Commitments** come first and are never scored: scheduled *on* today,
@@ -169,7 +215,12 @@ off.
 | `org-queue-apply.el`        | the writes, their log, undo       | yes       |
 | `org-queue.el`              | commands, buffer, keymap          | yes       |
 | `org-queue-propose.el`      | horizon and proposal buffers      | yes       |
-| `test/*-test.el`            | ERT: core, horizon (no Org); harvest, apply (Org) | mixed |
+| `org-queue-close-core.el`   | the close, arithmetic only        | no        |
+| `org-queue-close.el`        | the close buffer and its keys     | yes       |
+| `org-queue-dormant.el`      | the project invariant, the check  | yes       |
+| `org-queue-daylog-core.el`  | the day log's merge and gaps      | no        |
+| `org-queue-daylog.el`       | the day log buffer                | yes       |
+| `test/*-test.el`            | ERT: core, horizon, close, daylog (no Org); harvest, apply, rituals (Org) | mixed |
 
 The core takes a list of plists and returns a list of plists, so the
 formula can be argued with in batch:

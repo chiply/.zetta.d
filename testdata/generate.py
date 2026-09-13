@@ -93,6 +93,17 @@ FILES = {
  T("Should QUES entries be queueable at all?", "@deep org", "tiny", state="QUES"),
 ]),
 "work": ("work", "Professional and project work", [
+ # Two projects for the invariant (G8): one whose children are all done
+ # or parked -- dormant, nobody has decided what comes next -- and one
+ # whose children are all done, which is a project to close.
+ T("Vendor evaluation", "@deep procurement", "mid", state="TODO",
+   body="Three vendors shortlisted in June. The last child was parked and\nnothing has replaced it.",
+   sub=[("Collect the three quotes", "1:00", "DONE"),
+        ("Reference calls", "1:00", "DONE"),
+        ("Draft the recommendation", "2:00", "HOLD")]),
+ T("Q2 retrospective", "@shallow", "tiny", state="TODO",
+   sub=[("Collect the numbers", "0:30", "DONE"),
+        ("Write it up", "0:45", "DONE")]),
  T("Draft Q4 roadmap for the retrieval service", "@deep planning", "big", prio="A",
    state="PROG",
    body="Three themes so far: enrichment, gold-set curation, and whether the\nCLIP tier earns its keep.",
@@ -460,7 +471,7 @@ HABITS = [
  ("Lift weights",     "body",         "1:00", "Mon Tue Wed Thu Fri Sat"),
  ("Bike",             "body",         "0:45", "Mon Tue Wed Thu Fri"),
  ("Clean apartment",  "housekeeping", "0:20", None),
- ("Guitar practice",  "music",        "0:30", None),
+ ("Read",             "reading",      "1:00", None),
  ("Laundry",          "housekeeping", "0:30", "Sat"),
 ]
 

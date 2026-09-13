@@ -11,7 +11,8 @@
 # queue has buckets, habits, a horizon, an apply layer and a proposal
 # buffer -- several gaps got smaller.
 #
-# Status [2026-09-12]: written, nothing from it built.
+# Status [2026-09-12]: wave 1 BUILT the same day (see "As built" under
+# each wave); waves 2-6 follow in order, each with its own note.
 
 * Start here
 
@@ -194,6 +195,56 @@ The one-line hook: =org-capture-after-finalize-hook= writes
 =:INTERRUPTED:= = the ID of the entry most recently moved to PROG, when
 one is open.  Test: the assay's fourth G13 test.  Counted in G2's close
 per PROG entry.
+
+** As built [2026-09-12]
+
+- =org-routine= (=source/zettapkg/org-routine/=): =-core= parses the named
+  table (en dash or hyphen; =weekdays= / =weekend= / =Mon-Sat= day sets),
+  answers blocks, dip, fixed rows, kick/review/quiet windows, and derives
+  the bucket table and capacity; 21 batch tests.  =org-routine.el= reads
+  the file with an mtime cache, hands the queue its tables
+  (=org-routine-apply-to-queue=, called at the end of the module's
+  :config so the hand-written =setq= stays the fallback), and generates
+  the habits file behind a =#+GENERATED= guard with IDs kept by title; 6
+  file tests.  The variants table replaces overlapping rows and the
+  report says which.  The "Monday = focus 480" figure in the plan above
+  was loose: the table gives work 450 (240 + 90 dip + 120), housekeeping
+  150 (admin 120 + the clean's 30); the tests pin those.
+- Apply layer: =property=, =tag=, =refile= actions with reverses; an action
+  that changes nothing is dropped from the log; a placement writes the
+  "Placed on ... by proposal" LOGBOOK line.  13 tests.
+- Harvest: =:closed=, =:last-transition=, =:interrupted=, =:dormant-parent=.
+  Core: =dormant-project= and =in-flight= drop reasons (the second ahead of
+  wave 4, one line).
+- G2: =org-queue-close-core= (11 batch tests) and =org-queue-close= (the
+  buffer, =N= with the pick limit, =T=/=W=/=C-c C-c= sweep, the history
+  stamp; the morning report's "yesterday closed" line).  The sweep binds
+  =org-inhibit-logging= to =note= so five WAITs raise no prompt; the note
+  is =,-o-z= afterwards.  Chains are a hook variable the close already
+  draws (wave 4 fills it).
+- G8: =org-queue-dormant= with the =dormant-project= and =project-status=
+  org-ql predicates, the check through =tag= actions, the =j= view (dormant
+  and finished?), hyrolo-org-mode buffers skipped.  The org-ql result
+  cache is bypassed for the project query: its answer depends on today.
+- G9: =org-queue-daylog-core= (sort with tie-break by kind, gaps, join by
+  time, interruptions per block, the date regexp; 8 tests) and
+  =org-queue-daylog= (=,-o-E=); =modules/org/org-daylog.el= has the =j=
+  template into =~/kb/notes/journal.org=, the PROG tracker, and the date
+  =defib= (not a =defil=: a date has no delimiters).
+- G13d: =org-capture-before-finalize-hook= (not after: the entry is still
+  in the capture buffer there) writes =:INTERRUPTED:=; journal lines are
+  exempt.
+- Small adoptions: =org-agenda-auto-exclude-function= over the routine's
+  admin block; the placement note.  The datetree archive location waits
+  for wave 2 with the pack.
+- 9 file-level tests over a temp corpus (=org-queue-rituals-test.el=) and
+  a batch smoke run of the three modules against the fixture.
+- Fixture: =testdata/routine.org=; the generator gained a dormant and a
+  finished project in work.org and swapped guitar for reading among the
+  habits, to match the table.
+- Not done here: the real =schedule.org= has not been given the columns
+  (that is the user's table); until it has, the fallback is in force and
+  the echo area says so on load.
 
 * Wave 2 — The week  (G3, G7a)
 

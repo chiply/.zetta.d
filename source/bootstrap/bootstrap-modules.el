@@ -144,6 +144,10 @@ in the order they appear in the `zetta-modules!' declaration.")
             ;; working-state vocabulary from the queue's, and reads the
             ;; queue's plan history for the planned rail.
             "org-queue.el" "org-gantt.el"
+            ;; org-routine.el after org-queue.el: it derives the queue's
+            ;; buckets from the routine table.  org-daylog.el after both:
+            ;; its day log is drawn in the queue's buffer.
+            "org-routine.el" "org-daylog.el"
             "org-ql.el" "org-capture.el" "org-ref.el" "ob-mermaid.el"
             "pdf-tools.el" "biblio.el" "citar.el" "org-remark.el"
             "org-tree-slide.el" "org-transclusion.el"))

@@ -140,6 +140,8 @@ thing on the page, and it should read that way in any theme."
     (event-later    . "an appointment on a later day")
     (event-past     . "an appointment that has already happened")
     (habit          . "a habit: reserved, not planned")
+    (dormant-project . "its project has no next step (dormant)")
+    (in-flight      . "an agent has it")
     (bucket-closed  . "its bucket has no minutes today"))
   "Human wording for the reasons a task ends up where it does.")
 
@@ -359,6 +361,21 @@ the finding, not a bug: move a deadline, drop a commitment, or accept
 that today overflows.\n"
        'org-queue-detail))))
 
+(defun org-queue--yesterday-line (date)
+  "Say whether the day before DATE was closed, from the plan history.
+R12 of the composite made visible without a nag: one line, no prompt."
+  (let* ((yesterday (org-queue-core-date-add date -1))
+         (entry (cl-find yesterday (org-queue-history)
+                         :key (lambda (entry) (plist-get entry :date)))))
+    (cond
+     ((null entry) nil)
+     ((plist-get entry :closed)
+      (format "   yesterday closed at %s\n"
+              (if (string-match "\\([0-9][0-9]:[0-9][0-9]\\)" (plist-get entry :closed))
+                  (match-string 1 (plist-get entry :closed))
+                (plist-get entry :closed))))
+     (t "   yesterday was not closed\n"))))
+
 (defun org-queue--draw (plan)
   "Draw PLAN in the current buffer."
   (let ((inhibit-read-only t))
@@ -367,6 +384,8 @@ that today overflows.\n"
     (org-queue--insert (org-queue--date-string (plist-get plan :date))
                        'org-queue-header)
     (org-queue--insert (org-queue--capacity-line plan) 'org-queue-detail)
+    (when-let* ((line (org-queue--yesterday-line (plist-get plan :date))))
+      (org-queue--insert line 'org-queue-detail))
     (org-queue--insert-buckets plan)
     (org-queue--insert-legend)
     (org-queue--draw-body plan)

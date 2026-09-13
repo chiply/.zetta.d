@@ -33,12 +33,12 @@ SCHEDULED: <2026-09-12 Sat .+1d>
 :CREATED:  [2026-05-08 Fri]
 :END:
 
-* TODO Guitar practice  :music:
+* TODO Read  :reading:
 SCHEDULED: <2026-09-12 Sat .+1d>
 :PROPERTIES:
 :ID:       2F7F6CAE-0A3A-4FD8-BAD3-BB28E5589D62
 :STYLE:    habit
-:Effort:   0:30
+:Effort:   1:00
 :CREATED:  [2026-06-14 Sun]
 :END:
 

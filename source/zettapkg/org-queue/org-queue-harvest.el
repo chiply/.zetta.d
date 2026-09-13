@@ -336,6 +336,36 @@ people is a worse problem than a typo."
   "Return the entry's REVIEW_ON date as a YYYYMMDD integer, or nil."
   (org-queue-harvest--timestamp-date (org-entry-get (point) "REVIEW_ON")))
 
+(defun org-queue-harvest--closed ()
+  "Return the entry's CLOSED stamp as a YYYYMMDD integer, or nil."
+  (org-queue-harvest--timestamp-date (org-entry-get (point) "CLOSED")))
+
+(defun org-queue-harvest--last-transition ()
+  "Return (STATE . DATE) of the entry's newest state change, or nil."
+  (when-let* ((last (car (last (org-queue-state-log)))))
+    (cons (car last) (org-queue-harvest--date (cdr last)))))
+
+(defun org-queue-harvest--interrupted ()
+  "Return the ID of the entry a capture interrupted, from INTERRUPTED."
+  (when-let* ((raw (org-entry-get (point) "INTERRUPTED")))
+    (let ((trimmed (string-trim raw)))
+      (unless (string-empty-p trimmed) trimmed))))
+
+(defcustom org-queue-dormant-tag "dormant"
+  "Tag the project check writes on a parent with no next step.
+Read by the harvest as `:dormant-parent' on the children."
+  :type 'string
+  :group 'org-queue)
+
+(defun org-queue-harvest--dormant-parent-p ()
+  "Return non-nil if an ancestor of the entry carries the dormant tag."
+  (save-excursion
+    (let (found)
+      (while (and (not found) (org-up-heading-safe))
+        (when (member org-queue-dormant-tag (org-get-tags nil t))
+          (setq found t)))
+      found)))
+
 (defun org-queue-harvest-entry (&optional today)
   "Return the Org entry at point as a queue task plist.
 TODAY, a YYYYMMDD integer, anchors repeating timestamps."
@@ -367,6 +397,10 @@ TODAY, a YYYYMMDD integer, anchors repeating timestamps."
           :habit (org-queue-harvest--habit-p)
           :habit-days (org-queue-harvest--habit-days)
           :placed (org-queue-harvest--placed)
+          :closed (org-queue-harvest--closed)
+          :last-transition (org-queue-harvest--last-transition)
+          :interrupted (org-queue-harvest--interrupted)
+          :dormant-parent (org-queue-harvest--dormant-parent-p)
           :timestamp (car stamps)
           :timestamp-past (cdr stamps))))
 

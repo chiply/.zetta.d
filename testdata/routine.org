@@ -1,0 +1,40 @@
+#+TITLE: Daily Routine (fixture)
+#+FILETAGS: :routine:
+
+# The fixture's copy of ~/kb/notes/schedule.org's table, made
+# machine-readable: the three columns org-routine needs (kind, days,
+# bucket, habit) added to the prose table.  Regenerating the fixture
+# (python3 testdata/generate.py) does not touch this file; it is the
+# input the generator's (todo) routine.org agrees with.
+
+* Schedule
+
+#+NAME: routine
+| Time        | Activity               | Notes                                            | kind  | days     | bucket       | habit |
+|-------------+------------------------+--------------------------------------------------+-------+----------+--------------+-------|
+| 05:00–05:30 | Clean apartment        | dishes, dishwasher, laundry — polished, peaceful | fixed |          | housekeeping | yes   |
+| 05:30–06:00 | Plan the day           | list tasks, delegate them to the focus blocks    | fixed |          |              |       |
+| 06:00–07:00 | Lift weights           | toughest workout, front-loaded                   | fixed | Mon-Sat  | body         | yes   |
+| 07:00–07:30 | Get ready              | protein shake after the lift                     | fixed |          |              |       |
+| 07:30–08:00 | Buffer                 | confirm schedule, relax, coffee                  | fixed |          |              |       |
+| 08:00–12:00 | Focus block 1 (4h)     | vague, deep                                      | focus | weekdays | work         |       |
+| 12:00–13:00 | Bike                   | midday reset between blocks                      | fixed | Mon-Fri  | body         | yes   |
+| 13:00–13:30 | Shower                 | protein parfait                                  | fixed | weekdays |              |       |
+| 13:30–15:00 | Focus block 2, the dip | pomodoros carry the post-lunch dip               | dip   | weekdays | work         |       |
+| 15:00–17:00 | Focus block 2, vague   | vague work once focus returns                    | focus | weekdays | work         |       |
+| 17:00–18:00 | Dinner + walk          | last food of the day                             | fixed |          |              |       |
+| 18:00–20:00 | Free time / admin      | housekeeping, todo items, shallow overflow       | admin | weekdays |              |       |
+| 20:00–21:00 | Read                   | no screens                                       | fixed |          | reading      | yes   |
+| 09:00–12:00 | Weekend project block  |                                                  | focus | weekend  | work         |       |
+| 13:00–13:30 | Laundry                |                                                  | fixed | Sat      | housekeeping | yes   |
+| 13:30–15:00 | Weekend admin          |                                                  | admin | weekend  |              |       |
+
+* Variants
+
+A variant replaces every routine row its time range overlaps, on the
+days it applies.  Name the day in `org-routine-variant-days'.
+
+#+NAME: variants
+| variant   | Time        | Activity          | kind | days |
+|-----------+-------------+-------------------+------+------|
+| interview | 08:00-12:00 | Interview morning | off  |      |

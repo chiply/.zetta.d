@@ -87,6 +87,10 @@ All under the =,-o= prefix (=launch-map= → =menu-org-map=).
 | =,-o-c=  | =org-timegrid-week=             | the writable week grid (drag moves timestamps) |
 | =,-o-V=  | =zetta-org-todo-rolo=           | HyRolo browse over the active corpus (=C-u= = whole backlog) |
 | =,-o-d=  | =zetta-hyrolo-day=              | every entry that mentions a given day          |
+| =,-o-x=  | =org-queue-close=               | close the day: carried, done, PROG sweep, tomorrow's draft |
+| =,-o-E=  | =org-queue-day-log=             | the day's evidence in time order, with the gaps |
+| =,-o-v j= | =org-agenda= "Dormant"         | projects with no next step, and finished ones  |
+| =M-x org-routine-report= |                | today's blocks, windows and dip from the routine table |
 
 ** Editing an entry
 
@@ -98,6 +102,7 @@ All under the =,-o= prefix (=launch-map= → =menu-org-map=).
 | =,-o-z=  | =org-add-note=     | add a LOGBOOK note                          |
 | =,-o-r=  | =org-refile=       | move the entry to another file or heading   |
 | =,-o-o=  | =org-capture=      | capture; =t= is the task template with effort |
+| =,-o-o j= | =org-capture=     | a journal line under today's heading, linked to what is in PROG |
 
 ** Inside the =*org-queue*= buffer
 
@@ -479,11 +484,116 @@ carry-over bonus.
   you stop.
 - There is no org-clock.  Do not clock in; the state change is the clock.
 
+* The day's frame
+
+Four rituals over the same corpus, built 2026-09-12 (composite.org wave
+1).  Each is a buffer in the queue's style -- the same columns, =RET= and
+=o= to jump, =g= to redraw -- and each write goes through the apply layer,
+so =,-o-u= undoes it.
+
+** The routine table, read by code
+
+=~/kb/notes/schedule.org= is still the prose note.  Its table gains a
+=#+NAME: routine= line and four columns:
+
+#+begin_example
+#+NAME: routine
+| Time        | Activity               | Notes | kind  | days     | bucket       | habit |
+|-------------+------------------------+-------+-------+----------+--------------+-------|
+| 05:00–05:30 | Clean apartment        |       | fixed |          | housekeeping | yes   |
+| 06:00–07:00 | Lift weights           |       | fixed | Mon-Sat  | body         | yes   |
+| 08:00–12:00 | Focus block 1 (4h)     |       | focus | weekdays | work         |       |
+| 13:30–15:00 | Focus block 2, the dip |       | dip   | weekdays | work         |       |
+| 15:00–17:00 | Focus block 2, vague   |       | focus | weekdays | work         |       |
+| 18:00–20:00 | Free time / admin      |       | admin | weekdays |              |       |
+#+end_example
+
+- =kind=: =fixed=, =focus=, =dip=, =admin= or =off=.  =days=: =Mon Tue=, =Mon-Fri=,
+  =weekdays=, =weekend=, blank for every day.  =bucket=: which queue bucket
+  the minutes belong to (blank: focus and dip are =work=, admin is
+  =housekeeping=).  =habit=: the row should exist as a habit entry.
+- A =#+NAME: variants= table overrides rows on named days; name the day in
+  =org-routine-variant-days=.
+- From it, *the queue's buckets and capacity are derived* when the queue
+  loads and whenever the corpus toggles.  The =setq= in
+  =modules/org/org-queue.el= is now the fallback, used only when the table
+  is absent or malformed, and the echo area says so.  A malformed row
+  fails with its line number, never with a partial capacity.
+- =M-x org-routine-generate-habits= writes =(todo) routine.org= from the
+  rows marked =habit=.  The file starts with =#+GENERATED= and the generator
+  refuses to overwrite one that does not; IDs survive by title.  The
+  hand-written routine.org in the fixture was regenerated this way.
+- =M-x org-routine-report= shows today's blocks, the dip, and the kick /
+  review / quiet windows the chains will use.
+- The fixture's copy is =testdata/routine.org=; a test session reads it.
+- Part 6 question 1 (pomodoros in the dip only, or also block one's first
+  two hours): =org-routine-dip-first-hours=, default nil -- the dip only.
+
+The real =schedule.org= has not been given the columns yet: until it is,
+the fallback tables are in force and the echo area says "keeping the
+hand-written buckets" when the queue loads.
+
+** Close the day: =,-o-x=
+
+At the fixed stop.  One buffer:
+
+- *Unfinished* -- planned today and still open, each with how many plans
+  have carried it.
+- *Done today* -- finished today, once each, planned or =unplanned=.
+- *Overdue* (hard deadlines) and *Due tomorrow* (tomorrow's, and soft
+  deadlines by then).
+- *Still in PROG* -- with the captures that interrupted each.  =T= marks a
+  line to go back to TODO, =W= to WAIT; =C-c C-c= applies the marks
+  together, logged once, undone together.  No note is asked for in the
+  sweep; =,-o-z= on the entry adds one.
+- *Tomorrow's routine* and *appointments*, the *inbox* count.
+- *Tomorrow's draft* -- the same packer run for tomorrow, so it respects
+  tomorrow's capacity.  =N= marks a line NEXT; the third is refused
+  (=org-queue-pick-limit= 3, counted over every open NEXT).
+- The phrase.  Printed, not asked.
+
+Closing stamps today in the plan history (=:closed=), once; the morning
+report's second line says "yesterday closed at 17:02" or "yesterday was
+not closed".
+
+** Dormant projects: =,-o-v j= and =M-x org-queue-dormant-check=
+
+A project is a heading with a child that has a TODO keyword.  It is
+*live* when a child is open and not parked (TODO, NEXT, PROG, WAIT, QUES)
+or the project carries a plain timestamp within =org-queue-dormant-days=
+(14); *finished?* when every child is DONE or NOPE; *dormant* otherwise.
+The check tags dormant projects =:dormant:= and clears the tag from the
+rest; an unchanged corpus writes nothing.  The packer drops a dormant
+parent's children with reason =dormant-project=.  The =j= view lists the
+dormant and the finished, live, without the check having run.  The check
+runs by hand and from the review pack; never from a timer.
+
+** The day log: =,-o-E=
+
+One day in time order: each PROG interval's start and end, every state
+change, the captures made that day (joined to the PROG entry they
+interrupted, by the =:INTERRUPTED:= property or by time), journal lines.
+Under it: the stretches inside a focus or dip block with nothing in PROG
+longer than =org-queue-daylog-gap-threshold= (15 minutes), and the
+interruptions per block, internal against external.
+
+** The journal line and interruptions
+
+=,-o-o j= captures =* HH:MM what I am doing= under today's =[[Sep 12th, 2026]]=
+heading in =~/kb/notes/journal.org= (one file; the heading is created on
+first use), with a link to the entry most recently moved to PROG.  Any
+other capture made while something is in PROG records that entry's ID as
+=:INTERRUPTED:=, which the close counts.  Any plain date in any buffer --
+=2026-09-12= or =Sep 12th, 2026= -- is a Hyperbole button opening that day
+in the rolo; inside an Org timestamp the button stands aside.
+
 * Working against the test data
 
 The fixture is seven =(todo)= files under =testdata/todo/=, with full
 metadata: efforts, dates, LOGBOOK transitions, IDs, five habits in
-=(todo) routine.org=, and =reading= / =housekeeping= tags for the buckets.
+=(todo) routine.org= (lift, bike, clean, read, laundry), a dormant project
+and a finished one in =(todo) work.org=, =reading= / =housekeeping= tags for
+the buckets, and the routine table in =testdata/routine.org=.
 
 1. =M-x zetta-org-toggle-todo-source=.  The echo line should read
    =test (7 agenda files, ...)=.  It rebuilds =org-agenda-files= and the
@@ -516,6 +626,8 @@ A first session that touches every lever:
    accepted ones are committed today.  =,-o-p= again: the proposal is
    smaller, and the rejected line is gone.  =,-o-u= undoes the apply.
 8. =,-o-w= for the derived clock; =,-o-C= for calibration.
+9. =,-o-x=.  Read the sections; =T= on a PROG line, =C-c C-c=; =,-o-u=.
+   =,-o-v j= for the dormant project; =,-o-E= for the day.
 
 * Working against the real files
 
@@ -534,10 +646,13 @@ migration.  The tooling exists and has not been pointed at a real file:
   =- [X]= → =* DONE=, =- [-]= → =* PROG=.  It shows the count and asks first.
   One undo puts the file back.
 
-Then a =(todo) routine.org= with the lift, the bike and the clean, and a
-bucket table that matches how the real files are tagged.  Convert
-=(todo) emacs.org= first, live with it for a week, and only then decide
-about the rest.
+Then the routine table: give =schedule.org='s table its =#+NAME: routine=
+line and the =kind= / =days= / =bucket= / =habit= columns (the fixture's
+=testdata/routine.org= is the model), check =M-x org-routine-report=, and
+=M-x org-routine-generate-habits= for =(todo) routine.org=.  The buckets
+follow from the table; =org-routine-bucket-matches= says which tags and
+categories each bucket claims.  Convert =(todo) emacs.org= first, live
+with it for a week, and only then decide about the rest.
 
 * Tuning knobs
 
@@ -575,18 +690,14 @@ So this file does not overpromise.  Each item is argued in
 
 From =scheduling.org=:
 
-- The routine table in =schedule.org= read by code, so buckets and habits
-  are derived from it instead of typed in the module (step 6).
 - Sub-day placement into routine blocks, timed SCHEDULED stamps,
   round-tripping through the writable timegrid (step 7).
 - Habits phase 2: org-habit's graph, strength with a 13-day half-life, the
   two-miss alert (step 8).
 
 From =composite.org= (the plan for the assay's remaining gaps, in six
-waves; keys already reserved there):
+waves; keys already reserved there).  Wave 1 is built (above).
 
-- Wave 1: the routine table read by code, close-the-day (=,-o-x=), dormant
-  projects, the journal line and day log, interruptions.
 - Wave 2: the weekly review pack (=,-o-m=), "still worth it?" (=,-o-y=).
 - Wave 3: AI decoration of the inbox (=,-o-f=), duplicates, commits as
   evidence of DONE.

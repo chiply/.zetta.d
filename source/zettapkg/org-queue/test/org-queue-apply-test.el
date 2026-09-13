@@ -164,5 +164,65 @@ SCHEDULED: <2026-09-20 Sun>
       (should (equal '(1 2 3 4 5 6) (plist-get habit :habit-days)))
       (should (= 60 (plist-get habit :effort))))))
 
+;;;; Properties, tags, refiles
+
+(ert-deftest oqa/a-property-is-set-and-undone ()
+  (oqa-with-corpus
+    (org-queue-apply-actions
+     (list (list :action 'property :task (oqa-task file "OQA-1") :name "KEPT" :value "[2026-09-12 Sat]")))
+    (should (equal "[2026-09-12 Sat]" (oqa-property file "OQA-1" "KEPT")))
+    (org-queue-undo-apply)
+    (should-not (oqa-property file "OQA-1" "KEPT"))))
+
+(ert-deftest oqa/a-property-already-at-its-value-is-a-no-op-and-unlogged ()
+  (oqa-with-corpus
+    (org-queue-apply-actions
+     (list (list :action 'property :task (oqa-task file "OQA-1") :name "SURFACED" :value "3")))
+    (should-not
+     (org-queue-apply-actions
+      (list (list :action 'property :task (oqa-task file "OQA-1") :name "SURFACED" :value "3"))))
+    (should (= 1 (length (org-queue-apply--log))))))
+
+(ert-deftest oqa/a-tag-is-added-once-and-removed-by-undo ()
+  (oqa-with-corpus
+    (org-queue-apply-actions
+     (list (list :action 'tag :task (oqa-task file "OQA-1") :tag "dormant" :add t)))
+    (should (member "dormant" (plist-get (oqa-task file "OQA-1") :tags)))
+    (should (member "work" (plist-get (oqa-task file "OQA-1") :tags)))
+    ;; Setting a tag that is set changes nothing and logs nothing.
+    (should-not
+     (org-queue-apply-actions
+      (list (list :action 'tag :task (oqa-task file "OQA-1") :tag "dormant" :add t))))
+    (should (= 1 (length (org-queue-apply--log))))
+    (org-queue-undo-apply)
+    (should-not (member "dormant" (plist-get (oqa-task file "OQA-1") :tags)))))
+
+(ert-deftest oqa/a-refile-moves-the-entry-and-undo-brings-it-back ()
+  (oqa-with-corpus
+    (let ((other (expand-file-name "other.org" dir)))
+      (with-temp-file other (insert "#+TITLE: Other\n\n* Project\n"))
+      (org-queue-apply-actions
+       (list (list :action 'refile :task (oqa-task file "OQA-1") :to other :heading "Project")))
+      (should-not (oqa-task file "OQA-1"))
+      (let ((moved (cl-find "OQA-1" (org-queue-harvest (list other) 20260912)
+                            :key (lambda (task) (plist-get task :id)) :test #'equal)))
+        (should moved)
+        (should (equal "Write the thing" (plist-get moved :title))))
+      (with-temp-buffer
+        (insert-file-contents other)
+        (should (string-match-p "^\\* Project\n\\*\\* TODO Write the thing" (buffer-string))))
+      (org-queue-undo-apply)
+      (should (oqa-task file "OQA-1"))
+      (should-not (cl-find "OQA-1" (org-queue-harvest (list other) 20260912)
+                           :key (lambda (task) (plist-get task :id)) :test #'equal)))))
+
+(ert-deftest oqa/a-placement-leaves-a-logbook-line ()
+  (oqa-with-corpus
+    (org-queue-apply-actions
+     (list (list :action 'schedule :task (oqa-task file "OQA-1") :to 20260915 :placed t)))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (should (string-match-p "- Placed on \\[.*\\] by proposal" (buffer-string))))))
+
 (provide 'org-queue-apply-test)
 ;;; org-queue-apply-test.el ends here

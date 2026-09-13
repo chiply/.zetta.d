@@ -544,6 +544,23 @@
          (plan (org-queue-core-plan tasks oqt-today 100)))
     (should (plist-get plan :overcommitted))))
 
+;;;; Dormant projects and agents
+
+(ert-deftest oqt/children-of-a-dormant-project-are-dropped-with-the-reason ()
+  (let* ((child (oqt-task "child" :dormant-parent t))
+         (free (oqt-task "free"))
+         (plan (org-queue-core-plan (list child free) oqt-today 300)))
+    (should (equal '("free") (oqt-plan-titles plan)))
+    (should (eq 'dormant-project (oqt-drop-reason plan "child")))))
+
+(ert-deftest oqt/an-entry-in-flight-is-excluded-and-takes-no-capacity ()
+  (let* ((flying (oqt-task "flying" :state "AGENT" :effort 240))
+         (task (oqt-task "task"))
+         (plan (org-queue-core-plan (list flying task) oqt-today 300)))
+    (should (equal '("task") (oqt-plan-titles plan)))
+    (should (eq 'in-flight (oqt-drop-reason plan "flying")))
+    (should (= 60 (plist-get plan :minutes)))))
+
 (provide 'org-queue-core-test)
 ;;; org-queue-core-test.el ends here
 

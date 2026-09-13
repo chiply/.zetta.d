@@ -18,7 +18,8 @@
   :ensure nil
   :load-path "source/zettapkg/org-queue"
   :commands (org-queue-today org-queue-calibration org-queue-plan
-             org-queue-undo-apply org-queue-horizon org-queue-propose)
+             org-queue-undo-apply org-queue-horizon org-queue-propose
+             org-queue-close org-queue-dormant-check org-queue-day-log)
 
   :brushup
   ;; The plan is a prominence ladder, not a colour scheme: the date at the
@@ -59,9 +60,16 @@
         (expand-file-name ".data/org/queue-applies.el" user-emacs-directory)
         org-queue-rejections-file
         (expand-file-name ".data/org/queue-rejections.el" user-emacs-directory))
-  ;; The horizon and the proposal live in their own file, loaded with the
-  ;; package so their commands are there when the keys below are pressed.
-  (with-eval-after-load 'org-queue (require 'org-queue-propose))
+  ;; The horizon and the proposal, the close, the project check and the
+  ;; day log live in their own files, loaded with the package so their
+  ;; commands are there when the keys below are pressed.
+  (with-eval-after-load 'org-queue
+    (require 'org-queue-propose)
+    (require 'org-queue-close)
+    (require 'org-queue-dormant)
+    (require 'org-queue-daylog))
+  ;; The close counts the inbox; the queue itself never plans from it.
+  (setq org-queue-inbox-file "~/kb/inbox.org")
 
   :config
   ;; A placeholder day, and known to be one.  The honest number comes from
@@ -83,9 +91,12 @@
 
   ;; Buckets: the day as a few named pools rather than one.  Each is a
   ;; reservation and a limit; the first match claims a task and anything
-  ;; unclaimed is `default'.  Minutes here are read off schedule.org by eye
-  ;; -- the two focus blocks are work, "Free time / admin" is the house --
-  ;; and will be derived from that table once it is read by code.  With
+  ;; unclaimed is `default'.
+  ;;
+  ;; THE FALLBACK.  org-routine.el derives this table and `org-queue-capacity'
+  ;; from the routine table in schedule.org the moment this package loads
+  ;; (`org-routine-apply-to-queue'); what is set here is only in force when
+  ;; that table is absent or malformed, and the echo area says so.  With
   ;; habits in (todo) routine.org, the lift and the bike come out of `body'
   ;; before anything is packed.  Set to nil to fall back to one pool.
   (setq org-queue-buckets
@@ -97,7 +108,12 @@
                         :match (:tags ("body")))
           (housekeeping :minutes 60
                         :match (:tags ("housekeeping") :category ("home" "buy")))
-          (default      :minutes 60))))
+          (default      :minutes 60)))
+  ;; Now the table, if there is one.  After the `setq' above, not before:
+  ;; `with-eval-after-load' forms run at `provide' time, which is before
+  ;; this :config block, and the hand-written fallback would win.
+  (when (fboundp 'zetta-org-routine-follow-source)
+    (zetta-org-routine-follow-source)))
 
 (general-define-key
  :keymaps 'menu-org-map
@@ -105,5 +121,6 @@
  "C" 'org-queue-calibration
  "u" 'org-queue-undo-apply
  "P" 'org-queue-horizon    ; the read-only many-day view; h/H are org-metaleft
- "p" 'org-queue-propose)
+ "p" 'org-queue-propose
+ "x" 'org-queue-close)     ; close the day; the smart tree's old key
 ;;; org-queue.el ends here

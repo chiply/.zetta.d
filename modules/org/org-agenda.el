@@ -26,6 +26,7 @@
 ;;   ,-o-v f   Areas      by category
 ;;   ,-o-v r   Review     what closed or moved in the last seven days
 ;;   ,-o-v b   Blocked    stuck on a thing, stuck on a person, or ready
+;;   ,-o-v j   Dormant    projects with no next step (org-queue-dormant)
 ;;
 ;; Views that group on computed buckets (Neglected, Chase, Horizon) do it
 ;; with named `:pred' functions in org-super-agenda.el rather than
@@ -66,6 +67,8 @@
   ;; Required here rather than at startup: the cost lands on the first
   ;; agenda of the session, not on every session.
   (require 'org-ql-search nil t)
+  ;; The `dormant-project' predicate the j view names.
+  (require 'org-queue-dormant nil t)
 
   (setq org-agenda-restore-windows-after-quit t
         ;; Match `org-tags-column' in org.el: tags right after the
@@ -217,6 +220,15 @@
                      ((org-agenda-overriding-header "")
                       (org-super-agenda-groups
                        zetta-org-agenda-blocked-groups)))))
+
+          ;; The project invariant (G8): `dormant-project' is an org-ql
+          ;; predicate from org-queue-dormant, so the view is live whether
+          ;; or not `org-queue-dormant-check' has written the tag yet.
+          ("j" "Dormant -- projects with no next step"
+           ((org-ql-block '(dormant-project)
+                          ((org-ql-block-header "Dormant -- every child parked or done")))
+            (org-ql-block '(project-status finished)
+                          ((org-ql-block-header "Finished? -- every child done; close the project")))))
 
           ("u" "Untriaged -- what has no metadata yet"
            ((org-ql-block '(and (todo)

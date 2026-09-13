@@ -3,9 +3,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; LSP MODE
 ;; NOTE: GC and read-process-output-max tuning is handled in early-init.el
 
-;; can let you see what's being watched... useful for debugging purposes
-;; (lsp--all-watchable-directories "~/source_code/REMOVED-REPO" lsp-file-watch-ignored-directories)
-
 (use-package lsp-mode
   :init
   ;; Variables that can be set before lsp-mode loads

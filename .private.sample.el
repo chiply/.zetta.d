@@ -55,6 +55,22 @@
 (setq github-notifier-token "YOUR_GITHUB_TOKEN")
 
 ;; ──────────────────────────────────────────────────────────────────
+;; Work tools.  The modules ship with these nil and stay inert until the
+;; private file supplies values -- an employer's host, project key or
+;; workspace never lives in a tracked module (work-security-audit.org S3).
+;; ──────────────────────────────────────────────────────────────────
+
+;; Jira (modules/tools/jira.el): the instance and the saved queries.
+;; (setq zetta-jira-url  "https://example.atlassian.net"
+;;       zetta-jira-jqls '((:jql "assignee = currentUser() and sprint in openSprints() ORDER BY priority DESC, created ASC"
+;;                          :limit 200 :filename "My sprint")))
+
+;; Slack (modules/tools/slack.el): one plist per workspace; the token and
+;; cookie live in auth-source under :host / :user (slack.md).
+;; (setq zetta-slack-teams '((:name "example" :host "example.slack.com"
+;;                            :user "alice@example.com" :default t)))
+
+;; ──────────────────────────────────────────────────────────────────
 ;; Mail sending (mu4e / message-mode via msmtp)
 ;;
 ;; mu4e accounts/contexts are personal, so they are not shown here —

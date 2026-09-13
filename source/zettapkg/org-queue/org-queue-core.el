@@ -348,6 +348,7 @@ problem and you want to see it."
     (quick    . 1.0)
     (carry    . 2.5)
     (stick    . 2.0)
+    (mission  . 2.4)
     (glut     . 2.0))
   "Coefficients of the scoring formula.
 
@@ -359,6 +360,7 @@ problem and you want to see it."
          + quick    * (effort <= `org-queue-quick-threshold')
          + carry    * (planned before and not finished)
          + stick    * (a machine placement already on this day, while proposing)
+         + mission  * (serves a mission of the season; the priority-B weight)
          - glut     * (tasks already picked from this category)
 
 The last term is the only one that is not a property of the task: it is
@@ -688,6 +690,7 @@ on what has already been picked and so belongs to the packer."
        (if (and org-queue-core-placed-soft (plist-get task :placed)
                 (eql (plist-get task :scheduled) today))
            (funcall w 'stick) 0.0)
+       (if (plist-get task :mission) (funcall w 'mission) 0.0)
        (or (alist-get (plist-get task :state) org-queue-state-weights
                       0.0 nil #'equal)
            0.0))))

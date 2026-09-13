@@ -20,7 +20,8 @@
   :commands (org-queue-today org-queue-calibration org-queue-plan
              org-queue-undo-apply org-queue-horizon org-queue-propose
              org-queue-close org-queue-dormant-check org-queue-day-log
-             org-queue-review-week org-queue-still-worth-it)
+             org-queue-review-week org-queue-still-worth-it
+             org-queue-season org-queue-intake)
 
   :brushup
   ;; The plan is a prominence ladder, not a colour scheme: the date at the
@@ -69,7 +70,10 @@
     (require 'org-queue-close)
     (require 'org-queue-dormant)
     (require 'org-queue-daylog)
-    (require 'org-queue-review))
+    (require 'org-queue-review)
+    (require 'org-queue-season)
+    (require 'org-queue-intake)
+    (setq org-queue-review-floors-function #'org-queue-season-floors))
   ;; The close counts the inbox; the queue itself never plans from it.
   (setq org-queue-inbox-file "~/kb/inbox.org")
 
@@ -126,5 +130,7 @@
  "p" 'org-queue-propose
  "x" 'org-queue-close      ; close the day; the smart tree's old key
  "m" 'org-queue-review-week   ; Monday: the pack
- "y" 'org-queue-still-worth-it)
+ "y" 'org-queue-still-worth-it
+ "n" 'org-queue-season        ; horizoNs: the season
+ "I" 'org-queue-intake)       ; what a deadline would cost
 ;;; org-queue.el ends here

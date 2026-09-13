@@ -96,6 +96,13 @@ FILES = {
  # Two projects for the invariant (G8): one whose children are all done
  # or parked -- dormant, nobody has decided what comes next -- and one
  # whose children are all done, which is a project to close.
+ # Serves a mission of the season (G5): the children inherit MISSION.
+ T("Retrieval service launch plan", "@deep planning", "mid",
+   state="PROG", mission="M-RETRIEVAL",
+   sub=[("Collect input from the team", "1:00", "DONE"),
+        ("Write the first draft", "2:00", "TODO"),
+        ("Review with Sam", "0:30", "TODO"),
+        ("Publish", "0:15", "TODO")]),
  T("Vendor evaluation", "@deep procurement", "mid", state="TODO",
    body="Three vendors shortlisted in June. The last child was parked and\nnothing has replaced it.",
    sub=[("Collect the three quotes", "1:00", "DONE"),
@@ -354,6 +361,7 @@ def render_task(rng, today, spec, level, cat):
         if rng.random() < 0.3:
             P.append(f":KEPT:     {ina(today - dt.timedelta(days=rng.randint(10, 80)))}")
     if spec.get("blocked"): P.append(f":BLOCKED_BY: {oid(rng)}")
+    if spec.get("mission"): P.append(f":MISSION:  {spec['mission']}")
     if spec.get("repeat") and st == "DONE":
         P.append(f":LAST_REPEAT: {ina(today - dt.timedelta(days=3))}")
     P.append(":END:")

@@ -460,6 +460,7 @@ TODAY, a YYYYMMDD integer, anchors repeating timestamps."
           :parent (save-excursion
                     (when (org-up-heading-safe) (org-get-heading t t t t)))
           :agent-session (org-entry-get (point) "AGENT_SESSION")
+          :mission (org-entry-get (point) "MISSION" t)
           :landed (org-queue-harvest--landed-p (nth 2 components))
           :interrupted (org-queue-harvest--interrupted)
           :dormant-parent (org-queue-harvest--dormant-parent-p)

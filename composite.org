@@ -11,8 +11,8 @@
 # queue has buckets, habits, a horizon, an apply layer and a proposal
 # buffer -- several gaps got smaller.
 #
-# Status [2026-09-12]: waves 1 to 4 BUILT the same day (see "As built"
-# under each wave); waves 5 and 6 follow in order, each with its own note.
+# Status [2026-09-12]: waves 1 to 5 BUILT the same day (see "As built"
+# under each wave); wave 6 follows, with its own note.
 
 * Start here
 
@@ -504,6 +504,33 @@ beside its backlinks; "on this day" through =zetta-hyrolo-day=;
 =:card:= headings, later.
 
 Tests: the five in the assay.  Anki is last and optional.
+
+** As built [2026-09-12]
+
+- G5: =org-queue-season-core= (the season's name, the mission check
+  naming the offenders, orphans, rockless, finished?, stale) and
+  =org-queue-season= (the file and its template, the =mission= and
+  =orphan= org-ql predicates, the floors for the pack, the season
+  command over a twelve-week pack); 7 batch tests.  The =mission= weight
+  in the core and =:mission= (inherited) in the harvest; the =o= view;
+  the Areas view groups by mission.  The fourth-mission refusal sits on
+  =write-file-functions=: Emacs 31 demotes an error in
+  =before-save-hook= to a message and saves anyway, measured in the
+  smoke run.
+- G12: =org-queue-intake-core= over the horizon simulator, run with and
+  without the candidate so "fits" means no deadline the window met is
+  missed because of it, and the displaced ones are named ("or move
+  X"); =org-queue-intake= (=,-o-I=) and the advice after an interactive
+  =org-deadline=; 3 batch tests.
+- G10: =org-knowledge= (=source/zettapkg/org-knowledge/=): WikiWords (a
+  single capitalised word counts, as HyWiki's own pages here show),
+  the page text with its title once, the source line with the reason
+  or an error before any write, untouched pages, on-this-day; promote,
+  resurface, on-this-day; the favourite problems into decoration as
+  =AI_PROBLEM=; 9 tests.  Anki is not wired.
+- Fixture: =(todo) horizons.org= with a theme, three missions and two
+  areas; a project in work.org serving a mission, its children
+  inheriting it.
 
 * Wave 6 — The body, and the outside feeds  (G4 phase 2, G14, G13a, G13b)
 

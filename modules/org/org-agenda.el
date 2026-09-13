@@ -27,6 +27,7 @@
 ;;   ,-o-v r   Review     what closed or moved in the last seven days
 ;;   ,-o-v b   Blocked    stuck on a thing, stuck on a person, or ready
 ;;   ,-o-v j   Dormant    projects with no next step (org-queue-dormant)
+;;   ,-o-v o   Orphan     open work serving no mission (org-queue-season)
 ;;
 ;; Views that group on computed buckets (Neglected, Chase, Horizon) do it
 ;; with named `:pred' functions in org-super-agenda.el rather than
@@ -69,6 +70,7 @@
   (require 'org-ql-search nil t)
   ;; The `dormant-project' predicate the j view names.
   (require 'org-queue-dormant nil t)
+  (require 'org-queue-season nil t)
 
   (setq org-agenda-restore-windows-after-quit t
         ;; Match `org-tags-column' in org.el: tags right after the
@@ -235,6 +237,14 @@
                           ((org-ql-block-header "Dormant -- every child parked or done")))
             (org-ql-block '(project-status finished)
                           ((org-ql-block-header "Finished? -- every child done; close the project")))))
+
+          ;; Horizons (G5): open work that reaches no mission through
+          ;; its parents, and the missions themselves.
+          ("o" "Orphan -- open work serving no mission"
+           ((org-ql-block '(orphan)
+                          ((org-ql-block-header "Serving no mission")))
+            (org-ql-block '(todo "MISSION")
+                          ((org-ql-block-header "The missions")))))
 
           ("u" "Untriaged -- what has no metadata yet"
            ((org-ql-block '(and (todo)

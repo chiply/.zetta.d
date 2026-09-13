@@ -99,6 +99,11 @@ All under the =,-o= prefix (=launch-map= → =menu-org-map=).
 | =,-o-i=  | =org-chain-kick=                | kick the entry at point to an agent; =C-u= past the limit, =C-u C-u= headless |
 | =,-o-v a= | =org-agenda= "Chains"          | in flight, landed for review, asking      |
 | =M-x org-chain-land= |                    | apply the landing log by hand (it is watched anyway) |
+| =,-o-n=  | =org-queue-season=              | the season: last quarter's walk beside the horizons file |
+| =,-o-I=  | =org-queue-intake=              | what a deadline for the entry at point would cost |
+| =,-o-v o= | =org-agenda= "Orphan"          | open work serving no mission, and the missions |
+| =,-o-M=  | =org-knowledge-promote=         | the heading becomes a HyWiki page; one link and its reason stay |
+| =,-o-R=  | =org-knowledge-resurface=       | the page untouched longest, beside what mentions it |
 | =,-o-v j= | =org-agenda= "Dormant"         | projects with no next step, and finished ones  |
 | =M-x org-routine-report= |                | today's blocks, windows and dip from the routine table |
 
@@ -776,7 +781,57 @@ says this is a quiet window; a question is a mark in the mode line
 - The pack: the chains' week -- kicks, latency, review lag, your minutes
   against the machine's.
 
-* Working against the test data
+* The season
+
+Built 2026-09-12 (composite.org wave 5).
+
+** Horizons: =,-o-n=
+
+One file, =~/kb/todo/(todo) horizons.org= (made from a template the
+first time =,-o-n= runs): a =Theme= heading with a =:SEASON:= and one
+sentence; at most three =* MISSION= headings for the season (saving the
+file with a fourth is refused, naming them); =* AREA <category>=
+headings with =:MIN_HOURS_WEEK:= and =:MAX_HOURS_WEEK:=.  A project serves
+a mission by carrying =:MISSION:= (the mission's ID); its children
+inherit it.
+
+- The queue adds one term: =mission= (2.4, the priority-B weight) for a
+  task that reaches a mission, so aligned work rises without
+  out-arguing a deadline.
+- =,-o-v o=: open work (TODO, NEXT, PROG) that reaches no mission, and
+  the missions themselves.  The Areas view groups by mission too.
+- The pack reads the areas' floors and ceilings: *Areas against their
+  floors*.
+- =,-o-n= draws the last twelve weeks as a pack, with the season, the
+  theme (stale after =org-queue-season-days=, 90) and each mission --
+  "no rock this week" when nothing NEXT, PROG or scheduled serves it --
+  and opens the file beside it.  The theme and the missions are typed
+  there.  The daily plan never opens the file.
+
+** The intake gate: =,-o-I=
+
+On an entry, asks for a date and says what committing to it means: the
+minutes already committed on or before it against the capacity in the
+window, the hard deadlines ahead, and either the first day the work
+fits or that it does not, by how many minutes, and which deadlines it
+would push past ("or move X").  Nothing is written.  After an
+interactive =,-o-D= the same line is shown for the deadline just set.
+A soft deadline, a habit, a HOLD or an IDEA never consults the gate.
+
+** The knowledge loop: =,-o-M= and =,-o-R=
+
+=,-o-M= on a heading asks for the WikiWord (the title, capitalised and
+run together, by default) and the reason, and only then writes: the
+body moves verbatim into =~/kb/wiki/WikiWord.org= (created with its
+title line, or extended), and the source keeps its heading with one
+line in place of the body: =[[hy:WikiWord]] the reason.=  =,-o-R= opens
+the page untouched longest (30 days, =org-knowledge-resurface-days=)
+beside a rolo search for its name.  =M-x org-knowledge-on-this-day=
+searches the rolo for this day a year ago and a month ago.
+
+=~/kb/wiki/FavouriteProblems.org='s headings are the favourite problems:
+decoration names one in =AI_PROBLEM= when a capture bears on it.  Anki
+is not wired.
 
 The fixture is seven =(todo)= files under =testdata/todo/=, with full
 metadata: efforts, dates, LOGBOOK transitions, IDs, five habits in
@@ -886,10 +941,8 @@ From =scheduling.org=:
   two-miss alert (step 8).
 
 From =composite.org= (the plan for the assay's remaining gaps, in six
-waves; keys already reserved there).  Waves 1 to 4 are built (above).
+waves; keys already reserved there).  Waves 1 to 5 are built (above).
 
-- Wave 5: horizons and the season (=,-o-n=), the intake gate (=,-o-I=),
-  promote and resurface (=,-o-M=, =,-o-R=).
 - Wave 6: habits phase 2, the timer in the dip (=,-o-e=), calendar and
   mail feeds.
 

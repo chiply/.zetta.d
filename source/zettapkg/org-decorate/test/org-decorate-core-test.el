@@ -30,7 +30,8 @@
     :impacts (1 2 3 4 5)
     :deadline-types ("hard" "soft")
     :people ("Sam" "legal")
-    :wikiwords ("Hyperbole" "Python")))
+    :wikiwords ("Hyperbole" "Python")
+    :problems ("How do I make the plan honest?")))
 
 (defun odt-entry (heading &rest properties)
   (append properties (list :id "E1" :heading heading :body "" :created 20260903)))
@@ -100,6 +101,18 @@
   (should (plist-get (org-decorate-core-validate "garbage" odt-lists) :drops))
   (should (plist-get (org-decorate-core-validate '(1 2 3) odt-lists) :drops)))
 
+
+;;;; The favourite problems
+
+(ert-deftest odt/a-capture-matching-a-favourite-problem-gets-ai-problem ()
+  (let ((hit (org-decorate-core-merge
+              (odt-entry "x")
+              (org-decorate-core-validate (list :kind "note" :problem "How do I make the plan honest?") odt-lists)
+              "[s]"))
+        (miss (org-decorate-core-validate (list :kind "note" :problem "Something else") odt-lists)))
+    (should (equal "How do I make the plan honest?" (cdr (assoc "AI_PROBLEM" hit))))
+    (should-not (plist-get miss :problem))
+    (should (cl-some (lambda (d) (eq 'problem (car d))) (plist-get miss :drops)))))
 
 ;;;; Dates
 

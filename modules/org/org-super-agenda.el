@@ -322,6 +322,7 @@ the entry produces, so it would discard the CLOSED item too."
 
 (defvar zetta-org-agenda-area-groups
   '((:discard (:todo ("HOLD" "IDEA")))
+    (:auto-property "MISSION")
     (:auto-category t))
   "Grouping for the Areas view.
 

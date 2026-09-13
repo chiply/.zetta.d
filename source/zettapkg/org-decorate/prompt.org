@@ -38,6 +38,8 @@ Fields:
   keyword is WAIT.
 - related: WikiWords from the list that the note is about.
 - repo: for kind delegate, the repository name from the note.
+- problem: one of the favourite problems, only when the note clearly
+  bears on it.
 - why: one line of rationale.
 - confidence: overall 0-1; field_confidence: per field.
 

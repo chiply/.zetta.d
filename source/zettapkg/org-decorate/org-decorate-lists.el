@@ -133,6 +133,15 @@ The flat files first, then the project headings the check calls live."
    (delq nil (org-ql-select (org-decorate--files) '(property "WAITING_ON")
                :action (lambda () (org-entry-get (point) "WAITING_ON"))))))
 
+(defvar org-decorate-problems-function nil
+  "Function returning the favourite problems, a list of strings.
+Set by the knowledge module; nil means none.")
+
+(defun org-decorate-lists-problems ()
+  "Return the favourite problems, when something answers for them."
+  (and org-decorate-problems-function
+       (ignore-errors (funcall org-decorate-problems-function))))
+
 (defun org-decorate-lists-wikiwords ()
   "Return the WikiWords that have a page, when HyWiki is around."
   (when (fboundp 'hywiki-get-wikiword-list)
@@ -153,7 +162,8 @@ The flat files first, then the project headings the check calls live."
                          (or (org-decorate--global-property "IMPACT_ALL") '("1" "2" "3" "4" "5")))
         :deadline-types (or (org-decorate--global-property "DEADLINE_TYPE_ALL") '("hard" "soft"))
         :people (org-decorate-lists-people)
-        :wikiwords (org-decorate-lists-wikiwords)))
+        :wikiwords (org-decorate-lists-wikiwords)
+        :problems (org-decorate-lists-problems)))
 
 
 ;;;; One entry as a plist

@@ -1,0 +1,39 @@
+#+TITLE: Horizons
+#+CATEGORY: horizons
+#+TODO: MISSION | DONE
+
+* Theme
+:PROPERTIES:
+:SEASON:  2026-Q3
+:CREATED: [2026-07-01 Wed]
+:END:
+Ship the retrieval service and get the days to add up.
+
+* MISSION Ship the retrieval service
+:PROPERTIES:
+:ID:       M-RETRIEVAL
+:SEASON:   2026-Q3
+:END:
+
+* MISSION Make the plan honest
+:PROPERTIES:
+:ID:       M-PLAN
+:SEASON:   2026-Q3
+:END:
+
+* MISSION Read more than I scroll
+:PROPERTIES:
+:ID:       M-READ
+:SEASON:   2026-Q3
+:END:
+
+* AREA emacs
+:PROPERTIES:
+:MIN_HOURS_WEEK: 2
+:MAX_HOURS_WEEK: 10
+:END:
+
+* AREA learn
+:PROPERTIES:
+:MIN_HOURS_WEEK: 3
+:END:

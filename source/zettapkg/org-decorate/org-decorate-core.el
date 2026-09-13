@@ -251,6 +251,11 @@ proposal with nothing in it and one drop, `garbage'.  Each drop is
                             (if (stringp related) (list related) related)))))
         (when-let* ((repo (plist-get proposal :repo)))
           (keep :repo repo))
+        ;; A favourite problem the note bears on, from the list only.
+        (when-let* ((problem (plist-get proposal :problem)))
+          (if (org-decorate-core--in problem (plist-get lists :problems))
+              (keep :problem problem)
+            (drop 'problem problem "not a favourite problem")))
         (keep :why (or (plist-get proposal :why) ""))
         (keep :confidence (or (plist-get proposal :confidence) 0.0))
         (keep :field_confidence (plist-get proposal :field_confidence))
@@ -479,6 +484,7 @@ AI_STAMP text: time, backend, model, prompt and schema versions."
         (put "AI_DUPLICATE_OF" (plist-get validated :duplicate-of)))
       (when (plist-get validated :date-stale) (put "AI_DATE_STALE" "t"))
       (put "AI_REPO" (plist-get validated :repo))
+      (put "AI_PROBLEM" (plist-get validated :problem))
       (put "AI_WHY" (org-decorate-core--why validated (nreverse canonical)))
       (put "AI_CONFIDENCE"
            (format "%.2f%s" (plist-get validated :confidence)

@@ -54,4 +54,13 @@ else
   status=1
   printf '%-30s FAILED\n' "smoke-modules"
 fi
+# No "~/kb" literal outside docstrings and comments: every kb path derives
+# from `zetta-kb-dir' (WP-Z9).  Reads the sources as Lisp; exit 1 on a hit.
+if out=$(timeout -s KILL "$TIMEOUT" emacs -Q --batch -l source/zettapkg/check-kb-root.el 2>&1); then
+  printf '%-30s %s\n' "check-kb-root" "$(echo "$out" | head -1)"
+else
+  status=1
+  printf '%-30s FAILED\n' "check-kb-root"
+  echo "$out" | head -20
+fi
 exit $status

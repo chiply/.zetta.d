@@ -44,7 +44,9 @@
 (defvar org-queue-capacity)
 (defvar org-queue-slack-fraction)
 
-(defcustom org-routine-file "~/kb/notes/schedule.org"
+;; Under the Zetta config the kb root is `zetta-kb-dir'; standalone, ~/kb.
+(defcustom org-routine-file
+  (expand-file-name "notes/schedule.org" (or (bound-and-true-p zetta-kb-dir) "~/kb/"))
   "The note holding the routine table."
   :type 'file
   :group 'org-routine)
@@ -250,7 +252,7 @@ applied.  With QUIET, no message."
                          (if (and (boundp 'org-agenda-files) org-agenda-files
                                   (stringp (car org-agenda-files)))
                              (file-name-directory (car org-agenda-files))
-                           "~/kb/todo/")))))
+                           (expand-file-name "todo/" (or (bound-and-true-p zetta-kb-dir) "~/kb/")))))))
 
 (defun org-routine--existing-ids (file)
   "Return an alist of (TITLE . ID) for the entries in FILE, if it exists."

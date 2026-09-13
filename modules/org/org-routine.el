@@ -40,7 +40,7 @@
 (declare-function org-routine-variant "org-routine" (&optional date))
 (declare-function org-routine-admin-p "org-routine" (&optional time))
 
-(defcustom zetta-org-routine-real-file "~/kb/notes/schedule.org"
+(defcustom zetta-org-routine-real-file (zetta-kb-file "notes/schedule.org")
   "The routine note in the real kb."
   :type 'file :group 'zetta)
 

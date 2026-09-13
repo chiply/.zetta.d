@@ -34,11 +34,12 @@
   :init
   (setq org-decorate-corrections-file
         (expand-file-name ".data/org/decoration-corrections.el" user-emacs-directory)
-        org-decorate-inbox-file "~/kb/inbox.org")
+        org-decorate-inbox-file (zetta-kb-file "inbox.org"))
   ;; The repositories whose commits may name an entry: the kb, plus
   ;; whatever ~/.private.el lists in `zetta-git-repos'.
   (setq org-decorate-git-repos
-        (append '("~/kb") (bound-and-true-p zetta-git-repos)))
+        (append (list (directory-file-name (expand-file-name zetta-kb-dir)))
+                (bound-and-true-p zetta-git-repos)))
   ;; Every capture is checked for a duplicate once org-capture is up.
   (with-eval-after-load 'org-capture
     (require 'org-decorate)

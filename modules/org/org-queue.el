@@ -116,7 +116,7 @@
   (with-eval-after-load 'org-agenda
     (setq org-agenda-text-search-extra-files '(agenda-archives)))
   ;; The close counts the inbox; the queue itself never plans from it.
-  (setq org-queue-inbox-file "~/kb/inbox.org")
+  (setq org-queue-inbox-file (zetta-kb-file "inbox.org"))
 
   :config
   ;; A placeholder day, and known to be one.  The honest number comes from

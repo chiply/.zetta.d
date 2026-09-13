@@ -60,7 +60,9 @@
 (defvar gptel-backend)
 (defvar gptel-model)
 
-(defcustom org-decorate-inbox-file "~/kb/inbox.org"
+;; Under the Zetta config the kb root is `zetta-kb-dir'; standalone, ~/kb.
+(defcustom org-decorate-inbox-file
+  (expand-file-name "inbox.org" (or (bound-and-true-p zetta-kb-dir) "~/kb/"))
   "The inbox: where captures land and decoration reads."
   :type 'file
   :group 'org-decorate)
@@ -93,7 +95,8 @@ machine at the cost of precision.  Part 6 question 4 of composite.org."
   :type 'file
   :group 'org-decorate)
 
-(defcustom org-decorate-git-repos '("~/kb")
+(defcustom org-decorate-git-repos
+  (list (directory-file-name (expand-file-name (or (bound-and-true-p zetta-kb-dir) "~/kb/"))))
   "Repositories whose commit messages are read for entry IDs."
   :type '(repeat directory)
   :group 'org-decorate)

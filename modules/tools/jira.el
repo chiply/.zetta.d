@@ -17,7 +17,7 @@ nil leaves this module inert.")
 A list of plists (:jql STRING :limit N :filename STRING).  Set in
 ~/.private.el; see .private.sample.el for the shape.")
 
-(defvar zetta-jira-working-dir "~/kb/jira/"
+(defvar zetta-jira-working-dir (zetta-kb-file "jira/")
   "Directory org-jira keeps its per-project org files in.")
 
 (use-package org-jira

@@ -668,7 +668,7 @@ Uses first letter, or first two letters if conflicts exist."
   "Additional files to add to `org-agenda-files'.
 Set this in ~/.private.el before modules load.")
 
-(defvar zetta-org-inbox-file "~/kb/inbox.org"
+(defvar zetta-org-inbox-file (zetta-kb-file "inbox.org")
   "Where the capture templates land, and the file the Inbox view reads.
 
 Part of the real corpus rather than an entry in `zetta-extra-agenda-files'
@@ -734,19 +734,19 @@ reopen the both-corpora-live hole this toggle exists to close."
   ;; specialization — the sender/subject prefill has no generic
   ;; equivalent (%:fromname/%:subject only bind in mail buffers).
   (setq org-capture-templates
-        '(("n" "Note"
+        `(("n" "Note"
            entry
-           (file "~/kb/inbox.org")
+           (file ,zetta-org-inbox-file)
            "* %?\n:PROPERTIES:\n:CREATED: %U\n:END:\n"
            :prepend t)
           ("N" "Note (with backlink)"
            entry
-           (file "~/kb/inbox.org")
+           (file ,zetta-org-inbox-file)
            "* %?\n:PROPERTIES:\n:CREATED: %U\n:END:\n%a\n"
            :prepend t)
           ("m" "Mail (capture message link)"
            entry
-           (file "~/kb/todo/(todo) email.org")
+           (file ,(zetta-kb-file "todo/(todo) email.org"))
            "* TODO %:fromname: %:subject\n:PROPERTIES:\n:CREATED: %U\n:END:\n%a\n%?"
            :prepend t)
           ;; The one template that asks for metadata, and it asks for it
@@ -758,7 +758,7 @@ reopen the both-corpora-live hole this toggle exists to close."
           ;; routing is C-c C-w, same as every other capture.
           ("t" "Task (estimate and tags up front)"
            entry
-           (file "~/kb/inbox.org")
+           (file ,zetta-org-inbox-file)
            "* TODO %^{Task} %^G\n:PROPERTIES:\n:CREATED: %U\n:END:\n%^{Effort}p%?"
            :prepend t)))
   (zetta-logseq-update-agenda-files))

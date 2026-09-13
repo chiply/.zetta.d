@@ -53,7 +53,7 @@
   (file-name-as-directory
    (expand-file-name (or org-knowledge-directory
                          (and (boundp 'hywiki-directory) hywiki-directory)
-                         "~/kb/wiki"))))
+                         (expand-file-name "wiki" (or (bound-and-true-p zetta-kb-dir) "~/kb/"))))))
 
 (defun org-knowledge-page-file (word)
   "Return the file of page WORD."

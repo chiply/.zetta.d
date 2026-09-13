@@ -29,8 +29,8 @@
   ;; so pdf: links are same-dir relative and resolve against the note's
   ;; own directory.
   (setq pdfnote-file-prefix ""      ; logseq-era naming; dir context suffices
-        pdfnote-assets-directory (expand-file-name "~/kb/pdf/")
-        pdfnote-pages-directory  (expand-file-name "~/kb/pdf/")
+        pdfnote-assets-directory (zetta-kb-file "pdf/")
+        pdfnote-pages-directory  (zetta-kb-file "pdf/")
         pdfnote-asset-link-directory "."
         pdfnote-page-file-function
         (lambda (pdf)

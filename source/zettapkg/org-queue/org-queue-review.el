@@ -41,7 +41,9 @@
   :type 'string
   :group 'org-queue)
 
-(defcustom org-queue-reviews-file "~/kb/notes/reviews.org"
+;; Under the Zetta config the kb root is `zetta-kb-dir'; standalone, ~/kb.
+(defcustom org-queue-reviews-file
+  (expand-file-name "notes/reviews.org" (or (bound-and-true-p zetta-kb-dir) "~/kb/"))
   "Where the review lines are written, in a datetree."
   :type 'file
   :group 'org-queue)

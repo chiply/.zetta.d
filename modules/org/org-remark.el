@@ -157,7 +157,7 @@ Gmail moves around), so they make a durable source identity."
 
   ;; Notes land in the synced kb tree, mirroring the readwise layout
   ;; (<source>/<middle-dimension>/<title-slug>.org) where it makes sense.
-  (defvar my-org-remark-directory (expand-file-name "~/kb/org-remark/")
+  (defvar my-org-remark-directory (zetta-kb-file "org-remark/")
     "Root for org-remark notes files, inside the synced kb tree.")
 
   (defun my-org-remark-slugify (s &optional maxlen)
@@ -230,7 +230,7 @@ Gmail moves around), so they make a durable source identity."
        my-org-remark-directory))
      ;; kb's own notes: annotations live next to the file they annotate
      ((and buffer-file-name
-           (string-prefix-p (expand-file-name "~/kb/") buffer-file-name))
+           (string-prefix-p (expand-file-name zetta-kb-dir) buffer-file-name))
       (concat (file-name-sans-extension buffer-file-name) "-annotations.org"))
      ;; any other file: marginalia.org in the file's own directory
      (buffer-file-name "marginalia.org")

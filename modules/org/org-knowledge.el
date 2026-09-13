@@ -26,7 +26,7 @@
   :init
   (with-eval-after-load 'hyperbole
     (require 'org-knowledge)
-    (setq org-knowledge-directory (expand-file-name "~/kb/wiki")))
+    (setq org-knowledge-directory (zetta-kb-file "wiki")))
   ;; Decoration scores captures against the favourite problems.
   (with-eval-after-load 'org-decorate-lists
     (require 'org-knowledge)

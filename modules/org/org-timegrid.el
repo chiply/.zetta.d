@@ -27,7 +27,7 @@
 
 (defcustom zetta-org-timegrid-file
   (expand-file-name "(todo) calendar.org"
-                    (or (bound-and-true-p zetta-logseq-dir) "~/kb/todo/"))
+                    (or (bound-and-true-p zetta-logseq-dir) (zetta-kb-file "todo/")))
   "File new calendar blocks are written to.
 
 The package's own default is `calendar.org' in `user-emacs-directory' --

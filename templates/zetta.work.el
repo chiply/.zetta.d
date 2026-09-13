@@ -42,13 +42,13 @@
 ;;; ————————————————————————————————————————————————
 
 ;; The org task system, hyperbole's rolo and hywiki, org-remark and the
-;; eww downloads all read `~/kb/...' (measured 2026-09-13: 40 literal
-;; references across 20 files, ten of them in modules/app/hyperbole.el;
-;; work-profile.org Part 3).  Day one keeps the path and makes it a WORK
-;; tree: local, unsynced, never registered with Syncthing, never touched
-;; by hub-deploy.  Phase 2 (task WP-Z9) turns the root into one variable.
-;; `zetta-logseq-dir' is the (todo) corpus; its default is already this.
-(setq zetta-logseq-dir "~/kb/todo/")
+;; eww downloads all live under `zetta-kb-dir' (default ~/kb/; since
+;; WP-Z9 every kb path in the modules derives from it, and the (todo)
+;; corpus `zetta-logseq-dir' is its todo/).  Day one keeps the path and
+;; makes it a WORK tree: local, unsynced, never registered with
+;; Syncthing, never touched by hub-deploy (work-profile.org Part 3).  A
+;; different root is one line:
+;; (setq zetta-kb-dir "~/work-kb/")
 
 ;; The skeleton the kept modules expect, created once and idempotently:
 ;; the capture templates append to inbox.org (modules/org/org.el), the
@@ -58,7 +58,7 @@
 ;; nothing else needs to exist.  A starter routine table for org-routine
 ;; is testdata/routine.org: copy it to ~/kb/notes/schedule.org when the
 ;; queue first asks for one.
-(let ((kb (expand-file-name "~/kb/")))
+(let ((kb (expand-file-name zetta-kb-dir)))
   (dolist (dir '("todo/" "notes/" "wiki/" "org-remark/"))
     (make-directory (concat kb dir) t))
   (let ((inbox (concat kb "inbox.org")))

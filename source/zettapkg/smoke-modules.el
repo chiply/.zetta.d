@@ -25,6 +25,10 @@
 (defvar menu-org-map (make-sparse-keymap))
 (defgroup zetta nil "stub" :group 'emacs)
 (defvar zetta-org-todo-source 'test)
+;; The kb root the modules derive their paths from (bootstrap-modules.el);
+;; the real one, so the smoke test's view of the modules is the config's.
+(defvar zetta-kb-dir "~/kb/")
+(defun zetta-kb-file (relative) (expand-file-name relative zetta-kb-dir))
 (defun zetta-org-toggle-todo-source (&optional _) nil)
 (defvar brushup-styles nil)
 (require 'org)

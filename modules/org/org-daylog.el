@@ -36,7 +36,7 @@
 (declare-function org-at-timestamp-p "org" (&optional extended))
 (declare-function org-end-of-subtree "org" (&optional invisible-ok to-heading))
 
-(defcustom zetta-org-journal-file "~/kb/notes/journal.org"
+(defcustom zetta-org-journal-file (zetta-kb-file "notes/journal.org")
   "The one journal file; a heading per day in the Logseq date form."
   :type 'file :group 'zetta)
 

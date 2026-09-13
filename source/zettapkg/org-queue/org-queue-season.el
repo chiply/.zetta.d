@@ -48,7 +48,9 @@
 (declare-function org-queue-review-mode "org-queue-review")
 (defvar org-queue-review-window)
 
-(defcustom org-queue-horizons-file "~/kb/todo/(todo) horizons.org"
+;; Under the Zetta config the kb root is `zetta-kb-dir'; standalone, ~/kb.
+(defcustom org-queue-horizons-file
+  (expand-file-name "todo/(todo) horizons.org" (or (bound-and-true-p zetta-kb-dir) "~/kb/"))
   "The theme, the missions and the areas' floors."
   :type 'file
   :group 'org-queue)

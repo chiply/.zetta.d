@@ -19,9 +19,24 @@ Download Terminus TTF from https://files.ax86.net/terminus-ttf/")
 (defvar zetta-literature-dir "~/.lit/"
   "Directory for bibliography files and PDFs.  Set in ~/.zetta.el.")
 
+;; The knowledge base: ONE root, every kb path in the modules derived
+;; from it through `zetta-kb-file' (WP-Z9; before it, 40-odd literal
+;; "~/kb/..." strings across 20 files were the convention).  A work
+;; machine keeps the same path and makes it a local, unsynced tree
+;; (work-profile.org Part 3); a different root is one setq here.
+(defvar zetta-kb-dir "~/kb/"
+  "Root of the knowledge base: the (todo) corpus, notes, wiki, inbox, PDFs.
+Set in ~/.zetta.el.  The modules derive every kb path from it through
+`zetta-kb-file'; the standalone zettapkg packages read it when bound and
+fall back to the same default on their own.")
+
+(defun zetta-kb-file (relative)
+  "Absolute name of RELATIVE under `zetta-kb-dir'."
+  (expand-file-name relative zetta-kb-dir))
+
 ;; name is vestigial (logseq era); points at the kb todo dir since 2026-07
-(defvar zetta-logseq-dir "~/kb/todo/"
-  "Directory containing Logseq pages.  Set in ~/.zetta.el.")
+(defvar zetta-logseq-dir (zetta-kb-file "todo/")
+  "Directory containing the (todo) corpus.  Set in ~/.zetta.el.")
 
 (defvar zetta-use-lockfile t
   "When non-nil, pin packages to versions in elpaca-lock.el.

@@ -23,7 +23,9 @@
 (require 'org)
 (require 'org-queue-mail-core)
 
-(defcustom org-queue-mail-stub "~/kb/todo/mail.org_archive"
+;; Under the Zetta config the kb root is `zetta-kb-dir'; standalone, ~/kb.
+(defcustom org-queue-mail-stub
+  (expand-file-name "todo/mail.org_archive" (or (bound-and-true-p zetta-kb-dir) "~/kb/"))
   "The archive stub the mail entries are written to.
 An archive file: outside `org-agenda-files' and the refile targets,
 found by text search through `org-agenda-text-search-extra-files'."

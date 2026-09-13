@@ -2,6 +2,10 @@
 ;;
 ;; ~/.zetta.el — HEADLESS profile for Zetta Emacs
 ;;
+;; One of three profile templates (README.md, "Profiles"): zetta.example.el
+;; is the full GUI profile, zetta.work.el the GUI profile for an
+;; employer-managed machine (work-profile.org).
+;;
 ;; A terminal-only, secret-free Zetta for a machine with no window
 ;; system, no SVG support and no toolchain beyond gcc: the kb-hub VPS
 ;; (apt emacs-nox 29 on Ubuntu 24.04, reached from a phone or tablet over

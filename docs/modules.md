@@ -2,6 +2,8 @@
 
 Each module is a directory under `modules/` containing one `.el` file per package configuration. Enable modules in `~/.zetta.el` via `zetta-modules!`.
 
+Three profile templates under `templates/` pick from these files: the full profile loads everything, the headless one is a hand-picked subset for a tty-only box, and the work profile loads everything except the 32 files in [Work profile exclusions](#work-profile-exclusions) at the end of this page.
+
 ## :core
 
 Essential Emacs settings and built-in enhancements. Almost always required.
@@ -169,3 +171,44 @@ Terminal and process management.
 | foreman.el | foreman | Process manager integration |
 | foreman-conf.el | — | Foreman configuration |
 | vterm.el | vterm | Full terminal emulator |
+
+## Work profile exclusions
+
+`templates/zetta.work.el` (work-profile.org Part 2) leaves these 32 files out, each for one of three reasons: **R1** it reads or writes a personal account or service; **R2** it moves data between the machine and personal infrastructure; **R3** it is a toy or reveals location. Everything else loads. A module not listed here that joins `modules/app/` later does *not* join the work profile: `:app` is an inclusion list there.
+
+| Category      | File                     | Rule | Why                                                        |
+|---------------|--------------------------|------|------------------------------------------------------------|
+| `:completion` | chiply-isr.el            | R2   | indexes personal trees into a local vector DB at startup   |
+| `:completion` | consult-mu.el            | R1   | mail search                                                |
+| `:completion` | consult-omni.el          | R1   | web search on personal API keys                            |
+| `:tools`      | gnus.el                  | R1   | news reader                                                |
+| `:tools`      | irs.el                   | R2   | spawns the personal retrieval backend                      |
+| `:tools`      | signel.el                | R1   | Signal daemon; plaintext history under the config dir      |
+| `:app`        | nano-mu4e.el             | R1   | mail                                                       |
+| `:app`        | mu4e-dashboard.el        | R1   | mail                                                       |
+| `:app`        | org-msg.el               | R1   | mail                                                       |
+| `:app`        | elfeed.el                | R1   | feeds                                                      |
+| `:app`        | wombag.el                | R1   | read-later                                                 |
+| `:app`        | pocket-reader.el         | R1   | read-later                                                 |
+| `:app`        | nov.el                   | R1   | EPUB reader writing under a personal notes tree            |
+| `:app`        | mastodon.el              | R1   | social                                                     |
+| `:app`        | bluesky.el               | R1   | social                                                     |
+| `:app`        | md4rd.el                 | R1   | Reddit                                                     |
+| `:app`        | reddigg.el               | R1   | Reddit                                                     |
+| `:app`        | erc.el                   | R1   | IRC                                                        |
+| `:app`        | spot.el                  | R1   | Spotify                                                    |
+| `:app`        | spot4e.el                | R1   | Spotify                                                    |
+| `:app`        | llm-convo.el             | R2   | ChatGPT shares into the personal kb via a hub script       |
+| `:app`        | yt-transcript.el         | R2   | YouTube transcripts into the personal kb via a hub script  |
+| `:app`        | whisper.el               | R1   | microphone dictation                                       |
+| `:app`        | say.el                   | R1   | text-to-speech with a personal data file                   |
+| `:app`        | wttrin.el                | R3   | weather for a configured city                              |
+| `:app`        | anki.el                  | R1   | flashcards against a personal deck                         |
+| `:app`        | flappy-fish.el           | R3   | game                                                       |
+| `:app`        | speed-type.el            | R3   | game                                                       |
+| `:app`        | spray.el                 | R3   | speed reading toy                                          |
+| `:app`        | touchtype.el             | R3   | typing game                                                |
+| `:app`        | key-quiz.el              | R3   | game                                                       |
+| `:org`        | pdfnote.el               | R2   | iPad PDF annotations -> Logseq notes                       |
+
+Kept with their values moved to `~/.private.el` (nothing employer-specific in a module): `tools/jira.el` (`zetta-jira-url`, `zetta-jira-jqls`), `tools/slack.el` (`zetta-slack-teams`), `core/remote.el` (`zetta-ssh-hosts`, else `~/.ssh/config`), `tools/ai.el` (`zetta-ai-personal-backends` nil registers Claude only). See `.private.sample.el`.

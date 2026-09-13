@@ -98,7 +98,25 @@ Edit `~/.zetta.el` to customize:
  :term)
 ```
 
-API keys and credentials go in `~/.private.el` (see [`.private.sample.el`](.private.sample.el)). For 1Password-backed secrets, see [`secrets.md`](secrets.md).
+API keys and credentials go in `~/.private.el` (see [`.private.sample.el`](.private.sample.el)). Where they come from -- 1Password, another vault, or plain `~/.authinfo.gpg` -- is a per-machine choice described in [`secrets.md`](secrets.md).
+
+## Profiles
+
+`~/.zetta.el` *is* the profile. Three templates ship under `templates/`;
+`bin/zetta install --profile <name>` copies one into place when there is no
+`~/.zetta.el` yet, and never overwrites an existing one.
+
+| Profile    | Template                      | For                                                                                   | Secrets backend        |
+|------------|-------------------------------|---------------------------------------------------------------------------------------|------------------------|
+| `full`     | `templates/zetta.example.el`  | a personal GUI machine: every module (the default `install`)                          | `nil` (1Password when the `op` CLI is present, else authinfo) |
+| `headless` | `templates/zetta.headless.el` | a tty-only box with no SVG and no toolchain (the kb-hub VPS; `headless-zetta.org`)    | `none`                 |
+| `work`     | `templates/zetta.work.el`     | an employer-managed machine: the GUI config minus every personal app, on a work-local kb (`work-profile.org`; the audit that precedes it is `work-security-audit.org`) | `authinfo` (or the employer's vault, `secrets.md`) |
+
+The work profile excludes 32 module files (listed in
+[`docs/modules.md`](docs/modules.md#work-profile-exclusions)); the tools it
+keeps that could name an employer -- Jira, Slack, ssh hosts, the AI backends
+-- read their values from `~/.private.el` and ship with nothing set.
+`bin/zetta doctor` prints the profile and the secrets backend in force.
 
 ## Documentation
 
@@ -115,12 +133,14 @@ API keys and credentials go in `~/.private.el` (see [`.private.sample.el`](.priv
 ```
 bin/zetta <command>
 
-  install            Install packages and native-compile
-  sync               Re-evaluate config, install new packages
-  freeze [--commit]  Write lockfile (optionally commit it)
-  update             Pull all packages (backs up lockfile first)
-  doctor             Diagnose environment and configuration
-  test               Start test daemon and verify startup
+  install [--profile P]  Install packages and native-compile; P = full | headless | work
+  build                  Same phases, long window, no cache purge (slow boxes, updates)
+  sync                   Re-evaluate config, install new packages
+  freeze [--commit]      Write lockfile (optionally commit it)
+  update                 Pull all packages (backs up lockfile first)
+  doctor                 Diagnose environment, profile, secrets backend, file modes
+  test                   Start test daemon and verify startup
+  ci-test                Batch-mode test (ZETTA_TEMPLATE picks the profile)
 ```
 
 ## Modules
@@ -213,7 +233,7 @@ If you used chemacs2, also remove the `("zetta" ...)` entry from `~/.emacs-profi
 ├── init.el                # Entry point
 ├── early-init.el          # Startup optimization
 ├── elpaca-lock.el         # Package version lockfile
-├── templates/             # User config templates
+├── templates/             # Profile templates: example (full), headless, work
 ├── source/
 │   ├── bootstrap/         # Core initialization
 │   ├── init-data/         # Default module file list

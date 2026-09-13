@@ -7,6 +7,12 @@
 ;; so variables set here are available to all modules.
 ;;
 ;; The only required section is `zetta-modules!' — everything else is optional.
+;;
+;; This is the FULL profile (bin/zetta install copies it by default).  Two
+;; siblings: zetta.headless.el for a tty-only box with no SVG and no
+;; toolchain (headless-zetta.org), and zetta.work.el for an employer-
+;; managed machine, the GUI config minus every personal app
+;; (work-profile.org).  README.md, "Profiles".
 
 ;;; ————————————————————————————————————————————————
 ;;; Appearance

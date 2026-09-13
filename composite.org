@@ -1,0 +1,446 @@
+#+title: Composite — Building the Assay's Rituals, Feeds and Chains
+#+author: Charlie Holland
+#+startup: overview
+
+# The implementation plan for productivity.org's gap list, written after
+# scheduling.org's steps 0-5 landed (2026-09-12).  It takes the sixteen
+# gaps G1-G16, marks what the last two builds already covered, keeps the
+# assay's own ranking rule, and lays the rest out in six waves that each
+# run a week before the next.  Mechanisms are cited from productivity.org
+# Part 3.2 rather than restated; this file adds what changed now that the
+# queue has buckets, habits, a horizon, an apply layer and a proposal
+# buffer -- several gaps got smaller.
+#
+# Status [2026-09-12]: written, nothing from it built.
+
+* Start here
+
+** The rule for "worthwhile"
+
+productivity.org ranks by =(bookkeeping removed per occurrence) x
+(occurrences per week) / (build size)=, ties broken by dependency.  This
+plan keeps that rule and adds one more: *a gap that a built mechanism
+now makes cheap moves up*.  Three did:
+
+- G12 the intake gate was an advice that re-ran the day packer per day
+  up to a date.  =org-queue-core-horizon= is exactly that loop; G12 is
+  now a fifty-line command over it.
+- G2 close-the-day wanted a PROG sweep with one key per entry.
+  =org-queue-apply-actions= is the sweep's writer, with its log and undo.
+- G6 the routine template was to *set* capacity.  It now *derives*
+  =org-queue-buckets= and =(todo) routine.org=, both of which exist and
+  are typed by hand.
+
+And one got harder to justify than the assay thought: G11 backpressure
+is built, so its rank-15 slot is free, and Stage 6's "spreading a long
+task before its deadline" is already a =,-o-p= away.
+
+** Where the sixteen gaps stand
+
+| gap | name                          | assay rank | state 2026-09-12                                       | this plan |
+|-----+-------------------------------+------------+--------------------------------------------------------+-----------|
+| G1  | AI decoration of the inbox    |          1 | not started                                            | wave 3    |
+| G15 | the derived clock             |          2 | *built* (org-gantt, 2026-09-09)                          | --        |
+| G16 | the agent chain               |          3 | not started                                            | wave 4    |
+| G6  | routine template              |          4 | *half*: buckets and habits typed, not derived            | wave 1    |
+| G2  | close the day                 |          5 | not started                                            | wave 1    |
+| G3  | weekly review pack            |          6 | not started; the views it assembles exist              | wave 2    |
+| G13 | derived feeds                 |          7 | not started; four pieces                               | waves 1, 3, 6 |
+| G7  | still worth it? + duplicates  |          8 | not started                                            | waves 2, 3 |
+| G4  | habits                        |          9 | *phase 1 built* (reservations); phase 2 open             | wave 6    |
+| G8  | project invariant             |         10 | not started                                            | wave 1    |
+| G9  | interstitial line, day log    |         11 | not started                                            | wave 1    |
+| G5  | horizons                      |         12 | not started                                            | wave 5    |
+| G10 | knowledge loop                |         13 | not started                                            | wave 5    |
+| G14 | timer in the dip              |         14 | not started                                            | wave 6    |
+| G11 | backpressure                  |         15 | *built* (scheduling.org, 2026-09-12)                     | --        |
+| G12 | intake gate                   |         16 | not started; now cheap                                 | wave 5    |
+
+Everything not built is in a wave.  Nothing is refused here that the
+assay adopted; three items depend on answers only you have (Part 6) and
+carry a stated default so the build does not wait.
+
+** What every wave shares
+
+- *Shape.*  A pure core in =source/zettapkg/= with batch ERT tests, an Org
+  harvest, a thin command file; the org-queue pattern.  New packages:
+  =org-routine= (wave 1), =org-decorate= (wave 3), =org-chain= (wave 4).
+  Everything else is a file inside org-queue or a module under
+  =modules/org/=.
+- *Buffers.*  Every new report reuses =org-queue-mode='s drawing: the
+  header face ladder, =org-queue--insert-task=, the columns and their
+  toggles, =RET=/=o= to jump, the write keys where they make sense.  A
+  ritual is a buffer with keys, never a prompt.
+- *Writes.*  Every write goes through =org-queue-apply-actions=, so it is
+  all-or-none, logged, and undone by =,-o-u=.  New action kinds are added
+  to =org-queue-apply--perform= with their reverse: =property= (set or
+  remove one property), =tag= (add or remove one tag), =refile=.
+- *The gate.*  After a week on each wave: would going back be a relief?
+  If yes, the wave is reverted before the next begins (3.5's rule).
+
+* Keys
+
+The menu is fuller than when 3.3 was written.  Taken now: =g j k U J K a T
+8 o z S D t h H l L - r A s q TAB S-TAB v Q C V d b w W c u p P=.  Free:
+=e f i m n x y B E F G I M N O R X Y Z=.  The assay's proposals that
+collided are moved:
+
+| ritual / command          | assay key | key here | why                                   |
+|---------------------------+-----------+----------+---------------------------------------|
+| close the day             | =,-o-x=     | =,-o-x=    | as proposed                           |
+| weekly review pack        | =,-o-w=     | =,-o-m=    | =w= is the gantt; m for Monday          |
+| still worth it?           | =,-o-y=     | =,-o-y=    | as proposed                           |
+| decorate the inbox        | =,-o-c=     | =,-o-f=    | =c= is the timegrid; f for facets       |
+| kick a chain              | =,-o-i=     | =,-o-i=    | as proposed                           |
+| season                    | =,-o-p=     | =,-o-n=    | =p= is propose; n for horizoNs          |
+| promote to a wiki page    | =,-o-P=     | =,-o-M=    | =P= is the horizon; M for Make a page   |
+| resurface an old page     | =,-o-R=     | =,-o-R=    | as proposed                           |
+| timer in the dip          | =,-o-e=     | =,-o-e=    | as proposed                           |
+| intake evidence           | (advice)  | =,-o-I=    | plus the advice on =org-deadline=       |
+| chains view               | =,-o-v a=   | =,-o-v a=  | agenda dispatcher                     |
+| dormant projects view     | =,-o-v j=   | =,-o-v j=  | agenda dispatcher                     |
+| journal line              | =,-o-o j=   | =,-o-o j=  | capture template                      |
+
+* Wave 1 — The day's frame  (G6, G2, G8, G9, G13d)
+
+The routine read by code, the day closed by a key, projects that say
+when they stopped, and the two hooks that make the log honest.  One
+week.
+
+** G6 The routine as a machine-readable template  (size S)
+
+Mechanism per productivity.org.  What changes now:
+
+- =org-routine-core.el= (pure) parses a named table in
+  =~/kb/notes/schedule.org= (=#+NAME: routine=; the existing table gains a
+  =kind= column: =fixed focus dip admin off=, and an optional =days=
+  column) plus a =#+NAME: variants= table.  It answers four questions:
+  blocks for a weekday, the dip window, the fixed rows, and the kick /
+  review / quiet windows for G16.
+- *It writes the two tables the queue reads today.*  =org-queue-buckets=
+  is derived: every =focus= minute is =work=, =admin= minutes are
+  =housekeeping= (or whatever the row's =bucket= column says), and the
+  =default= bucket is what is left.  The =setq= in
+  =modules/org/org-queue.el= becomes a fallback used only when the table is
+  absent.  Fixed rows with a =habit= column generate =(todo) routine.org=
+  entries (Part 2 of scheduling.org said this would happen; it does here).
+  Generated, never hand-edited: a =#+GENERATED= line at the top and a
+  check that refuses to overwrite a file without it.
+- Sub-day placement (scheduling.org step 7) is unblocked by this wave and
+  stays in scheduling.org.
+
+Tests: the five in the assay, plus: the derived bucket table for Monday
+equals focus 480 / admin 120 / default the rest; a table without a
+=kind= column fails with its line; the generated routine file round-trips
+through the harvest as five habits with the right =HABIT_DAYS=.
+
+Depends on Part 6 question 1 (the pomodoro window); default assumed.
+
+** G2 Close the day  (size S)
+
+Mechanism per productivity.org, in =org-queue-close.el= inside org-queue.
+What changes now:
+
+- The core takes today's plan (history), the harvest, the intervals, and
+  *tomorrow's day plan from the horizon* (one call, honest capacity from
+  G6).  Sections: Unfinished (carried, with count), Done today, Overdue
+  and due tomorrow, Tomorrow's routine and fixed events, Inbox count,
+  Tomorrow's draft, and (after wave 4) each chain with or without its
+  next prompt.
+- =N= on a draft line is =org-queue-mark-next= already; the third =N= is
+  refused with the rule (=org-queue-pick-limit= 3, counted over
+  tomorrow's NEXT entries).
+- The PROG sweep is a list of =state= actions built for
+  =org-queue-apply-actions=: one key per line to move an entry to =TODO=
+  or =WAIT=, applied together, undone together.
+- Writes a =:closed= stamp into the history entry for today; the morning
+  report reads it and says "yesterday was closed" or not, which is R12
+  made visible without a nag.
+- The phrase is printed.
+
+Tests: the eight in the assay.  =,-o-x=.
+
+** G8 The project invariant  (size S)
+
+Mechanism per productivity.org: =org-ql-defpred dormant-project=, the
+=:dormant:= tag written by the check, the =j= agenda view, and the queue
+dropping a dormant parent's children with reason =dormant-project=.
+
+What changes now: the tag write is a =tag= action through the apply
+layer (idempotent: setting a tag that is set is a no-op and logs
+nothing).  The check runs from the close (G2) and the review pack (G3),
+never from a timer.  =org-edna= stays optional and unbuilt.
+
+Tests: the five in the assay.  Depends on the migration for real value;
+the fixture has three parents with children and gains one dormant.
+
+** G9 The interstitial line, the day log, the date button  (size S)
+
+Mechanism per productivity.org: the =j= capture template with
+=%(zetta-org-prog-link)=, =zetta-org-day-log= assembling intervals, state
+changes, captures and journal lines in time order with =RET= to jump,
+and a =defil= over ISO and ordinal dates calling =zetta-hyrolo-day=.
+
+What changes now: the day log is drawn in =org-queue-mode= (a task line
+per event, the note column carrying the time and the kind), so the
+columns and jump keys come free.  Gaps in a focus block with nothing in
+PROG are listed using G6's blocks.  Commits join it in wave 6.
+
+Tests: the four in the assay; the day-log ordering test runs over plists.
+
+** G13d Interruptions  (size XS)
+
+The one-line hook: =org-capture-after-finalize-hook= writes
+=:INTERRUPTED:= = the ID of the entry most recently moved to PROG, when
+one is open.  Test: the assay's fourth G13 test.  Counted in G2's close
+per PROG entry.
+
+* Wave 2 — The week  (G3, G7a)
+
+The Monday pack and the one question it exists to ask.  One week.
+
+** G3 The weekly review pack  (size S)
+
+Mechanism per productivity.org: =zetta-org-review-week= (=,-o-m=) assembles
+what moved, neglected, chase, parked-due, untriaged, inbox count, dormant
+(G8), still-worth-it candidates (G7), calibration, the time table by
+category, the =ROTTEN= count, and (wave 4) the chains' week; two lines
+typed into a datetree in =~/kb/notes/reviews.org=.
+
+What changes now: the time table is =org-gantt-table= (built); the
+calendar-against-template row compares last week's intervals to G6's
+blocks per bucket, which is the "areas below their minimum" row in
+plain arithmetic once G5's floors exist.  The pack is one buffer in
+=org-queue-mode= with a section per group.
+
+Tests: the five in the assay.
+
+** G7a "Still worth it?"  (size S)
+
+Mechanism per productivity.org: =:SURFACED:= incremented by the Parked
+view and the pack; =,-o-y= on an entry shows age, times carried, times
+surfaced and takes one key: keep (=:KEPT:= stamp, counter reset), park
+(=HOLD= with =REVIEW_ON= a season out), dismiss (=NOPE= with =:DISMISSED:=).
+=zetta-org-dismiss-after= 3 makes the pack *propose* dismissal (Part 6
+question 7, default: proposed, never automatic).
+
+What changes now: all three keys are apply actions (=property= and
+=state=), so a dismissal is undoable and logged.  Duplicates are wave 3,
+with decoration, because they share the irs call.
+
+Tests: the first three in the assay.
+
+* Wave 3 — Clarify  (G1, G7b, G13c)
+
+The largest bookkeeping reducer, and the two proposals that ride on
+its accept key.  Two weeks.
+
+** G1 AI decoration of the inbox  (size M)
+
+Mechanism per productivity.org 3.2 and the contract in 3.6, in a new
+zettapkg =org-decorate= (=-core=, =-harvest=, =.el=).  The core takes an
+entry plist, the closed lists, the calibration table and a function
+that answers a prompt, and returns a proposal plist; the harvest
+collects the lists from the config and neighbours from irs; the command
+file runs =gptel-request= with =:schema=, writes =AI_*= properties, and
+gives the Inbox view its third group and three keys: accept, edit,
+reject.
+
+What changes now:
+
+- *Accept is an apply.*  Accepting writes the real fields through
+  =org-queue-apply-actions= (new kinds =property=, =tag=, =refile=, plus the
+  existing =state= and =schedule=) and strips the =AI_*= properties in the
+  same transaction; reject strips only.  Undo works.
+- *Effort comes from the queue's calibration* for the proposed category,
+  as the assay says; the table is =org-queue-core-calibration= over the
+  harvest.
+- *Dates are resolved in elisp*: the model returns a phrase, =org-read-date=
+  parses it against =:CREATED:=.
+- =AI_KIND: delegate= and =AI_REPO= feed wave 4's kick.
+- Which model: Part 6 question 4.  Default: the local model through
+  gptel (qwen2.5:7b via Ollama, already installed for the router), with
+  a preset switch to Claude for an inbox you choose to send.
+
+Tests: the six in the assay, all with a stubbed model, in batch.
+=,-o-f= decorates the inbox on demand; the idle timer is off until the
+first week says the proposals are worth having.
+
+** G7b Duplicate capture  (size XS)
+
+On capture finalize, =irs_fts_search= over the inbox and todo files for
+the new title; a near-match writes =:DUPLICATE_OF:= and the Inbox view
+groups it "captured before".  Test: the assay's fourth G7 test.
+
+** G13c Git as evidence of DONE  (size S)
+
+A reader over =git log= of =~/kb= and the repos in =~/.private.el=; a
+commit message carrying an entry's =:ID:= proposes =EVIDENCE_DONE= with
+the SHA, offered in the Inbox view with G1's accept key.  Idempotent on
+re-run.  Test: the assay's second G13 test.
+
+* Wave 4 — Chains  (G16)
+
+The one mechanism with no ancestor in the survey, and the one that
+governs most of the working day.  Two weeks.
+
+** G16 The agent chain  (size M)
+
+Mechanism per productivity.org, in a new zettapkg =org-chain=:
+
+- The =AGENT(a!)= state after =PROG=; =org-gantt-machine-states= so its
+  intervals are machine minutes in their own lane.
+- =,-o-i= kicks: refuses without a prompt or past =org-queue-chain-limit=
+  (3; =C-u= overrides and logs); writes =:AGENT_SESSION:=; opens the
+  terminal with =claude --session-id UUID "<prompt>"=; transitions to
+  =AGENT=.  =C-u C-u= is headless for =:KICK_AT:= runs, never the default.
+- Landing: the Claude Code =Stop= and =Notification= hooks append plists
+  to =.data/org/agent-landings.el=; Emacs watches the file and
+  =zetta-org-agent-land= transitions =AGENT= to =NEXT= or =QUES= through
+  the apply layer.  No elisp is evaluated from a hook.
+- Views: "Landed -- review", "In flight", "Agent asks" in the Day view;
+  =,-o-v a= the Chains view.
+- The queue: =AGENT= excluded with reason =in-flight=; a landed entry is
+  a commitment at =org-queue-review-share= (0.5) of its effort; the
+  morning report's line on expected landings and review minutes.
+- G2's close lists each chain with or without its next prompt.
+
+What changes now: state changes are apply actions; the landing reader
+is idempotent by session and event; the horizon treats =AGENT= like
+=WAIT= (excluded, no capacity).  The hooks themselves are a
+=settings.json= change (the =update-config= skill's territory), written
+so the hook only appends a line.
+
+Tests: the eight in the assay; the landing reader over a fixture log.
+Decisions: Part 6 questions 12-14, defaults stated there.
+
+* Wave 5 — The season  (G5, G12, G10)
+
+Above the week.  Two weeks.
+
+** G5 Horizons  (size M)
+
+Mechanism per productivity.org: =(todo) horizons.org= with a =Theme= and
+at most three =* MISSION= headings per season; =:MISSION:= on projects,
+inherited; the =o= orphan view; =w_mission= in the score; =,-o-n= the
+season command; area floors and ceilings as =:MIN_HOURS_WEEK:= /
+=:MAX_HOURS_WEEK:= read by G3.
+
+What changes now: the score term is one line in
+=org-queue-core-score= and one weight; the fourth-mission refusal is a
+=before-save-hook= check on that file only.  Depends on question 8 for
+content, not for code.
+
+Tests: the five in the assay.
+
+** G12 The intake gate  (size XS now)
+
+Advice on =org-deadline= (interactive only) and =,-o-I=: run
+=org-queue-core-horizon= from today to the date, report committed hours
+against capacity per bucket, the commitments ahead, and the first day
+the work fits (from =:placements=, or "does not fit" from =:missed=).
+Never refuses the write.  Test: the assay's.
+
+** G10 The knowledge loop  (size M)
+
+Mechanism per productivity.org: =,-o-M= promote a heading to a HyWiki
+page with a link reason typed once; =,-o-R= resurface an untouched page
+beside its backlinks; "on this day" through =zetta-hyrolo-day=;
+=FavouriteProblems.org= scored by G1 as =AI_PROBLEM=; =anki-editor= for
+=:card:= headings, later.
+
+Tests: the five in the assay.  Anki is last and optional.
+
+* Wave 6 — The body, and the outside feeds  (G4 phase 2, G14, G13a, G13b)
+
+** G4 Habits, phase 2  (size M)
+
+=org-habit= loaded; faces re-skinned onto the ink ladder in a =:brushup=
+form; the strength score as properties with Loop's 13-day half-life and
+the two-miss alert through =zetta-notify=, as a pure =org-habit-core= in
+org-queue (=org-habit-stats= is the fallback if the pure core is not
+worth its tests).  Frequency habits via =org-window-habit= only if one is
+wanted.
+
+Tests: the five in the assay.  Question 2 is already answered by the
+build: habits live in =(todo) routine.org=.
+
+** G14 A unit timer inside the dip  (size S)
+
+=org-timer-set-timer= from the entry's Effort on the transition into
+PROG, offered by =,-o-e= only when now falls inside G6's dip (or the
+first two hours of block one if question 1 says so).  A bell only.
+Test: the predicate over G6's rows.
+
+** G13a Calendar  (size S, conditional)
+
+=org-caldav= into =(todo) calendar.org= if an external calendar exists
+(question 3).  If not, nothing.
+
+** G13b Mail  (size S)
+
+Memacs' =mu= module with =--delegation=, or a mu4e query over the sent
+folder, writing =WAIT= entries with =WAITING_ON= into an archive stub
+outside the daily views.  Test: the assay's first G13 test.
+
+* Small adoptions folded in
+
+From Appendix A's /adopt/ column and the queue's own to-do:
+
+- =org-ql-defpred queue-score= exposing =org-queue-core-score=, so any
+  agenda block can sort by it (wave 2, with the pack).
+- =org-agenda-auto-exclude-function= hiding =@call=, =@errand=, =@meeting=
+  outside G6's admin hours (wave 1, ten lines after G6).
+- A =datetree/= archive location so the done log is chronological (wave 2).
+- The =Rescheduled= LOGBOOK note: =org-log-reschedule 'time= is set; the
+  apply layer batches several reschedules in one command and Org keeps
+  only one pending note, so the apply layer writes its own
+  =- Placed on [stamp] by proposal= line per action (wave 1, in the apply
+  layer, five lines).
+
+* Sequence and size
+
+| wave | contents                                   | size | new package       | gate question after a week                              |
+|------+--------------------------------------------+------+-------------------+---------------------------------------------------------|
+|    1 | G6 routine, G2 close, G8 dormant, G9 log, G13d | S+S+S+S+XS | =org-routine= | is the day closed by a key, and is capacity honest?     |
+|    2 | G3 pack, G7a still-worth-it                | S+S  | --                | did Monday take thirty minutes and answer one question? |
+|    3 | G1 decoration, G7b duplicates, G13c git    | M+XS+S | =org-decorate=   | is the inbox emptied by accept keys?                    |
+|    4 | G16 chains                                 | M    | =org-chain=         | does the config know what is in flight?                 |
+|    5 | G5 horizons, G12 intake, G10 knowledge     | M+XS+M | --              | does work serve something, and is a new deadline argued? |
+|    6 | G4 phase 2, G14 timer, G13a/b feeds        | M+S+S+S | --             | is the routine the record?                              |
+
+Stage 0 of the assay -- migrate =(todo) emacs.org=, live with it -- is
+still first and still yours.  Every wave is exercised against the fixture
+before it; the fixture gains what each wave needs (a routine table, a
+dormant project, an inbox with raw captures, a chain).
+
+* Part 6 — Decisions that are yours, with the default each wave assumes
+
+|  # | question (productivity.org Part 5)                             | default assumed here                                       | wave |
+|----+----------------------------------------------------------------+------------------------------------------------------------+------|
+|  1 | pomodoros in the dip only, or also block one's first two hours | the dip only; the routine table is corrected to say so     | 1, 6 |
+|  2 | where habits live                                              | =(todo) routine.org= -- already built that way             |   -- |
+|  3 | is there an external calendar                                  | no; G13a is skipped until told otherwise                   |    6 |
+|  4 | which LLM decorates, and where                                 | local qwen2.5:7b through gptel; Claude by preset           |    3 |
+|  5 | is PROG the pick                                               | no: NEXT stays a prior decision; PROG earns the boost only |   -- |
+|  6 | =:BLOCKED_BY:= or org-edna                                     | the property; edna unbuilt                                 |    1 |
+|  7 | dismissal automatic or proposed                                | proposed, in the pack; =setq= to automate                  |    2 |
+|  8 | this season's theme                                            | cannot be defaulted; G5's file starts empty                |    5 |
+|  9 | capacity                                                       | derived from the routine table (G6), then from intervals   |    1 |
+| 10 | area versus resource for notes                                 | a =#+filetags:= line per note; G3 reads it                 |    2 |
+| 11 | concurrent PROG sharing                                        | =wall=, as built                                           |   -- |
+| 12 | two chains or three                                            | three, with the report saying when two would do            |    4 |
+| 13 | may an agent's question interrupt                              | quietly: mode line, no sound                               |    4 |
+| 14 | where the prompt lives                                         | the body; a =Prompt= sub-heading when there are notes      |    4 |
+
+Answer any of these and the wave adjusts; none blocks the build.
+
+* Where the rest lives
+
+- =productivity.org= — the assay; Part 3.2 has each gap's mechanism, tests
+  and must-nots, which this plan cites rather than repeats.
+- =scheduling.org= — buckets, habits phase 1, start-by, the horizon and
+  the proposal loop; its step 7 (sub-day) waits on wave 1's G6.
+- =time-management.org= — the queue, views, fixture and derived clock.
+- =TASK-TRACKING.org= — the tutorial; each wave adds its keys and a
+  section there.

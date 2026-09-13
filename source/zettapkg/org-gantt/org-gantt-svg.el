@@ -60,6 +60,11 @@
   "Time held in a waiting state: blocked, not idle."
   :group 'org-gantt)
 
+(defface org-gantt-machine
+  '((t :inherit shadow :slant italic))
+  "Time an agent held the entry: the chain's lane, a rung under work."
+  :group 'org-gantt)
+
 (defface org-gantt-idle
   '((t :inherit shadow))
   "Time the entry was open and in no particular state."
@@ -372,6 +377,11 @@ highlight."
            (org-gantt-svg--bar svg left actual-y span actual-h 'org-gantt-worked 0.95))
           (`(actual waiting)
            (org-gantt-svg--bar svg left actual-y span actual-h 'org-gantt-waiting 0.45))
+          (`(actual machine)
+           ;; Above the actual rail, its own lane: not your minutes.
+           (org-gantt-svg--bar svg left (- actual-y (max 3 (round (* actual-h 0.5))))
+                               span (max 3 (round (* actual-h 0.45)))
+                               'org-gantt-machine 0.6))
           (`(actual idle)
            (org-gantt-svg--bar svg left (+ actual-y (round (* actual-h 0.35)))
                                span (max 2 (round (* actual-h 0.3)))

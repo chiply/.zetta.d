@@ -87,6 +87,16 @@ module keeps the two in step."
   :type '(repeat string)
   :group 'org-gantt)
 
+(defcustom org-gantt-machine-states '("AGENT")
+  "States meaning an agent holds the entry: machine minutes, not yours.
+
+Drawn as the chain's own lane, never clipped to `org-gantt-window'
+\(agents run at night), and never in a human total: `:worked' ignores
+them and `:machine' sums them.  Must not overlap
+`org-gantt-working-states'."
+  :type '(repeat string)
+  :group 'org-gantt)
+
 (defcustom org-gantt-waiting-states '("WAIT" "QUES" "HOLD")
   "States that count as blocked rather than idle.
 
@@ -105,9 +115,10 @@ historical entries end where they really ended."
   :group 'org-gantt)
 
 (defun org-gantt-core-class (state)
-  "Return the bar class of STATE: `working', `waiting', `done' or `idle'."
+  "Return the bar class of STATE: `working', `machine', `waiting', `done' or `idle'."
   (cond ((null state) 'idle)
         ((member state org-gantt-working-states) 'working)
+        ((member state org-gantt-machine-states) 'machine)
         ((member state org-gantt-waiting-states) 'waiting)
         ((member state org-gantt-done-states) 'done)
         (t 'idle)))
@@ -352,6 +363,7 @@ Adds, to each row:
   :segments  raw classified segments, for the Gantt
   :clipped   the same, cut to `org-gantt-window', for the grid and the sums
   :worked    working minutes after clipping, under `org-gantt-overlap'
+  :machine   minutes an agent held it, never part of :worked
   :elapsed   wall minutes from first touch to last, or to NOW while open
   :sessions  how many separate times it was picked up
   :first     when it was first touched, :last when it was last left
@@ -372,7 +384,16 @@ those two numbers is the most useful thing on the chart."
                                             (apply #'max (mapcar (lambda (s) (plist-get s :end))
                                                                  segments))))))
                            (append (list :segments segments
-                                         :clipped (org-gantt-core-clip segments windows))
+                                         ;; Machine segments are not clipped
+                                         ;; to the working day: agents run
+                                         ;; at night, and that is the point.
+                                         :clipped (append
+                                                   (org-gantt-core-clip
+                                                    (cl-remove-if (lambda (s) (eq (plist-get s :class) 'machine))
+                                                                  segments)
+                                                    windows)
+                                                   (cl-remove-if-not (lambda (s) (eq (plist-get s :class) 'machine))
+                                                                     segments)))
                                    row)))
                        rows))
          (worked (org-gantt-core-attribute
@@ -392,10 +413,18 @@ those two numbers is the most useful thing on the chart."
                                              (eq (plist-get s :class) 'working)))
                                       segments))
                     (minutes (cdr (assq index worked)))
+                    (machine (cl-reduce #'+ (mapcar (lambda (s) (floor (- (plist-get s :end)
+                                                                        (plist-get s :start))
+                                                                     60))
+                                                    (cl-remove-if-not
+                                                     (lambda (s) (eq (plist-get s :class) 'machine))
+                                                     segments))
+                                        :initial-value 0))
                     (effort (plist-get row :effort))
                     (stale (and open (< (plist-get open :start) today))))
                (append
                 (list :worked minutes
+                      :machine machine
                       ;; A row still in PROG since a previous day has been
                       ;; accruing every working hour since, because nothing
                       ;; marked the end.  That is the honest reading of time

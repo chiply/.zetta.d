@@ -142,10 +142,15 @@ the live theme, which is exactly what a calendar wants."
         ;; same argument the `t' capture template already makes about
         ;; estimates.  Starting something (PROG) and finishing it (DONE)
         ;; need no explanation, so they stay silent.
+        ;; AGENT (G16): an agent has the ball.  After PROG, because that
+        ;; is where a chain starts -- you write the prompt in PROG and
+        ;; kick.  A timestamp only: the kick and the landing are the
+        ;; log, and org-chain writes the session ID beside them.
         '((sequence
            "TODO(t!)"
            "NEXT(N!)"
            "PROG(p!)"
+           "AGENT(a!)"
            "WAIT(w@/!)"
            "QUES(q@/!)"
            "HOLD(h@/!)"

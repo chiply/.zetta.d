@@ -310,3 +310,49 @@ CLOSED: [2026-08-26 Wed 13:22] SCHEDULED: <2026-08-15 Sat>
 
 Superseded -- the prototype was folded into the main pipeline.
 
+* AGENT Port the ingestion retries to the new client  :@deep:
+:PROPERTIES:
+:ID:       80E92471-27BB-478D-98A1-9D705299ADB4
+:CREATED:  [2026-09-06 Sun]
+:Effort:   1:00
+:AGENT_SESSION: 6f1c2a4e-0000-4000-8000-000000000001
+:AGENT_REPO: ~/source_code/information-retrieval-service
+:END:
+:LOGBOOK:
+- State "AGENT"      from "PROG"       [2026-09-12 Sat 09:05]
+- State "PROG"       from "TODO"       [2026-09-12 Sat 08:40]
+:END:
+Notes: the old client swallowed 429s; see the outage postmortem.
+** Prompt
+In ~/source_code/information-retrieval-service, replace the retry loop in
+ingest/client.py with the new backoff client; keep the tests green.
+
+* NEXT Write the migration for the reranker cache  :@deep:
+:PROPERTIES:
+:ID:       529FCF35-63CE-47CE-8D80-7DB206A765C3
+:CREATED:  [2026-09-08 Tue]
+:Effort:   0:40
+:AGENT_SESSION: 6f1c2a4e-0000-4000-8000-000000000002
+:END:
+:LOGBOOK:
+- State "NEXT"       from "AGENT"      [2026-09-12 Sat 07:50]
+- State "AGENT"      from "PROG"       [2026-09-11 Fri 22:10]
+- State "PROG"       from "TODO"       [2026-09-11 Fri 21:45]
+:END:
+Add an alembic migration that adds the rerank_cache table; run the tests.
+
+* QUES Move the CLIP index build off the request path  :@deep:
+:PROPERTIES:
+:ID:       61B04406-FD2C-4BB9-AAAE-AE301595B2B9
+:CREATED:  [2026-09-09 Wed]
+:Effort:   1:00
+:AGENT_SESSION: 6f1c2a4e-0000-4000-8000-000000000003
+:END:
+:LOGBOOK:
+- State "QUES"       from "AGENT"      [2026-09-12 Sat 09:30]
+- State "AGENT"      from "PROG"       [2026-09-12 Sat 09:12]
+- State "PROG"       from "TODO"       [2026-09-12 Sat 09:00]
+:END:
+Build the CLIP index in a background job.
+Agent asks: should the job run under the existing scheduler or a new one?
+

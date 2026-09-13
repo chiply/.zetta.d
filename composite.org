@@ -11,8 +11,8 @@
 # queue has buckets, habits, a horizon, an apply layer and a proposal
 # buffer -- several gaps got smaller.
 #
-# Status [2026-09-12]: waves 1 and 2 BUILT the same day (see "As built"
-# under each wave); waves 3-6 follow in order, each with its own note.
+# Status [2026-09-12]: waves 1 to 4 BUILT the same day (see "As built"
+# under each wave); waves 5 and 6 follow in order, each with its own note.
 
 * Start here
 
@@ -359,6 +359,43 @@ commit message carrying an entry's =:ID:= proposes =EVIDENCE_DONE= with
 the SHA, offered in the Inbox view with G1's accept key.  Idempotent on
 re-run.  Test: the assay's second G13 test.
 
+** As built [2026-09-12]
+
+- =org-decorate= (=source/zettapkg/org-decorate/=): =-core= (validate
+  against the lists, the drops into AI_WHY, the merge that never emits
+  a canonical name, the accept plan as apply actions with the refile
+  last, the two-signal duplicate rule, commit evidence, and the
+  idempotence key of hash + prompt + schema versions with AI_REJECTED
+  honoured); 28 batch tests.  =-lists= reads the closed lists from Org
+  state and the entry as a plist.  =org-decorate.el= is the request
+  chain (irs neighbours, then =gptel-request= with =:schema=, then the
+  write through the apply layer), the four keys, the corrections file,
+  the capture duplicate check and the git reader; 11 file tests with a
+  stubbed model.
+- *Dates*: the contract said "pin whichever org-read-date gives".
+  Measured: =org-read-date= resolves a weekday name against the current
+  date and ignores the base time it is handed, and does not read
+  "tomorrow" or "end of month" at all.  So the resolver is
+  =org-decorate-core-resolve-phrase=, our own arithmetic against CREATED
+  (weekday strictly after, "next week" = Monday, "end of month", "+2d",
+  "in 3 weeks", ISO, "Sep 10", a time of day), pinned by 16 cases.
+- Apply layer: =deadline=, =timestamp= and =body-line= actions; undo
+  replays reverses last-first (a refile must come back before the
+  property restores); a keyword set on an entry that had none reverses
+  to "" (a nil target made =org-todo= cycle, which hangs batch); the
+  locator scans the file for the ID and refuses a stale position; the
+  dirty check looks at file buffers, not entries.
+- Module: local Ollama backend by default (=qwen2.5:7b=, present), Claude
+  by =org-decorate-backend=; =C-c a/e/r/d= in Org and agenda buffers; the
+  Inbox view's five groups and the commit-evidence block; commits in
+  the day log.
+- Not done: the =make decorate-eval= precision harness (needs a key and
+  a network); the idle timer (off by design until the first week says).
+- A finding for the tests: Emacs installs its own SIGALRM handler, so
+  the =perl -e 'alarm N'= wrapper productivity.org prescribes never kills
+  a hung batch Emacs.  =source/zettapkg/run-tests.sh= uses coreutils
+  =timeout -s KILL= instead.
+
 * Wave 4 — Chains  (G16)
 
 The one mechanism with no ancestor in the survey, and the one that
@@ -393,6 +430,43 @@ so the hook only appends a line.
 
 Tests: the eight in the assay; the landing reader over a fixture log.
 Decisions: Part 6 questions 12-14, defaults stated there.
+
+** As built [2026-09-12]
+
+- =org-chain= (=source/zettapkg/org-chain/=): =-core= (the prompt from the
+  body or the Prompt heading, verbatim; the kick check and the override;
+  KICK_AT headless-only; the command line; the landing log applied
+  once with orphans; the landed predicate; metrics per chain; the
+  expected-landings arithmetic -- each chain lands every latency +
+  cycle minutes and each landing costs a cycle, so three chains at
+  15/20 over 240 minutes need 360 and two need 240, "when two would
+  do"); 10 batch tests.  =org-chain.el=: the kick with a stubbed
+  terminal seam, the landing reader with file-notify and a timer, the
+  =landed-from-agent= and =agent-asks= org-ql predicates, the morning
+  line, the close and pack hooks; 5 file tests over a temp corpus and a
+  log written the way the hook writes it.
+- =AGENT(a!)= after PROG in org.el.  =org-gantt-machine-states= with a
+  =machine= class: its own lane above the actual rail, unclipped by the
+  window, summed as =:machine=, never in =:worked=; one gantt test.
+  =org-queue-review-share= in the core; =:landed= and =:agent-session=
+  from the harvest.
+- The hook: =~/.files/files/.claude/claude-landing.sh= (committed on
+  .files dev, 919db76), symlinked into =~/.claude=, wired in
+  settings.json for Stop and Notification.  It appends one plist line;
+  nothing else.
+- A finding that changed the apply layer: =org-todo= leaves its LOGBOOK
+  line to =post-command-hook=, so a state change from a timer, a
+  file-notify callback or a batch test never recorded its transition,
+  and several changes in one apply kept only the last pending line.
+  The apply layer now flushes the pending note itself after every
+  state change.  Every earlier wave's state writes benefit.
+- Measured numbers use the median across chains, not the mean: one
+  overnight run would drag a mean past the block.
+- Fixture: three chains in work.org (in flight with a Prompt heading,
+  landed overnight, asking).
+- Decisions taken as Part 6 defaults: three chains; questions quietly
+  in the mode line; the prompt in the body with a Prompt heading when
+  there are notes.
 
 * Wave 5 — The season  (G5, G12, G10)
 

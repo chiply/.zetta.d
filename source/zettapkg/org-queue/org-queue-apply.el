@@ -234,7 +234,14 @@ After the planning line and the drawers, past the last text line."
     ('state
      (let ((to (or (plist-get action :to) "")))
        (unless (equal to (or (org-get-todo-state) ""))
-         (org-todo (if (string-empty-p to) 'none to)))))
+         (org-todo (if (string-empty-p to) 'none to))
+         ;; `org-todo' leaves its LOGBOOK line to `post-command-hook'.
+         ;; An apply may run from a timer, a file watch or a batch test,
+         ;; where no command follows, and several state changes in one
+         ;; apply would keep only the last pending line.  So the line is
+         ;; written here, now: the transition is the clock's evidence.
+         (when (memq #'org-add-log-note post-command-hook)
+           (org-add-log-note)))))
     ('property
      (if (plist-get action :value)
          (org-entry-put (point) (plist-get action :name) (plist-get action :value))

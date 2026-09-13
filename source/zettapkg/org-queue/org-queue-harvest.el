@@ -398,6 +398,17 @@ Read by the harvest as `:dormant-parent' on the children."
   :type 'string
   :group 'org-queue)
 
+(defun org-queue-harvest--landed-p (state)
+  "Return non-nil if the entry is NEXT straight from an agent state.
+The transition before the newest one was into AGENT: the run finished
+and the review is what is left."
+  (and (equal state "NEXT")
+       (let ((log (org-queue-state-log)))
+         (and (>= (length log) 2)
+              (equal (car (car (last log))) "NEXT")
+              (member (car (car (last log 2))) org-queue-agent-states)
+              t))))
+
 (defun org-queue-harvest--dormant-parent-p ()
   "Return non-nil if an ancestor of the entry carries the dormant tag."
   (save-excursion
@@ -448,6 +459,8 @@ TODAY, a YYYYMMDD integer, anchors repeating timestamps."
           :dismissed (org-queue-harvest--timestamp-date (org-entry-get (point) "DISMISSED"))
           :parent (save-excursion
                     (when (org-up-heading-safe) (org-get-heading t t t t)))
+          :agent-session (org-entry-get (point) "AGENT_SESSION")
+          :landed (org-queue-harvest--landed-p (nth 2 components))
           :interrupted (org-queue-harvest--interrupted)
           :dormant-parent (org-queue-harvest--dormant-parent-p)
           :timestamp (car stamps)

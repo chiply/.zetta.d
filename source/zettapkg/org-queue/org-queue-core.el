@@ -768,9 +768,20 @@ Each element is a plist of `:category', `:n', `:raw' and `:factor'."
     (or (cdr (assoc category factors))
         (alist-get t factors 1.0))))
 
+(defcustom org-queue-review-share 0.5
+  "Share of a landed entry's effort that is your minutes: the review.
+An agent task's effort means your minutes per cycle, spec plus review;
+when it lands, what is left is the review (Part 6 question 12 of
+composite.org starts this at one half)."
+  :type 'float
+  :group 'org-queue)
+
 (defun org-queue-core-minutes (task factors)
-  "Return the minutes TASK should be planned against, calibrated."
+  "Return the minutes TASK should be planned against, calibrated.
+A landed entry -- NEXT straight from AGENT -- is planned at
+`org-queue-review-share' of its effort."
   (max 1 (round (* (org-queue-core-effort task)
+                   (if (plist-get task :landed) org-queue-review-share 1.0)
                    (org-queue-core-factor factors (plist-get task :category))))))
 
 

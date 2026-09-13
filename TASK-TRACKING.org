@@ -56,6 +56,7 @@ Defined in =modules/org/org.el=.
 | TODO  | =t=   | open work                                            | scored candidate                      |
 | NEXT  | =N=   | you have decided this is next, whatever the formula says | *commitment*, never scored          |
 | PROG  | =p=   | in progress; entering it starts the derived clock   | scored, with a "finishing" bonus; at most 3 per day |
+| AGENT | =a=   | an agent has the ball: a chain in flight            | excluded, reason =in-flight=; never human capacity |
 | WAIT  | =w=   | waiting on someone; asks for a note                 | excluded unless a deadline is within 7 days |
 | QUES  | =q=   | an open question; asks for a note                   | scored, docked 1.5                    |
 | HOLD  | =h=   | paused by choice; asks for a note                   | excluded                              |
@@ -95,6 +96,9 @@ All under the =,-o= prefix (=launch-map= → =menu-org-map=).
 | =C-c a / C-c e / C-c r= | =org-decorate-accept= / =-accept-field= / =-reject= | on an entry or an agenda line: promote the proposals, one field, or strip them |
 | =C-c d=  | =org-decorate-this=             | decorate the entry at point               |
 | =M-x org-decorate-git-evidence= |         | commits naming an entry's ID become =EVIDENCE_DONE= |
+| =,-o-i=  | =org-chain-kick=                | kick the entry at point to an agent; =C-u= past the limit, =C-u C-u= headless |
+| =,-o-v a= | =org-agenda= "Chains"          | in flight, landed for review, asking      |
+| =M-x org-chain-land= |                    | apply the landing log by hand (it is watched anyway) |
 | =,-o-v j= | =org-agenda= "Dormant"         | projects with no next step, and finished ones  |
 | =M-x org-routine-report= |                | today's blocks, windows and dip from the routine table |
 
@@ -711,6 +715,67 @@ thirty days of commits in =~/kb= and the repositories =zetta-git-repos=
 names, and an open entry whose ID a commit message contains gets
 =EVIDENCE_DONE= with the SHA, once.  Commits also appear in the day log.
 
+* Chains
+
+Built 2026-09-12 (composite.org wave 4).  Most code is written by an
+agent you kick off and review; the config now knows it is happening.
+
+** The lifecycle
+
+One new state, =AGENT=, after PROG: an agent has the ball.  You write the
+prompt in PROG and kick; the entry is =AGENT= while the run lasts; it
+lands as =NEXT= when the run finished (you committed to the review the
+moment you kicked it off) or =QUES= when the agent stopped to ask; you
+review in PROG; then DONE, AGENT again for the next iteration, or NOPE.
+Every hop is a logged transition, so the derived clock gets the split:
+PROG intervals are your minutes, AGENT intervals are the machine's,
+drawn as the chain's own lane in the gantt (=org-gantt-machine-states=)
+and never in a human total; kick to landing is latency, landing to PROG
+is review lag, AGENT transitions per chain is the iteration count.
+
+** Kicking: =,-o-i=
+
+On the entry.  The prompt is the body, or the body of a =Prompt=
+sub-heading when the entry holds notes too; it is passed to the session
+untouched.  Refused without a prompt, or with =org-chain-limit= (3)
+chains already in flight -- =C-u= kicks past the limit and the log says
+so.  The kick writes =:AGENT_SESSION:= (a UUID), asks once for the
+repository (kept as =:AGENT_REPO:=; a decoration's =AI_REPO= is used when
+there is one), opens a vterm running =claude --session-id UUID "<prompt>"=
+in it, and transitions to AGENT.  =C-u C-u= runs headless instead:
+=claude -p= in a git worktree of the repository, output to a buffer.  An
+entry with =:KICK_AT: HH:MM= before dawn runs headless only, kicked by a
+ten-minute timer when its time comes; an interactive kick of such an
+entry is refused.
+
+** Landing
+
+The Claude Code =Stop= and =Notification= hooks run
+=~/.claude/claude-landing.sh= (in the .files repo), which appends one
+plist per line to =.data/org/agent-landings.el= and nothing else.  Emacs
+watches the file (and reads it every minute besides): the entry in
+AGENT whose session matches becomes NEXT on a stop, QUES on a question
+(the question is appended to the body as "Agent asks: ..."), each line
+once, through the apply layer.  A line no entry owns is an orphan,
+reported, never dropped.  A stop is a notification unless the routine
+says this is a quiet window; a question is a mark in the mode line
+(=?2=) and nothing more.
+
+** Where chains appear
+
+- The Day view: *Landed -- review* at the top beside NEXT, *In flight*
+  and *Agent asks* after the work in progress.
+- =,-o-v a=: the Chains view, the same three groups.
+- The morning report: one line -- chains in flight, the landings expected
+  in the first focus block at the measured latency and your measured
+  cycle, the review minutes they imply, and when fewer chains would do.
+- The queue: AGENT is excluded (=in-flight=); a landed entry is planned at
+  =org-queue-review-share= (0.5) of its effort -- an agent task's effort
+  is your minutes per cycle, spec plus review.
+- The close: each chain in flight, primed (its prompt is there) or not.
+- The pack: the chains' week -- kicks, latency, review lag, your minutes
+  against the machine's.
+
 * Working against the test data
 
 The fixture is seven =(todo)= files under =testdata/todo/=, with full
@@ -821,9 +886,8 @@ From =scheduling.org=:
   two-miss alert (step 8).
 
 From =composite.org= (the plan for the assay's remaining gaps, in six
-waves; keys already reserved there).  Waves 1 to 3 are built (above).
+waves; keys already reserved there).  Waves 1 to 4 are built (above).
 
-- Wave 4: agent chains (=,-o-i=, the AGENT state, landings).
 - Wave 5: horizons and the season (=,-o-n=), the intake gate (=,-o-I=),
   promote and resurface (=,-o-M=, =,-o-R=).
 - Wave 6: habits phase 2, the timer in the dip (=,-o-e=), calendar and

@@ -482,6 +482,46 @@ HABITS = [
  ("Laundry",          "housekeeping", "0:30", "Sat"),
 ]
 
+# Agent chains (G16): one in flight with a Prompt sub-heading and its
+# session, one that landed this morning and waits for review, one that
+# asked a question.  Their LOGBOOKs hold the kick and the landing.
+def render_chains(rng, today):
+    def stamp(d, hhmm): return ina(d, hhmm)
+    y = today - dt.timedelta(days=1)
+    L = []
+    L += [f"* AGENT Port the ingestion retries to the new client  :@deep:",
+          ":PROPERTIES:", f":ID:       {oid(rng)}", f":CREATED:  {ina(today - dt.timedelta(days=6))}",
+          ":Effort:   1:00", ":AGENT_SESSION: 6f1c2a4e-0000-4000-8000-000000000001",
+          ":AGENT_REPO: ~/source_code/information-retrieval-service", ":END:",
+          ":LOGBOOK:",
+          f'- State "AGENT"      from "PROG"       {stamp(today, "09:05")}',
+          f'- State "PROG"       from "TODO"       {stamp(today, "08:40")}',
+          ":END:",
+          "Notes: the old client swallowed 429s; see the outage postmortem.",
+          "** Prompt",
+          "In ~/source_code/information-retrieval-service, replace the retry loop in",
+          "ingest/client.py with the new backoff client; keep the tests green.", ""]
+    L += [f"* NEXT Write the migration for the reranker cache  :@deep:",
+          ":PROPERTIES:", f":ID:       {oid(rng)}", f":CREATED:  {ina(today - dt.timedelta(days=4))}",
+          ":Effort:   0:40", ":AGENT_SESSION: 6f1c2a4e-0000-4000-8000-000000000002", ":END:",
+          ":LOGBOOK:",
+          f'- State "NEXT"       from "AGENT"      {stamp(today, "07:50")}',
+          f'- State "AGENT"      from "PROG"       {stamp(y, "22:10")}',
+          f'- State "PROG"       from "TODO"       {stamp(y, "21:45")}',
+          ":END:",
+          "Add an alembic migration that adds the rerank_cache table; run the tests.", ""]
+    L += [f"* QUES Move the CLIP index build off the request path  :@deep:",
+          ":PROPERTIES:", f":ID:       {oid(rng)}", f":CREATED:  {ina(today - dt.timedelta(days=3))}",
+          ":Effort:   1:00", ":AGENT_SESSION: 6f1c2a4e-0000-4000-8000-000000000003", ":END:",
+          ":LOGBOOK:",
+          f'- State "QUES"       from "AGENT"      {stamp(today, "09:30")}',
+          f'- State "AGENT"      from "PROG"       {stamp(today, "09:12")}',
+          f'- State "PROG"       from "TODO"       {stamp(today, "09:00")}',
+          ":END:",
+          "Build the CLIP index in a background job.",
+          "Agent asks: should the job run under the existing scheduler or a new one?", ""]
+    return L
+
 def render_routine(rng, today):
     L = ["#+TITLE: Routine", "#+CATEGORY: routine",
          f"#+PROPERTY: Effort_ALL {EFFORT_ALL}", f"#+COLUMNS: {COLUMNS}",
@@ -505,6 +545,7 @@ def build(rng, today):
         for spec in specs:
             L += render_task(rng, today, spec, 1, cat)
         out[f"(todo) {fname}.org"] = "\n".join(L) + "\n"
+    out["(todo) work.org"] += "\n".join(render_chains(rng, today)) + "\n"
     out["(todo) calendar.org"] = "\n".join(render_events(rng, today)) + "\n"
     out["(todo) routine.org"] = "\n".join(render_routine(rng, today)) + "\n"
     return out

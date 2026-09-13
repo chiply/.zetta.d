@@ -40,6 +40,31 @@
 
 ;;;; Intervals to segments
 
+(ert-deftest org-gantt-core-test-agent-minutes-are-machine-not-worked ()
+  "PROG 09:00-09:20, AGENT 09:20-23:40 (overnight, outside the window),
+NEXT after: 20 worked minutes, 860 machine minutes, and the machine
+segment is kept whole in :clipped."
+  (let* ((row (org-gantt-test--row
+               :intervals (list (list :state "PROG"
+                                      :start (org-gantt-test--at 2026 9 8 9 0)
+                                      :end (org-gantt-test--at 2026 9 8 9 20))
+                                (list :state "AGENT"
+                                      :start (org-gantt-test--at 2026 9 8 9 20)
+                                      :end (org-gantt-test--at 2026 9 8 23 40))
+                                (list :state "NEXT"
+                                      :start (org-gantt-test--at 2026 9 8 23 40)
+                                      :end (org-gantt-test--at 2026 9 9 8 0)))))
+         (org-gantt-window org-gantt-test--window)
+         (measured (car (org-gantt-core-summarize
+                         (list row) (org-gantt-test--at 2026 9 9 9 0)))))
+    (should (= 20 (plist-get measured :worked)))
+    (should (= 860 (plist-get measured :machine)))
+    (should (eq 'machine (org-gantt-core-class "AGENT")))
+    (let ((machine (cl-find 'machine (plist-get measured :clipped)
+                            :key (lambda (s) (plist-get s :class)))))
+      (should machine)
+      (should (= (org-gantt-test--at 2026 9 8 23 40) (plist-get machine :end))))))
+
 (ert-deftest org-gantt-core-test-open-and-close ()
   "TODO -> PROG at 09:12 then PROG -> DONE at 10:40 is one 88-minute bar."
   (let* ((row (org-gantt-test--row

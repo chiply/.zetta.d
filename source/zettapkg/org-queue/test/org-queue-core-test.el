@@ -561,6 +561,14 @@
     (should (eq 'in-flight (oqt-drop-reason plan "flying")))
     (should (= 60 (plist-get plan :minutes)))))
 
+(ert-deftest oqt/a-landed-entry-is-planned-at-the-review-share ()
+  (let* ((org-queue-review-share 0.5)
+         (org-queue-calibrate nil)
+         (landed (oqt-task "landed" :state "NEXT" :effort 60 :landed t))
+         (plan (org-queue-core-plan (list landed) oqt-today 300)))
+    (should (= 30 (plist-get plan :minutes)))
+    (should (eq 'committed (plist-get (car (plist-get plan :planned)) :queue-reason)))))
+
 (provide 'org-queue-core-test)
 ;;; org-queue-core-test.el ends here
 

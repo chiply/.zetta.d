@@ -36,6 +36,7 @@
 (defcustom zetta-org-gantt-rungs
   '((org-gantt-worked        . brushup-fg)
     (org-gantt-waiting       . brushup-fg-3)
+    (org-gantt-machine       . brushup-fg-4)
     (org-gantt-idle          . brushup-fg-5)
     (org-gantt-span          . brushup-fg-6)
     (org-gantt-plan-queue    . brushup-fg-2)

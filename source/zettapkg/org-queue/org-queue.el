@@ -303,6 +303,11 @@ With FIXED, only the fixed-width ones; otherwise only the trailing ones."
 (defvar-local org-queue--redraw-function nil
   "How to redraw this buffer after a toggle; nil means draw the plan.")
 
+(defvar org-queue-morning-line-function nil
+  "Function returning one more line for the morning report, or nil.
+Set by org-chain: chains in flight, the landings expected, the review
+minutes they imply.")
+
 (defun org-queue--redraw ()
   "Redraw the current buffer with its current settings."
   (if org-queue--redraw-function
@@ -386,6 +391,9 @@ R12 of the composite made visible without a nag: one line, no prompt."
     (org-queue--insert (org-queue--capacity-line plan) 'org-queue-detail)
     (when-let* ((line (org-queue--yesterday-line (plist-get plan :date))))
       (org-queue--insert line 'org-queue-detail))
+    (when-let* ((line (and org-queue-morning-line-function
+                           (ignore-errors (funcall org-queue-morning-line-function)))))
+      (org-queue--insert (format "   %s\n" line) 'org-queue-detail))
     (org-queue--insert-buckets plan)
     (org-queue--insert-legend)
     (org-queue--draw-body plan)

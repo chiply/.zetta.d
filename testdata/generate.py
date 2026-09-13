@@ -541,6 +541,17 @@ def render_routine(rng, today):
               f":Effort:   {eff}",
               f":CREATED:  {ina(today - dt.timedelta(days=rng.randint(30, 200)))}"]
         if days: L.append(f":HABIT_DAYS: {days}")
+        L += [":END:"]
+        # Ticks (habits phase 2): three weeks of DONEs with a miss or two,
+        # so the strength score and org-habit's graph have something to
+        # read.  A tick is the DONE transition the repeater rolls on.
+        allowed = set(days.split()) if days else None
+        L.append(":LOGBOOK:")
+        for back in range(21, 0, -1):
+            d = today - dt.timedelta(days=back)
+            if allowed and d.strftime("%a") not in allowed: continue
+            if rng.random() < 0.15: continue          # a miss
+            L.append(f'- State "DONE"       from "TODO"       {ina(d, "07:05")}')
         L += [":END:", ""]
     return L
 

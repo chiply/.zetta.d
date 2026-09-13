@@ -15,6 +15,7 @@
 set -u
 cd "$(dirname "$0")/../.." || exit 1
 TIMEOUT=${TIMEOUT:-120}
+export ORG_QUEUE_TESTS=1
 pkgs=(source/zettapkg/org-queue source/zettapkg/org-gantt source/zettapkg/org-routine
       source/zettapkg/org-decorate source/zettapkg/org-chain source/zettapkg/org-knowledge)
 loadpath=()

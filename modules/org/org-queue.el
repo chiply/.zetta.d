@@ -21,7 +21,8 @@
              org-queue-undo-apply org-queue-horizon org-queue-propose
              org-queue-close org-queue-dormant-check org-queue-day-log
              org-queue-review-week org-queue-still-worth-it
-             org-queue-season org-queue-intake)
+             org-queue-season org-queue-intake
+             org-queue-timer org-queue-habit-update org-queue-mail-waiting)
 
   :brushup
   ;; The plan is a prominence ladder, not a colour scheme: the date at the
@@ -50,7 +51,27 @@
       (set-face-attribute 'org-queue-alarm nil
                           :foreground (or (bound-and-true-p brushup-fg)
                                           (face-foreground 'default nil t))
-                          :weight 'bold :underline t))
+                          :weight 'bold :underline t)
+      ;; org-habit's graph: red, yellow and green become rungs of the
+      ;; ink ladder.  A missed day is a rung down, not a colour; nothing
+      ;; resets to zero on screen because nothing resets to zero in the
+      ;; score.
+      (when (facep 'org-habit-clear-face)
+        (let ((fg   (or (bound-and-true-p brushup-fg) (face-foreground 'default nil t)))
+              (fg-3 (or (bound-and-true-p brushup-fg-3) (face-foreground 'shadow nil t)))
+              (fg-5 (or (bound-and-true-p brushup-fg-5) (face-foreground 'shadow nil t)))
+              (bg   (or (bound-and-true-p brushup-bg) (face-background 'default nil t)))
+              (bg-2 (or (bound-and-true-p brushup-bg-2) (face-background 'default nil t))))
+          (dolist (spec `((org-habit-clear-face          ,bg-2 nil)
+                          (org-habit-clear-future-face   ,bg   nil)
+                          (org-habit-ready-face          ,fg-3 nil)
+                          (org-habit-ready-future-face   ,bg-2 nil)
+                          (org-habit-alert-face          ,fg   nil)
+                          (org-habit-alert-future-face   ,bg-2 nil)
+                          (org-habit-overdue-face        ,fg   t)
+                          (org-habit-overdue-future-face ,fg-5 nil)))
+            (set-face-attribute (nth 0 spec) nil :background (nth 1 spec)
+                                :foreground bg :underline (nth 2 spec))))))
    t)
 
   :init
@@ -73,7 +94,27 @@
     (require 'org-queue-review)
     (require 'org-queue-season)
     (require 'org-queue-intake)
-    (setq org-queue-review-floors-function #'org-queue-season-floors))
+    (require 'org-queue-timer)
+    (require 'org-queue-habit)
+    (require 'org-queue-mail)
+    (setq org-queue-review-floors-function #'org-queue-season-floors)
+    ;; Habits are scored once a day, at the close (habits phase 2).
+    (advice-add 'org-queue-close :after
+                (lambda (&rest _) (ignore-errors (org-queue-habit-update nil t)))))
+  ;; org-habit: the consistency graph in the agenda, only for today's
+  ;; habits, its column past the prefix the agenda draws (the graph
+  ;; overwrites that column).  The faces are re-skinned below: no streak
+  ;; colours, the ink ladder.
+  (with-eval-after-load 'org
+    (add-to-list 'org-modules 'org-habit)
+    (setq org-habit-show-habits-only-for-today t
+          org-habit-graph-column 56
+          org-habit-preceding-days 21
+          org-habit-following-days 3))
+  ;; The mail stub is outside the agenda and the refile targets, found
+  ;; by text search only (Karl Voit's pattern).
+  (with-eval-after-load 'org-agenda
+    (setq org-agenda-text-search-extra-files '(agenda-archives)))
   ;; The close counts the inbox; the queue itself never plans from it.
   (setq org-queue-inbox-file "~/kb/inbox.org")
 
@@ -132,5 +173,6 @@
  "m" 'org-queue-review-week   ; Monday: the pack
  "y" 'org-queue-still-worth-it
  "n" 'org-queue-season        ; horizoNs: the season
- "I" 'org-queue-intake)       ; what a deadline would cost
+ "I" 'org-queue-intake        ; what a deadline would cost
+ "e" 'org-queue-timer)        ; a unit timer, inside the dip only
 ;;; org-queue.el ends here

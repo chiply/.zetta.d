@@ -49,7 +49,7 @@ CLOSED: [2026-09-08 Tue 14:59]
 :Effort:   0:15
 :END:
 
-* TODO Vendor evaluation [2/3]                    :@deep:procurement:dormant:
+* TODO Vendor evaluation [2/3]  :@deep:procurement:
 SCHEDULED: <2026-09-15 Tue>
 :PROPERTIES:
 :ID:       02A86AA1-5C9A-4A80-8054-D25BE68C2391

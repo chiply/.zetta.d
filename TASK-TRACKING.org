@@ -104,6 +104,9 @@ All under the =,-o= prefix (=launch-map= → =menu-org-map=).
 | =,-o-v o= | =org-agenda= "Orphan"          | open work serving no mission, and the missions |
 | =,-o-M=  | =org-knowledge-promote=         | the heading becomes a HyWiki page; one link and its reason stay |
 | =,-o-R=  | =org-knowledge-resurface=       | the page untouched longest, beside what mentions it |
+| =,-o-e=  | =org-queue-timer=               | a unit timer on the entry, only inside the routine's dip |
+| =M-x org-queue-habit-update= |            | score every habit (also runs at the close)  |
+| =M-x org-queue-mail-waiting= |            | flagged sent questions become WAIT entries in the mail stub |
 | =,-o-v j= | =org-agenda= "Dormant"         | projects with no next step, and finished ones  |
 | =M-x org-routine-report= |                | today's blocks, windows and dip from the routine table |
 
@@ -833,11 +836,58 @@ searches the rolo for this day a year ago and a month ago.
 decoration names one in =AI_PROBLEM= when a capture bears on it.  Anki
 is not wired.
 
+* The body, and the outside feeds
+
+Built 2026-09-12 (composite.org wave 6).
+
+** Habits, phase 2
+
+=org-habit= is loaded: the consistency graph appears beside each habit
+in the agenda, for today's habits only, its faces walking the ink
+ladder rather than red, yellow and green.  Under it, a strength score
+with Loop's arithmetic: with =m = 0.5^(1/13)= (=org-queue-habit-half-life=),
+a done day moves the score toward one, a missed day multiplies it by
+=m=, a skipped day (=:HABIT_SKIP: 2026-09-10 ...=) leaves it alone.  Thirty
+straight days from nothing give 0.80, sixty 0.96, ninety 0.99; one miss
+costs a fraction, never everything.  The series comes from the habit's
+own LOGBOOK (every DONE is a tick) over the last ninety days.  The close
+writes =:HABIT_STRENGTH:= and =:HABIT_ALERT:= on every habit in one apply
+(=M-x org-queue-habit-update= does it by hand) and two consecutive
+misses raise a notification.  Frequency habits ("three a week") are not
+built.
+
+** The timer in the dip: =,-o-e=
+
+Entering PROG while now is inside the routine's dip starts
+=org-timer-set-timer= with the entry's Effort (25 minutes without one);
+=,-o-e= offers the same by hand and says why not outside the dip.  The
+bell is a notification; the interval still comes from the state log.
+Part 6 question 1: =org-routine-dip-first-hours= adds block one's first
+two hours to the dip.
+
+** Feeds
+
+- *Mail.* =M-x org-queue-mail-waiting= asks =mu= for the flagged messages
+  in the sent folders and the inbox.  A flagged message you sent whose
+  thread ends with you asking a question becomes a =WAIT= with
+  =WAITING_ON= the recipient; a flagged message you received becomes a
+  =NEXT=; a thread whose newest message is theirs yields nothing.  The
+  entries go to =~/kb/todo/mail.org_archive= -- outside the agenda and
+  the refile targets, found by text search only -- once per message ID,
+  with a mu4e link and no body text.
+- *Calendar.* Not built: there is no external calendar to bridge (Part 6
+  question 3); appointments stay as plain timestamps in
+  =(todo) calendar.org=.
+
+* Working against the test data
+
 The fixture is seven =(todo)= files under =testdata/todo/=, with full
 metadata: efforts, dates, LOGBOOK transitions, IDs, five habits in
-=(todo) routine.org= (lift, bike, clean, read, laundry), a dormant project
-and a finished one in =(todo) work.org=, =reading= / =housekeeping= tags for
-the buckets, and the routine table in =testdata/routine.org=.
+=(todo) routine.org= (lift, bike, clean, read, laundry, each with three
+weeks of ticks), a dormant project, a finished one, a project serving a
+mission and three agent chains in =(todo) work.org=, the season in
+=(todo) horizons.org=, =reading= / =housekeeping= tags for the buckets,
+and the routine table in =testdata/routine.org=.
 
 1. =M-x zetta-org-toggle-todo-source=.  The echo line should read
    =test (7 agenda files, ...)=.  It rebuilds =org-agenda-files= and the
@@ -941,10 +991,8 @@ From =scheduling.org=:
   two-miss alert (step 8).
 
 From =composite.org= (the plan for the assay's remaining gaps, in six
-waves; keys already reserved there).  Waves 1 to 5 are built (above).
-
-- Wave 6: habits phase 2, the timer in the dip (=,-o-e=), calendar and
-  mail feeds.
+waves; keys already reserved there).  All six waves are built (above);
+what each left out is said in its section.
 
 And still: migration of the real =(todo)= files (milestone 5): tooling
 exists, not run.

@@ -11,8 +11,8 @@
 # queue has buckets, habits, a horizon, an apply layer and a proposal
 # buffer -- several gaps got smaller.
 #
-# Status [2026-09-12]: waves 1 to 5 BUILT the same day (see "As built"
-# under each wave); wave 6 follows, with its own note.
+# Status [2026-09-12]: all six waves BUILT the same day (see "As built"
+# under each wave).  What each left out is in its note.
 
 * Start here
 
@@ -563,6 +563,33 @@ Test: the predicate over G6's rows.
 Memacs' =mu= module with =--delegation=, or a mu4e query over the sent
 folder, writing =WAIT= entries with =WAITING_ON= into an archive stub
 outside the daily views.  Test: the assay's first G13 test.
+
+** As built [2026-09-12]
+
+- G4 phase 2: =org-queue-habit-core= (Loop's score with the 13-day
+  half-life, the two-miss alert, the repair, skips, the series from
+  ticks over the days a habit falls on; 7 tests pinning 0.798 / 0.959
+  / 0.992) and =org-queue-habit= (the series from each habit's LOGBOOK
+  DONEs and HABIT_SKIP, HABIT_STRENGTH and HABIT_ALERT written through
+  the apply layer from the close, the alert through zetta-notify).
+  org-habit loaded with the graph for today's habits at column 56, its
+  eight faces re-skinned onto the ink ladder in the module's :brushup
+  form.  Frequency habits are not built; org-habit-stats was not
+  needed.  The fixture's habits gained three weeks of ticks.
+- G14: =org-queue-timer= (=,-o-e=, and the PROG transition inside the
+  dip); the predicate is the routine's =org-routine-in-dip-p=, already
+  tested; the bell is zetta-notify.
+- G13b: =org-queue-mail-core= (the last line skipping quotes and the
+  signature, the question test, the three rules, the entry text; 6
+  tests over message plists) and =org-queue-mail= over =mu find -o
+  sexp= with the body read from the message file, the thread's newest
+  sender checked with =-r msgid:=, written once per MSGID into
+  =~/kb/todo/mail.org_archive=, which
+  =org-agenda-text-search-extra-files= makes searchable and nothing
+  else reads.  Not Memacs: mu is here and one query is enough.
+- G13a: skipped, as the default says -- no external calendar.
+- Not verified live: the timer's ring and the mail reader against the
+  real store (the parser is tested; =mu= answers the queries).
 
 * Small adoptions folded in
 

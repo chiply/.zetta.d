@@ -85,6 +85,10 @@
 ;; (setq zetta-slack-teams '((:name "example" :host "example.slack.com"
 ;;                            :user "alice@example.com" :default t)))
 
+;; Hosts for `zetta-ssh' / `zetta-ssh-shell' (modules/core/remote.el).  The
+;; default is the Host aliases of ~/.ssh/config; set this to override.
+;; (setq zetta-ssh-hosts '("dev-box" "bastion"))
+
 ;; ──────────────────────────────────────────────────────────────────
 ;; Mail sending (mu4e / message-mode via msmtp)
 ;;

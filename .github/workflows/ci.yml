@@ -28,6 +28,16 @@ on:
   schedule:
     - cron: "0 6 * * 1"  # Mondays 06:00 UTC
   workflow_dispatch:
+    inputs:
+      # Which ~/.zetta.el the non-nox rows get.  No extra matrix row for
+      # the work profile (a warm-cache run per PR, billed): exercise it
+      # by hand from here when wanted (work-profile.org Part 7.4).  The
+      # nox row always runs the headless template.
+      template:
+        description: "Profile template for the test rows (example = full)"
+        type: choice
+        options: [example, headless, work]
+        default: example
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -43,6 +53,9 @@ env:
   # tools-category elpaca-wait hung 15 minutes past its last message).
   # Disabling the prompt turns that hang into an immediate, named failure.
   GIT_TERMINAL_PROMPT: "0"
+  # bin/zetta ci-sync / ci-test install this template when ~/.zetta.el
+  # is missing; the stub step below writes the same one, so both agree.
+  ZETTA_TEMPLATE: ${{ inputs.template || 'example' }}
 
 jobs:
   test:
@@ -146,13 +159,13 @@ jobs:
 
       - name: Create stub files
         # The nox row gets the headless profile, every other row the
-        # full one.  Both must exist before bin/zetta runs: ci-sync and
-        # ci-test substitute the full-profile example when ~/.zetta.el
-        # is missing.
+        # template chosen at dispatch (the full-profile example by
+        # default).  Both must exist before bin/zetta runs: ci-sync and
+        # ci-test substitute ZETTA_TEMPLATE when ~/.zetta.el is missing.
         run: |
           touch ~/.dir-locals.el
           echo ";;" > ~/.private.el
-          cp templates/${{ matrix.emacs-nox && 'zetta.headless.el' || 'zetta.example.el' }} ~/.zetta.el
+          cp templates/${{ matrix.emacs-nox && 'zetta.headless.el' || format('zetta.{0}.el', inputs.template || 'example') }} ~/.zetta.el
 
       - name: Sync missing packages
         if: steps.cache-elpaca.outputs.cache-hit != 'true'

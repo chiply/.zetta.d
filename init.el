@@ -23,6 +23,8 @@
 (let ((zetta-config (expand-file-name "~/.zetta.el")))
   (when (file-exists-p zetta-config)
     (load-file zetta-config)))
+;; A user file that moved `zetta-kb-dir' takes the (todo) corpus with it.
+(zetta-kb-follow-root)
 
 ;; Secrets -- needed by ~/.private.el before the modules load.  The cache,
 ;; its loader and the auth-source bridge live in bootstrap-secrets.el; it

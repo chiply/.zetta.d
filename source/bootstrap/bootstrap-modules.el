@@ -36,7 +36,22 @@ fall back to the same default on their own.")
 
 ;; name is vestigial (logseq era); points at the kb todo dir since 2026-07
 (defvar zetta-logseq-dir (zetta-kb-file "todo/")
-  "Directory containing the (todo) corpus.  Set in ~/.zetta.el.")
+  "Directory containing the (todo) corpus.  Set in ~/.zetta.el.
+Derived from `zetta-kb-dir' when this file loads; a ~/.zetta.el that
+moves the root without setting this is followed by `zetta-kb-follow-root'.")
+
+(defvar zetta--logseq-dir-default zetta-logseq-dir
+  "What `zetta-logseq-dir' was before ~/.zetta.el loaded.")
+
+(defun zetta-kb-follow-root ()
+  "Re-derive the kb defaults this file computed before ~/.zetta.el loaded.
+init.el calls this right after the user file.  `zetta-logseq-dir' was
+derived from `zetta-kb-dir' at load time, so a user file that only
+moves the root would leave the (todo) corpus behind (measured 2026-09-13
+in the WP-Z9 rehearsal); unless the user file set the corpus directory
+itself, it follows the root."
+  (when (equal zetta-logseq-dir zetta--logseq-dir-default)
+    (setq zetta-logseq-dir (zetta-kb-file "todo/"))))
 
 (defvar zetta-use-lockfile t
   "When non-nil, pin packages to versions in elpaca-lock.el.

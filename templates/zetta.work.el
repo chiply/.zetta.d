@@ -28,9 +28,9 @@
 ;;; Which machine this is
 ;;; ————————————————————————————————————————————————
 
-;; Informational today; `bin/zetta doctor' reports it after WP-Z10 and
-;; modules may test it, though none should need to: policy lives here,
-;; in the module lists, not in the modules.
+;; Reported by `bin/zetta doctor'; modules may test it, though none
+;; should need to: policy lives here, in the module lists, not in the
+;; modules.
 (setq zetta-profile 'work)
 
 ;;; ————————————————————————————————————————————————
@@ -92,13 +92,14 @@
 ;; below resolves an item from the Dev vault.  Work credentials (a GitHub
 ;; token, an LLM key if the employer allows one) go in ~/.authinfo.gpg,
 ;; or in whatever vault the employer issues -- work-profile.org Part 4
-;; describes how that plugs in without editing init.el.
+;; and secrets.md describe how that plugs in without editing init.el.
 ;;
-;; Until the backend switch lands (task WP-Z2), init.el turns the
-;; 1Password backend on whenever an `op' binary exists and this file
-;; cannot veto it, so if the employer installs 1Password CLI the work
-;; ~/.private.el must set `auth-sources' itself (draft in work-profile.org
-;; Part 3).  After WP-Z2 this line is the whole decision:
+;; This line is the whole decision (bootstrap-secrets.el reads it after
+;; this file has loaded): `authinfo' leaves `auth-sources' at Emacs's
+;; default files and spawns no `op' even if the employer installs the
+;; 1Password CLI.  For an employer vault: 'op with `zetta-op-template-file'
+;; pointed at an untracked template, or 'command with
+;; `zetta-secrets-command' printing KEY=VALUE lines (secrets.md).
 (setq zetta-secrets-backend 'authinfo)
 
 ;;; ————————————————————————————————————————————————

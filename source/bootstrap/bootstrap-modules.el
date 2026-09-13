@@ -4,6 +4,8 @@
 ;; Provides `zetta-modules!' macro for declaring which modules to load.
 ;; Also defines user-configurable variables for distro customization.
 
+(require 'cl-lib)
+
 ;;; User-configurable variables
 ;; These can be set in ~/.zetta.el before `zetta-modules!' is called.
 
@@ -28,6 +30,47 @@ Set to nil in ~/.zetta.el for bleeding-edge packages.")
 ;; Apply lockfile preference (elpaca-lock-file is set in bootstrap-elpaca.el)
 (unless zetta-use-lockfile
   (setq elpaca-lock-file nil))
+
+;;; Profile and secrets
+;; Set in ~/.zetta.el.  init.el reads the backend decision AFTER that file
+;; has loaded (bootstrap-secrets.el), so each machine chooses for itself
+;; and no personal vault is ever assumed (work-profile.org Part 4).
+
+(defvar zetta-profile 'full
+  "Which profile this machine runs: `full', `headless' or `work'.
+A marker the templates set and `bin/zetta doctor' reports.  Policy does
+not live here but in the module lists of ~/.zetta.el, so modules should
+not need to test it.")
+
+(defvar zetta-secrets-backend nil
+  "How ~/.private.el and auth-source get their secrets.  Set in ~/.zetta.el.
+nil        pick `op' when the `op' binary and `zetta-op-template-file'
+           both exist, else `authinfo'.  (The behaviour before this
+           variable existed.)
+op         1Password CLI: one `op inject' over `zetta-op-template-file'.
+command    run `zetta-secrets-command'; it prints KEY=VALUE lines.
+authinfo   Emacs's own auth-source files; no cache, no subprocess.
+none       no secrets at all: `auth-sources' is nil (CI, the hub).")
+
+(defvar zetta-op-template-file
+  (expand-file-name "source/op-secrets.env.tpl" user-emacs-directory)
+  "Template `op inject' resolves for the `op' backend.
+A work vault points this outside the repo, for example
+~/.config/zetta/secrets.env.tpl holding op://<WorkVault>/... references.")
+
+(defvar zetta-secrets-command nil
+  "Shell command for the `command' backend.
+It must print KEY=VALUE lines, one per secret: `pass show emacs/env', or
+a bw / vault / aws secretsmanager call piped through jq -- secrets.md
+has one line per vault.")
+
+(defun zetta-secrets-effective-backend ()
+  "The secrets backend in force: `zetta-secrets-backend', or the nil rule."
+  (or zetta-secrets-backend
+      (if (and (executable-find "op")
+               (file-exists-p zetta-op-template-file))
+          'op
+        'authinfo)))
 
 ;;; Module system
 

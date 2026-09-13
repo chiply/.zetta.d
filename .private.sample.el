@@ -3,14 +3,29 @@
 ;; Copy this file to ~/.private.el and fill in your credentials.
 ;; ~/.private.el is loaded early in init.el and is NOT tracked by git.
 ;;
-;; Two ways to supply secrets:
+;; Where the values come from is decided per machine by
+;; `zetta-secrets-backend' in ~/.zetta.el (secrets.md has the table):
 ;;
-;;   (a) Manual — paste literal values below (the YOUR_X placeholders).
+;;   (a) authinfo — no cache.  Put values in ~/.authinfo.gpg and let the
+;;       packages read auth-source, or paste literals below (the YOUR_X
+;;       placeholders) if you must.
 ;;
-;;   (b) 1Password CLI — populate `op-secrets.env.tpl` with item refs,
-;;       then call `(zetta-op-read "KEY")` here.  See `secrets.md` for
-;;       the full setup.  The `zetta-op-auth-source-entries` block
-;;       below is the auth-source bridge for that mode.
+;;   (b) op — 1Password CLI.  Populate the template (source/op-secrets.env.tpl,
+;;       or `zetta-op-template-file' pointed at an untracked one) with
+;;       item references, call (zetta-secrets-load) once and
+;;       (zetta-secrets-read "KEY") per value.  `zetta-op-load' and
+;;       `zetta-op-read' are aliases of the same functions.
+;;
+;;   (c) command — any vault that prints KEY=VALUE lines, e.g. in ~/.zetta.el:
+;;         (setq zetta-secrets-backend 'command
+;;               zetta-secrets-command "pass show emacs/env")
+;;       then the same (zetta-secrets-load) / (zetta-secrets-read "KEY").
+;;
+;; For (b) and (c) the `zetta-op-auth-source-entries' block at the end is
+;; the auth-source bridge: it maps the (host, user) a package asks for to
+;; a cache key.
+;;
+;; (zetta-secrets-load)   ; uncomment for (b) and (c)
 
 ;; IRC (erc)
 (setq erc-nick "YOUR_IRC_NICK")
@@ -131,8 +146,8 @@
 ;;   account default : example-account
 
 ;; ──────────────────────────────────────────────────────────────────
-;; 1Password auth-source entries (only needed if using mode (b) above)
-;; Maps (host, user, port) tuples to 1Password cache keys.
+;; Cache-backed auth-source entries (backends (b) and (c) above).
+;; Maps (host, user, port) tuples to cache keys.
 ;; Used by forge, gptel, erc, mastodon, etc. via auth-source-search.
 ;; ──────────────────────────────────────────────────────────────────
 ;; (setq zetta-op-auth-source-entries

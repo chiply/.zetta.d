@@ -176,10 +176,14 @@
 
 ;; No 1Password CLI on this box, so no credential can resolve.  Say so
 ;; explicitly rather than let every lookup fall through to a backend
-;; that is not there.  The modules that need secrets (elfeed, mastodon,
-;; forge, gptel) are simply absent from the lists below; ~/.private.el
-;; on this machine can be a single ";;".
-(setq auth-sources nil)
+;; that is not there: the `none' backend sets `auth-sources' to nil
+;; (bootstrap-secrets.el).  The modules that need secrets (elfeed,
+;; mastodon, forge, gptel) are simply absent from the lists below;
+;; ~/.private.el on this machine can be a single ";;".
+(setq zetta-secrets-backend 'none)
+
+;; Reported by `bin/zetta doctor'; policy stays in the module lists.
+(setq zetta-profile 'headless)
 
 ;;; ————————————————————————————————————————————————
 ;;; Modules

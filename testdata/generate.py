@@ -151,7 +151,7 @@ FILES = {
         ("Post the old passport", "0:30", "TODO")]),
  T("File the 2025 tax return", "@deep admin finance", "big", prio="A",
    pin=("dead", 9)),
- T("Chase the REMOVED-EMPLOYER HSA reimbursement", "@call finance", "mid", state="WAIT",
+ T("Chase the insurer about the outstanding claim", "@call finance", "mid", state="WAIT",
    body="Third time asking. Claim ref in the email thread."),
  T("Track down the old TIAA 401k", "@call finance", "tiny", state="NEXT"),
  T("Cancel Hodinkee insurance before renewal", "@call admin", "tiny", prio="A",

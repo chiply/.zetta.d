@@ -46,7 +46,7 @@ DEADLINE: <2026-09-21 Mon>
 :IMPACT:   5
 :END:
 
-* WAIT [#B] Chase the REMOVED-EMPLOYER HSA reimbursement  :@call:finance:@tired:
+* WAIT [#B] Chase the insurer about the outstanding claim  :@call:finance:@tired:
 SCHEDULED: <2026-10-08 Thu>
 :PROPERTIES:
 :ID:       F3E9AC9F-F714-4747-ADEC-00D296113671

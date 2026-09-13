@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.7](https://github.com/chiply/.zetta.d/compare/v0.2.6...v0.2.7) (2026-09-11)
+
+
+### Features
+
+* **headless:** add the keep-out sheet's modules, OSC 52, ghostel download, custom-file ([#146](https://github.com/chiply/.zetta.d/issues/146)) ([cebfcb4](https://github.com/chiply/.zetta.d/commit/cebfcb426a0a286443cf56c45cdc8b2f5a42f9fd))
+
+
+### Bug Fixes
+
+* keep deferred native compilation off the bootstrap ([#145](https://github.com/chiply/.zetta.d/issues/145)) ([0081913](https://github.com/chiply/.zetta.d/commit/0081913fc29b3cf5fa6ff9dc77fa2e2763a72b5b))
+* load ibuffer eagerly, pin the python grammar (hub cutover findings) ([#142](https://github.com/chiply/.zetta.d/issues/142)) ([1b9d90a](https://github.com/chiply/.zetta.d/commit/1b9d90a04e87bb3a90f156764397915839bc621c))
+* purge module bytecode before build and sync start ([#144](https://github.com/chiply/.zetta.d/issues/144)) ([de0a62d](https://github.com/chiply/.zetta.d/commit/de0a62dde37d063f24f03411d84336abb25aaf81))
+
 ## [0.2.6](https://github.com/chiply/.zetta.d/compare/v0.2.5...v0.2.6) (2026-09-11)
 
 

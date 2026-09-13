@@ -135,3 +135,6 @@ source/lib/**/*.so
 # org LaTeX export byproducts (the .org is the source)
 productivity.log
 productivity.tex
+
+# org-queue runtime state: plan history, apply log, rejections
+.data/

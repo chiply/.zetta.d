@@ -39,20 +39,20 @@ outside it: a journal line, a promoted page, and the mail stub.
 
 The rituals in the order you meet them.  Each has its own section below.
 
-| when                    | you press           | what happens                                                                 |
-|-------------------------+---------------------+------------------------------------------------------------------------------|
-| 05:30, plan the day     | =,-o-Q=               | today packed against the routine's capacity; the second line says whether yesterday was closed; the third what the chains in flight will cost |
-|                         | =N= / =S= on a line    | up to three picks; a placement                                              |
-| a block starts          | =C-c C-t p=             | into PROG: the derived clock starts; inside the dip a timer starts too       |
-|                         | =,-o-i=               | kick a prompt to an agent; the entry goes AGENT                              |
-| at a switch             | =,-o-o j=             | a journal line, linked to what is in PROG                                    |
-| a pomodoro break        | Day view / =,-o-v a=  | what landed (NEXT from AGENT), what is asking; =C-c C-t p= to review           |
-| the admin slot          | =,-o-f= then =,-o-v i= | the inbox decorated; =C-c a= accepts each proposal, =C-c r= rejects           |
-| before a new deadline   | =,-o-I= (or just =,-o-D=) | what the date costs, against the window's capacity                       |
-| the fixed stop          | =,-o-x=               | close: carried, done, the PROG sweep, tomorrow's draft, the phrase           |
-| Monday, thirty minutes  | =,-o-m=               | the pack; =y= on a raised item -- keep, park or dismiss; =w= writes the three answers |
-| once a season           | =,-o-n=               | last quarter's walk beside the horizons file; the theme and three missions   |
-| any time                | =,-o-M= / =,-o-R=       | a note becomes a wiki page with its reason; a quiet page resurfaces        |
+| when                   | you press                 | what happens                                                                                                                                  |
+|------------------------+---------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 05:30, plan the day    | =,-o-Q=                   | today packed against the routine's capacity; the second line says whether yesterday was closed; the third what the chains in flight will cost |
+|                        | =N= / =S= on a line       | up to three picks; a placement                                                                                                                |
+| a block starts         | =C-c C-t p=               | into PROG: the derived clock starts; inside the dip a timer starts too                                                                        |
+|                        | =,-o-i=                   | kick a prompt to an agent; the entry goes AGENT                                                                                               |
+| at a switch            | =,-o-o j=                 | a journal line, linked to what is in PROG                                                                                                     |
+| a pomodoro break       | Day view / =,-o-v a=      | what landed (NEXT from AGENT), what is asking; =C-c C-t p= to review                                                                          |
+| the admin slot         | =,-o-f= then =,-o-v i=    | the inbox decorated; =C-c a= accepts each proposal, =C-c r= rejects                                                                           |
+| before a new deadline  | =,-o-I= (or just =,-o-D=) | what the date costs, against the window's capacity                                                                                            |
+| the fixed stop         | =,-o-x=                   | close: carried, done, the PROG sweep, tomorrow's draft, the phrase                                                                            |
+| Monday, thirty minutes | =,-o-m=                   | the pack; =y= on a raised item -- keep, park or dismiss; =w= writes the three answers                                                         |
+| once a season          | =,-o-n=                   | last quarter's walk beside the horizons file; the theme and three missions                                                                    |
+| any time               | =,-o-M= / =,-o-R=         | a note becomes a wiki page with its reason; a quiet page resurfaces                                                                           |
 
 Nothing in that table runs on a timer except the landing watch and the
 KICK_AT kicks; the rituals happen when you press the key.
@@ -100,18 +100,18 @@ KICK_AT kicks; the rituals happen when you press the key.
 
 Defined in =modules/org/org.el=.
 
-| state | key | meaning                                              | queue behaviour                       |
-|-------+-----+------------------------------------------------------+---------------------------------------|
-| TODO  | =t=   | open work                                            | scored candidate                      |
-| NEXT  | =N=   | you have decided this is next, whatever the formula says | *commitment*, never scored          |
-| PROG  | =p=   | in progress; entering it starts the derived clock   | scored, with a "finishing" bonus; at most 3 per day |
-| AGENT | =a=   | an agent has the ball: a chain in flight            | excluded, reason =in-flight=; never human capacity |
-| WAIT  | =w=   | waiting on someone; asks for a note                 | excluded unless a deadline is within 7 days |
-| QUES  | =q=   | an open question; asks for a note                   | scored, docked 1.5                    |
-| HOLD  | =h=   | paused by choice; asks for a note                   | excluded                              |
-| IDEA  | =i=   | someday / maybe                                     | excluded                              |
-| DONE  | =d=   | finished                                             | excluded; feeds calibration           |
-| NOPE  | =n=   | abandoned; asks for a note                          | excluded; feeds calibration           |
+| state | key | meaning                                                  | queue behaviour                                     |
+|-------+-----+----------------------------------------------------------+-----------------------------------------------------|
+| TODO  | =t= | open work                                                | scored candidate                                    |
+| NEXT  | =N= | you have decided this is next, whatever the formula says | *commitment*, never scored                          |
+| PROG  | =p= | in progress; entering it starts the derived clock        | scored, with a "finishing" bonus; at most 3 per day |
+| AGENT | =a= | an agent has the ball: a chain in flight                 | excluded, reason =in-flight=; never human capacity  |
+| WAIT  | =w= | waiting on someone; asks for a note                      | excluded unless a deadline is within 7 days         |
+| QUES  | =q= | an open question; asks for a note                        | scored, docked 1.5                                  |
+| HOLD  | =h= | paused by choice; asks for a note                        | excluded                                            |
+| IDEA  | =i= | someday / maybe                                          | excluded                                            |
+| DONE  | =d= | finished                                                 | excluded; feeds calibration                         |
+| NOPE  | =n= | abandoned; asks for a note                               | excluded; feeds calibration                         |
 
 Change a state with =C-c C-t= on the heading, then the state's key.  The
 states you leave work in (WAIT, QUES, HOLD, NOPE) prompt for a one-line

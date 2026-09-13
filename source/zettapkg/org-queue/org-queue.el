@@ -24,6 +24,21 @@
 ;;   o     show it in another window   c    calibration report
 ;;   TAB   what was cut, and why       q    bury
 ;;
+;; Five keys write to the entry under point -- the only writes this
+;; buffer makes, each one a decision you took on one line:
+;;
+;;   S  schedule it today       L  schedule it later (asks for the day)
+;;   N  mark it NEXT            H  hold it, with a note
+;;   U  unschedule it
+;;
+;; Each line shows minutes, category, the TODO state and the title.  The
+;; rest of the metadata is a keypress away, one column per key, so the
+;; default stays readable and the full picture is there when you argue
+;; with a decision:
+;;
+;;   s state   # priority   e estimate   i impact   d dates
+;;   w age     k clocked    t tags       f file     a all / none
+;;
 ;; The arithmetic all lives in `org-queue-core', which has no Org in it;
 ;; this file only asks the questions and draws the answers.
 
@@ -33,6 +48,7 @@
 (require 'org)
 (require 'org-queue-core)
 (require 'org-queue-harvest)
+(require 'org-queue-apply)
 
 (defcustom org-queue-buffer-name "*org-queue*"
   "Name of the buffer the day's plan is drawn in."
@@ -42,6 +58,20 @@
 (defcustom org-queue-show-details nil
   "When non-nil, open the plan with the cut and excluded work expanded."
   :type 'boolean
+  :group 'org-queue)
+
+(defcustom org-queue-columns '(state)
+  "Metadata columns shown on each task line.
+
+A set, not a sequence: columns are drawn in the order of
+`org-queue--column-specs' whatever order they are named here.  Toggling
+a column in the plan buffer updates this variable too, so the choice
+carries to the next plan in the session.  The state is on by default
+because it is the one field that changes what the planner does with a
+task; everything else is evidence for a decision you are questioning."
+  :type '(set (const state) (const priority) (const estimate)
+              (const impact) (const dates) (const age)
+              (const clocked) (const tags) (const file))
   :group 'org-queue)
 
 
@@ -84,6 +114,9 @@ thing on the page, and it should read that way in any theme."
 (defvar-local org-queue--details nil
   "Whether the cut and excluded sections are expanded.")
 
+(defvar-local org-queue--columns nil
+  "The metadata columns drawn in this buffer; see `org-queue-columns'.")
+
 
 ;;;; Formatting
 
@@ -105,7 +138,9 @@ thing on the page, and it should read that way in any theme."
     (blocked        . "blocked by unfinished work")
     (waiting        . "waiting, with no deadline in sight")
     (event-later    . "an appointment on a later day")
-    (event-past     . "an appointment that has already happened"))
+    (event-past     . "an appointment that has already happened")
+    (habit          . "a habit: reserved, not planned")
+    (bucket-closed  . "its bucket has no minutes today"))
   "Human wording for the reasons a task ends up where it does.")
 
 (defun org-queue--reason-label (reason)
@@ -113,6 +148,95 @@ thing on the page, and it should read that way in any theme."
 
 (defun org-queue--insert (string &optional face)
   (insert (if face (propertize string 'face face) string)))
+
+;;;; Columns
+;;
+;; Fixed-width columns sit between the category and the title, so the
+;; titles stay aligned however many are on.  Variable-width ones (tags,
+;; file) trail the line after the note, where ragged edges cost nothing.
+
+(defalias 'org-queue--iso #'org-queue-core-iso)
+
+(defun org-queue--column-state (task)
+  (or (plist-get task :state) ""))
+
+(defun org-queue--column-priority (task)
+  (if-let* ((priority (plist-get task :priority)))
+      (format "#%c" priority)
+    ""))
+
+(defun org-queue--column-estimate (task)
+  "The entry's own estimate, before calibration; a ? when it has none."
+  (if-let* ((effort (plist-get task :effort)))
+      (org-queue-core-format-minutes effort)
+    "?"))
+
+(defun org-queue--column-impact (task)
+  (if-let* ((impact (plist-get task :impact))) (format "i%s" impact) ""))
+
+(defun org-queue--column-dates (task)
+  "SCHEDULED, DEADLINE and start-by as S, D and by; a soft deadline is ~."
+  (string-join
+   (delq nil
+         (list (when-let* ((s (plist-get task :scheduled)))
+                 (concat "S " (org-queue--iso s)
+                         (if (plist-get task :placed) "*" "")))
+               (when-let* ((d (plist-get task :deadline)))
+                 (concat "D " (org-queue--iso d)
+                         (if (plist-get task :deadline-soft) "~" "")))
+               (when-let* ((b (plist-get task :start-by)))
+                 (concat "by " (org-queue--iso b)))))
+   " "))
+
+(defun org-queue--column-bucket (task)
+  (format "%s" (or (plist-get task :queue-bucket) (org-queue-core-bucket task))))
+
+(defun org-queue--column-age (task)
+  "Days since CREATED, against the plan's date."
+  (if-let* ((created (plist-get task :created))
+            (today (plist-get org-queue--plan :date)))
+      (format "%dd" (org-queue-core-days-between created today))
+    ""))
+
+(defun org-queue--column-clocked (task)
+  "Minutes the derived clock has measured on the task so far."
+  (let ((minutes (plist-get task :clocked)))
+    (if (and minutes (> minutes 0))
+        (org-queue-core-format-minutes minutes)
+      "")))
+
+(defun org-queue--column-tags (task)
+  (if-let* ((tags (plist-get task :tags)))
+      (concat ":" (string-join tags ":") ":")
+    ""))
+
+(defun org-queue--column-file (task)
+  (if-let* ((file (plist-get task :file)))
+      (file-name-nondirectory file)
+    ""))
+
+(defconst org-queue--column-specs
+  ;; (COLUMN KEY WIDTH FUNCTION)  WIDTH nil = variable, drawn after the note.
+  '((state    "s"  5 org-queue--column-state)
+    (priority "#"  2 org-queue--column-priority)
+    (estimate "e"  5 org-queue--column-estimate)
+    (impact   "i"  2 org-queue--column-impact)
+    (dates    "d" 40 org-queue--column-dates)
+    (bucket   "B"  8 org-queue--column-bucket)
+    (age      "w"  4 org-queue--column-age)
+    (clocked  "k"  5 org-queue--column-clocked)
+    (tags     "t" nil org-queue--column-tags)
+    (file     "f" nil org-queue--column-file))
+  "The columns a task line can carry, in drawing order.")
+
+(defun org-queue--active-columns (&optional fixed)
+  "Return the specs of the columns on in this buffer.
+With FIXED, only the fixed-width ones; otherwise only the trailing ones."
+  (cl-remove-if-not
+   (lambda (spec)
+     (and (memq (car spec) org-queue--columns)
+          (if fixed (nth 2 spec) (null (nth 2 spec)))))
+   org-queue--column-specs))
 
 (defun org-queue--insert-task (task &optional note)
   "Insert one line for TASK, with an optional right-hand NOTE."
@@ -125,11 +249,35 @@ thing on the page, and it should read that way in any theme."
      (if (plist-get task :queue-guessed) 'org-queue-guess 'org-queue-detail))
     (org-queue--insert (format "%-7s " (or (plist-get task :category) "-"))
                        'org-queue-detail)
+    (dolist (spec (org-queue--active-columns t))
+      (org-queue--insert
+       (format (format "%%-%ds " (nth 2 spec)) (funcall (nth 3 spec) task))
+       (if (and (eq (car spec) 'estimate) (plist-get task :queue-guessed))
+           'org-queue-guess
+         'org-queue-detail)))
     (insert (truncate-string-to-width (or (plist-get task :title) "") 58))
     (when note
       (org-queue--insert (format "  %s" note) 'org-queue-detail))
+    (dolist (spec (org-queue--active-columns))
+      (let ((text (funcall (nth 3 spec) task)))
+        (unless (string-empty-p text)
+          (org-queue--insert (concat "  " text) 'org-queue-detail))))
     (put-text-property start (point) 'org-queue-task task)
     (insert "\n")))
+
+(defun org-queue--insert-legend ()
+  "Insert the line that says which columns are on, and the keys."
+  (org-queue--insert
+   (concat
+    "   columns: "
+    (mapconcat
+     (lambda (spec)
+       (let ((on (memq (car spec) org-queue--columns)))
+         (propertize (format "%s %s" (nth 1 spec) (car spec))
+                     'face (if on 'org-queue-detail 'org-queue-guess))))
+     org-queue--column-specs "  ")
+    "  a all\n")
+   'org-queue-detail))
 
 (defun org-queue--insert-section (title tasks note-function)
   (when tasks
@@ -150,6 +298,67 @@ thing on the page, and it should read that way in any theme."
 
 ;;;; Drawing
 
+(defvar-local org-queue--redraw-function nil
+  "How to redraw this buffer after a toggle; nil means draw the plan.")
+
+(defun org-queue--redraw ()
+  "Redraw the current buffer with its current settings."
+  (if org-queue--redraw-function
+      (funcall org-queue--redraw-function)
+    (org-queue--draw org-queue--plan)))
+
+(defun org-queue--capacity-line (plan)
+  "Return the line of numbers under PLAN's date."
+  (let ((routine (cl-reduce #'+ (mapcar (lambda (b) (plist-get b :routine))
+                                        (plist-get plan :buckets))
+                            :initial-value 0)))
+    (format "   %s planned of %s usable (%s capacity%s, %d%% slack)\n"
+            (org-queue-core-format-minutes (plist-get plan :minutes))
+            (org-queue-core-format-minutes (plist-get plan :usable))
+            (org-queue-core-format-minutes (plist-get plan :capacity))
+            (if (> routine 0)
+                (format ", routine %s" (org-queue-core-format-minutes routine))
+              "")
+            (round (* 100 org-queue-slack-fraction)))))
+
+(defun org-queue--insert-buckets (plan)
+  "Insert one entry per bucket when PLAN has more than one."
+  (let ((buckets (plist-get plan :buckets)))
+    (when (> (length buckets) 1)
+      (org-queue--insert "   ")
+      (dolist (bucket buckets)
+        (org-queue--insert
+         (format "%s %s of %s%s   "
+                 (plist-get bucket :name)
+                 (org-queue-core-format-minutes (plist-get bucket :minutes))
+                 (org-queue-core-format-minutes (plist-get bucket :usable))
+                 (cond ((plist-get bucket :overcommitted) " OVER")
+                       ((and (zerop (plist-get bucket :minutes))
+                             (> (plist-get bucket :usable) 0))
+                        " (unfilled)")
+                       (t "")))
+         (if (plist-get bucket :overcommitted) 'org-queue-alarm 'org-queue-detail)))
+      (org-queue--insert "\n"))))
+
+(defun org-queue--insert-alarm (plan)
+  "Insert the overcommitment banner for PLAN, naming the buckets."
+  (when (plist-get plan :overcommitted)
+    (let ((over (cl-remove-if-not (lambda (b) (plist-get b :overcommitted))
+                                  (plist-get plan :buckets))))
+      (org-queue--insert
+       (format "\nOVERCOMMITTED: %s -- nothing was planned on top.\n"
+               (mapconcat (lambda (b)
+                            (format "%s by %s" (plist-get b :name)
+                                    (org-queue-core-format-minutes
+                                     (- (plist-get b :minutes) (plist-get b :usable)))))
+                          over ", "))
+       'org-queue-alarm)
+      (org-queue--insert
+       "What you have already agreed to does not fit in the day.  That is
+the finding, not a bug: move a deadline, drop a commitment, or accept
+that today overflows.\n"
+       'org-queue-detail))))
+
 (defun org-queue--draw (plan)
   "Draw PLAN in the current buffer."
   (let ((inhibit-read-only t))
@@ -157,30 +366,24 @@ thing on the page, and it should read that way in any theme."
     (setq org-queue--plan plan)
     (org-queue--insert (org-queue--date-string (plist-get plan :date))
                        'org-queue-header)
-    (org-queue--insert
-     (format "   %s planned of %s usable (%s capacity, %d%% slack)\n"
-             (org-queue-core-format-minutes (plist-get plan :minutes))
-             (org-queue-core-format-minutes (plist-get plan :usable))
-             (org-queue-core-format-minutes (plist-get plan :capacity))
-             (round (* 100 org-queue-slack-fraction)))
-     'org-queue-detail)
-    (when (plist-get plan :overcommitted)
-      (org-queue--insert
-       (format "\nOVERCOMMITTED by %s -- nothing was planned on top.\n"
-               (org-queue-core-format-minutes
-                (- (plist-get plan :minutes) (plist-get plan :usable))))
-       'org-queue-alarm)
-      (org-queue--insert
-       "What you have already agreed to does not fit in the day.  That is
-the finding, not a bug: move a deadline, drop a commitment, or accept
-that today overflows.\n"
-       'org-queue-detail))
+    (org-queue--insert (org-queue--capacity-line plan) 'org-queue-detail)
+    (org-queue--insert-buckets plan)
+    (org-queue--insert-legend)
+    (org-queue--draw-body plan)
+    (goto-char (point-min))))
 
+(defun org-queue--draw-body (plan)
+  "Insert PLAN's sections at point: the banner, the work, the tally."
+  (let ((inhibit-read-only t))
+    (org-queue--insert-alarm plan)
     (let ((by-reason (lambda (reason)
                        (cl-remove-if-not
                         (lambda (task)
                           (eq reason (plist-get task :queue-reason)))
                         (plist-get plan :planned)))))
+      (org-queue--insert-section
+       "Routine" (plist-get plan :routine)
+       (lambda (_habit) "reserved"))
       (org-queue--insert-section
        "Committed" (funcall by-reason 'committed)
        (lambda (task) (org-queue--when-note task)))
@@ -226,24 +429,33 @@ that today overflows.\n"
       (org-queue--insert
        (format "Estimates scaled by %.2fx overall; c for the breakdown.\n"
                (alist-get t (plist-get plan :calibration) 1.0))
-       'org-queue-detail))
-    (goto-char (point-min))))
+       'org-queue-detail))))
 
 (defun org-queue--when-note (task)
   "Return the reason TASK counts as committed today."
-  (cond
-   ((and (plist-get task :timestamp)
-         (= (plist-get task :timestamp) (plist-get org-queue--plan :date)))
-    "appointment")
-   ((and (plist-get task :deadline)
-         (<= (plist-get task :deadline) (plist-get org-queue--plan :date)))
-    (if (< (plist-get task :deadline) (plist-get org-queue--plan :date))
-        (format "overdue since %s" (plist-get task :deadline))
-      "due today"))
-   ((plist-get task :scheduled)
-    (if (< (plist-get task :scheduled) (plist-get org-queue--plan :date))
-        (format "scheduled %s" (plist-get task :scheduled))
-      "scheduled today"))))
+  (let* ((today (plist-get org-queue--plan :date))
+         (scheduled (plist-get task :scheduled))
+         (deadline (plist-get task :deadline))
+         (start-by (plist-get task :start-by))
+         (why
+          (cond
+           ((equal (plist-get task :state) "NEXT") "next")
+           ((and (plist-get task :timestamp)
+                 (= (plist-get task :timestamp) today))
+            "appointment")
+           ((and deadline (<= deadline today))
+            (if (< deadline today)
+                (format "overdue since %s" (org-queue--iso deadline))
+              "due today"))
+           ((and scheduled (= scheduled today))
+            (if (plist-get task :placed) "placed today" "scheduled today"))
+           ((and start-by (<= start-by today))
+            (format "start by %s, due %s" (org-queue--iso start-by)
+                    (org-queue--iso deadline)))
+           (scheduled (format "scheduled %s" (org-queue--iso scheduled))))))
+    (if (plist-get task :slice)
+        (format "%s (slice)" (or why ""))
+      why)))
 
 
 ;;;; Commands
@@ -269,6 +481,7 @@ With PROMPT (\\[universal-argument]), plan another day instead."
     (with-current-buffer buffer
       (org-queue-mode)
       (setq org-queue--details org-queue-show-details)
+      (setq org-queue--columns (copy-sequence org-queue-columns))
       (org-queue--draw plan))
     (pop-to-buffer buffer)
     (message "%s" (org-queue-core-summary plan))))
@@ -286,7 +499,7 @@ With PROMPT (\\[universal-argument]), plan another day instead."
   "Show or hide the work that did not make the plan."
   (interactive)
   (setq org-queue--details (not org-queue--details))
-  (org-queue--draw org-queue--plan))
+  (org-queue--redraw))
 
 (defun org-queue-task-at-point ()
   "Return the task on the current line, or nil."
@@ -294,31 +507,11 @@ With PROMPT (\\[universal-argument]), plan another day instead."
 
 (defun org-queue--goto (task other-window)
   "Move to TASK's Org entry, in OTHER-WINDOW when non-nil."
-  (let* ((file (plist-get task :file))
-         (position (plist-get task :point))
-         (id (plist-get task :id))
-         (buffer (and file (find-file-noselect file))))
-    (unless buffer (user-error "No file recorded for this task"))
-    (with-current-buffer buffer
-      ;; The recorded position is only as fresh as the last harvest, so
-      ;; check the heading is still the one that was planned and fall
-      ;; back to the ID -- which survives any amount of editing -- if the
-      ;; file has moved underneath us.
-      (let ((found (save-excursion
-                     (goto-char (min position (point-max)))
-                     (and (ignore-errors (org-back-to-heading t))
-                          (equal (org-get-heading t t t t)
-                                 (plist-get task :title))
-                          (point)))))
-        (setq position (or found
-                           (when id
-                             (when-let* ((marker (org-id-find id t)))
-                               (marker-position marker)))
-                           position))))
+  (let ((where (org-queue-harvest-locate task)))
     (funcall (if other-window #'pop-to-buffer #'pop-to-buffer-same-window)
-             buffer)
+             (car where))
     (widen)
-    (goto-char position)
+    (goto-char (cdr where))
     (org-back-to-heading t)
     (org-fold-show-entry)
     (org-fold-show-children)))
@@ -388,6 +581,85 @@ Estimates are%s currently scaled by it.\n"
       (setq position (previous-single-property-change position 'org-queue-task)))
     (when position (goto-char (line-beginning-position)))))
 
+(defun org-queue-toggle-column (column)
+  "Show or hide COLUMN on every task line, and remember the choice.
+Interactively, prompt for one of `org-queue--column-specs'."
+  (interactive
+   (list (intern (completing-read "Column: " (mapcar #'car org-queue--column-specs)
+                                  nil t))))
+  (unless (assq column org-queue--column-specs)
+    (user-error "No such column: %s" column))
+  (setq org-queue--columns
+        (if (memq column org-queue--columns)
+            (delq column (copy-sequence org-queue--columns))
+          (cons column org-queue--columns)))
+  ;; The buffer is the place the choice is made, but the next plan should
+  ;; open the same way, so the default follows the buffer.
+  (setq org-queue-columns (copy-sequence org-queue--columns))
+  (org-queue--redraw))
+
+(defun org-queue-toggle-all-columns ()
+  "Show every column, or, if every column is already on, only the state."
+  (interactive)
+  (let ((all (mapcar #'car org-queue--column-specs)))
+    (setq org-queue--columns
+          (if (cl-every (lambda (column) (memq column org-queue--columns)) all)
+              '(state)
+            all))
+    (setq org-queue-columns (copy-sequence org-queue--columns))
+    (org-queue--redraw)))
+
+
+;;;; Writing to the entry under point
+
+(defun org-queue--date-at-point ()
+  "Return the day the line at point belongs to."
+  (or (get-text-property (point) 'org-queue-date)
+      (plist-get org-queue--plan :date)))
+
+(defun org-queue--apply-here (action &optional note)
+  "Apply ACTION to the task at point, then replan."
+  (let ((task (or (org-queue-task-at-point)
+                  (user-error "No task on this line"))))
+    (org-queue-apply-actions (list (plist-put action :task task)) note)
+    (org-queue-refresh)))
+
+(defun org-queue-schedule-today ()
+  "Schedule the task at point on the day this line belongs to, as a placement."
+  (interactive)
+  (let ((date (org-queue--date-at-point)))
+    (org-queue--apply-here (list :action 'schedule :to date :placed t)
+                           (format "S in the plan for %s" (org-queue--iso date)))))
+
+(defun org-queue-schedule-later ()
+  "Schedule the task at point on a day you choose, as a placement."
+  (interactive)
+  (let ((date (org-queue-harvest--date
+               (org-read-date nil t nil "Schedule for: "))))
+    (org-queue--apply-here (list :action 'schedule :to date :placed t)
+                           (format "L in the plan, to %s" (org-queue--iso date)))))
+
+(defun org-queue-mark-next ()
+  "Mark the task at point NEXT: a commitment from you, not a date."
+  (interactive)
+  (org-queue--apply-here (list :action 'state :to "NEXT") "N in the plan"))
+
+(defun org-queue-hold ()
+  "Put the task at point on HOLD; the state asks for its note."
+  (interactive)
+  (org-queue--apply-here (list :action 'state :to "HOLD") "H in the plan"))
+
+(defun org-queue-unschedule ()
+  "Remove the task at point's SCHEDULED.
+A schedule a person wrote is only removed after asking."
+  (interactive)
+  (let ((task (or (org-queue-task-at-point) (user-error "No task on this line"))))
+    (unless (plist-get task :scheduled)
+      (user-error "%s is not scheduled" (plist-get task :title)))
+    (when (or (plist-get task :placed)
+              (y-or-n-p "Not a machine placement; remove the schedule anyway? "))
+      (org-queue--apply-here (list :action 'unschedule) "U in the plan"))))
+
 (defvar-keymap org-queue-mode-map
   :doc "Keymap for `org-queue-mode'."
   "RET" #'org-queue-goto
@@ -396,7 +668,23 @@ Estimates are%s currently scaled by it.\n"
   "TAB" #'org-queue-toggle-details
   "c"   #'org-queue-calibration
   "n"   #'org-queue-next
-  "p"   #'org-queue-previous)
+  "p"   #'org-queue-previous
+  "a"   #'org-queue-toggle-all-columns
+  "S"   #'org-queue-schedule-today
+  "L"   #'org-queue-schedule-later
+  "N"   #'org-queue-mark-next
+  "H"   #'org-queue-hold
+  "U"   #'org-queue-unschedule)
+
+;; One named command per column, so `describe-mode' and which-key show
+;; "org-queue-toggle-tags" rather than an anonymous lambda.
+(dolist (spec org-queue--column-specs)
+  (let* ((column (car spec))
+         (name (intern (format "org-queue-toggle-%s" column))))
+    (defalias name
+      (lambda () (interactive) (org-queue-toggle-column column))
+      (format "Show or hide the %s column." column))
+    (keymap-set org-queue-mode-map (nth 1 spec) name)))
 
 (define-derived-mode org-queue-mode special-mode "Queue"
   "Major mode for the day's queue.

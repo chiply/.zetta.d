@@ -1,0 +1,54 @@
+#+TITLE: Routine
+#+CATEGORY: routine
+#+PROPERTY: Effort_ALL 0 0:05 0:10 0:15 0:20 0:30 0:45 1:00 1:30 2:00 3:00 4:00 5:00 6:00 7:00
+#+COLUMNS: %40ITEM(Task) %TODO %3PRIORITY(P) %6IMPACT(Imp) %17Effort(Estimate){:} %CLOCKSUM(Clocked) %DEADLINE %SCHEDULED %TAGS
+#+FILETAGS: :routine:
+
+* TODO Lift weights  :body:
+SCHEDULED: <2026-09-12 Sat .+1d>
+:PROPERTIES:
+:ID:       15E6462A-36AD-41CB-BAED-05DD51A953F8
+:STYLE:    habit
+:Effort:   1:00
+:CREATED:  [2026-05-23 Sat]
+:HABIT_DAYS: Mon Tue Wed Thu Fri Sat
+:END:
+
+* TODO Bike  :body:
+SCHEDULED: <2026-09-12 Sat .+1d>
+:PROPERTIES:
+:ID:       06A765C3-80E9-4471-A7BB-D78D18A19D70
+:STYLE:    habit
+:Effort:   0:45
+:CREATED:  [2026-05-06 Wed]
+:HABIT_DAYS: Mon Tue Wed Thu Fri
+:END:
+
+* TODO Clean apartment  :housekeeping:
+SCHEDULED: <2026-09-12 Sat .+1d>
+:PROPERTIES:
+:ID:       FD2C6BB9-2AAE-4E30-9595-B2B9529FCF35
+:STYLE:    habit
+:Effort:   0:20
+:CREATED:  [2026-05-08 Fri]
+:END:
+
+* TODO Guitar practice  :music:
+SCHEDULED: <2026-09-12 Sat .+1d>
+:PROPERTIES:
+:ID:       2F7F6CAE-0A3A-4FD8-BAD3-BB28E5589D62
+:STYLE:    habit
+:Effort:   0:30
+:CREATED:  [2026-06-14 Sun]
+:END:
+
+* TODO Laundry  :housekeeping:
+SCHEDULED: <2026-09-12 Sat .+1d>
+:PROPERTIES:
+:ID:       0588A735-3AF1-4119-A77F-2D3F0328A1DA
+:STYLE:    habit
+:Effort:   0:30
+:CREATED:  [2026-03-04 Wed]
+:HABIT_DAYS: Sat
+:END:
+

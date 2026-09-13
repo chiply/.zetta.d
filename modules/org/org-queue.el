@@ -17,7 +17,8 @@
 (use-package org-queue
   :ensure nil
   :load-path "source/zettapkg/org-queue"
-  :commands (org-queue-today org-queue-calibration org-queue-plan)
+  :commands (org-queue-today org-queue-calibration org-queue-plan
+             org-queue-undo-apply org-queue-horizon org-queue-propose)
 
   :brushup
   ;; The plan is a prominence ladder, not a colour scheme: the date at the
@@ -53,23 +54,56 @@
   ;; Carry-over state, not notes: keep it with the other generated data
   ;; rather than in `user-emacs-directory' proper.
   (setq org-queue-history-file
-        (expand-file-name ".data/org/queue-history.el" user-emacs-directory))
+        (expand-file-name ".data/org/queue-history.el" user-emacs-directory)
+        org-queue-apply-log-file
+        (expand-file-name ".data/org/queue-applies.el" user-emacs-directory)
+        org-queue-rejections-file
+        (expand-file-name ".data/org/queue-rejections.el" user-emacs-directory))
+  ;; The horizon and the proposal live in their own file, loaded with the
+  ;; package so their commands are there when the keys below are pressed.
+  (with-eval-after-load 'org-queue (require 'org-queue-propose))
 
   :config
   ;; A placeholder day, and known to be one.  The honest number comes from
   ;; clocking normally for a fortnight and reading it off -- until then the
   ;; packer needs *a* capacity, and one that is too generous teaches you to
   ;; distrust the plan faster than one that is too mean.
-  (setq org-queue-capacity '((0 . 90)    ; Sunday
+  ;;
+  ;; Weekends are flat with weekdays FOR NOW: the fixture is being exercised
+  ;; on whatever day it happens to be, and a 90-minute Saturday makes every
+  ;; run read as overcommitted before the packer is even tested.  Restore a
+  ;; smaller weekend once real clock data says what one is worth.
+  (setq org-queue-capacity '((0 . 300)   ; Sunday
                              (1 . 300)
                              (2 . 300)
                              (3 . 300)
                              (4 . 300)
-                             (5 . 240)   ; Friday
-                             (6 . 90)))) ; Saturday
+                             (5 . 300)   ; Friday
+                             (6 . 300))) ; Saturday
+
+  ;; Buckets: the day as a few named pools rather than one.  Each is a
+  ;; reservation and a limit; the first match claims a task and anything
+  ;; unclaimed is `default'.  Minutes here are read off schedule.org by eye
+  ;; -- the two focus blocks are work, "Free time / admin" is the house --
+  ;; and will be derived from that table once it is read by code.  With
+  ;; habits in (todo) routine.org, the lift and the bike come out of `body'
+  ;; before anything is packed.  Set to nil to fall back to one pool.
+  (setq org-queue-buckets
+        '((work         :minutes 300     ; flat across the week while testing
+                        :match (:category ("work" "emacs" "cal")))
+          (reading      :minutes 60
+                        :match (:tags ("reading") :category ("learn")))
+          (body         :minutes 120
+                        :match (:tags ("body")))
+          (housekeeping :minutes 60
+                        :match (:tags ("housekeeping") :category ("home" "buy")))
+          (default      :minutes 60))))
 
 (general-define-key
  :keymaps 'menu-org-map
  "Q" 'org-queue-today
- "C" 'org-queue-calibration)
+ "C" 'org-queue-calibration
+ "u" 'org-queue-undo-apply
+ "P" 'org-queue-horizon    ; the read-only many-day view; h/H are org-metaleft
+ "p" 'org-queue-propose)
 ;;; org-queue.el ends here

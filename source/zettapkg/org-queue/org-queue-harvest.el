@@ -312,6 +312,26 @@ people is a worse problem than a typo."
     (let ((trimmed (string-trim raw)))
       (unless (string-empty-p trimmed) trimmed))))
 
+(defconst org-queue-harvest--weekdays
+  '(("sun" . 0) ("mon" . 1) ("tue" . 2) ("wed" . 3) ("thu" . 4) ("fri" . 5) ("sat" . 6))
+  "Weekday names as HABIT_DAYS writes them, to day-of-week numbers.")
+
+(defun org-queue-harvest--habit-days ()
+  "Return HABIT_DAYS as a list of weekday numbers, or nil for every day."
+  (when-let* ((days (org-entry-get (point) "HABIT_DAYS")))
+    (delq nil (mapcar (lambda (word)
+                        (alist-get (downcase (substring word 0 (min 3 (length word))))
+                                   org-queue-harvest--weekdays nil nil #'equal))
+                      (split-string days)))))
+
+(defun org-queue-harvest--habit-p ()
+  "Return non-nil if the entry at point is a habit (STYLE habit)."
+  (equal (org-entry-get (point) "STYLE") "habit"))
+
+(defun org-queue-harvest--placed ()
+  "Return the date a machine placement wrote this entry's SCHEDULED, or nil."
+  (org-queue-harvest--timestamp-date (org-entry-get (point) "PLACED")))
+
 (defun org-queue-harvest--review-on ()
   "Return the entry's REVIEW_ON date as a YYYYMMDD integer, or nil."
   (org-queue-harvest--timestamp-date (org-entry-get (point) "REVIEW_ON")))
@@ -344,8 +364,45 @@ TODAY, a YYYYMMDD integer, anchors repeating timestamps."
           :deadline-soft (org-queue-harvest--soft-deadline-p)
           :waiting-on (org-queue-harvest--waiting-on)
           :review-on (org-queue-harvest--review-on)
+          :habit (org-queue-harvest--habit-p)
+          :habit-days (org-queue-harvest--habit-days)
+          :placed (org-queue-harvest--placed)
           :timestamp (car stamps)
           :timestamp-past (cdr stamps))))
+
+
+;;;; Finding an entry again
+
+(defun org-queue-harvest-locate (task)
+  "Return (BUFFER . POSITION) of TASK's heading, or signal a user error.
+
+The recorded position is only as fresh as the last harvest, so the
+heading there is checked against the title and the ID is the fallback
+-- it survives any amount of editing."
+  (let* ((file (plist-get task :file))
+         (position (plist-get task :point))
+         (id (plist-get task :id))
+         (buffer (and file (find-file-noselect file))))
+    (unless buffer (user-error "No file recorded for this task"))
+    (with-current-buffer buffer
+      (save-restriction
+        (widen)
+        (let ((found (and position
+                          (save-excursion
+                            (goto-char (min position (point-max)))
+                            (and (ignore-errors (org-back-to-heading t))
+                                 (equal (org-get-heading t t t t)
+                                        (plist-get task :title))
+                                 (point))))))
+          (setq position
+                (or found
+                    (when id
+                      (when-let* ((marker (org-id-find id t)))
+                        (and (eq (marker-buffer marker) buffer)
+                             (marker-position marker))))
+                    position))
+          (unless position (user-error "Cannot find %s" (plist-get task :title)))
+          (cons buffer position))))))
 
 
 ;;;; Reading the corpus

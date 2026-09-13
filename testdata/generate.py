@@ -3,7 +3,7 @@
 
 Deterministic: seeded RNG and a pinned TODAY, so regenerating is reproducible.
 
-    python3 generate.py [--today 2026-09-08] [--seed N]
+    python3 generate.py [--today YYYY-MM-DD] [--seed N]   # --today defaults to today
 
 Aims to exercise every consumer at once:
   * the queue      -- states, priority, effort, deadlines, blockers, carry-over
@@ -12,7 +12,7 @@ Aims to exercise every consumer at once:
   * timegrid/calfw -- timed ranges, multi-day spans, all-day events, repeaters
   * calibration    -- clocked actuals that diverge from their estimates
 """
-import argparse, datetime as dt, random, pathlib, uuid
+import argparse, datetime as dt, random, pathlib, re, uuid
 
 EFFORT_ALL = ("0 0:05 0:10 0:15 0:20 0:30 0:45 1:00 1:30 "
               "2:00 3:00 4:00 5:00 6:00 7:00")
@@ -62,8 +62,7 @@ FILES = {
         ("Benchmark before and after", "0:30", "TODO")]),
  T("Drop the flappy-fish 5Hz mode-line timer", "@shallow perf", "tiny",
    state="DONE", body="Five forced redisplays a second to animate a string\nnothing renders -- telephone-line is not active."),
- T("Restore gc-cons-percentage in bootstrap-gcmh", "@shallow perf", "tiny", prio="A",
-   pin=("sched", 0)),
+ T("Restore gc-cons-percentage in bootstrap-gcmh", "@shallow perf", "tiny", prio="A"),
  T("Move read-process-output-max back to 4MB", "@shallow perf", "tiny", prio="B"),
  T("Byte-compile modules instead of load-file", "@deep perf", "big", prio="B",
    body="662 of 702 zetta-* functions run interpreted. The .elc files exist\nand are fresh; `load-file' just can't prefer them.",
@@ -72,18 +71,17 @@ FILES = {
  T("Replace vc segment shell-outs with filesystem reads", "@deep perf", "mid",
    blocked=True),
  T("Make zetta-op-read lazy so startup stops blocking", "@deep startup", "mid",
-   prio="A", pin=("dead", 0), body="Measured 1.05-1.21s of a 9.17s init, and that is with the\nvault already unlocked."),
+   prio="A", pin=("dead", 1), body="Measured 1.05-1.21s of a 9.17s init, and that is with the\nvault already unlocked."),
  T("Add :commands to pr-review and ein", "@shallow startup", "tiny", state="DONE",
    legacy_clock=True),
  T("Fix TLS trust config in security.el", "@deep security", "mid", prio="A",
-   state="NEXT",
    body="gnutls-trustfiles is literally (\"zsh:1: command not found: -m\")\nwhile gnutls-verify-error is t."),
  T("Wire org-other-agenda into the org module", "@deep org", "mid",
    body="Needs TextUI vendored too -- not on MELPA.",
    sub=[("Add the textui elpaca recipe", "0:30", "TODO"),
         ("Configure org-other-agenda-series", "1:00", "TODO")]),
  T("Prototype org-transclusion live-sync task view", "@deep org", "big", prio="A",
-   state="PROG", pin=("sched", 0),
+   state="PROG", pin=("sched", 1),
    body="The only item in the plan with real design risk. Does live-sync\nfeel first class, or does the modal `e' gesture grate?"),
  T("Write ERT tests for the queue scorer", "@deep org test", "mid"),
  T("Audit which of the 145 eager use-package blocks matter", "@deep startup", "big",
@@ -103,13 +101,12 @@ FILES = {
         ("Cost the CLIP tier decision", "2:00", "TODO"),
         ("Circulate for review", "0:30", "TODO")]),
  T("Review the reranker benchmark writeup", "@deep review", "mid", prio="B",
-   pin=("sched", 0)),
+   pin=("sched", 2)),
  T("Prepare slides for the architecture review", "@deep present", "big", prio="A",
    pin=("dead", 1)),
  T("Reply to the vendor security questionnaire", "@shallow admin", "mid",
    state="WAIT", body="Waiting on legal for the subprocessor list."),
- T("Update the on-call runbook for the index rebuild", "@deep docs", "mid",
-   state="NEXT"),
+ T("Update the on-call runbook for the index rebuild", "@deep docs", "mid"),
  T("Pair with Sam on the ingestion backpressure bug", "@deep pairing", "mid"),
  T("File expenses for the August conference", "@shallow admin", "tiny", prio="C"),
  T("Interview debrief writeup", "@shallow hiring", "tiny", state="DONE"),
@@ -117,7 +114,7 @@ FILES = {
    body="Measured 36%/46% OCR-vs-CLIP split. Scores are shown rather than\nfiltered, which may be the wrong call.", blocked=True),
  T("Cut the 0.4.0 release", "@deep release", "mid", blocked=True, pin=("dead", 3)),
  T("Rotate the Algolia API key and audit its ACLs", "@deep security", "mid", prio="A",
-   pin=("dead", -2),
+   pin=("dead", -1),
    body="The key baked into the public bundle has addObject, deleteIndex and\nsettings ACLs. Rotate regardless."),
  T("Write the postmortem for the Aug 21 outage", "@deep docs", "big", prio="B",
    sub=[("Assemble the timeline", "1:00", "DONE"),
@@ -135,10 +132,10 @@ FILES = {
         ("Fill in the online form", "1:00", "TODO"),
         ("Post the old passport", "0:30", "TODO")]),
  T("File the 2025 tax return", "@deep admin finance", "big", prio="A",
-   pin=("dead", -5)),
+   pin=("dead", 9)),
  T("Chase the REMOVED-EMPLOYER HSA reimbursement", "@call finance", "mid", state="WAIT",
    body="Third time asking. Claim ref in the email thread."),
- T("Track down the old TIAA 401k", "@call finance", "mid", state="NEXT"),
+ T("Track down the old TIAA 401k", "@call finance", "tiny", state="NEXT"),
  T("Cancel Hodinkee insurance before renewal", "@call admin", "tiny", prio="A",
    pin=("dead", 4),
    body="Covered through 2027-02-09, so cancel well before."),
@@ -146,8 +143,10 @@ FILES = {
    body="Not until Game of Thrones is finished."),
  T("Clean out the freezer", "@errand", "tiny", state="DONE", legacy_clock=True),
  T("Replace the missing Rolex bracelet link", "@errand", "tiny"),
+ T("Descale the coffee machine", "@shallow housekeeping", "tiny"),
+ T("Sort the recycling", "@shallow housekeeping", "tiny"),
  T("Book the dentist", "@call health", "tiny", state="DONE"),
- T("Service the car", "@errand", "mid", pin=("sched", 0)),
+ T("Service the car", "@errand", "mid", pin=("sched", 3)),
  T("Sort out the unemployment paperwork", "@deep admin", "mid", prio="B"),
  T("Hang the picture frames", "@errand", "tiny", state="IDEA"),
  T("Deep clean the garage", "@errand", "big", state="IDEA"),
@@ -163,6 +162,7 @@ FILES = {
  T("Read the Ravenbrook MPS design docs", "@deep reading", "big", state="IDEA"),
  T("Try the new tree-sitter query syntax", "@deep practice", "mid"),
  T("Take notes on the retrieval-augmentation survey", "@deep reading", "mid"),
+ T("Read the Emacs 31 NEWS file", "@shallow reading", "tiny"),
  T("Rebuild the SQL study deck", "@shallow practice", "mid", state="HOLD"),
  T("Read up on org-element caching", "@deep reading", "mid",
    body="Prompted by org-fold-core-style being set to `overlays' by something\nunidentified."),
@@ -183,7 +183,7 @@ FILES = {
 # Calendar entries are commitments with real clock times, so they are built
 # separately -- the timegrid and calfw need durations, spans and repeats.
 EVENTS = [
- ("Architecture review",      "@meeting work",   0,  "10:00", "11:30", None),
+ ("Architecture review",      "@meeting work",   2,  "10:00", "11:30", None),
  ("1:1 with manager",         "@meeting work",   0,  "15:00", "15:30", "+1w"),
  ("Team retro",               "@meeting work",   2,  "14:00", "15:00", "+2w"),
  ("Dentist appointment",      "@meeting health", 5,  "09:20", "10:00", None),
@@ -252,7 +252,7 @@ def log_lines(events):
 
 def clock_lines(rng, start_day, est_min, n):
     """N clock entries spread over days, summing near est_min x a drift factor."""
-    out, total = [], max(10, int(est_min * rng.uniform(0.5, 1.9)))
+    out, total = [], max(10, int(est_min * rng.uniform(0.7, 1.4)))
     per = max(5, total // n)
     for i in range(n):
         d = start_day + dt.timedelta(days=i * rng.randint(1, 3))
@@ -280,12 +280,23 @@ def render_task(rng, today, spec, level, cat):
         if kind == "sched": sched = when
         else: dead = when
         if st in ("DONE", "NOPE", "HOLD", "IDEA"): st = "TODO"
-        eff = eff or rng.choice(SIZE[spec["size"]])
+        # A commitment inside the next day or two takes the smaller half of
+        # its size class, so the pinned set fits a day with room to score.
+        eff = rng.choice(SIZE[spec["size"]][:2]) if off <= 1 else eff or rng.choice(SIZE[spec["size"]])
     elif spec.get("repeat"):
         sched = today + dt.timedelta(days=rng.randint(-2, 5))
     else:
-        if rng.random() < 0.36: sched = today + dt.timedelta(days=rng.randint(-6, 28))
-        if rng.random() < 0.34: dead = today + dt.timedelta(days=rng.randint(-8, 40))
+        if rng.random() < 0.36:
+            # Never today: what is committed on the centre day is pinned by
+            # hand below, so the day's load is a decision, not a draw.
+            sched = today + dt.timedelta(days=rng.choice([-3, -2, -1] + list(range(1, 29))))
+        if rng.random() < 0.34:
+            # Mostly ahead: a backlog where a third of the deadlines have
+            # already passed reads as neglect, not as a fixture.
+            off = rng.randint(-3, -1) if rng.random() < 0.15 else rng.randint(2, 40)
+            dead = today + dt.timedelta(days=off)
+    if st == "NEXT":
+        sched = None
     if st in ("DONE", "NOPE") and not pin:
         sched = sched or today - dt.timedelta(days=rng.randint(2, 30))
         dead = dead if rng.random() < 0.4 else None
@@ -335,7 +346,7 @@ def render_task(rng, today, spec, level, cat):
         fin = today - dt.timedelta(days=rng.randint(1, 25))
         # Actual time drifts from the estimate; that drift is the signal
         # `org-queue' calibration exists to measure.
-        spent = int((mins(eff) if eff else 45) * rng.uniform(0.5, 1.9))
+        spent = int((mins(eff) if eff else 45) * rng.uniform(0.7, 1.4))
         events = work_log(rng, fin, spent, rng.randint(1, 3), st)
         # CREATED is drawn independently of the finish date, so pull it back
         # behind the first transition -- a task created after it was worked
@@ -408,7 +419,7 @@ def render_task(rng, today, spec, level, cat):
         L += [":PROPERTIES:", f":ID:       {oid(rng)}", f":Effort:   {seff}", ":END:"]
         if sst == "DONE":
             f2 = today - dt.timedelta(days=rng.randint(1, 20))
-            ev = work_log(rng, f2, int(mins(seff) * rng.uniform(0.5, 1.6)), 1, "DONE")
+            ev = work_log(rng, f2, int(mins(seff) * rng.uniform(0.7, 1.4)), 1, "DONE")
             L.insert(shead_idx + 1, f"CLOSED: {inat(ev[-1][1])}")
             L += [":LOGBOOK:"] + log_lines(ev) + [":END:"]
         L.append("")
@@ -442,6 +453,31 @@ def render_events(rng, today):
         L.append("")
     return L
 
+# Habits: time already decided, on a repeating pattern, that the planner
+# subtracts from the day rather than plans.  STYLE=habit is the discriminator;
+# HABIT_DAYS the weekday set ("except Sundays").
+HABITS = [
+ ("Lift weights",     "body",         "1:00", "Mon Tue Wed Thu Fri Sat"),
+ ("Bike",             "body",         "0:45", "Mon Tue Wed Thu Fri"),
+ ("Clean apartment",  "housekeeping", "0:20", None),
+ ("Guitar practice",  "music",        "0:30", None),
+ ("Laundry",          "housekeeping", "0:30", "Sat"),
+]
+
+def render_routine(rng, today):
+    L = ["#+TITLE: Routine", "#+CATEGORY: routine",
+         f"#+PROPERTY: Effort_ALL {EFFORT_ALL}", f"#+COLUMNS: {COLUMNS}",
+         "#+FILETAGS: :routine:", ""]
+    for name, tag, eff, days in HABITS:
+        L.append(f"* TODO {name}  :{tag}:")
+        L.append(f"SCHEDULED: {act(today, rep='.+1d')}")
+        L += [":PROPERTIES:", f":ID:       {oid(rng)}", ":STYLE:    habit",
+              f":Effort:   {eff}",
+              f":CREATED:  {ina(today - dt.timedelta(days=rng.randint(30, 200)))}"]
+        if days: L.append(f":HABIT_DAYS: {days}")
+        L += [":END:", ""]
+    return L
+
 def build(rng, today):
     out = {}
     for fname, (cat, title, specs) in FILES.items():
@@ -452,17 +488,37 @@ def build(rng, today):
             L += render_task(rng, today, spec, 1, cat)
         out[f"(todo) {fname}.org"] = "\n".join(L) + "\n"
     out["(todo) calendar.org"] = "\n".join(render_events(rng, today)) + "\n"
+    out["(todo) routine.org"] = "\n".join(render_routine(rng, today)) + "\n"
     return out
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--today", default="2026-09-08")
+    ap.add_argument("--today", default=dt.date.today().isoformat())
     ap.add_argument("--seed", type=int, default=20260908)
     a = ap.parse_args()
     today = dt.date.fromisoformat(a.today)
     rng = random.Random(a.seed)
     d = pathlib.Path(__file__).parent / "todo"
     d.mkdir(parents=True, exist_ok=True)
+    committed = []
     for name, text in build(rng, today).items():
         (d / name).write_text(text)
         print(f"  {name:28} {text.count(chr(10) + '* ') + 1:3} top-level")
+        # Self-check: what the centre day is committed to, before calibration.
+        iso = today.isoformat()
+        for block in text.split("\n* ")[1:]:
+            head, _, rest = block.partition("\n")
+            if head.startswith(("DONE", "NOPE", "HOLD", "IDEA")): continue
+            if ":STYLE:    habit" in rest: continue      # reserved, not committed
+            dead = re.search(r"DEADLINE: <(\d{4}-\d\d-\d\d)", rest)
+            hit = (head.startswith("NEXT")
+                   or f"SCHEDULED: <{iso}" in rest
+                   or (dead and dead[1] <= iso)          # overdue counts too
+                   or f"<{iso} " in rest)                 # appointment today
+            # Repeaters that roll onto today are not simulated here.
+            if hit:
+                m = re.search(r":Effort:\s+(\d+):(\d+)", rest)
+                committed.append((head.split("  :")[0], int(m[1]) * 60 + int(m[2]) if m else 30))
+    total = sum(m for _, m in committed)
+    print(f"\ncommitted on {today}: {len(committed)} entries, {total // 60}:{total % 60:02d} raw")
+    for h, m in committed: print(f"  {m // 60}:{m % 60:02d}  {h}")

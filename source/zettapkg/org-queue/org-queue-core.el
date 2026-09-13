@@ -106,6 +106,157 @@ it -- a commitment outranks a policy."
   :group 'org-queue)
 
 
+;;;; Buckets
+;;
+;; A day is not one pool of minutes but a few with names: focus work,
+;; reading, housekeeping.  Each is a reservation AND a limit -- the packer
+;; fills it even when better-scoring work exists elsewhere, and never past
+;; its minutes.  With no buckets defined, `org-queue-capacity' is the one
+;; and only bucket and nothing below changes a thing.
+
+(defcustom org-queue-buckets nil
+  "Named budgets of minutes per day, each claiming tasks by tag or category.
+
+Each element is (NAME . PLIST) with
+
+  :minutes  an integer, or a per-weekday alist like `org-queue-capacity'
+            (a weekday absent from the alist closes the bucket that day)
+  :match    a plist of :category (a list of names), :tags (any of),
+            :pred (a function of the task plist); the FIRST bucket whose
+            match holds claims the task, in list order
+  :spill    when non-nil, minutes this bucket did not use are handed to
+            the `default' bucket at the end of packing
+
+A task no bucket claims belongs to `default'; a table without a
+`default' entry leaves such tasks with nowhere to go, and they are cut
+with reason `bucket-closed' -- visibly, on purpose.  Nil means one
+bucket, `default', whose minutes are `org-queue-capacity'."
+  :type '(alist :key-type symbol :value-type plist)
+  :group 'org-queue)
+
+(defun org-queue-core--weekday-minutes (minutes date)
+  "Resolve MINUTES, an integer or per-weekday alist, for DATE."
+  (cond ((integerp minutes) minutes)
+        ((consp minutes)
+         (or (alist-get (org-queue-core-day-of-week date) minutes) 0))
+        (t 0)))
+
+(defun org-queue-core-bucket-specs ()
+  "Return the bucket table in force: `org-queue-buckets' or the default."
+  (or org-queue-buckets
+      (list (list 'default :minutes org-queue-capacity))))
+
+(defun org-queue-core--match-p (task match)
+  "Return non-nil if TASK satisfies MATCH, a bucket's :match plist."
+  (let ((category (plist-get match :category))
+        (tags (plist-get match :tags))
+        (pred (plist-get match :pred)))
+    (or (and category (member (plist-get task :category) category))
+        (and tags (cl-intersection tags (plist-get task :tags) :test #'equal))
+        (and pred (funcall pred task)))))
+
+(defun org-queue-core-bucket (task)
+  "Return the name of the bucket that claims TASK."
+  (or (cl-loop for (name . spec) in (org-queue-core-bucket-specs)
+               when (and (plist-get spec :match)
+                         (org-queue-core--match-p task (plist-get spec :match)))
+               return name)
+      'default))
+
+(defun org-queue-core-bucket-capacity (name date)
+  "Return the minutes bucket NAME has on DATE, 0 if it does not exist."
+  (let ((spec (alist-get name (org-queue-core-bucket-specs))))
+    (if spec (org-queue-core--weekday-minutes (plist-get spec :minutes) date) 0)))
+
+
+;;;; Habits
+;;
+;; A habit is time already decided -- the lift, the bike, the dishes --
+;; not a task to be finished.  It never competes with the backlog: it is
+;; subtracted from its bucket before packing begins and shown so the day
+;; adds up.  `:habit' is set by the harvest from STYLE=habit; `:habit-days'
+;; is the weekday set from HABIT_DAYS, nil meaning every day.
+
+(defun org-queue-core-habit-p (task)
+  "Return non-nil if TASK is a habit rather than a task."
+  (plist-get task :habit))
+
+(defun org-queue-core-habit-applies-p (task date)
+  "Return non-nil if habit TASK falls on DATE."
+  (let ((days (plist-get task :habit-days)))
+    (or (null days) (memq (org-queue-core-day-of-week date) days))))
+
+
+;;;; Backpressure
+;;
+;; A deadline pushes work backwards.  START-BY is the latest day on which
+;; the effort still fits into the free minutes of the days up to the
+;; deadline; from that day the task is a commitment, not a candidate.
+;; The horizon simulator supplies real free minutes through
+;; `org-queue-core-free-minutes-function'; alone, the day packer
+;; approximates with each day's bucket capacity less slack.
+
+(defcustom org-queue-start-by t
+  "When non-nil, a hard deadline commits a task from its start-by day."
+  :type 'boolean
+  :group 'org-queue)
+
+(defvar org-queue-core-free-minutes-function nil
+  "Function of (BUCKET DATE) returning the minutes free for planning.
+Nil means the bucket's capacity less `org-queue-slack-fraction'.")
+
+(defvar org-queue-core-slice-commitments nil
+  "When non-nil, a commitment that does not fit is planned as a slice.
+
+Bound by the horizon simulator.  A slice carries `:slice' and a
+`:queue-minutes' smaller than the effort; what is left stays in the pool
+for the next day.  Only commitments are sliced, never candidates.  A day
+in the simulation therefore never overflows; a deadline the days cannot
+cover is reported by the horizon as missed instead.")
+
+(defvar org-queue-core-placed-soft nil
+  "When non-nil, a machine placement is a candidate, not a commitment.
+
+Bound while proposing, so the planner may move what it placed itself.
+A SCHEDULED a person wrote is a commitment either way.")
+
+(defcustom org-queue-min-slice 15
+  "Smallest slice of a task worth planning, in minutes."
+  :type 'integer
+  :group 'org-queue)
+
+(defun org-queue-core-free-minutes (bucket date)
+  "Return the minutes BUCKET has free for planning on DATE."
+  (if org-queue-core-free-minutes-function
+      (funcall org-queue-core-free-minutes-function bucket date)
+    (round (* (org-queue-core-bucket-capacity bucket date)
+              (- 1.0 org-queue-slack-fraction)))))
+
+(defvar org-queue-core-start-by-task nil
+  "The task whose start-by is being computed, for the free-minutes function.
+Its own deadline-day minutes must not count as already booked.")
+
+(defun org-queue-core-start-by (task today minutes)
+  "Return the day TASK must start by to finish MINUTES before its deadline.
+
+Walks back from the deadline, spending each day's free minutes, and
+returns the day the effort is covered -- or TODAY when it is not
+covered by then, which is to say it is already late.  Nil for a task
+with no hard deadline, or a deadline already passed."
+  (let ((deadline (plist-get task :deadline)))
+    (when (and org-queue-start-by deadline
+               (not (plist-get task :deadline-soft))
+               (> deadline today))
+      (let ((bucket (org-queue-core-bucket task))
+            (org-queue-core-start-by-task task)
+            (day deadline)
+            (need minutes))
+        (while (and (> need 0) (> day today))
+          (setq need (- need (org-queue-core-free-minutes bucket day)))
+          (when (> need 0) (setq day (org-queue-core-date-add day -1))))
+        day))))
+
+
 ;;;; Filtering
 
 (defcustom org-queue-done-states '("DONE" "NOPE")
@@ -190,6 +341,7 @@ problem and you want to see it."
     (progress . 3.0)
     (quick    . 1.0)
     (carry    . 2.5)
+    (stick    . 2.0)
     (glut     . 2.0))
   "Coefficients of the scoring formula.
 
@@ -200,6 +352,7 @@ problem and you want to see it."
          + progress * (state is PROG)
          + quick    * (effort <= `org-queue-quick-threshold')
          + carry    * (planned before and not finished)
+         + stick    * (a machine placement already on this day, while proposing)
          - glut     * (tasks already picked from this category)
 
 The last term is the only one that is not a property of the task: it is
@@ -299,6 +452,30 @@ One catastrophically mis-clocked task should not quadruple a category."
   "Return the number of days from FROM to TO, both YYYYMMDD integers."
   (- (org-queue-core-day-number to) (org-queue-core-day-number from)))
 
+(defun org-queue-core-date-from-day-number (days)
+  "Return the YYYYMMDD integer DAYS after 1970-01-01.
+The inverse of `org-queue-core-day-number', same civil algorithm."
+  (let* ((z (+ days 719468))
+         (era (/ (if (>= z 0) z (- z 146096)) 146097))
+         (doe (- z (* era 146097)))
+         (yoe (/ (- doe (/ doe 1460) (- (/ doe 36524)) (/ doe 146096)) 365))
+         (y (+ yoe (* era 400)))
+         (doy (- doe (- (+ (* 365 yoe) (/ yoe 4)) (/ yoe 100))))
+         (mp (/ (+ (* 5 doy) 2) 153))
+         (d (1+ (- doy (/ (+ (* 153 mp) 2) 5))))
+         (m (if (< mp 10) (+ mp 3) (- mp 9)))
+         (y (if (<= m 2) (1+ y) y)))
+    (+ (* y 10000) (* m 100) d)))
+
+(defun org-queue-core-iso (date)
+  "Return DATE, a YYYYMMDD integer, as YYYY-MM-DD."
+  (format "%d-%02d-%02d" (/ date 10000) (% (/ date 100) 100) (% date 100)))
+
+(defun org-queue-core-date-add (date days)
+  "Return DATE, a YYYYMMDD integer, moved by DAYS."
+  (org-queue-core-date-from-day-number
+   (+ (org-queue-core-day-number date) days)))
+
 (defun org-queue-core-day-of-week (date)
   "Return the day of week of DATE (YYYYMMDD), 0 = Sunday.
 1970-01-01 was a Thursday, hence the offset."
@@ -364,6 +541,7 @@ pulled back in if the day underfills.  `:dropped' is an alist of
              (reason
               (cond
                ((org-queue-core-done-p task) 'done)
+               ((org-queue-core-habit-p task) 'habit)
                ((member state org-queue-excluded-states) 'state)
                ((cl-some (lambda (id) (member id open-ids)) blockers) 'blocked)
                ((and (equal state "WAIT")
@@ -390,8 +568,10 @@ pulled back in if the day underfills.  `:dropped' is an alist of
                      (> (plist-get task :timestamp) today))
                 'event-later)
                ((and (not (org-queue-core-committed-p task today))
-                     (null (plist-get task :timestamp))
-                     (plist-get task :timestamp-past))
+                     (or (and (plist-get task :timestamp)
+                              (< (plist-get task :timestamp) today))
+                         (and (null (plist-get task :timestamp))
+                              (plist-get task :timestamp-past))))
                 'event-past))))
         (cond
          (reason (push (cons task reason) dropped))
@@ -423,11 +603,16 @@ the carry-over term, so yesterday's undone plan outranks fresh work
 without outranking today's actual obligations."
   (let ((scheduled (plist-get task :scheduled))
         (deadline (plist-get task :deadline))
-        (timestamp (plist-get task :timestamp)))
+        (timestamp (plist-get task :timestamp))
+        (start-by (plist-get task :start-by)))
     (or (equal (plist-get task :state) "NEXT")
-        (and scheduled (= scheduled today))
+        (and scheduled (= scheduled today)
+             ;; A machine placement is only a fact once the planner is
+             ;; not the one asking; while proposing it may be moved.
+             (not (and org-queue-core-placed-soft (plist-get task :placed))))
         (and deadline (<= deadline today))
-        (and timestamp (= timestamp today)))))
+        (and timestamp (= timestamp today))
+        (and start-by (<= start-by today)))))
 
 (defun org-queue-core-carried-p (task today)
   "Return non-nil if TASK was planned for an earlier day and not finished.
@@ -489,6 +674,9 @@ on what has already been picked and so belongs to the packer."
        (if (<= (org-queue-core-effort task) org-queue-quick-threshold)
            (funcall w 'quick) 0.0)
        (if (org-queue-core-carried-p task today) (funcall w 'carry) 0.0)
+       (if (and org-queue-core-placed-soft (plist-get task :placed)
+                (eql (plist-get task :scheduled) today))
+           (funcall w 'stick) 0.0)
        (or (alist-get (plist-get task :state) org-queue-state-weights
                       0.0 nil #'equal)
            0.0))))
@@ -608,8 +796,7 @@ is picked -- that is the whole point of it."
                 (picks (or (cdr (assoc (plist-get task :category)
                                        (plist-get (car state) :picks)))
                            0)))
-            (when (and (<= (+ (plist-get (car state) :minutes) minutes)
-                           (plist-get (car state) :usable))
+            (when (and (<= minutes (org-queue-core--room state task))
                        (or (not (equal (plist-get task :state) "PROG"))
                            (< (plist-get (car state) :wip) org-queue-wip-limit)))
               (let ((score (- (org-queue-core-score task today)
@@ -623,16 +810,33 @@ is picked -- that is the whole point of it."
           (org-queue-core--admit state best today factors reason best-score))))
     remaining))
 
-(defun org-queue-core--admit (state task today factors reason &optional score)
-  "Add TASK to the plan held in STATE, stamped with REASON and SCORE."
+(defun org-queue-core--bucket-state (state task)
+  "Return the mutable plist of TASK's bucket in STATE, or nil if closed."
+  (alist-get (org-queue-core-bucket task) (plist-get (car state) :buckets)))
+
+(defun org-queue-core--room (state task)
+  "Return the minutes TASK's bucket still has in STATE."
+  (let ((bucket (org-queue-core--bucket-state state task)))
+    (if bucket
+        (- (plist-get bucket :usable) (plist-get bucket :minutes))
+      0)))
+
+(defun org-queue-core--admit (state task today factors reason
+                                    &optional score minutes)
+  "Add TASK to the plan held in STATE, stamped with REASON and SCORE.
+MINUTES overrides the calibrated effort, for a slice."
   (let* ((plan (car state))
-         (minutes (org-queue-core-minutes task factors))
+         (whole (org-queue-core-minutes task factors))
+         (minutes (or minutes whole))
          (category (plist-get task :category))
+         (bucket (org-queue-core--bucket-state state task))
          (picks (plist-get plan :picks)))
     (setf (alist-get category picks nil nil #'equal)
           (1+ (or (alist-get category picks 0 nil #'equal) 0)))
     (setq plan (plist-put plan :picks picks))
     (setq plan (plist-put plan :minutes (+ (plist-get plan :minutes) minutes)))
+    (when bucket
+      (plist-put bucket :minutes (+ (plist-get bucket :minutes) minutes)))
     (when (equal (plist-get task :state) "PROG")
       (setq plan (plist-put plan :wip (1+ (plist-get plan :wip)))))
     (setq plan
@@ -641,7 +845,9 @@ is picked -- that is the whole point of it."
                             task
                             :queue-reason reason
                             :queue-minutes minutes
+                            :queue-bucket (org-queue-core-bucket task)
                             :queue-guessed (org-queue-core-guessed-p task)
+                            :slice (and (< minutes whole) t)
                             :queue-score (or score
                                              (org-queue-core-score task today)))
                            (plist-get plan :planned))))
@@ -649,15 +855,43 @@ is picked -- that is the whole point of it."
 
 (defun org-queue-core--cut-reason (task state factors)
   "Say why TASK did not make the plan in STATE."
-  (cond
-   ((and (equal (plist-get task :state) "PROG")
-         (>= (plist-get (car state) :wip) org-queue-wip-limit))
-    'wip-limit)
-   ((> (+ (plist-get (car state) :minutes)
-          (org-queue-core-minutes task factors))
-       (plist-get (car state) :usable))
-    'no-room)
-   (t 'no-room)))
+  (let ((bucket (org-queue-core--bucket-state state task)))
+    (cond
+     ((and (equal (plist-get task :state) "PROG")
+           (>= (plist-get (car state) :wip) org-queue-wip-limit))
+      'wip-limit)
+     ((or (null bucket) (zerop (plist-get bucket :capacity)))
+      'bucket-closed)
+     ((> (org-queue-core-minutes task factors)
+         (org-queue-core--room state task))
+      'no-room)
+     (t 'no-room))))
+
+(defun org-queue-core--bucket-states (today capacity habits)
+  "Build the per-bucket packing state for TODAY.
+
+CAPACITY, when given, overrides the default bucket's minutes -- the
+older calling convention, kept for the tests and for callers with one
+pool.  HABITS are subtracted from their buckets before slack is taken:
+routine is fixed time, and slack is for the work that is not."
+  (mapcar
+   (lambda (cell)
+     (let* ((name (car cell))
+            (minutes (if (and capacity (eq name 'default) (null org-queue-buckets))
+                         capacity
+                       (org-queue-core-bucket-capacity name today)))
+            (routine (cl-reduce
+                      #'+ (mapcar #'org-queue-core-effort
+                                  (cl-remove-if-not
+                                   (lambda (habit) (eq (org-queue-core-bucket habit) name))
+                                   habits))
+                      :initial-value 0))
+            (usable (max 0 (round (* (- minutes routine)
+                                     (- 1.0 org-queue-slack-fraction))))))
+       (cons name (list :capacity minutes :routine routine
+                        :usable usable :minutes 0
+                        :spill (plist-get (cdr cell) :spill)))))
+   (org-queue-core-bucket-specs)))
 
 
 ;;;; The plan
@@ -665,17 +899,21 @@ is picked -- that is the whole point of it."
 (defun org-queue-core-plan (tasks &optional today capacity)
   "Plan a day of TASKS for TODAY against CAPACITY minutes.
 
-TODAY defaults to the current date and CAPACITY to
-`org-queue-core-capacity' for that day.  Returns a plist:
+TODAY defaults to the current date and CAPACITY to the bucket table's
+minutes for that day (`org-queue-buckets', or `org-queue-capacity' when
+there is none).  Returns a plist:
 
   :date         the day planned, YYYYMMDD
-  :capacity     minutes in the day
-  :usable       capacity less `org-queue-slack-fraction'
+  :capacity     minutes in the day, all buckets
+  :routine      the habits that fall on the day, annotated
+  :usable       minutes for tasks after routine and slack, all buckets
   :minutes      minutes planned
+  :buckets      one plist per bucket: :name :capacity :routine :usable
+                :minutes :overcommitted
   :planned      the day, committed first, each task annotated with
-                `:queue-reason', `:queue-minutes', `:queue-score' and
-                `:queue-guessed'
-  :overcommitted non-nil when commitments alone exceed :usable
+                `:queue-reason', `:queue-minutes', `:queue-bucket',
+                `:queue-score', `:queue-guessed' and `:slice'
+  :overcommitted non-nil when commitments alone exceed some bucket
   :cut          (TASK . REASON) for eligible tasks that did not fit
   :dropped      (TASK . REASON) for tasks that never competed
   :deferred     tasks scheduled later and not needed to fill the day
@@ -684,11 +922,28 @@ TODAY defaults to the current date and CAPACITY to
 Every task handed in comes back in exactly one of :planned, :cut,
 :dropped or :deferred."
   (let* ((today (or today (org-queue-core-today)))
-         (capacity (or capacity (org-queue-core-capacity today)))
-         (usable (max 0 (round (* capacity (- 1.0 org-queue-slack-fraction)))))
          (factors (org-queue-core-calibration tasks))
          (sorted (org-queue-core-filter tasks today))
-         (eligible (plist-get sorted :eligible))
+         (habits (cl-remove-if-not
+                  (lambda (task) (org-queue-core-habit-applies-p task today))
+                  (mapcar #'car
+                          (cl-remove-if-not (lambda (cell) (eq (cdr cell) 'habit))
+                                            (plist-get sorted :dropped)))))
+         (buckets (org-queue-core--bucket-states today capacity habits))
+         (sum (lambda (key)
+                (cl-reduce #'+ (mapcar (lambda (b) (plist-get (cdr b) key)) buckets)
+                           :initial-value 0)))
+         (usable (funcall sum :usable))
+         ;; Start-by is a property of the task on this day, so stamp it
+         ;; before the commitment check reads it.
+         (eligible (mapcar (lambda (task)
+                             (let ((start-by (org-queue-core-start-by
+                                              task today
+                                              (org-queue-core-minutes task factors))))
+                               (if start-by
+                                   (org-queue-core--annotate task :start-by start-by)
+                                 task)))
+                           (plist-get sorted :eligible)))
          (committed (org-queue-core--sort-committed
                      (cl-remove-if-not
                       (lambda (task) (org-queue-core-committed-p task today))
@@ -698,37 +953,96 @@ Every task handed in comes back in exactly one of :planned, :cut,
                       (lambda (task) (org-queue-core-committed-p task today))
                       eligible))
          (state (list (list :minutes 0 :usable usable :wip 0
-                            :picks nil :planned nil)))
+                            :picks nil :planned nil :buckets buckets)))
          cut)
     ;; Commitments are facts, not candidates: they are never scored and
-    ;; never dropped for want of room.  If they alone overflow the day,
-    ;; that is the finding -- say it and plan nothing else on top.
+    ;; never dropped for want of room.  If they alone overflow a bucket,
+    ;; that is the finding -- say it and plan nothing else in it.  The
+    ;; horizon simulator is the one exception: there a commitment that
+    ;; is not yet due may be sliced to what fits, or carried a day.
     (dolist (task committed)
-      (org-queue-core--admit state task today factors 'committed))
-    (let ((overcommitted (> (plist-get (car state) :minutes) usable)))
-      (if overcommitted
-          (setq cut (mapcar (lambda (task) (cons task 'overcommitted))
-                            candidates))
-        (let ((leftover (org-queue-core--fill candidates state today
-                                              factors 'scored)))
-          (setq cut (mapcar (lambda (task)
-                              (cons task (org-queue-core--cut-reason
-                                          task state factors)))
-                            leftover))))
+      (let* ((minutes (org-queue-core-minutes task factors))
+             (room (org-queue-core--room state task)))
+        (cond
+         ((or (not org-queue-core-slice-commitments)
+              (<= minutes room)
+              ;; An appointment has a time of day; it cannot be sliced or
+              ;; carried, so it is admitted whole even in the simulation.
+              (eql (plist-get task :timestamp) today))
+          (org-queue-core--admit state task today factors 'committed))
+         ((>= room org-queue-min-slice)
+          (org-queue-core--admit state task today factors 'committed nil room))
+         (t (push (cons task 'no-room) cut)))))
+    (let* ((overcommitted-buckets
+            (cl-remove-if-not
+             (lambda (b) (> (plist-get (cdr b) :minutes) (plist-get (cdr b) :usable)))
+             buckets))
+           (overcommitted (and overcommitted-buckets t))
+           (open (cl-remove-if
+                  (lambda (task)
+                    (assq (org-queue-core-bucket task) overcommitted-buckets))
+                  candidates))
+           (blocked (cl-remove-if-not
+                     (lambda (task)
+                       (assq (org-queue-core-bucket task) overcommitted-buckets))
+                     candidates)))
+      (dolist (task blocked) (push (cons task 'overcommitted) cut))
+      (let ((leftover (org-queue-core--fill open state today factors 'scored)))
+        ;; Spill: a bucket that allows it hands what it did not use to
+        ;; the default bucket, and the default's candidates get one more
+        ;; pass.
+        (let ((spilled 0))
+          (dolist (b buckets)
+            (when (and (plist-get (cdr b) :spill) (not (eq (car b) 'default)))
+              (setq spilled (+ spilled (max 0 (- (plist-get (cdr b) :usable)
+                                                 (plist-get (cdr b) :minutes)))))))
+          (when-let* ((default (and (> spilled 0) (alist-get 'default buckets))))
+            (plist-put default :usable (+ (plist-get default :usable) spilled))
+            (setcar state (plist-put (car state) :usable
+                                     (+ (plist-get (car state) :usable) spilled)))
+            (setq leftover (org-queue-core--fill leftover state today factors 'scored))))
+        (dolist (task leftover)
+          (push (cons task (org-queue-core--cut-reason task state factors)) cut)))
       ;; A day that still has room after the backlog is exhausted may
       ;; reach forward: scheduled-later work is deferred, not refused.
       (let ((deferred (plist-get sorted :deferred)))
-        (unless overcommitted
-          (setq deferred (org-queue-core--fill deferred state today
-                                               factors 'pulled-forward)))
+        (setq deferred (org-queue-core--fill
+                        (cl-remove-if
+                         (lambda (task)
+                           (assq (org-queue-core-bucket task) overcommitted-buckets))
+                         deferred)
+                        state today factors 'pulled-forward))
+        ;; Tasks in an overcommitted bucket were never offered; put them back.
+        (setq deferred (append deferred
+                               (cl-remove-if-not
+                                (lambda (task)
+                                  (assq (org-queue-core-bucket task) overcommitted-buckets))
+                                (plist-get sorted :deferred))))
         (list :date today
-              :capacity capacity
-              :usable usable
+              :capacity (funcall sum :capacity)
+              :routine (mapcar (lambda (habit)
+                                 (org-queue-core--annotate
+                                  habit
+                                  :queue-minutes (org-queue-core-effort habit)
+                                  :queue-bucket (org-queue-core-bucket habit)
+                                  :queue-guessed (org-queue-core-guessed-p habit)))
+                               habits)
+              :usable (plist-get (car state) :usable)
               :minutes (plist-get (car state) :minutes)
+              :buckets (mapcar (lambda (b)
+                                 (list :name (car b)
+                                       :capacity (plist-get (cdr b) :capacity)
+                                       :routine (plist-get (cdr b) :routine)
+                                       :usable (plist-get (cdr b) :usable)
+                                       :minutes (plist-get (cdr b) :minutes)
+                                       :overcommitted
+                                       (> (plist-get (cdr b) :minutes)
+                                          (plist-get (cdr b) :usable))))
+                               buckets)
               :planned (nreverse (plist-get (car state) :planned))
               :overcommitted overcommitted
               :wip (plist-get (car state) :wip)
-              :cut cut
+              :cut (nreverse cut)
               :dropped (plist-get sorted :dropped)
               :deferred deferred
               :calibration factors)))))

@@ -5,175 +5,189 @@
 #+FILETAGS: :work:
 
 * PROG [#A] Draft Q4 roadmap for the retrieval service [1/4]  :@deep:planning:
-DEADLINE: <2026-09-02 Wed>
+DEADLINE: <2026-10-17 Sat>
 :PROPERTIES:
-:ID:       717878C0-24CB-4B63-B29E-54A787B2F20F
-:CREATED:  [2026-08-13 Thu]
+:ID:       0077A9FF-ED22-4C29-8F50-D5D49176F030
+:CREATED:  [2026-07-25 Sat]
 :Effort:   6:00
+:IMPACT:   2
+:DEADLINE_TYPE: soft
 :END:
 :LOGBOOK:
-- State "PROG"       from "TODO"       [2026-09-06 Sun 10:00]
-- State "TODO"       from "PROG"       [2026-09-01 Tue 13:30]
-- State "PROG"       from              [2026-09-01 Tue 09:30]
-- New deadline from "[2026-08-23 Sun]" on [2026-09-03 Thu 12:30]
+- State "PROG"       from "TODO"       [2026-09-12 Sat 09:00]
+- State "TODO"       from "PROG"       [2026-09-07 Mon 17:51]
+- State "PROG"       from              [2026-09-07 Mon 16:30]
+- New deadline from "[2026-10-07 Wed]" on [2026-09-10 Thu 12:30]
 :END:
 
 Three themes so far: enrichment, gold-set curation, and whether the
 CLIP tier earns its keep.
 
 ** DONE Collect input from the team
-CLOSED: [2026-09-05 Sat 10:33]
+CLOSED: [2026-09-05 Sat 10:27]
 :PROPERTIES:
-:ID:       FC6604E5-A2A9-417B-85B0-281F8E727C1C
+:ID:       DA07A928-91D7-4E63-A758-518A190497E2
 :Effort:   1:00
 :END:
 :LOGBOOK:
-- State "DONE"       from "PROG"       [2026-09-05 Sat 10:33]
-- State "PROG"       from              [2026-09-05 Sat 09:00]
+- State "DONE"       from "PROG"       [2026-09-05 Sat 10:27]
+- State "PROG"       from              [2026-09-05 Sat 09:15]
 :END:
 
 ** PROG Draft the enrichment section
 :PROPERTIES:
-:ID:       190497E2-D289-404F-9584-B59C166346D0
+:ID:       7723E94D-45EC-4061-81AA-AC93F52B59F9
 :Effort:   2:00
 :END:
 
 ** TODO Cost the CLIP tier decision
 :PROPERTIES:
-:ID:       31D60D16-DA07-4928-91D7-0E632758518A
+:ID:       467D758E-12D8-4231-B3CD-FF8E297F2377
 :Effort:   2:00
 :END:
 
 ** TODO Circulate for review
 :PROPERTIES:
-:ID:       77E148CB-1F7D-4B71-8078-56D0BAFE321B
+:ID:       126828A6-0029-4C95-BB67-2BDB8419B4FD
 :Effort:   0:30
 :END:
 
-* TODO [#B] Review the reranker benchmark writeup  :@deep:review:@fresh:
-SCHEDULED: <2026-09-08 Tue>
+* PROG [#B] Review the reranker benchmark writeup  :@deep:review:
+SCHEDULED: <2026-09-14 Mon>
 :PROPERTIES:
-:ID:       AB6BB001-A9B4-4BB1-9769-882E126828A6
-:CREATED:  [2026-07-10 Fri]
-:Effort:   1:00
-:IMPACT:   5
+:ID:       B1A3400E-6D68-4414-9BC1-978E503B2D1C
+:CREATED:  [2026-08-17 Mon]
+:Effort:   2:00
+:IMPACT:   2
+:END:
+:LOGBOOK:
+- State "PROG"       from "TODO"       [2026-09-10 Thu 11:00]
+- State "TODO"       from "PROG"       [2026-09-10 Thu 11:44]
+- State "PROG"       from "TODO"       [2026-09-10 Thu 11:15]
+- State "TODO"       from "PROG"       [2026-09-07 Mon 10:58]
+- State "PROG"       from              [2026-09-07 Mon 10:30]
 :END:
 
 * TODO [#A] Prepare slides for the architecture review  :@deep:present:
-DEADLINE: <2026-09-09 Wed>
+DEADLINE: <2026-09-13 Sun>
 :PROPERTIES:
-:ID:       D63317C6-F9F3-45E6-B027-459129E01824
-:CREATED:  [2026-08-27 Thu]
+:ID:       26658852-09C3-41D9-94F4-0A5C64ADAED2
+:CREATED:  [2026-07-25 Sat]
 :Effort:   4:00
-:IMPACT:   4
-:END:
-:LOGBOOK:
-- New deadline from "[2026-08-30 Sun]" on [2026-09-05 Sat 12:30]
 :END:
 
-* WAIT [#B] Reply to the vendor security questionnaire  :@shallow:admin:
-SCHEDULED: <2026-10-05 Mon>
+* WAIT [#B] Reply to the vendor security questionnaire  :@shallow:admin:@tired:
 :PROPERTIES:
-:ID:       C087E801-3CBB-404A-A1D6-8B7626658852
-:CREATED:  [2026-07-21 Tue]
-:Effort:   0:45
-:IMPACT:   4
-:WAITING_ON: legal
+:ID:       F597A604-211C-4BF1-AFC2-54C448992799
+:CREATED:  [2026-08-25 Tue]
+:Effort:   1:30
+:IMPACT:   2
+:WAITING_ON: my accountant
 :END:
 :LOGBOOK:
-- State "WAIT"       from "TODO"       [2026-08-28 Fri 11:20] \\
-  Sent the details, waiting on confirmation.
-- Rescheduled from "[2026-09-28 Mon]" on [2026-09-04 Fri 08:55]
+- State "WAIT"       from "TODO"       [2026-08-25 Tue 11:20] \\
+  Blocked until they come back from leave.
 :END:
 
 Waiting on legal for the subprocessor list.
 
+* TODO Update the on-call runbook for the index rebuild  :@deep:docs:@fresh:
+:PROPERTIES:
+:ID:       D525649D-FD10-4503-9318-82E9DCAC140E
+:CREATED:  [2026-08-15 Sat]
+:Effort:   3:00
+:IMPACT:   3
+:END:
+
 - [X] first pass
 - [ ] second pass
 
-* NEXT [#C] Update the on-call runbook for the index rebuild  :@deep:docs:
-DEADLINE: <2026-09-26 Sat>
+* QUES Pair with Sam on the ingestion backpressure bug  :@deep:pairing:
+DEADLINE: <2026-10-21 Wed>
 :PROPERTIES:
-:ID:       E33412EB-3E3B-4CD3-9307-1542817BBFA3
-:CREATED:  [2026-08-20 Thu]
+:ID:       E7E63132-2169-488C-A9DF-A72EF95C0FE7
+:CREATED:  [2026-09-04 Fri]
 :Effort:   2:00
 :IMPACT:   2
+:WAITING_ON: IT
 :END:
 
-* PROG Pair with Sam on the ingestion backpressure bug  :@deep:pairing:
+* DONE [#C] File expenses for the August conference  :@shallow:admin:@fresh:
+CLOSED: [2026-08-31 Mon 10:44] SCHEDULED: <2026-09-08 Tue> DEADLINE: <2026-10-16 Fri>
 :PROPERTIES:
-:ID:       61DFAC47-6EEC-4704-B1C3-97B642F0B02E
-:CREATED:  [2026-08-27 Thu]
-:Effort:   0:45
-:IMPACT:   4
+:ID:       43B5B327-FD54-436F-8B3D-F520D2F39A71
+:CREATED:  [2026-07-15 Wed]
 :END:
 :LOGBOOK:
-- State "PROG"       from "TODO"       [2026-09-07 Mon 11:00]
-- State "TODO"       from "PROG"       [2026-09-02 Wed 11:38]
-- State "PROG"       from "TODO"       [2026-09-02 Wed 11:30]
-- State "TODO"       from "PROG"       [2026-09-01 Tue 14:07]
-- State "PROG"       from              [2026-09-01 Tue 14:00]
+- State "DONE"       from "PROG"       [2026-08-31 Mon 10:44]
+- State "PROG"       from "TODO"       [2026-08-31 Mon 10:30]
+- State "TODO"       from "PROG"       [2026-08-30 Sun 09:43]
+- State "PROG"       from "TODO"       [2026-08-30 Sun 09:30]
+- State "TODO"       from "PROG"       [2026-08-28 Fri 09:28]
+- State "PROG"       from              [2026-08-28 Fri 09:15]
 :END:
 
-* TODO [#C] File expenses for the August conference  :@shallow:admin:
-SCHEDULED: <2026-10-06 Tue>
+* DONE Interview debrief writeup  :@shallow:hiring:
+CLOSED: [2026-08-23 Sun 13:20] SCHEDULED: <2026-08-23 Sun>
 :PROPERTIES:
-:ID:       652343D4-70E1-4DBC-B36C-2D9ECD6357F1
-:CREATED:  [2026-07-11 Sat]
-:Effort:   0:10
-:END:
-
-* DONE Interview debrief writeup  :@shallow:hiring:@tired:
-CLOSED: [2026-08-25 Tue 09:11] SCHEDULED: <2026-08-11 Tue>
-:PROPERTIES:
-:ID:       CFF37306-94D4-4AC1-8FBE-4E7548408FAA
-:CREATED:  [2026-07-14 Tue]
-:Effort:   0:20
+:ID:       0E3F5709-3CB1-405B-9779-FB0BFC4D50BA
+:CREATED:  [2026-08-14 Fri]
+:Effort:   0:05
 :IMPACT:   5
 :END:
 :LOGBOOK:
-- State "DONE"       from "PROG"       [2026-08-25 Tue 09:11]
-- State "PROG"       from "TODO"       [2026-08-25 Tue 09:00]
-- State "TODO"       from "PROG"       [2026-08-22 Sat 16:10]
-- State "PROG"       from "TODO"       [2026-08-22 Sat 16:00]
-- State "TODO"       from "PROG"       [2026-08-21 Fri 10:40]
-- State "PROG"       from              [2026-08-21 Fri 10:30]
-- Rescheduled from "[2026-08-04 Tue]" on [2026-09-06 Sun 08:55]
+- State "DONE"       from "PROG"       [2026-08-23 Sun 13:20]
+- State "PROG"       from "TODO"       [2026-08-23 Sun 13:15]
+- State "TODO"       from "PROG"       [2026-08-20 Thu 13:05]
+- State "PROG"       from "TODO"       [2026-08-20 Thu 13:00]
+- State "TODO"       from "PROG"       [2026-08-19 Wed 16:20]
+- State "PROG"       from              [2026-08-19 Wed 16:15]
 :END:
 
-* QUES [#B] Decide whether to keep the CLIP tier  :@deep:decision:@fresh:
-SCHEDULED: <2026-09-11 Fri>
+- [X] first pass
+- [ ] second pass
+
+* QUES [#C] Decide whether to keep the CLIP tier  :@deep:decision:
+SCHEDULED: <2026-09-27 Sun>
 :PROPERTIES:
-:ID:       68A9BFCB-59D2-4AFF-AD9A-52388A79827C
-:CREATED:  [2026-08-06 Thu]
-:Effort:   1:30
-:BLOCKED_BY: 13009921-F5DE-4A4E-B570-F20A51B4962C
-:END:
-:LOGBOOK:
-- Rescheduled from "[2026-09-04 Fri]" on [2026-09-02 Wed 08:55]
+:ID:       4300C9E5-61E4-4922-B104-BAC8901AEDA9
+:CREATED:  [2026-08-01 Sat]
+:Effort:   3:00
+:WAITING_ON: Priya
+:BLOCKED_BY: CF8C1C99-6B54-47E6-ABCE-16F09A7A5BB4
 :END:
 
 Measured 36%/46% OCR-vs-CLIP split. Scores are shown rather than
 filtered, which may be the wrong call.
 
-* TODO [#B] Cut the 0.4.0 release  :@deep:release:@fresh:
-DEADLINE: <2026-09-11 Fri>
+- [X] first pass
+- [ ] second pass
+
+* TODO Cut the 0.4.0 release  :@deep:release:@fresh:
+DEADLINE: <2026-09-15 Tue -5d>
 :PROPERTIES:
-:ID:       4300C9E5-61E4-4922-B104-BAC8901AEDA9
-:CREATED:  [2026-07-28 Tue]
-:Effort:   3:00
+:ID:       3AA8C57F-51D1-4151-8BAE-C0B34D95D42F
+:CREATED:  [2026-07-04 Sat]
+:Effort:   1:30
+:IMPACT:   4
 :DEADLINE_TYPE: soft
-:BLOCKED_BY: 6B54F7E6-ABCE-46F0-9A7A-5BB461FDA169
+:BLOCKED_BY: 1DA94774-54D2-49F9-A23E-554701512498
 :END:
 
-* TODO [#A] Rotate the Algolia API key and audit its ACLs  :@deep:security:
-DEADLINE: <2026-09-06 Sun -5d>
+* PROG [#A] Rotate the Algolia API key and audit its ACLs  :@deep:security:
+DEADLINE: <2026-09-11 Fri -5d>
 :PROPERTIES:
-:ID:       87B3D08A-EF66-474B-B0B8-9384F09594C3
-:CREATED:  [2026-07-22 Wed]
-:Effort:   3:00
-:IMPACT:   3
-:DEADLINE_TYPE: soft
+:ID:       12B27BEE-B794-4E41-95DA-1AE10F455A47
+:CREATED:  [2026-07-30 Thu]
+:Effort:   0:45
+:IMPACT:   4
+:END:
+:LOGBOOK:
+- State "PROG"       from "TODO"       [2026-09-10 Thu 14:00]
+- State "TODO"       from "PROG"       [2026-09-11 Fri 11:26]
+- State "PROG"       from "TODO"       [2026-09-11 Fri 11:15]
+- State "TODO"       from "PROG"       [2026-09-09 Wed 13:25]
+- State "PROG"       from              [2026-09-09 Wed 13:15]
 :END:
 
 The key baked into the public bundle has addObject, deleteIndex and
@@ -182,72 +196,85 @@ settings ACLs. Rotate regardless.
 - [X] first pass
 - [ ] second pass
 
-* TODO [#B] Write the postmortem for the Aug 21 outage [1/3]  :@deep:docs:
-SCHEDULED: <2026-09-15 Tue>
+* DONE [#B] Write the postmortem for the Aug 21 outage [1/3]  :@deep:docs:
+CLOSED: [2026-09-01 Tue 13:38] SCHEDULED: <2026-08-17 Mon>
 :PROPERTIES:
-:ID:       DD18651F-A91A-4F29-80DC-3D2F39AFDE98
-:CREATED:  [2026-07-25 Sat]
+:ID:       98E60DBF-E9C3-4C28-A5BE-876EBAB9269B
+:CREATED:  [2026-08-04 Tue]
 :Effort:   6:00
+:END:
+:LOGBOOK:
+- State "DONE"       from "PROG"       [2026-09-01 Tue 13:38]
+- State "PROG"       from "TODO"       [2026-09-01 Tue 10:30]
+- State "TODO"       from "PROG"       [2026-08-29 Sat 19:08]
+- State "PROG"       from              [2026-08-29 Sat 16:00]
 :END:
 
 ** DONE Assemble the timeline
-CLOSED: [2026-09-04 Fri 15:07]
+CLOSED: [2026-09-06 Sun 14:16]
 :PROPERTIES:
-:ID:       1672384E-9A59-4843-843C-BF23B9D5D74F
+:ID:       752BF9B8-B72B-4DB1-AD5A-42C6CE9E9902
 :Effort:   1:00
 :END:
 :LOGBOOK:
-- State "DONE"       from "PROG"       [2026-09-04 Fri 15:07]
-- State "PROG"       from              [2026-09-04 Fri 14:30]
+- State "DONE"       from "PROG"       [2026-09-06 Sun 14:16]
+- State "PROG"       from              [2026-09-06 Sun 13:30]
 :END:
 
 ** TODO Identify contributing factors
 :PROPERTIES:
-:ID:       9B34288A-CDA1-441F-9FE3-994112B27BEE
+:ID:       560989B9-5EE8-401E-BFDF-D3DEE2D03F3A
 :Effort:   2:00
 :END:
 
 ** TODO Write up remediations
 :PROPERTIES:
-:ID:       EFAB3604-9E66-455E-A947-720AED08587E
+:ID:       552D0B12-E21E-48CB-B322-7582D6C54292
 :Effort:   2:00
 :END:
 
-* HOLD [#C] Renew the team's model API quota  :@shallow:admin:@fresh:
+* TODO Renew the team's model API quota  :@shallow:admin:@tired:
 :PROPERTIES:
-:ID:       ECF1C884-D1A8-410C-A07C-5AAD376EA7B2
-:CREATED:  [2026-07-19 Sun]
-:Effort:   0:30
-:IMPACT:   2
-:END:
-:LOGBOOK:
-- State "HOLD"       from "TODO"       [2026-08-25 Tue 16:40] \\
-  Revisit when there is budget.
+:ID:       1ED2CE77-187F-49FB-A7A3-8481F44676E7
+:CREATED:  [2026-08-04 Tue]
+:IMPACT:   5
 :END:
 
-* IDEA [#B] Sync with design on the dashboard redesign  :@call:
+* DONE [#A] Sync with design on the dashboard redesign  :@call:
+CLOSED: [2026-09-04 Fri 12:25] SCHEDULED: <2026-08-27 Thu>
 :PROPERTIES:
-:ID:       3161B90A-3C8C-4E60-B474-A737A59BB245
-:CREATED:  [2026-07-26 Sun]
-:IMPACT:   2
-:END:
-
-* NOPE [#A] Archive the retired ingestion prototype  :@shallow:admin:
-CLOSED: [2026-08-30 Sun 16:37] SCHEDULED: <2026-08-09 Sun>
-:PROPERTIES:
-:ID:       5DFEB445-494A-43E4-98F9-815EFD803BF7
-:CREATED:  [2026-07-04 Sat]
-:Effort:   0:20
+:ID:       E835F2E5-6ACE-4792-AD8E-8BEFEC2EB254
+:CREATED:  [2026-08-10 Mon]
+:Effort:   2:00
+:IMPACT:   3
 :END:
 :LOGBOOK:
-- State "NOPE"       from "PROG"       [2026-08-30 Sun 16:37] \\
-  Duplicate of another entry.
-- State "PROG"       from "TODO"       [2026-08-30 Sun 16:30]
-- State "TODO"       from "PROG"       [2026-08-28 Fri 09:36]
-- State "PROG"       from "TODO"       [2026-08-28 Fri 09:30]
-- State "TODO"       from "PROG"       [2026-08-25 Tue 13:06]
-- State "PROG"       from              [2026-08-25 Tue 13:00]
+- State "DONE"       from "PROG"       [2026-09-04 Fri 12:25]
+- State "PROG"       from "TODO"       [2026-09-04 Fri 11:30]
+- State "TODO"       from "PROG"       [2026-09-03 Thu 15:09]
+- State "PROG"       from "TODO"       [2026-09-03 Thu 14:15]
+- State "TODO"       from "PROG"       [2026-09-01 Tue 14:09]
+- State "PROG"       from              [2026-09-01 Tue 13:15]
+:END:
+
+* NOPE [#A] Archive the retired ingestion prototype  :@shallow:admin:@fresh:
+CLOSED: [2026-08-22 Sat 09:37] SCHEDULED: <2026-08-19 Wed>
+:PROPERTIES:
+:ID:       A361C9C3-CBB6-45F6-8CA2-56CE49FE6196
+:CREATED:  [2026-08-10 Mon]
+:Effort:   0:15
+:IMPACT:   5
+:END:
+:LOGBOOK:
+- State "NOPE"       from "PROG"       [2026-08-22 Sat 09:37] \\
+  No longer relevant after the rewrite.
+- State "PROG"       from "TODO"       [2026-08-22 Sat 09:30]
+- State "TODO"       from "PROG"       [2026-08-21 Fri 11:06]
+- State "PROG"       from              [2026-08-21 Fri 11:00]
 :END:
 
 Superseded -- the prototype was folded into the main pipeline.
+
+- [X] first pass
+- [ ] second pass
 

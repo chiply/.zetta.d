@@ -546,3 +546,292 @@
 
 (provide 'org-queue-core-test)
 ;;; org-queue-core-test.el ends here
+
+
+;;;; Date arithmetic
+
+(ert-deftest oqt/date-add-round-trips ()
+  (should (= 20260909 (org-queue-core-date-add 20260908 1)))
+  (should (= 20261001 (org-queue-core-date-add 20260930 1)))
+  (should (= 20270101 (org-queue-core-date-add 20261231 1)))
+  (should (= 20240229 (org-queue-core-date-add 20240228 1)))
+  (should (= 20260901 (org-queue-core-date-add 20260908 -7)))
+  (dolist (date '(19700101 20000229 20260912 20991231))
+    (should (= date (org-queue-core-date-from-day-number
+                     (org-queue-core-day-number date))))))
+
+
+;;;; Buckets
+
+(defconst oqt-buckets
+  '((work         :minutes 200 :match (:category ("work")))
+    (reading      :minutes 60  :match (:tags ("reading")))
+    (housekeeping :minutes 30  :match (:tags ("housekeeping")))
+    (default      :minutes 60)))
+
+(defun oqt-bucket-row (plan name)
+  (cl-find name (plist-get plan :buckets) :key (lambda (b) (plist-get b :name))))
+
+(ert-deftest oqt/bucket-claims-by-first-match ()
+  (let ((org-queue-buckets oqt-buckets))
+    (should (eq 'work (org-queue-core-bucket (oqt-task "a" :category "work"))))
+    (should (eq 'reading (org-queue-core-bucket
+                          (oqt-task "b" :tags '("reading" "housekeeping")))))
+    (should (eq 'default (org-queue-core-bucket (oqt-task "c"))))))
+
+(ert-deftest oqt/housekeeping-never-consumes-work-minutes ()
+  (let* ((org-queue-buckets oqt-buckets)
+         (org-queue-slack-fraction 0.0)
+         (tasks (list (oqt-task "work 1" :category "work" :effort 100)
+                      (oqt-task "work 2" :category "work" :effort 100)
+                      (oqt-task "chores" :tags '("housekeeping") :effort 30)))
+         (plan (org-queue-core-plan tasks oqt-today)))
+    (should (equal '("chores" "work 1" "work 2")
+                   (sort (oqt-plan-titles plan) #'string<)))
+    (should (= 200 (plist-get (oqt-bucket-row plan 'work) :minutes)))
+    (should (= 30 (plist-get (oqt-bucket-row plan 'housekeeping) :minutes)))))
+
+(ert-deftest oqt/bucket-full-cuts-with-its-name ()
+  (let* ((org-queue-buckets oqt-buckets)
+         (org-queue-slack-fraction 0.0)
+         (tasks (list (oqt-task "read 1" :tags '("reading") :effort 40)
+                      (oqt-task "read 2" :tags '("reading") :effort 40)))
+         (plan (org-queue-core-plan tasks oqt-today)))
+    (should (= 1 (length (plist-get plan :planned))))
+    (should (= 1 (length (plist-get plan :cut))))
+    (should (eq 'no-room (cdr (car (plist-get plan :cut)))))
+    (should (eq 'reading (plist-get (car (plist-get plan :planned)) :queue-bucket)))))
+
+(ert-deftest oqt/empty-bucket-does-not-feed-default-unless-spill ()
+  (let* ((org-queue-slack-fraction 0.0)
+         (tasks (list (oqt-task "d1" :effort 60) (oqt-task "d2" :effort 60))))
+    (let* ((org-queue-buckets oqt-buckets)
+           (plan (org-queue-core-plan tasks oqt-today)))
+      (should (= 1 (length (plist-get plan :planned))))
+      (should (= 0 (plist-get (oqt-bucket-row plan 'reading) :minutes))))
+    (let* ((org-queue-buckets
+            '((reading :minutes 60 :match (:tags ("reading")) :spill t)
+              (default :minutes 60)))
+           (plan (org-queue-core-plan tasks oqt-today)))
+      (should (= 2 (length (plist-get plan :planned))))
+      (should (= 120 (plist-get (oqt-bucket-row plan 'default) :usable))))))
+
+(ert-deftest oqt/commitment-overflows-its-bucket-alone ()
+  (let* ((org-queue-buckets oqt-buckets)
+         (org-queue-slack-fraction 0.0)
+         (tasks (list (oqt-task "due" :category "work" :effort 300
+                                :deadline oqt-today)
+                      (oqt-task "more work" :category "work" :effort 30)
+                      (oqt-task "read" :tags '("reading") :effort 30)))
+         (plan (org-queue-core-plan tasks oqt-today)))
+    (should (plist-get plan :overcommitted))
+    (should (plist-get (oqt-bucket-row plan 'work) :overcommitted))
+    (should-not (plist-get (oqt-bucket-row plan 'reading) :overcommitted))
+    (should (equal '("due" "read") (sort (oqt-plan-titles plan) #'string<)))
+    (should (eq 'overcommitted (oqt-drop-reason plan "more work")))))
+
+(ert-deftest oqt/bucket-closed-on-a-weekday-absent-from-its-alist ()
+  (let* ((org-queue-buckets
+          '((work :minutes ((1 . 200)) :match (:category ("work")))
+            (default :minutes 60)))
+         (plan (org-queue-core-plan
+                (list (oqt-task "w" :category "work")) oqt-today)))   ; Tuesday
+    (should (eq 'bucket-closed (oqt-drop-reason plan "w")))))
+
+(ert-deftest oqt/no-buckets-means-capacity-is-the-only-bucket ()
+  (let* ((org-queue-buckets nil)
+         (org-queue-slack-fraction 0.0)
+         (plan (org-queue-core-plan (list (oqt-task "a")) oqt-today 300)))
+    (should (= 1 (length (plist-get plan :buckets))))
+    (should (eq 'default (plist-get (car (plist-get plan :buckets)) :name)))
+    (should (= 300 (plist-get plan :usable)))))
+
+(ert-deftest oqt/every-task-lands-once-with-buckets ()
+  (let* ((org-queue-buckets oqt-buckets)
+         (tasks (list (oqt-task "w" :category "work")
+                      (oqt-task "r" :tags '("reading"))
+                      (oqt-task "h" :tags '("housekeeping") :effort 200)
+                      (oqt-task "d")
+                      (oqt-task "done" :state "DONE")
+                      (oqt-task "later" :scheduled 20260920)))
+         (plan (org-queue-core-plan tasks oqt-today)))
+    (should (= 6 (+ (length (plist-get plan :planned))
+                    (length (plist-get plan :cut))
+                    (length (plist-get plan :dropped))
+                    (length (plist-get plan :deferred)))))))
+
+
+;;;; Habits
+
+(defun oqt-habit (title minutes &optional days)
+  (oqt-task title :habit t :effort minutes :habit-days days
+            :scheduled oqt-today))
+
+(ert-deftest oqt/habit-is-never-planned-or-cut ()
+  (let* ((plan (org-queue-core-plan (list (oqt-habit "lift" 60)) oqt-today 300)))
+    (should-not (plist-get plan :planned))
+    (should-not (plist-get plan :cut))
+    (should (eq 'habit (oqt-drop-reason plan "lift")))
+    (should (equal '("lift") (oqt-titles (plist-get plan :routine))))))
+
+(ert-deftest oqt/habit-days-exclude-a-weekday ()
+  (let ((sunday 20260906)
+        (habit (oqt-habit "lift" 60 '(1 2 3 4 5 6))))
+    (should-not (plist-get (org-queue-core-plan (list habit) sunday 300) :routine))
+    (should (plist-get (org-queue-core-plan (list habit) oqt-today 300) :routine))))
+
+(ert-deftest oqt/habit-reduces-usable-before-slack ()
+  (let* ((org-queue-slack-fraction 0.2)
+         (plan (org-queue-core-plan (list (oqt-habit "lift" 100)) oqt-today 300)))
+    ;; (300 - 100) * 0.8, not 300 * 0.8 - 100
+    (should (= 160 (plist-get plan :usable)))
+    (should (= 100 (plist-get (car (plist-get plan :buckets)) :routine)))))
+
+(ert-deftest oqt/habit-reduces-its-own-bucket-only ()
+  (let* ((org-queue-buckets '((body :minutes 120 :match (:tags ("body")))
+                              (default :minutes 100)))
+         (org-queue-slack-fraction 0.0)
+         (plan (org-queue-core-plan
+                (list (oqt-habit "lift" 60))
+                oqt-today)))
+    ;; Untagged, so it is the default bucket's routine.
+    (should (= 40 (plist-get (oqt-bucket-row plan 'default) :usable)))
+    (should (= 120 (plist-get (oqt-bucket-row plan 'body) :usable))))
+  (let* ((org-queue-buckets '((body :minutes 120 :match (:tags ("body")))
+                              (default :minutes 100)))
+         (org-queue-slack-fraction 0.0)
+         (lift (oqt-task "lift" :habit t :effort 60 :tags '("body")))
+         (plan (org-queue-core-plan (list lift) oqt-today)))
+    (should (= 60 (plist-get (oqt-bucket-row plan 'body) :usable)))
+    (should (= 100 (plist-get (oqt-bucket-row plan 'default) :usable)))))
+
+(ert-deftest oqt/routine-exceeding-capacity-plans-nothing ()
+  (let* ((org-queue-slack-fraction 0.0)
+         (plan (org-queue-core-plan
+                (list (oqt-habit "lift" 400) (oqt-task "a" :effort 10))
+                oqt-today 300)))
+    (should (= 0 (plist-get plan :usable)))
+    (should-not (plist-get plan :planned))
+    (should (eq 'no-room (oqt-drop-reason plan "a")))))
+
+(ert-deftest oqt/repeater-without-habit-is-a-task ()
+  (let* ((plan (org-queue-core-plan
+                (list (oqt-task "bins" :scheduled oqt-today :effort 10))
+                oqt-today 300)))
+    (should (equal '("bins") (oqt-plan-titles plan)))))
+
+
+;;;; Backpressure: start-by
+
+(ert-deftest oqt/start-by-walks-back-from-the-deadline ()
+  ;; 100 free minutes a day (no slack); 250 minutes due Friday the 11th
+  ;; needs Fri + Thu + Wed, so start by Wednesday the 9th.
+  (let ((org-queue-capacity '((0 . 100) (1 . 100) (2 . 100) (3 . 100)
+                              (4 . 100) (5 . 100) (6 . 100)))
+        (org-queue-slack-fraction 0.0)
+        (task (oqt-task "big" :deadline 20260911)))
+    (should (= 20260909 (org-queue-core-start-by task oqt-today 250)))
+    (should (= 20260911 (org-queue-core-start-by task oqt-today 60)))
+    (should-not (org-queue-core-start-by
+                 (oqt-task "soft" :deadline 20260911 :deadline-soft t)
+                 oqt-today 250))
+    (should-not (org-queue-core-start-by (oqt-task "none") oqt-today 250))))
+
+(ert-deftest oqt/start-by-commits-on-and-after-its-day ()
+  ;; 200 free a day; 250 due Friday needs Friday and 50 of Thursday, so
+  ;; start-by is Thursday.  On Tuesday it is a candidate (too big to fit,
+  ;; so cut); on Thursday a commitment, whole, and the day overflows --
+  ;; the truth of it without the horizon's slices.
+  (let* ((org-queue-capacity '((0 . 200) (1 . 200) (2 . 200) (3 . 200)
+                               (4 . 200) (5 . 200) (6 . 200)))
+         (org-queue-slack-fraction 0.0)
+         (org-queue-calibrate nil)
+         (task (oqt-task "big" :deadline 20260911 :effort 250))
+         (before (org-queue-core-plan (list task) 20260908))   ; Tue
+         (on (org-queue-core-plan (list task) 20260910)))       ; Thu
+    (should-not (plist-get before :planned))
+    (should (eq 'no-room (oqt-drop-reason before "big")))
+    (should (eq 'committed (plist-get (car (plist-get on :planned)) :queue-reason)))
+    (should (= 20260910 (plist-get (car (plist-get on :planned)) :start-by)))
+    (should (plist-get on :overcommitted))))
+
+(ert-deftest oqt/start-by-uses-the-free-minutes-function ()
+  (let ((org-queue-core-free-minutes-function (lambda (_bucket _date) 50))
+        (task (oqt-task "big" :deadline 20260911)))
+    (should (= 20260908 (org-queue-core-start-by task oqt-today 250)))))
+
+
+;;;; Backpressure: slices
+
+(ert-deftest oqt/slice-only-when-simulating ()
+  ;; 100 free a day, 300 due Thursday: start-by is today (Tue), so it is
+  ;; a commitment that does not fit -- whole and overcommitted when
+  ;; planning a day, a 100-minute slice when simulating.
+  (let* ((org-queue-slack-fraction 0.0)
+         (org-queue-calibrate nil)
+         (org-queue-core-free-minutes-function (lambda (_b _d) 100))
+         (task (oqt-task "big" :effort 300 :deadline 20260910))
+         (whole (org-queue-core-plan (list task) oqt-today 100))
+         (sliced (let ((org-queue-core-slice-commitments t))
+                   (org-queue-core-plan (list task) oqt-today 100))))
+    (should (= 300 (plist-get (car (plist-get whole :planned)) :queue-minutes)))
+    (should (plist-get whole :overcommitted))
+    (should (= 100 (plist-get (car (plist-get sliced :planned)) :queue-minutes)))
+    (should (plist-get (car (plist-get sliced :planned)) :slice))
+    (should-not (plist-get sliced :overcommitted))))
+
+(ert-deftest oqt/the-day-packer-never-slices ()
+  "Slicing is the simulator's; a day plan admits a commitment whole and
+says the day overflows."
+  (let* ((org-queue-slack-fraction 0.0)
+         (org-queue-calibrate nil)
+         (org-queue-core-slice-commitments nil)
+         (plan (org-queue-core-plan
+                (list (oqt-task "due" :effort 300 :deadline oqt-today))
+                oqt-today 100)))
+    (should (= 300 (plist-get (car (plist-get plan :planned)) :queue-minutes)))
+    (should (plist-get plan :overcommitted))))
+
+(ert-deftest oqt/slice-below-minimum-is-carried-not-planned ()
+  (let* ((org-queue-slack-fraction 0.0)
+         (org-queue-calibrate nil)
+         (org-queue-core-slice-commitments t)
+         (org-queue-core-free-minutes-function (lambda (_b _d) 100))
+         ;; Due today, so it sorts ahead of the start-by commitment.
+         (filler (oqt-task "filler" :effort 95 :deadline oqt-today))
+         (big (oqt-task "big" :effort 300 :deadline 20260910))
+         (plan (org-queue-core-plan (list filler big) oqt-today 100)))
+    (should (equal '("filler") (oqt-plan-titles plan)))
+    (should (eq 'no-room (oqt-drop-reason plan "big")))))
+
+
+;;;; Soft placements
+
+(ert-deftest oqt/placed-schedule-is-soft-only-while-proposing ()
+  (let* ((placed (oqt-task "placed" :scheduled oqt-today :placed t))
+         (human (oqt-task "human" :scheduled oqt-today)))
+    (should (org-queue-core-committed-p placed oqt-today))
+    (let ((org-queue-core-placed-soft t))
+      (should-not (org-queue-core-committed-p placed oqt-today))
+      (should (org-queue-core-committed-p human oqt-today))
+      (should (> (org-queue-core-score placed oqt-today)
+                 (org-queue-core-score human oqt-today))))))
+
+
+;;;; Appointments across days
+
+(ert-deftest oqt/a-past-appointment-is-past-even-when-rolled ()
+  "The harvest rolls a repeater to its next occurrence relative to the
+harvest date; on a later day that occurrence is behind us."
+  (let* ((standup (oqt-task "standup" :timestamp 20260908 :effort 15))
+         (plan (org-queue-core-plan (list standup) 20260910 300)))
+    (should (eq 'event-past (oqt-drop-reason plan "standup")))))
+
+(ert-deftest oqt/an-appointment-is-never-sliced ()
+  (let* ((org-queue-slack-fraction 0.0)
+         (org-queue-calibrate nil)
+         (org-queue-core-slice-commitments t)
+         (meeting (oqt-task "meeting" :timestamp oqt-today :effort 90))
+         (plan (org-queue-core-plan (list meeting) oqt-today 60)))
+    (should (= 90 (plist-get (car (plist-get plan :planned)) :queue-minutes)))
+    (should-not (plist-get (car (plist-get plan :planned)) :slice))))

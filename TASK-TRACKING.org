@@ -31,8 +31,9 @@ inbox capture and accept with a key, hand a task to an agent and get it
 back as a landing, and set a theme and three missions a season.  The
 capacity every plan packs against comes from the routine table in
 =schedule.org=; time comes from TODO state transitions, never org-clock.
-Every write any of it makes goes through one apply layer, is logged,
-and is undone by =,-o-u=.
+Every write any of it makes to a task entry goes through one apply
+layer, is logged, and is undone by =,-o-u=.  Three things write files
+outside it: a journal line, a promoted page, and the mail stub.
 
 * A day, a week, a season
 
@@ -117,7 +118,9 @@ Change a state with =,-o-t= on the heading.  The states you leave work in
 
 * Keys
 
-All under the =,-o= prefix (=launch-map= → =menu-org-map=).
+Under the =,-o= prefix (=launch-map= → =menu-org-map=) unless shown
+otherwise; the decoration keys are =C-c= plus a letter, in Org buffers and
+agendas alike.
 
 ** The day
 
@@ -680,9 +683,10 @@ At the fixed stop.  One buffer:
   (=org-queue-pick-limit= 3, counted over every open NEXT).
 - The phrase.  Printed, not asked.
 
-Closing stamps today in the plan history (=:closed=), once; the morning
-report's second line says "yesterday closed at 17:02" or "yesterday was
-not closed".
+Closing stamps today in the plan history (=:closed=), once; the next
+morning's report says "yesterday closed at 17:02" or "yesterday was not
+closed" -- when yesterday had a plan at all; a day never planned gets no
+line.
 
 ** Dormant projects: =,-o-v j= and =M-x org-queue-dormant-check=
 
@@ -783,8 +787,9 @@ model against the config's own lists; you accept or correct.
 
 ** Decorating the inbox: =,-o-f=
 
-Every undecorated entry in =~/kb/inbox.org= (no =AI_HASH=, or a stale one,
-and not =:private:=) is sent one at a time.  The model sees the closed
+Every undecorated entry in =~/kb/inbox.org= (no =AI_HASH=, or a stale one;
+not =:private:=; not rejected under this prompt version) is sent one at a
+time.  The model sees the closed
 lists -- keywords minus NEXT/PROG/DONE/NOPE, the agenda files'
 categories, the refile targets (files, and the live projects' headings),
 the context and energy groups, the corpus's tags, =Effort_ALL=, hard/soft,
@@ -991,7 +996,7 @@ two hours to the dip.
 
 * Working against the test data
 
-The fixture is seven =(todo)= files under =testdata/todo/=, with full
+The fixture is eight =(todo)= files under =testdata/todo/=, with full
 metadata: efforts, dates, LOGBOOK transitions, IDs, five habits in
 =(todo) routine.org= (lift, bike, clean, read, laundry, each with three
 weeks of ticks), a dormant project, a finished one, a project serving a
@@ -1000,7 +1005,7 @@ mission and three agent chains in =(todo) work.org=, the season in
 and the routine table in =testdata/routine.org=.
 
 1. =M-x zetta-org-toggle-todo-source=.  The echo line should read
-   =test (7 agenda files, ...)=.  It rebuilds =org-agenda-files= and the
+   =test (8 agenda files, ...)=.  It rebuilds =org-agenda-files= and the
    HyRolo file list together, so nothing from the real kb is visible.  It
    resets to =real= on restart.
 2. The fixture is centred on a date; every stamp is an offset from it.
@@ -1163,8 +1168,13 @@ From =composite.org=, whose six waves are otherwise built (above):
   says the proposals are worth having;
 - frequency habits ("three a week"), and the Anki push;
 - the Parked view does not count surfacings; only the pack does;
-- the timer's ring and the mail reader were tested against fixtures, not
-  the live daemon and the real mail store.
+- verified in batch against fixtures and stubs, not yet in the live
+  daemon: the timer's ring, the mail reader against the real store,
+  decoration against a running model (the request chain was tested with
+  a stubbed model), a real kick through vterm and its landing (the log
+  reader was tested on lines shaped as the hook writes them), and the
+  gate line after =,-o-D=.  Each has a by-name command to try it on
+  purpose.
 
 And still: migration of the real =(todo)= files (milestone 5): tooling
 exists, not run; and the routine table's columns in the real

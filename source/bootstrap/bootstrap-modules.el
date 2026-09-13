@@ -182,7 +182,15 @@ in the order they appear in the `zetta-modules!' declaration.")
     ;; grouping variables it defines are what the custom commands there
     ;; name.
     (org . ("org.el" "org-todo-schema.el"
-            "org-super-agenda.el" "org-agenda.el" "org-other-agenda.el"
+            ;; org-ql.el right after org-super-agenda.el (its elpaca
+            ;; dependency, so the dependent is not declared first) and
+            ;; BEFORE the queue, daylog, decorate and chain modules: the
+            ;; zettapkg files those load `(require 'org-ql)', and
+            ;; org-decorate's :init requires its package as soon as
+            ;; org-capture is up -- with org-ql.el listed after it, batch
+            ;; startup failed with "Cannot open load file: org-ql"
+            ;; (measured 2026-09-13, ci-test on the dev tree at 422f10d).
+            "org-super-agenda.el" "org-ql.el" "org-agenda.el" "org-other-agenda.el"
             ;; org-queue.el before org-gantt.el: the chart takes its
             ;; working-state vocabulary from the queue's, and reads the
             ;; queue's plan history for the planned rail.
@@ -192,7 +200,7 @@ in the order they appear in the `zetta-modules!' declaration.")
             ;; its day log is drawn in the queue's buffer.
             "org-routine.el" "org-daylog.el" "org-decorate.el" "org-chain.el"
             "org-knowledge.el"
-            "org-ql.el" "org-capture.el" "org-ref.el" "ob-mermaid.el"
+            "org-capture.el" "org-ref.el" "ob-mermaid.el"
             "pdf-tools.el" "biblio.el" "citar.el" "org-remark.el"
             "org-tree-slide.el" "org-transclusion.el"))
     (term . ("shell.el" "foreman.el" "foreman-conf.el" "vterm.el")))

@@ -87,7 +87,7 @@ carry the details for when the steps are taken.
 
 ** What was audited
 
-- The tracked trees at the =dev= heads: .zetta.d at 422f10d (595 tracked
+- The tracked trees at the =dev= heads: .zetta.d at 7b1242a (595 tracked
   files, 320 of them modules) and .files (121 tracked files, three
   modified in the working tree).
 - The full history of every branch: .zetta.d 1083 commits, .files 249
@@ -147,11 +147,11 @@ re-derived.
 
 | Credential                              | Variable(s)                                          | Repo     | Introduced                                   | Removed                                   | Reachable from                            |
 |-----------------------------------------+------------------------------------------------------+----------+----------------------------------------------+-------------------------------------------+-------------------------------------------|
-| Spotify app client id + client secret   | =spot4e-client-id/-secret=, later =spot-client-id/-secret= | .files | 8a7b569 (2022-11-05); again as =spot-*= in 01edfee (2025-08-01) | 155e91e (2026-02-18), 049807e (2026-02-20) | =main=, =dev=, seven other branches (measured, =git branch -a --contains=) |
-|                                         |                                                      | .zetta.d | 2526089, the initial commit (2026-02-20)     | 8220392 / 3347f9e / 2b33f3d (2026-02-23)   | =origin/main=, =dev=, the release branch, the fork |
-| Wallabag account password + API client id + client secret | =wombag-password=, =wombag-client-id=, =wombag-client-secret= | .files | before 155e91e (present at 155e91e~1; introduction not pinned) | 155e91e | =main= |
-| Miniflux (Fever) password               | =elfeed-protocol-feeds= =:password=                  | .files   | 9cd073c (2025-08-11); re-edited 1e11609, dca7a2e | 155e91e                                 | =main=                                    |
-| Local PostgreSQL DSN with password      | =lsp-sqls-connections= =dataSourceName=              | .files   | before 155e91e                               | 155e91e                                   | =main=                                    |
+| Spotify app client id + client secret   | =spot4e-client-id/-secret=, later =spot-client-id/-secret= | .files | 5112124 (2022-11-05); again as =spot-*= in c494bde (2025-08-01) | 0c1245c (2026-02-18), efd65e5 (2026-02-20) | =main=, =dev=, seven other branches (measured, =git branch -a --contains=) |
+|                                         |                                                      | .zetta.d | dd4a700, the initial commit (2026-02-20)     | 878bb46 / de80f96 / 829bf37 (2026-02-23)   | =origin/main=, =dev=, the release branch, the fork |
+| Wallabag account password + API client id + client secret | =wombag-password=, =wombag-client-id=, =wombag-client-secret= | .files | before 0c1245c (present at 0c1245c~1; introduction not pinned) | 0c1245c | =main= |
+| Miniflux (Fever) password               | =elfeed-protocol-feeds= =:password=                  | .files   | 1163804 (2025-08-11); re-edited 6fffd69, 91e3d47 | 0c1245c                                 | =main=                                    |
+| Local PostgreSQL DSN with password      | =lsp-sqls-connections= =dataSourceName=              | .files   | before 0c1245c                               | 0c1245c                                   | =main=                                    |
 
 Measured, and the reason items 2 and 3 of the action list are one job:
 the Miniflux password literal and the Wallabag password literal in that
@@ -161,7 +161,7 @@ Also in the pre-2026-02-18 tree: the Wallabag host and username, and a
 =lsp-yaml-schemas= entry whose path had already been redacted by hand.
 The Spotify *refresh token* was never committed (measured: no match in
 either history).  Two further copies of the .zetta.d initial commit
-(bf486bc, ac4293f) exist as dangling objects on this clone only; they
+(b625949, 849c701) exist as dangling objects on this clone only; they
 are not on any branch and were never pushed.
 
 Impact: the Spotify secret lets anyone mint tokens for that app (scope:
@@ -344,14 +344,14 @@ documented, optionally pinned.
 Evidence: =git ls-files -s files/.aliases= shows mode 120000 for all
 four files; each target is an absolute path into the same checkout, so
 =~/.aliases/index= -> =~/.files/files/.aliases/index= -> itself ("Too
-many levels of symbolic links", measured).  Since b02c1f8 (2026-03-06,
+many levels of symbolic links", measured).  Since fdf7534 (2026-03-06,
 "chore: convert alias files to symlinks"); the regular files before it
 were 28, 32, 23 and 11 lines.  =.zshrc:396= sources the index behind
 =[[ -f ]]=, which is false for a broken link, so every alias has been
 silently gone for six months -- and on a machine whose user name is not
 this one the absolute target is wrong twice over.
 
-Fix: =git checkout b02c1f8~1 -- files/.aliases=, commit, re-run
+Fix: =git checkout fdf7534~1 -- files/.aliases=, commit, re-run
 =main.py= (WP-F6).
 
 ** S11 [Info] Confirmed non-findings
@@ -383,7 +383,7 @@ Brewfile (measured 2026-09-13 with =brew ruby=: =DOTFILES_PROFILE= and
 =INCLUDE_EMACS_MAC= arrive as nil, a =HOMEBREW_X= as set).  So the
 =INCLUDE_EMACS_MAC= and =INCLUDE_EMACS_SRC= blocks (Brewfile 179, 464)
 had never installed anything under =brew bundle=, and a profile gate
-written the same way would have been dead too.  Fix (.files 188084e, WP-F4):
+written the same way would have been dead too.  Fix (.files 9499ecd, WP-F4):
 the Brewfile reads =HOMEBREW_<NAME>= first and the plain name second;
 =.zshenv=, =.zshrc= and =bootstrap.sh= export the mirrors.  Measured:
 =HOMEBREW_INCLUDE_EMACS_SRC=t= adds the source build's 25-formula block,
@@ -418,7 +418,7 @@ for when the step is taken.
 | SEC-B6  | .zetta.d | =elfeed.org:30=: drop the alert feed (owner: delete the alert too)                                      | owner's call                                                                               |
 | SEC-B7  | .files   | =git rm --cached files/.msmtprc=; add =files/.msmtprc.example=; gitignore the real one; README note (= WP-F7) | no personal address in the tracked tree except the zettapkg headers                |
 | SEC-B8  | .files   | =aura-sync.sh= / =bootstrap.sh=: no default account; require =AURA_MSMTP_ACCOUNT=                       | =git grep gmail-= is empty                                                                 |
-| SEC-B9  | .files   | restore =files/.aliases/*= from =b02c1f8~1= (= WP-F6)                                                   | =source ~/.aliases/index= defines =l=, =zefresh=, ...                                      |
+| SEC-B9  | .files   | restore =files/.aliases/*= from =fdf7534~1= (= WP-F6)                                                   | =source ~/.aliases/index= defines =l=, =zefresh=, ...                                      |
 | SEC-B10 | .files   | =CLAUDE.md= / README: drop the stale =mcp_servers/= mention; note the profile switch                    | docs match the tree                                                                        |
 
 Done when, for the group: =git grep -i -E '<employer names>|<project key>|<host name>'=
@@ -430,18 +430,18 @@ returns only the ten zettapkg author headers.
 Commits are on =dev=; .zetta.d unless marked.  Batch means
 =emacs -Q --batch= (31.0.91) against the elpaca builds.
 
-- *SEC-B1* -- 8f051bd.  The module names no host; the group grep for
+- *SEC-B1* -- f15aba3.  The module names no host; the group grep for
   the host and the project key is empty.  Batch: with =zetta-jira-url=
   nil org-jira is not loaded; with an example URL and one JQL plist,
   =jiralib-url= and =org-jira-custom-jqls= take exactly those values and
   the working directory is created.  =org-jira-get-issues= against a
   live instance: owner, on the work machine (no Jira here).
-- *SEC-B2* -- ae30cfa.  No workspace name in the module or in slack.md
+- *SEC-B2* -- 933f067.  No workspace name in the module or in slack.md
   (example.slack.com).  Batch: nil leaves slack unloaded; one team with
   no credential loads slack with zero teams and a message; the same
   team with a token in a scratch authinfo registers under its name.
   =slack-start= against a workspace: owner.
-- *SEC-B3* -- 99db731.  The group grep for the host name is empty.
+- *SEC-B3* -- 068d373.  The group grep for the host name is empty.
   =custom-file= defaults to =.data/custom.el= in init.el before
   ~/.zetta.el loads and is loaded after the modules.  Rehearsal probe
   (Part 7.2 of work-profile.org): =custom-file= is that path and init.el
@@ -450,14 +450,14 @@ Commits are on =dev=; .zetta.d unless marked.  Batch means
   temporarily since emacs -q would overwrite customizations"), so one
   =M-x customize-save-variable= in the live session is the owner's
   check.
-- *SEC-B4* -- cd4344a.  The grep for the repository name is empty.
-- *SEC-B5* -- 2c31dd1.  =python3 testdata/generate.py --today 2026-09-12=
+- *SEC-B4* -- 7cbb315.  The grep for the repository name is empty.
+- *SEC-B5* -- 847dfe9.  =python3 testdata/generate.py --today 2026-09-12=
   reproduces the committed corpus byte-for-byte except the one heading
   (measured against a scratch copy; =--today= defaults to today, so the
   pinned day matters).  =run-tests.sh=: 19 suites, 307 tests, 0
   unexpected; module smoke OK.
 - *SEC-B6* -- skipped, owner's.
-- *SEC-B7* -- .files 915176f.  =files/.msmtprc= untracked and
+- *SEC-B7* -- .files bda6a8e.  =files/.msmtprc= untracked and
   gitignored (the file and the ~/.msmtprc symlink stay on this Mac);
   =files/.msmtprc.example= with example.com addresses.  The address grep
   over .files' tracked tree is empty.
@@ -465,9 +465,9 @@ Commits are on =dev=; .zetta.d unless marked.  Batch means
   the bootstrap block require =AURA_MSMTP_ACCOUNT= (a message and a skip
   when unset); =bash -n= and shellcheck clean on aura-sync.sh, no
   warning in the edited bootstrap block.
-- *SEC-B9* -- .files a83a4af.  =zsh -c 'source ~/.aliases/index'= defines
+- *SEC-B9* -- .files 5e9e2b3.  =zsh -c 'source ~/.aliases/index'= defines
   38 aliases, among them =l=, =zefresh=, =tk=, =p=.
-- *SEC-B10* -- .files cbbf5fa (with WP-F8).  No mention of
+- *SEC-B10* -- .files 61fc56a (with WP-F8).  No mention of
   =mcp_servers=, =.localsecrets= or =.tokens= remains in README.md,
   CLAUDE.md or bootstrap.sh.
 - *Group grep, measured on the finished trees*: the identifier grep
@@ -499,7 +499,7 @@ Commits are on =dev=; .zetta.d unless marked.  Batch means
   and =auth-sources= on this Mac is =(zetta-op)=, so the file was never
   on the search path.  gptel and forge in the live session: owner (no
   evaluation into the live daemon from here).
-- *SEC-C1* -- 050b696.  Batch, five cases: no python on PATH ->
+- *SEC-C1* -- fee1a64.  Batch, five cases: no python on PATH ->
   =("/etc/ssl/cert.pem")=; a python whose certifi is missing (stderr
   only) -> the same list, no error text; a python printing an existing
   bundle -> appended; a python printing a missing path -> ignored;
@@ -507,12 +507,12 @@ Commits are on =dev=; .zetta.d unless marked.  Batch means
   only the existing one appended.  In every case every entry exists and
   =gnutls-verify-error= is t; =(url-retrieve-synchronously
   "https://github.com")= returned HTTP/1.1 200 OK under the module.
-- *SEC-C2* -- d171d22 (modes) and 386d0ff (profile and backend, with
+- *SEC-C2* -- 022002b (modes) and c274d47 (profile and backend, with
   WP-Z10).  =doctor= before SEC-C0: "Mode 644" on ~/.private.el,
   ~/.authinfo and ~/.zshenv.local, plus the plaintext-authinfo warning;
   after: "Mode 600" lines only.  It also prints "Profile: full" and
   "Secrets backend: op (29 of 29 keys resolve from ...)" on this Mac.
-- *SEC-C3* -- cc9bb06 (.zetta.d), .files 7c0fa3b.  A staged
+- *SEC-C3* -- b767182 (.zetta.d), .files f4e8c69.  A staged
   =(setq x-secret "AKIA...")= with a valid key shape is refused (exit
   1, value redacted; a first probe with an invalid shape was not, which
   is the rule working, not failing); slack.md staged passes; =gitleaks
@@ -520,7 +520,7 @@ Commits are on =dev=; .zetta.d unless marked.  Batch means
   124 files).  Both clones have =core.hooksPath= set, and every commit
   of this work went through the hook.  gitleaks 8.30.1 was installed
   here with brew for the test; it is in the Brewfile.
-- *SEC-C4* -- d036c02 (with WP-Z2).  secrets.md describes exactly what
+- *SEC-C4* -- 2aa6bd8 (with WP-Z2).  secrets.md describes exactly what
   bootstrap-secrets.el does: the backend table, the vault-adoption table
   and the "never on a managed machine" section.
 - *SEC-C5* -- owner.
@@ -610,13 +610,13 @@ re-run over the finished trees.
 ** Done
 
 - *Group B* -- SEC-B1..B5 and B7..B10 (B6 is the owner's).  .zetta.d:
-  8f051bd, ae30cfa, 99db731, cd4344a, 2c31dd1.  .files: 915176f,
-  a83a4af, cbbf5fa.  The group grep over both finished trees finds the
+  f15aba3, 933f067, 068d373, 7cbb315, 847dfe9.  .files: bda6a8e,
+  5e9e2b3, 61fc56a.  The group grep over both finished trees finds the
   identifiers only in =elfeed.org= (B6 and the public feeds) and the
   address only in author headers and example placeholders.
 - *Group C* -- SEC-C0 (this Mac: five files at 600, ~/.authinfo moved
-  aside), C1 (050b696), C2 (d171d22 + 386d0ff), C3 (cc9bb06 and .files
-  7c0fa3b), C4 (in d036c02).  C5 is the owner's.
+  aside), C1 (fee1a64), C2 (022002b + c274d47), C3 (b767182 and .files
+  f4e8c69), C4 (in 2aa6bd8).  C5 is the owner's.
 - *A new finding*, S12, fixed with WP-F4: the Brewfile's environment
   gates had never worked.
 - *The profile*, work-profile.org Part 8, Phases 1 and 2, including
@@ -624,22 +624,22 @@ re-run over the finished trees.
 
 ** Deviations from the plan, with reasons
 
-- *SEC-C4 rides in WP-Z2's commit (d036c02)* rather than its own:
+- *SEC-C4 rides in WP-Z2's commit (2aa6bd8)* rather than its own:
   its done-when is "doc matches init.el", and the doc describes the
   backend switch, so it could only be written once the switch existed.
 - *SEC-C2 is two commits*: the file-mode and plaintext-authinfo
-  warnings (d171d22, before SEC-C0 so the before/after could be
+  warnings (022002b, before SEC-C0 so the before/after could be
   measured) and the profile-and-backend report, which needs the
-  variables WP-Z2 introduces and so landed with WP-Z10 (386d0ff).
-- *The Aura frame sync came along with SEC-B7/B8* (.files 915176f).
+  variables WP-Z2 introduces and so landed with WP-Z10 (c274d47).
+- *The Aura frame sync came along with SEC-B7/B8* (.files bda6a8e).
   Its script, plist, bootstrap block and README lines were uncommitted
   in the working tree, and the fix edits exactly those lines, so the
   hunks could not be separated.  The plist carries placeholders only;
   the example address in the script's comment is a placeholder word.
-- *The restored alias file =emacs= was edited* (a83a4af): every alias
+- *The restored alias file =emacs= was edited* (5e9e2b3): every alias
   pointed at the emacs-plus@29 keg, which no longer exists, and an alias
   to a missing binary would have shadowed the =emacs= on PATH.  The
-  other three files are byte-identical to b02c1f8~1.
+  other three files are byte-identical to fdf7534~1.
 - *Two numbers in the audit were wrong*, corrected above: the template
   holds 29 keys, not 33; the owner's address is in 46 zettapkg author
   headers and two plan documents, not ten.
@@ -648,7 +648,13 @@ re-run over the finished trees.
 
 ** Left to the owner
 
-1. Group A (rotation) and group D (history rewrite), as decided.
+1. Group A (rotation): not done as of 2026-09-13 (owner's decision to
+   proceed with D first).  Every step is listed, value-free, in
+   ~/kb/notes/ROTATE.org, with a check script that names the template
+   keys whose vault value is still one the old history held.  Measured
+   before the rewrite: seven keys still resolved to leaked values (the
+   client id is expected to); the rotation closes the exposure, the
+   rewrite does not.
 2. SEC-B6 (the alert feed line and the alert itself) and SEC-C5 (GitHub
    non-provider scanning, push protection on .files).
 3. Live checks that batch cannot do: gptel and forge authenticate with
@@ -657,7 +663,7 @@ re-run over the finished trees.
 4. Push =dev= in both repos and open the PRs; the two design docs are
    committed value-free and double as the descriptions.  Before the
    PR, =bin/zetta freeze=: =ci-test= reports =LOCK-MISSING= for poimap,
-   queued since fd2d1c7 (2026-09-12) with no lock entry -- pre-existing,
+   queued since bd9100e (2026-09-12) with no lock entry -- pre-existing,
    and the only gate the rehearsal still fails.
 5. The hub's ~/.zetta.el is the pre-switch headless template (it is
    never overwritten); under the new init its =(setq auth-sources nil)=
@@ -667,8 +673,8 @@ re-run over the finished trees.
 
 ** Part 1 scan, re-run [2026-09-13, measured over the finished trees]
 
-Same method as Part 1, over =git ls-files= at .zetta.d b990c82 (598
-files, lockfile excluded) and .files 7d1150b (126 files), plus
+Same method as Part 1, over =git ls-files= at .zetta.d 48d2334 (598
+files, lockfile excluded) and .files 37643ae (126 files), plus
 =gitleaks dir= over clean exports of both HEADs.
 
 | Family                        | .zetta.d                                                                                                                                                                                       | .files                                                       |
@@ -681,3 +687,63 @@ files, lockfile excluded) and .files 7d1150b (126 files), plus
 | IPv4 / Tailscale ranges       | two dotted quads inside chiply-isr's =uv.lock= (package metadata)                                                                                                                              | none                                                         |
 | absolute home paths           | three =plan-*.md= documents and headless-zetta.org (pre-existing prose; the user name, not a secret)                                                                                            | none                                                         |
 | employer / project key / host | =elfeed.org= 18, 30, 125-127 only (SEC-B6, owner; public feeds)                                                                                                                                | none                                                         |
+
+** Group D, done [2026-09-13, measured]
+
+Preconditions: A not complete (owner's call, see above); the five open
+PRs merged or closed first (.files #11 #13 #14 squash-merged, .zetta.d
+#143 release 0.2.7 merged, #22 closed); CI green on both merged mains
+(all four .zetta.d cache rows, the release, the .files bootstrap and hub
+lint); both =dev= branches merged with the new mains and pushed so the
+rewrite covered them; the hub NOT idle-checked (Tailscale SSH asked for
+a browser re-authentication).
+
+- *SEC-D1* -- ~/.local/state/zetta-rewrite/replacements.txt, mode 600,
+  17 rules: the seven credential literals from S1 (the Spotify client id
+  and secret, the Wallabag password and API client id and secret, the
+  Miniflux password -- byte-identical to the Wallabag one, and to the
+  IRC password, a third sharer the audit missed -- the PostgreSQL DSN
+  password, anchored on =password==), plus a StackExchange API key found
+  in both histories that S1 did not list, plus the identifiers the
+  owner asked for: the two previous employers' hosts and names (exact
+  forms only, so the public feed URLs that merely contain a name are
+  untouched), the project key, the laptop host name, the old repository
+  name, the Wallabag host and username (quoted form: the username is a
+  common word).  Two rules would have garbled prose or matched nothing
+  as first written; the impact check over HEAD caught both.
+- *SEC-D2* -- fresh mirror clones; =git filter-repo --replace-text=,
+  for .files also =--path .lit/pdf --invert-paths=.  .zetta.d: 1103
+  commits, 52 refs rewritten, 0 literals left in =git log --all -p=.
+  .files: 479 commits, 6 refs, 0 literals, 0 PDF blobs, 64 MB -> 13 MB.
+- *SEC-D3* -- force pushes enabled on =main= for the duration, every
+  branch and tag pushed by explicit refspec (nothing deleted), the
+  protection restored to the saved settings (reviews, the three status
+  contexts on .zetta.d, linear history); remote refs equal the mirrors'
+  afterwards.  The push re-ran CI on both mains (billed).  Tags
+  v0.2.3..v0.2.7 moved to rewritten commits; the v0.2.7 release object
+  still records its original target SHA as metadata.
+- *SEC-D4* -- this Mac: ~/.zetta.d, ~/.files and the ~/.zetta-mac.d trial
+  clone fetched and reset to the rewritten =dev= (uncommitted files
+  stashed and restored), local branches re-pointed, reflogs expired and
+  old objects collected.  The trial clone moved forward 233 files: it had
+  been on an old dev.  The hub is left to the owner (below).  A fresh
+  clone of .files: 0 literals, 0 PDF objects.
+- *SEC-D5, D6* -- owner (below).
+
+Still reachable: the pre-rewrite commits are still served by SHA
+(=gh api repos/.../commits/<old>= answers 200 for the S1 commits) and
+GitHub's =refs/pull/*= keep the old PR heads alive; only GitHub support
+removes those.  The one fork keeps its copy.  The values are therefore
+still live until group A is done.
+
+** Left to the owner, after D
+
+1. Hub: re-authenticate Tailscale SSH, then
+   =git -C ~/.zetta.d fetch origin && git -C ~/.zetta.d reset --hard origin/main=
+   (a plain pull cannot cross a rewrite); no daemon restart needed, the
+   tracked content is unchanged there.
+2. SEC-D5: ask GitHub support to remove cached views, the pull-request
+   references and unreachable objects for both repos.
+3. SEC-D6: the next release-please PR on .zetta.d should open normally;
+   the CHANGELOG's links to pre-rewrite hashes are the known casualty.
+4. Group A, per ~/kb/notes/ROTATE.org.

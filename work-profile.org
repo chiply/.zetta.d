@@ -659,13 +659,13 @@ rehearsal is Part 7.2's overlay under the source-built Emacs 32.0.50,
 the build that compiled every package here (bytecode census: 1669 .elc
 by 32.0.50, 2 by 31.0.91).
 
-- *WP-Z1* -- 0c725b9 (the :app order; the draft had eww before
+- *WP-Z1* -- 1289b9f (the :app order; the draft had eww before
   eca-emacs, the default order the other way).  After every later task
   including Z9: 277 of 309 files resolve, 0 missing, 0 extra, 32
   excluded, :app order equal to the default order restricted to the
   kept files, kb skeleton =inbox.org notes org-remark todo wiki=
   created, custom-file under .data/.
-- *WP-Z2* -- d036c02.  Six batch cases: nil rule with the real =op= ->
+- *WP-Z2* -- 2aa6bd8.  Six batch cases: nil rule with the real =op= ->
   =op=, the cache holds 29 of the template's 29 keys, auth-sources
   =(zetta-op)= (R-S4); ='authinfo= with a stub =op= on PATH that logs
   and fails -> the stub is never spawned, cache 0, auth-sources left at
@@ -673,33 +673,33 @@ by 32.0.50, 2 by 31.0.91).
   and the auth-source bridge returns the value; nil rule without =op=,
   and with =op= but no template -> =authinfo=.  CI's nox row is the
   owner's to trigger.
-- *WP-Z3* -- ae30cfa (SEC-B2's evidence).
-- *WP-Z4* -- 8f051bd (SEC-B1's evidence).
-- *WP-Z5* -- 06245b8.  This Mac's config yields its one host; a scratch
+- *WP-Z3* -- 933f067 (SEC-B2's evidence).
+- *WP-Z4* -- f15aba3 (SEC-B1's evidence).
+- *WP-Z5* -- caa2fab.  This Mac's config yields its one host; a scratch
   config with an Include, a wildcard, a negation, a two-alias Host line
   and a duplicate yields the included host, the bastion and the two
   aliases in order; =zetta-ssh-hosts= overrides; 0 literal hosts in the
   module.
-- *WP-Z6* -- 5ab032b.  Batch over the gptel form: nil -> backends
+- *WP-Z6* -- 0d295a9.  Batch over the gptel form: nil -> backends
   ("Claude"), default Claude with the backend's first model, no
   =zetta-openrouter-refresh-models= idle timer, the key-reading function
   undefined; t -> ("LLM-Router" "OpenRouter" "Claude"), default
   OpenRouter, timer present.  Rehearsal probe under the work template:
   the same nil picture with the whole config loaded.
-- *WP-Z7* -- 050b696 (SEC-C1's evidence).
-- *WP-Z8* -- 99db731 (SEC-B3's evidence; the save itself is the owner's
+- *WP-Z7* -- fee1a64 (SEC-C1's evidence).
+- *WP-Z8* -- 068d373 (SEC-B3's evidence; the save itself is the owner's
   interactive check, batch implies -q).
-- *WP-Z9* -- b990c82.  =check-kb-root.el= reads 378 files and finds 0
+- *WP-Z9* -- 48d2334.  =check-kb-root.el= reads 378 files and finds 0
   code literals (a planted one is reported); run-tests.sh: 19 suites,
   307 tests, 0 unexpected, smoke OK; the Part 7.1 numbers unchanged.
   Rehearsal probe with =zetta-kb-dir= moved to =~/work-kb/=: every
   derived path followed except the (todo) corpus, which
-  bootstrap-modules.el had derived before the user file loaded; 0939e3e
+  bootstrap-modules.el had derived before the user file loaded; eed6889
   adds =zetta-kb-follow-root=, called by init.el after ~/.zetta.el, and
   the re-run shows 0 derived paths under ~/kb (the status section's
   table).  Unit test: root moved -> corpus follows; corpus set
   explicitly -> kept; nothing set -> default.
-- *WP-Z10* -- 386d0ff.  =install --profile work= on a scratch HOME
+- *WP-Z10* -- c274d47.  =install --profile work= on a scratch HOME
   (EMACS=false, so the run stops at the build step) writes a ~/.zetta.el
   identical to the template; an unknown profile is refused; an existing
   file is left alone with a message; =ci-test= with
@@ -709,14 +709,14 @@ by 32.0.50, 2 by 31.0.91).
   "headless" / none, and with a command override "command (1 KEY=VALUE
   lines)" plus a mode warning on a planted 644 authinfo file.  ci.yml
   parses; shellcheck on bin/zetta unchanged from HEAD.
-- *WP-Z11* -- 95e2409.  A batch check parses the 32 rows of
+- *WP-Z11* -- 3f0b2f7.  A batch check parses the 32 rows of
   docs/modules.md's table and compares them with the set the template
   excludes: both differences empty.
 - *WP-Z12* -- no commit of its own; the runs are in the status
   section's table.  Both templates reach =ZETTA-OK= with zero "Error
   (use-package)" lines and zero void-function or wrong-type lines.
   =bin/zetta ci-test= still exits 1 on a separate, pre-existing gate:
-  =LOCK-MISSING= for poimap (queued since fd2d1c7, no lock entry) --
+  =LOCK-MISSING= for poimap (queued since bd9100e, no lock entry) --
   the owner's =bin/zetta freeze=.  =bin/zetta test= from the real tree
   under the source build: daemon started and responding, 346 packages,
   309 modules, no warning, no use-package error.
@@ -730,7 +730,7 @@ by 32.0.50, 2 by 31.0.91).
 | WP-F3  | =bootstrap.sh= gates (6.4) + the work-template copy after the zetta clone                                            | =bash -n= passes (hub-ci does this); a =--profile work= dry read of the script shows no Syncthing/LaunchAgent lines executed (test by running with =DRY_RUN=1= that echoes instead of executes, or by inspection) |
 | WP-F4  | Brewfile gates (6.5) + =gitleaks=                                                                                    | =brew bundle list --file=... = under each profile: the personal list absent for work                           |
 | WP-F5  | =install_emacs_distros.sh=: =INCLUDE_OTHER_DISTROS=                                                                  | with =f=, no clone of Spacemacs/Doom/Prelude/Centaur                                                            |
-| WP-F6  | restore =files/.aliases/*= from =b02c1f8~1= (= SEC-B9)                                                              | =source ~/.aliases/index= defines =l= and =zefresh=                                                            |
+| WP-F6  | restore =files/.aliases/*= from =fdf7534~1= (= SEC-B9)                                                              | =source ~/.aliases/index= defines =l= and =zefresh=                                                            |
 | WP-F7  | untrack =.msmtprc=, add the example (= SEC-B7); aura default (= SEC-B8)                                              | audit B's grep                                                                                                 |
 | WP-F8  | README + CLAUDE.md: profile section, the manifest, the work =~/.zshenv.local= example; drop =mcp_servers/=            | docs match                                                                                                     |
 | WP-F9  | =test_install.yml=: =workflow_dispatch= input for the profile                                                       | a manual run with =work= completes on =macos-latest=                                                           |
@@ -739,14 +739,14 @@ by 32.0.50, 2 by 31.0.91).
 
 Commits on .files =dev=.
 
-- *WP-F1* -- b865d36.  A new interactive shell on this Mac with
+- *WP-F1* -- f61e206.  A new interactive shell on this Mac with
   ~/.zshenv.local untouched: profile personal, both gates t, linode-cli
   a function (unchanged).  A scratch HOME whose ~/.zshenv.local is the
   work example (6.1): profile work, both gates f, linode-cli not a
   function; with only =DOTFILES_PROFILE=work= in it: both gates f; with
   an empty file: personal and t.  The whole .zshrc sourced with the work
   profile: both gates f, and an explicit =INCLUDE_EMACS_SRC=t= survives.
-- *WP-F2* -- 0c2ec08 and 500d026.  Personal dry run on this Mac: no
+- *WP-F2* -- 0aec29e and 0e8fea5.  Personal dry run on this Mac: no
   skip but the example file and no backup; work dry run: 13 manifest
   skips (not 4: the wallpaper directory alone holds five files) plus the
   example.  Scratch HOME with a planted regular ~/.zshrc, real work run:
@@ -755,7 +755,7 @@ Commits on .files =dev=.
   ~/.aliases here is a symlink to the repo directory, so the alias
   files ARE the repo's -- a target that resolves to its source is now
   "kept" instead of moved aside (the 2026-03 alias loop's mechanism).
-- *WP-F3* -- bd20a14.  =bash -n= passes; shellcheck's pre-existing set
+- *WP-F3* -- baf9f51.  =bash -n= passes; shellcheck's pre-existing set
   minus two SC2046; an awk pass shows every st-ensure-folder,
   download-wallpapers, launchctl and snowsql line inside a
   personal-gated block except the two simple-bar agents (both
@@ -763,19 +763,19 @@ Commits on .files =dev=.
   true, =--profile work= -> false, =DOTFILES_PROFILE=work= -> false.  A
   =DRY_RUN= mode was not added: the gates are four =if personal= blocks
   and one helper, inspected instead.
-- *WP-F4* -- 188084e.  =brew bundle list --formula --cask=: personal
+- *WP-F4* -- 9499ecd.  =brew bundle list --formula --cask=: personal
   394 entries, work 381; the 13 missing at work are the 11 personal
   entries and the two 1password casks; gitleaks in both;
   =HOMEBREW_INCLUDE_OP=t= restores the casks at work.  See audit S12 for
   why the variables travel as =HOMEBREW_= mirrors.
-- *WP-F5* -- 02c8c35.  Sandbox HOME with stubbed git and curl: with
+- *WP-F5* -- cd6391e.  Sandbox HOME with stubbed git and curl: with
   =f= the script attempts one clone (chemacs); with =t= chemacs,
   Spacemacs, Doom, the Prelude installer and Centaur.
-- *WP-F6* -- a83a4af (SEC-B9's evidence).
-- *WP-F7* -- 915176f (SEC-B7/B8's evidence).
-- *WP-F8* -- cbbf5fa (with SEC-B10).  No stale mention remains; both
+- *WP-F6* -- 5e9e2b3 (SEC-B9's evidence).
+- *WP-F7* -- bda6a8e (SEC-B7/B8's evidence).
+- *WP-F8* -- 61fc56a (with SEC-B10).  No stale mention remains; both
   docs name the manifest, the hook and the example file.
-- *WP-F9* -- 7d1150b.  The workflow parses; the dispatch is the owner's
+- *WP-F9* -- 37643ae.  The workflow parses; the dispatch is the owner's
   to run.
 
 ** Phase 3 -- install day
@@ -828,22 +828,22 @@ and why, and what is left to the owner.
 
 - *Phase 0* -- audit groups B and C (work-security-audit.org,
   "Implementation status").
-- *Phase 1, .zetta.d* -- WP-Z1..Z12: the template (0c725b9), the
-  secrets backend with bootstrap-secrets.el and secrets.md (d036c02),
-  slack (ae30cfa), jira (8f051bd), remote (06245b8), ai (5ab032b),
-  security (050b696), custom-file (99db731), bin/zetta and ci.yml
-  (386d0ff), the docs (95e2409), the rehearsal (below), and WP-Z9 last
-  and alone (b990c82, plus the follow-up 0939e3e the rehearsal asked
+- *Phase 1, .zetta.d* -- WP-Z1..Z12: the template (1289b9f), the
+  secrets backend with bootstrap-secrets.el and secrets.md (2aa6bd8),
+  slack (933f067), jira (f15aba3), remote (caa2fab), ai (0d295a9),
+  security (fee1a64), custom-file (068d373), bin/zetta and ci.yml
+  (c274d47), the docs (3f0b2f7), the rehearsal (below), and WP-Z9 last
+  and alone (48d2334, plus the follow-up eed6889 the rehearsal asked
   for): =zetta-kb-dir= with every kb path derived, the =check-kb-root=
   test in run-tests.sh.
-- *Phase 2, .files* -- WP-F1..F9: b865d36, 0c2ec08 + 500d026, bd20a14,
-  188084e, 02c8c35, a83a4af, 915176f, cbbf5fa, 7d1150b.
-- *One fix outside the plan* -- 97d028c: since b14463b (2026-09-12)
+- *Phase 2, .files* -- WP-F1..F9: f61e206, 0aec29e + 0e8fea5, baf9f51,
+  9499ecd, cd6391e, 5e9e2b3, bda6a8e, 61fc56a, 37643ae.
+- *One fix outside the plan* -- cff42c9: since ff0071b (2026-09-12)
   org-decorate's :init requires its package as soon as org-capture is
   up, that package requires org-ql, and org-ql's elpaca order was not
   yet processed, so batch startup reported "Error (use-package):
   org-decorate/:init: Cannot open load file: org-ql" under BOTH
-  templates and on the pre-change tree (422f10d) -- a latent bug of the
+  templates and on the pre-change tree (7b1242a) -- a latent bug of the
   unpushed waves that would meet the daemon on its next start.  org-ql
   now carries =:ensure (:wait t)= and sits after its dependency
   org-super-agenda in the default order.  Found because WP-Z12's gate
@@ -891,7 +891,7 @@ and why, and what is left to the owner.
   matches five files, and the untracked news-reader state is listed
   too.
 - *WP-Z12's ci-test exits 1 on a gate that is not the rehearsal's*:
-  =LOCK-MISSING= for poimap, unpinned since fd2d1c7 (2026-09-12).  Both
+  =LOCK-MISSING= for poimap, unpinned since bd9100e (2026-09-12).  Both
   templates reach ZETTA-OK with zero use-package errors, which is the
   done-when; the pin is the owner's =bin/zetta freeze= in the PR.
 
@@ -918,8 +918,8 @@ and why, and what is left to the owner.
 
 ** Rehearsal [2026-09-13, measured]
 
-Part 7.2's recipe: an =.elc=-free overlay of the working tree (b990c82
-for the ci-test rows, 0939e3e for the moved-root probe) with =elpaca/=
+Part 7.2's recipe: an =.elc=-free overlay of the working tree (48d2334
+for the ci-test rows, eed6889 for the moved-root probe) with =elpaca/=
 symlinked in, HOME on a scratch directory
 holding a =;;= private file (and, for the full profile, a copy of
 ~/kb), =EMACS= the source-built 32.0.50, =ZETTA_TEMPLATE= selecting the
@@ -931,7 +931,7 @@ profile, =bin/zetta ci-test=; then the work profile again with
 | ci-test, example (full)          | =ZETTA-OK packages=340 modules=309=; 0 "Error (use-package)"; 0 void-function / wrong-type; 1 skipped by predicate (corfu-terminal); exit 1 on LOCK-MISSING poimap; 76 s |
 | ci-test, work                    | =ZETTA-OK packages=306 modules=277=; 0 / 0 / 1 as above; exit 1 on LOCK-MISSING poimap; 58 s                                             |
 | probes, work                     | profile work, backend authinfo, auth-sources at Emacs's default; gptel backends ("Claude"), default Claude, no OpenRouter idle timer, the key-reading function undefined; slack and org-jira not loaded, their variables nil; ssh hosts from the scratch HOME's (absent) config: nil; gnutls-trustfiles ("/etc/ssl/cert.pem"), verify-error t; mu4e, elfeed, signel, chiply-isr not loaded; custom-file under the overlay's .data/, init.el byte-identical after a save attempt; kb skeleton present with inbox.org |
-| probes, work, kb root moved      | ~/.zetta.el = the work template preceded by =(setq zetta-kb-dir "~/work-kb/")=, tree at 0939e3e: the skeleton is created under work-kb/ and no ~/kb appears in that HOME; inbox, queue inbox, decorate inbox, PDF and image directories, journal, routine note, the three capture targets and the five rolo entries all under work-kb/; =zetta-logseq-dir= work-kb/todo/ (it stayed at ~/kb/todo/ before 0939e3e); 0 derived paths mention ~/kb; 0 use-package errors |
+| probes, work, kb root moved      | ~/.zetta.el = the work template preceded by =(setq zetta-kb-dir "~/work-kb/")=, tree at eed6889: the skeleton is created under work-kb/ and no ~/kb appears in that HOME; inbox, queue inbox, decorate inbox, PDF and image directories, journal, routine note, the three capture targets and the five rolo entries all under work-kb/; =zetta-logseq-dir= work-kb/todo/ (it stayed at ~/kb/todo/ before eed6889); 0 derived paths mention ~/kb; 0 use-package errors |
 | =bin/zetta test=, real tree      | daemon =zetta-test-<pid>= started and responding; 346 packages, 309 modules; no warning, no use-package error                             |
 | =run-tests.sh=, real tree        | 19 suites, 307 tests, 0 unexpected; smoke-modules OK; check-kb-root 378 files, 0 code literals                                            |
 

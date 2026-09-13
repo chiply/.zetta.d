@@ -108,6 +108,15 @@
     (gptel-mcp-register-tool)
     (gptel-mcp-use-tool))))
 
+(defvar zetta-ai-personal-backends t
+  "Non-nil registers the personal gptel backends and makes OpenRouter the default.
+The personal backends are OpenRouter (keyed from the secrets cache or
+~/source_code/my-ai/.env, with an idle refresh of its model catalogue)
+and the local LLM-Router proxy on :8765.  Nil, as in the work template,
+registers only Claude -- and OpenAI when `openai-api-key' is set -- and
+makes Claude the default; nothing personal is evaluated.  Set in
+~/.zetta.el (work-profile.org Part 5, WP-Z6).")
+
 (use-package gptel
   :demand t
   :config
@@ -119,6 +128,12 @@
   (when (bound-and-true-p openai-api-key)
     (gptel-make-openai "OpenAI" :stream t :key openai-api-key))
 
+  ;; ── Personal backends (nil at work: nothing below is evaluated) ────
+  (unless zetta-ai-personal-backends
+    (let ((claude (alist-get "Claude" gptel--known-backends nil nil #'equal)))
+      (setq gptel-backend claude
+            gptel-model   (car (gptel-backend-models claude)))))
+  (when zetta-ai-personal-backends
   ;; ── OpenRouter ────────────────────────────────────────────────────
   (defvar zetta-openrouter-models-cache-file
     (expand-file-name "openrouter-models-cache.eld" user-emacs-directory)
@@ -200,7 +215,9 @@ there makes the 1Password path win automatically."
     :models '(llm-router))
 
   (setq gptel-backend zetta-openrouter-backend
-        gptel-model   'deepseek/deepseek-v4-pro)
+        gptel-model   'deepseek/deepseek-v4-pro))
+  ;; ── end of the personal backends ──────────────────────────────────
+
   (when (featurep 'mcp)
     (require 'gptel-integrations))
   (setq gptel-confirm-tool-calls nil)

@@ -427,6 +427,25 @@ cmd_doctor() {
         _warn "No ~/.private.el found (API keys will not be available)"
     fi
 
+    # Secrets hygiene (work-security-audit.org SEC-C2).  These files hold
+    # credentials, or the token that unlocks them; a mode wider than 600
+    # exposes them to other local accounts and to backup or sync tools
+    # that honour modes.  A plaintext ~/.authinfo is a second, unencrypted
+    # credential store next to whatever the secrets backend serves.
+    local f mode
+    for f in ~/.private.el ~/.authinfo ~/.authinfo.gpg ~/.zshenv.local; do
+        [[ -e "$f" ]] || continue
+        mode=$(stat -f '%Lp' "$f" 2>/dev/null || stat -c '%a' "$f" 2>/dev/null)
+        if [[ "$mode" == "600" ]]; then
+            _ok "Mode 600: $f"
+        else
+            _warn "Mode $mode on $f (expected 600): chmod 600 $f"
+        fi
+    done
+    if [[ -f ~/.authinfo ]]; then
+        _warn "~/.authinfo is a plaintext credential store; move it to ~/.authinfo.gpg, or aside, once the backend serves its entries (secrets.md)"
+    fi
+
     # Elpaca directory
     if [[ -d "$ZETTA_DIR/elpaca/builds" ]]; then
         local pkg_count

@@ -3067,6 +3067,11 @@
                    :source "elpaca-menu-lock-file" :id poetry :type
                    git :protocol https :inherit t :depth treeless :ref
                    "1dff0d4a51ea8aff5f6ce97b154ea799902639ad"))
+ (poimap :source "elpaca-menu-lock-file" :recipe
+         (:source nil :package "poimap" :id poimap :host github :repo
+                  "florommel/poimap" :files ("poimap.el") :wait t
+                  :type git :protocol https :inherit t :depth treeless
+                  :ref "57a1b5dd76e28dec373eaa567f78553f74429585"))
  (polymode :source "elpaca-menu-lock-file" :recipe
            (:package "polymode" :fetcher github :repo
                      "polymode/polymode" :files

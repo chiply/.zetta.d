@@ -928,6 +928,35 @@ and why, and what is left to the owner.
 5. Part 9's calls: Slack with the employer, the AI default at work,
    Copilot, =INCLUDE_SNOWFLAKE=, when to flip =INCLUDE_EMACS_SRC=.
 
+** Install day [2026-09-14, measured on the work machine]
+
+The first genuinely fresh Mac exposed what neither the personal Mac
+nor CI could: .files' bootstrap had never run where Homebrew was not
+already on PATH and its taps not already trusted, and CI judged only
+the script's final exit status.  Fixed in .files PRs #17, #18 and #19,
+all merged the same day, the last with a green end-to-end bootstrap
+run under the new =brew bundle check= assertion:
+
+- Homebrew installed but not on the bootstrap shell's PATH, so every
+  =brew= line failed silently (=brew shellenv= now follows the installer).
+- =brew bundle --no-lock=: Homebrew 7 rejects it, so the whole Brewfile
+  was skipped (flag removed).
+- Homebrew 7 refuses to tap an untrusted tap and to load its formulae;
+  =brew trust --tap= now precedes each =brew tap= (the order matters).
+- Three casks broken upstream -- vial and openscad disabled for
+  Gatekeeper, font-miriam-mono-clm's download gone -- commented out.
+- =install_emacs_distros.sh= returns the status of its last section (the
+  optional canvas module), so a canvas failure read as a failed Emacs;
+  only a missing EmacsSrc.app is critical now.
+- The shell files (bash and zsh) errored on tools the bundle had not
+  installed; every optional tool is guarded.
+- The bootstrap records its critical steps and exits 1; the workflow
+  runs =brew bundle check= afterwards; =setup-work-machine.sh= pulls
+  before a re-run.
+
+Outcome on the machine at the time of writing: Emacs 32.0.50 built
+from source; the package install (=bin/zetta install=) still to run.
+
 ** Rehearsal [2026-09-13, measured]
 
 Part 7.2's recipe: an =.elc=-free overlay of the working tree (48d2334

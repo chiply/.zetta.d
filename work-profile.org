@@ -104,6 +104,17 @@ Assumes the tasks in Part 8 have landed on =main= in both repos.  Part
    if there is a seat; =M-x org-jira-get-issues= once
    =zetta-jira-url= is set.
 
+One-shot alternative [2026-09-14]: =.files/setup-work-machine.sh= does
+steps 2 to 7 in one run and is value-free, so it can travel by e-mail
+or be fetched from the repository's =main=.  It also takes the other
+Emacs decision the owner made after the doc was written: the work
+machine runs the SOURCE-BUILT Emacs alone, no =emacs-plus@31=
+(=INCLUDE_EMACS_PLUS=f= in ~/.zshenv.local skips the formula, the tap
+stays for the NS patches, =EMACS= points at the bundle so =bin/zetta=
+uses it, and the bundle's own =emacsclient= goes on PATH for the Claude
+Code hook).  The "emacs-plus on day one" rows above are the fallback,
+not the plan.
+
 If the machine must be set up before Part 8 lands, the manual path is
 the same list with step 4 replaced by: run =main.py= after deleting the
 manifest's paths from a scratch copy of =files/=, =brew bundle= on a

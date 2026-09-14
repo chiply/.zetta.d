@@ -897,10 +897,10 @@ and why, and what is left to the owner.
 
 ** Left to the owner
 
-1. Push both =dev= branches, =bin/zetta freeze= for poimap, open the
-   PRs (the two design docs are the descriptions), trigger the two
-   manual dispatches: ci.yml with =template=work=, test_install.yml
-   with =profile=work=.
+1. [done 2026-09-13] both =dev= branches pushed and merged with the new
+   mains, poimap pinned (217fa8d), the PRs opened with the docs as
+   descriptions (.zetta.d #147, .files #15); the two manual dispatches
+   follow the merges (outcome in the audit's status section).
 2. Live checks batch cannot do: gptel and forge with ~/.authinfo
    retired; a Customize save landing in =.data/custom.el=; the tab bar
    and mail (nothing in this work touches them, and =bin/zetta test=

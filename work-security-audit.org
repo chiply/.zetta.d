@@ -456,7 +456,10 @@ Commits are on =dev=; .zetta.d unless marked.  Batch means
   (measured against a scratch copy; =--today= defaults to today, so the
   pinned day matters).  =run-tests.sh=: 19 suites, 307 tests, 0
   unexpected; module smoke OK.
-- *SEC-B6* -- skipped, owner's.
+- *SEC-B6* -- dd1a8c8 [2026-09-13]: the alert feed line is gone from
+  elfeed.org (the rewrite had already blanked the name in its title).
+  Owner: delete the alert at Google, and run the elfeed.org -> Miniflux
+  sync so the feed leaves Miniflux too.
 - *SEC-B7* -- .files bda6a8e.  =files/.msmtprc= untracked and
   gitignored (the file and the ~/.msmtprc symlink stay on this Mac);
   =files/.msmtprc.example= with example.com addresses.  The address grep
@@ -523,7 +526,12 @@ Commits are on =dev=; .zetta.d unless marked.  Batch means
 - *SEC-C4* -- 2aa6bd8 (with WP-Z2).  secrets.md describes exactly what
   bootstrap-secrets.el does: the backend table, the vault-adoption table
   and the "never on a managed machine" section.
-- *SEC-C5* -- owner.
+- *SEC-C5* -- [2026-09-13] .files had NO secret scanning at all
+  (measured: scanning and push protection both disabled); both are now
+  enabled through the API, so .files matches .zetta.d.  "Non-provider
+  patterns" did not take through the repository API on either repo (the
+  PATCH is accepted, the field stays disabled) and needs the settings
+  page: Code security, Secret scanning, Non-provider patterns.  Owner.
 
 ** D. History rewrite (later, deliberate; after A, as its own step)
 
@@ -655,16 +663,22 @@ re-run over the finished trees.
    before the rewrite: seven keys still resolved to leaked values (the
    client id is expected to); the rotation closes the exposure, the
    rewrite does not.
-2. SEC-B6 (the alert feed line and the alert itself) and SEC-C5 (GitHub
-   non-provider scanning, push protection on .files).
+2. SEC-B6: delete the alert at Google and run the Miniflux sync (the
+   line itself is gone).  SEC-C5: the "Non-provider patterns" toggle on
+   both repos' settings pages (scanning and push protection are on).
 3. Live checks that batch cannot do: gptel and forge authenticate with
    ~/.authinfo moved aside; one =M-x customize-save-variable= lands in
    =.data/custom.el= and leaves =git status= clean.
 4. Push =dev= in both repos and open the PRs; the two design docs are
    committed value-free and double as the descriptions.  Before the
-   PR, =bin/zetta freeze=: =ci-test= reports =LOCK-MISSING= for poimap,
-   queued since bd9100e (2026-09-12) with no lock entry -- pre-existing,
-   and the only gate the rehearsal still fails.
+   PR: done, poimap is pinned (217fa8d).  A trap met on the way: a
+   =bin/zetta freeze= from this machine (source-built Emacs 32, full
+   profile, batch) writes only the packages that run queued, so it
+   DROPS corfu-terminal and popon (skipped by the tty-child-frames
+   predicate on 31+) and vterm (not queued in batch) -- the nox row
+   needs the first two.  Only the poimap entry was taken from its
+   output; regenerating the lockfile wholesale needs a run that queues
+   every profile's packages, or a hand merge.
 5. The hub's ~/.zetta.el is the pre-switch headless template (it is
    never overwritten); under the new init its =(setq auth-sources nil)=
    still holds, because the nil rule on a box without =op= chooses

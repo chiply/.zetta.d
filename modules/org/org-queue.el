@@ -112,9 +112,11 @@
           org-habit-preceding-days 21
           org-habit-following-days 3))
   ;; The mail stub is outside the agenda and the refile targets, found
-  ;; by text search only (Karl Voit's pattern).
+  ;; by text search only (Karl Voit's pattern), and so is the archive,
+  ;; which `zetta-logseq-todo-files' keeps out of the agenda.
   (with-eval-after-load 'org-agenda
-    (setq org-agenda-text-search-extra-files '(agenda-archives)))
+    (setq org-agenda-text-search-extra-files
+          (list 'agenda-archives (zetta-kb-file "todo/(todo) archive.org"))))
   ;; The close counts the inbox; the queue itself never plans from it.
   (setq org-queue-inbox-file (zetta-kb-file "inbox.org"))
 

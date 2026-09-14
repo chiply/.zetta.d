@@ -622,10 +622,17 @@ Regenerate it with `python3 testdata/generate.py'."
     zetta-logseq-pages-dir))
 
 (defun zetta-logseq-todo-files ()
-  "Return list of files in the active corpus starting with '(todo)'."
+  "Return list of files in the active corpus starting with '(todo)'.
+
+The archive is not part of the corpus even though its name matches:
+`org-archive-location' writes into it, and a plan that read it back
+would harvest every archived entry on every run.  Text search still
+reaches it through `org-agenda-text-search-extra-files'."
   (let ((dir (zetta-org-todo-dir)))
     (when (file-directory-p dir)
-      (directory-files dir t "^(todo).*\\.org$"))))
+      (seq-remove (lambda (file)
+                    (equal (file-name-nondirectory file) "(todo) archive.org"))
+                  (directory-files dir t "^(todo).*\\.org$")))))
 
 (defun zetta-logseq-todo-file-name (file)
   "Extract the name part from a (todo) FILE path.

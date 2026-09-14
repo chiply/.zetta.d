@@ -59,42 +59,42 @@ KICK_AT kicks; the rituals happen when you press the key.
 
 * Vocabulary
 
-| term        | meaning                                                                   |
-|-------------+---------------------------------------------------------------------------|
-| corpus      | the set of =(todo)= files the agenda and queue read (=org-agenda-files=)    |
-| plan        | the report =,-o-Q= draws for one day                                      |
-| bucket      | a named pool of minutes per day claimed by tag or category (work, reading...) |
-| habit       | an entry with =:STYLE: habit=: time reserved from a bucket, never planned   |
-| routine     | the day's habits, listed and subtracted before packing                    |
-| committed   | on the plan because of a fact: a date, a start-by, or the NEXT state      |
-| chosen      | on the plan because it scored highest and fit its bucket                  |
-| pulled forward | scheduled for a later day, drawn in because its bucket still had room  |
-| cut         | eligible, but did not fit (no room in its bucket, WIP limit, bucket overcommitted) |
-| deferred    | scheduled for a later day and not needed today                            |
-| excluded    | never competed: done, HOLD/IDEA, blocked, waiting, a habit, an appointment elsewhere |
-| capacity    | minutes a bucket is worth on a weekday (=org-queue-buckets=)               |
-| usable      | =(capacity - routine) x (1 - slack)=, per bucket                             |
-| start-by    | the latest day a hard-deadline task can start and still finish in time    |
-| slice       | part of a task planned on one day by the horizon simulator                |
-| horizon     | the day packer run across a range of days, read-only (=,-o-P=)             |
-| placement   | a SCHEDULED the machine wrote, stamped =:PLACED:=                           |
-| proposal    | the list of placements a horizon implies, shown for review (=,-o-p=)       |
-| derived clock | minutes computed from PROG state transitions in the LOGBOOK; no org-clock |
-| apply       | one all-or-none write of several actions, logged with its reverse; =,-o-u= undoes the last |
-| ritual      | a buffer with keys run on a cadence: the close, the pack, the season, clarify |
-| routine table | the =#+NAME: routine= table in =schedule.org=: blocks with a kind, days, bucket; capacity is derived from it |
-| dip         | the routine's =dip= block (13:30-15:00): where pomodoros ring, never in a deep block |
-| close       | =,-o-x=: the day's account and tomorrow's draft, stamped in the plan history |
-| pack        | =,-o-m=: the Monday review, generated from the files                       |
-| decoration  | =AI_*= properties a model proposed for an inbox entry; accepted, edited or rejected by a key |
-| surfaced    | =:SURFACED:= count: how often a parked item was shown without being pulled; at 3 the pack proposes dismissal |
-| dormant     | a project whose children are all parked or done: no next step; tagged =:dormant:= by the check |
-| chain       | an entry an agent works on: AGENT while it runs, landing as NEXT or QUES |
-| landing     | a line the Claude Code hooks append when a session stops or asks; Emacs applies it |
-| mission     | a =* MISSION= heading in the horizons file; a project serves one with =:MISSION:=, children inherit |
-| orphan      | open work that reaches no mission                                          |
-| season      | a quarter: the theme and at most three missions; =,-o-n=                    |
-| gate        | =,-o-I=: what a deadline would cost, against the window's capacity          |
+| term           | meaning                                                                                                      |
+|----------------+--------------------------------------------------------------------------------------------------------------|
+| corpus         | the set of =(todo)= files the agenda and queue read (=org-agenda-files=)                                     |
+| plan           | the report =,-o-Q= draws for one day                                                                         |
+| bucket         | a named pool of minutes per day claimed by tag or category (work, reading...)                                |
+| habit          | an entry with =:STYLE: habit=: time reserved from a bucket, never planned                                    |
+| routine        | the day's habits, listed and subtracted before packing                                                       |
+| committed      | on the plan because of a fact: a date, a start-by, or the NEXT state                                         |
+| chosen         | on the plan because it scored highest and fit its bucket                                                     |
+| pulled forward | scheduled for a later day, drawn in because its bucket still had room                                        |
+| cut            | eligible, but did not fit (no room in its bucket, WIP limit, bucket overcommitted)                           |
+| deferred       | scheduled for a later day and not needed today                                                               |
+| excluded       | never competed: done, HOLD/IDEA, blocked, waiting, a habit, an appointment elsewhere                         |
+| capacity       | minutes a bucket is worth on a weekday (=org-queue-buckets=)                                                 |
+| usable         | =(capacity - routine) x (1 - slack)=, per bucket                                                             |
+| start-by       | the latest day a hard-deadline task can start and still finish in time                                       |
+| slice          | part of a task planned on one day by the horizon simulator                                                   |
+| horizon        | the day packer run across a range of days, read-only (=,-o-P=)                                               |
+| placement      | a SCHEDULED the machine wrote, stamped =:PLACED:=                                                            |
+| proposal       | the list of placements a horizon implies, shown for review (=,-o-p=)                                         |
+| derived clock  | minutes computed from PROG state transitions in the LOGBOOK; no org-clock                                    |
+| apply          | one all-or-none write of several actions, logged with its reverse; =,-o-u= undoes the last                   |
+| ritual         | a buffer with keys run on a cadence: the close, the pack, the season, clarify                                |
+| routine table  | the =#+NAME: routine= table in =schedule.org=: blocks with a kind, days, bucket; capacity is derived from it |
+| dip            | the routine's =dip= block (13:30-15:00): where pomodoros ring, never in a deep block                         |
+| close          | =,-o-x=: the day's account and tomorrow's draft, stamped in the plan history                                 |
+| pack           | =,-o-m=: the Monday review, generated from the files                                                         |
+| decoration     | =AI_*= properties a model proposed for an inbox entry; accepted, edited or rejected by a key                 |
+| surfaced       | =:SURFACED:= count: how often a parked item was shown without being pulled; at 3 the pack proposes dismissal |
+| dormant        | a project whose children are all parked or done: no next step; tagged =:dormant:= by the check               |
+| chain          | an entry an agent works on: AGENT while it runs, landing as NEXT or QUES                                     |
+| landing        | a line the Claude Code hooks append when a session stops or asks; Emacs applies it                           |
+| mission        | a =* MISSION= heading in the horizons file; a project serves one with =:MISSION:=, children inherit          |
+| orphan         | open work that reaches no mission                                                                            |
+| season         | a quarter: the theme and at most three missions; =,-o-n=                                                     |
+| gate           | =,-o-I=: what a deadline would cost, against the window's capacity                                           |
 
 * States
 
@@ -1058,12 +1058,14 @@ modules over a temporary copy of it.
 * Working against the real files
 
 The real corpus is =~/kb/todo/(todo) *.org= plus =~/kb/inbox.org= and the
-files in =zetta-extra-agenda-files= (set in =~/.private.el=).
+files in =zetta-extra-agenda-files= (set in =~/.private.el=).  =(todo)
+archive.org= is left out of that glob on purpose: =org-archive-location=
+writes into it, and text search (=C-c a s=) still reaches it.
 
-The real files are not yet task files: across nine files there were 1650
-headings, 2 SCHEDULED, 6 DEADLINE and no =:Effort:= at the last census.
-The queue can only plan what is written down, so the first real step is a
-migration.  The tooling exists and has not been pointed at a real file:
+On 2026-09-13 the corpus was cut to four files (buy, calendar, emacs -
+categorized, todo); the rest were deleted rather than migrated.  What
+remains is still mostly unestimated and undated, and the queue can only
+plan what is written down.  The tooling for that exists:
 
 - =M-x zetta-org-todo-census= reports what metadata each file has.
 - =M-x zetta-org-insert-todo-header= adds the file preamble (Effort_ALL,
@@ -1093,8 +1095,8 @@ gate: would going back be a relief?):
    them.  =,-o-I= before any new deadline.
 6. The mail stub: =M-x org-queue-mail-waiting= once flagged mail exists.
 
-Convert =(todo) emacs.org= first, live with it for a week, and only then
-decide about the rest.
+Give one file its estimates and dates first, live with it for a week, and
+only then do the rest.
 
 * Tuning knobs
 

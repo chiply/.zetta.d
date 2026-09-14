@@ -738,10 +738,15 @@ still live until group A is done.
 
 ** Left to the owner, after D
 
-1. Hub: re-authenticate Tailscale SSH, then
-   =git -C ~/.zetta.d fetch origin && git -C ~/.zetta.d reset --hard origin/main=
-   (a plain pull cannot cross a rewrite); no daemon restart needed, the
-   tracked content is unchanged there.
+1. Hub: done [2026-09-13], after the owner approved the Tailscale SSH
+   check in the browser.  The clone held eleven uncommitted entries (the
+   live scratch copies of hub fixes), so they were stashed, the clone
+   reset to the rewritten =origin/main= (which also moved it from the
+   pre-release commit to 0.2.7), the stash re-applied cleanly, reflogs
+   expired and old objects collected (the pre-rewrite release commit is
+   no longer in the clone).  Deviations from D4's done-when: the hub's
+   tree is dirty by design, not clean, and the daemon was not restarted
+   -- the tracked content it runs from is unchanged.
 2. SEC-D5: ask GitHub support to remove cached views, the pull-request
    references and unreachable objects for both repos.
 3. SEC-D6: the next release-please PR on .zetta.d should open normally;

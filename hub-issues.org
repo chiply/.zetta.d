@@ -1,0 +1,529 @@
+#+title: Hub issues — batch list for the headless profile
+#+author: Charlie Holland
+#+startup: overview
+
+# Running list of things wrong on the kb-hub daemon (headless profile,
+# source-built Emacs 31.1 since [2026-09-11]).  Same rule as the other
+# docs: evidence stays with the claim.  Each item carries where it was
+# seen, why it happens, and the fix it wants; fixes go out in batches,
+# one PR per batch, rehearsed in batch mode and proven by CI's nox row
+# before the hub pulls.
+#
+# Add items under "Open" as you find them.  Move to "Fixed" with the PR
+# number when a batch ships.
+
+* Open
+** TODO Super and the other unreachable chords on the hub: Blink settings + decode entries
+:PROPERTIES:
+:ORDER: LAST -- the Emacs half shipped with batch 1; the Blink half (below) is what remains
+:SEE: "The real Super key in headless" and "Keyboard through Blink -> mosh -> tmux -> Emacs" below
+:FILE: templates/zetta.headless.el (decode entries, kkp), Blink settings on each iPad
+:END:
+
+Goal: the same chords in GUI and headless.  Decided [2026-09-11]:
+the real Cmd key stays; Blink's 8-bit role carries it over mosh, the
+kitty protocol carries it from a Mac terminal, the =C-x @ s= prefix is
+the floor.  The chords with no byte (C-,, C-tab, C-S-<letter>...) are
+injected by Blink Custom presses.  Everything below is what to type
+into Blink; the Emacs half is one PR.
+
+*** Emacs half (headless template, tty frames only) -- DONE, batch 1
+
+Batch 1 -- on =dev= [2026-09-11], not yet pushed.  =zetta-headless-tty-keys= on =tty-setup-hook= in the template (the two decode loops and the =C-c s= floor), =modules/core/kkp.el= (=:if (not (display-graphic-p))=, =global-kkp-mode=; kkp pinned in =elpaca-lock.el= at 82b7443).  Still owed: the rehearsal through tmux over ssh, and the verification list at the end of this item.
+
+- =input-decode-map=: Latin-1 U+00A1..U+00FE -> =[s-<char>]= (the
+  8-bit role; case preserved).  Narrow to the characters the config
+  binds if typing accents on the hub ever matters.
+- =input-decode-map=: =ESC [27;6;<code>~= and =ESC [<code>;6 u= ->
+  =[C-S-<letter>]= for A..Z (xterm.el's table stops at punctuation).
+- =kkp= module (new, =:if (not (display-graphic-p))=) for Mac
+  terminals; verify through tmux over ssh.
+- A short prefix bound to =event-apply-super-modifier= as the floor.
+- Rehearse in batch; CI nox row; pull; then the Blink entries.
+
+*** Blink half -- Modifiers (Config > Keyboard > Modifiers), both iPads
+
+| Key            | Role     | Why                                                    |
+|----------------+----------+--------------------------------------------------------|
+| Cmd (left)     | 8-bit    | Cmd-x sends the character x+128; Emacs decodes to s-x  |
+| Cmd (right)    | 8-bit    | same (or "Meta" if s-<arrows> are wanted: see below)   |
+| Option (left)  | Escape   | Meta, as today                                         |
+| Option (right) | Escape   |                                                        |
+| Caps Lock      | Control  | optional; "Escape on release" for a one-tap ESC        |
+
+Then Config > Keyboard > Shortcuts: reassign every Blink default that
+sits on a Cmd chord the config uses (Cmd-W close, Cmd-T new,
+Cmd-N/O/K, Cmd-digits, Cmd-[ ], Cmd-+/-/0 font size, Cmd-, ...).  The
+exact collision list comes from the config's =s-= bindings at
+implementation time (118 today; the hub subset is smaller).  Chords
+iPadOS keeps never reach Blink: Cmd-Tab, Cmd-Space, Cmd-H,
+Cmd-Shift-3/4/5, Cmd-Option-D, Globe combinations.
+
+*** Blink half -- Custom presses (Config > Keyboard > Custom presses), send as HEX
+
+Provisional: computed from the config's current bindings; the final
+list is re-derived from the config when this ships.  Format is
+xterm's modifyOtherKeys, which Emacs decodes with no change for the
+punctuation rows and with the decode entry above for the letter rows.
+Blink must be v15 or later (custom presses with modifiers, #1335).
+
+| Blink chord | Send (hex)                          | Emacs event | Binding it restores |
+|---+---+---+---|
+| Ctrl-, | =1B 5B 32 37 3B 35 3B 34 34 7E= | =C-,= | insert-state launch map |
+| Ctrl-Tab | =1B 5B 32 37 3B 35 3B 39 7E= | =C-tab= | tab-line next |
+| Ctrl-Shift-Tab | =1B 5B 32 37 3B 36 3B 39 7E= | =C-S-tab= | tab-line prev |
+| Ctrl-Shift-a | =1B 5B 32 37 3B 36 3B 36 35 7E= | =C-S-a= | windmove-left  (needs decode entry) |
+| Ctrl-Shift-d | =1B 5B 32 37 3B 36 3B 36 38 7E= | =C-S-d= | windmove-right / delete-other-windows (needs decode entry) |
+| Ctrl-Shift-s | =1B 5B 32 37 3B 36 3B 38 33 7E= | =C-S-s= | windmove-down  (needs decode entry) |
+| Ctrl-Shift-w | =1B 5B 32 37 3B 36 3B 38 37 7E= | =C-S-w= | windmove-up    (needs decode entry) |
+| Ctrl-Shift-t | =1B 5B 32 37 3B 36 3B 38 34 7E= | =C-S-t= | org-babel-tangle (needs decode entry) |
+| Ctrl-Shift-r | =1B 5B 32 37 3B 36 3B 38 32 7E= | =C-S-r= | consult-selection-history-prompt, minibuffer (needs decode entry) |
+| Ctrl-= | =1B 5B 32 37 3B 35 3B 36 31 7E= | =C-== | consult preview key |
+| Ctrl-; | =1B 5B 32 37 3B 35 3B 35 39 7E= | =C-;= | indent-for-tab-command |
+| Ctrl-' | =1B 5B 32 37 3B 35 3B 33 39 7E= | =C-'= | vertico-quick-exit |
+| Ctrl-" | =1B 5B 32 37 3B 36 3B 33 34 7E= | =C-\"= | my/vertico-quick-embark |
+| Ctrl-Backspace | =1B 7F= | =M-DEL= | backward-kill-word (evil insert: C-w already works) |
+
+Cmd with arrows / F-keys / Tab / Return skip the 8-bit path.  If any
+of those are wanted: right Cmd = "Meta" role (Cmd-<arrow> then arrives
+as =CSI 1;9A=) plus decode entries for modifier 9 -> =s-<arrow>=; or
+one Custom press per chord sending =1B 5B 31 3B 39 41= (Up) etc.
+
+*** Verification, in this order
+
+1. Blink =showkey=: Cmd-b prints =0xC3 0xA2=; Ctrl-, prints the
+   injected bytes; Option-b prints =0x1B 0x62=.
+2. Emacs on the hub: =C-h k= then Cmd-b says =s-b=; Ctrl-, says =C-,=;
+   Ctrl-Shift-a says =C-S-a=.
+3. The insert-state launch map opens on Ctrl-,; windmove moves on
+   Ctrl-Shift-w/a/s/d; the tab line switches on Ctrl-Tab.
+4. Paste a line containing "é" into the hub Emacs: it must paste as
+   text, not fire s-i.
+* Keyboard through Blink -> mosh -> tmux -> Emacs (reference, [2026-09-11])
+
+Why C-,, C-TAB, C-S-a/d/s/w (windmove), C-backspace and the s- keys
+do not arrive, and which bindings do.  Measured where it says so;
+the rest is read from the four layers' code and docs.
+
+** How a key travels
+
+1. /Blink/ (iPadOS).  iPadOS takes its own Cmd shortcuts first
+   (Cmd-Tab, Cmd-Space, Cmd-H, screenshots...), then Blink's own
+   shortcuts (configurable), then the terminal emulator encodes the
+   rest.  Blink's Modifiers panel can make Caps/Cmd/Opt act as Ctrl,
+   Alt (Meta) or Esc; nothing can act as Super.  Blink's "Custom
+   presses" panel maps one physical chord to an arbitrary byte
+   sequence (hex/ASCII; blinksh/blink#1015, shipped 13.5; modifier
+   chords in custom presses broke once, fixed in v15, #1335).
+2. /mosh/.  Input is a transparent byte stream: whatever Blink emits
+   reaches the server.  OUTPUT is not: mosh-server runs its own
+   terminal emulator and re-synthesises the screen for the client, so
+   any escape an application sends to the TERMINAL is dropped on the
+   floor -- the modifyOtherKeys enable (=CSI > 4;1 m=), the CSI u
+   push, DECSCUSR, OSC 52.  (mosh-devel: "How to support xterm
+   modifier key setting", unanswered; the cursor-style PR #1355 is
+   the same wall.)  mosh also eats C-^ (its escape key).
+3. /tmux 3.4/ (=extended-keys on=).  Swallows the prefix C-b.
+   Decodes both extended-key encodings coming IN from the client and
+   re-encodes for panes that asked for them (Emacs asks at frame init:
+   =xterm-tmux-extra-capabilities= carries =modifyOtherKeys=, so
+   term/tmux.el sends the request; tmux records the pane's wish, then
+   forwards the request outward, where mosh drops it).  Standard
+   sequences (CSI arrows with modifiers, function keys, backtab) pass
+   through untouched.
+4. /Emacs tty/ (term/tmux.el -> term/xterm.el).  Decodes the standard
+   xterm sequences and a FIXED table of extended keys in both forms
+   (=ESC [27;MOD;CODE~= and =ESC [CODE;MOD u=, xterm.el lines 520-642
+   in 31.1): C-tab, C-S-tab, C-return, S-return, S-tab, C-, C-. C-;
+   C-' C-= C-/ C-- C-\ C-digits, C-M- of the same, and the C-S-
+   punctuation.  NOT in the table: C-S-<letter> (C-S-a...), C-<letter>
+   variants, C-backspace (=27;5;127~=).  Those need an
+   =input-decode-map= entry of our own.
+
+** Why each reported key fails
+
+| Key                          | What arrives             | Why                                                                                                        |
+|------------------------------+--------------------------+------------------------------------------------------------------------------------------------------------|
+| C-,                          | =,=                      | ASCII has no Ctrl-comma.  Only an extended-key encoding can carry it; Blink never switches into one because the enable request dies in mosh (and Blink may not implement modifyOtherKeys at all: untested over ssh). |
+| C-TAB                        | =TAB= (= C-i)            | Tab is byte 9 and so is C-i; Ctrl adds nothing.  Needs extended keys (Emacs's table has it).                |
+| C-S-a / d / s / w (windmove) | =C-a= / =C-d= / =C-s= / =C-w= | ASCII control characters have no shift: C-S-a is byte 1, same as C-a.  Needs extended keys AND an Emacs decode entry (letters are not in xterm.el's table). |
+| C-backspace                  | =C-h= (byte 8)           | Backspace alone is DEL (127); Blink sends BS (8) for Ctrl-Backspace, and byte 8 is C-h, the help prefix.  There is no byte for "Ctrl + Backspace". |
+| s-anything (118 bindings)    | nothing / iPadOS action  | Terminals have no Super modifier; Blink can turn Cmd into Ctrl/Alt/Esc only, and iPadOS keeps many Cmd chords for itself. |
+| C-b, C-^, C-h                | swallowed / help         | tmux prefix; mosh escape; Emacs help.  Not bindable on this path.                                          |
+| C-i, C-m, C-[                | TAB, RET, ESC            | Same bytes.  Bindings on either name collide (the org-cycle item above).                                    |
+| S-RET, C-RET                 | RET                      | Extended keys only.                                                                                        |
+
+** What works everywhere (plain bytes or standard CSI)
+
+- =C-a..C-z= except C-b (tmux), C-h (help), C-i/C-m/C-[ (Tab/RET/ESC),
+  C-^ (mosh); plus =C-SPC= (byte 0; iPadOS's emoji popup on
+  Ctrl-Space needs the documented Custom press), =C-\=, =C-]=, =C-_=
+  and =C-/= (both byte 31: undo either way).
+- The whole Meta layer: =M-<any printable>=, including =M-<uppercase>=
+  (so M-S-x is M-X), M-digits, M-punctuation, =M-SPC=, =M-RET=,
+  =M-DEL= (backward-kill-word).  ESC + char, nothing to negotiate.
+  Blink: Opt (or Cmd) as Alt.  Exception: =M-[= is the CSI introducer
+  and unusable; =M-O= is the SS3 prefix, risky.
+- =C-M-<letter>= (ESC + control byte), with the C-b/C-h/C-i/C-m holes
+  (C-M-i = M-TAB, C-M-h = M-BS, C-M-m = M-RET).
+- Arrows, Home/End, PgUp/PgDn with ANY of S/M/C and combinations
+  (=CSI 1;MOD A= etc.; xterm.el decodes modifiers 2-8): =S-<up>=,
+  =C-<left>=, =M-<down>=, =C-M-<right>=, =C-S-<up>=...  This is the
+  richest universal modifier space.  Provided Blink emits them
+  (hterm lineage: expected; verify with the recipe below).
+- =S-TAB= (backtab, CSI Z).  F1-F12 with modifiers, where the
+  keyboard has them (Magic Keyboard: Blink Custom presses can emit).
+- Everything in evil normal/visual/motion state that is a plain key:
+  the =,= launch map, =g=-prefixed keys, digits.  The =kj= chord.
+
+** Escape hatch for the rest: Blink Custom presses
+
+Blink can send any bytes for a physical chord, and mosh passes input
+bytes untouched, so the extended-key encoding can be injected from the
+client side without the negotiation mosh drops.  tmux then re-encodes
+it for the pane (which asked), and Emacs's table decodes it.
+
+| Chord         | Send (hex)                     | Emacs sees          | Needs in Emacs                                             |
+|---------------+--------------------------------+---------------------+------------------------------------------------------------|
+| Ctrl-,        | =1B 5B 32 37 3B 35 3B 34 34 7E= (=ESC [27;5;44~=) | =C-,=  | nothing (in the table)                                     |
+| Ctrl-Tab      | =ESC [27;5;9~=                 | =C-tab=             | nothing                                                    |
+| Ctrl-Shift-Tab| =ESC [27;6;9~=                 | =C-S-tab=           | nothing                                                    |
+| Ctrl-Backspace| =ESC DEL= (=1B 7F=)            | =M-DEL=             | nothing: backward-kill-word already (or C-w in insert state, evil's own) |
+| Ctrl-Shift-a  | =ESC [27;6;65~=                | raw sequence        | =(define-key input-decode-map "\e[27;6;65~" [C-S-a])= per letter |
+
+One entry per chord, per device; the Emacs side for the letters is a
+short loop in the headless template.  Not measured yet: whether
+Blink's custom presses fire for Ctrl-<punctuation> on the current
+version (#1335 says yes since v15).
+
+** Recommendation: bindings to adopt so the same config works headless
+
+- /Insert-state leader/: C-, stays for the GUI; add =M-,= as the
+  universal twin (ESC , ; free in evil insert and in the minibuffer;
+  org's =C-c ,= is unrelated).  Normal-state =,= already works.
+- /windmove/: C-S-a/d/s/w have no tty form at all.  Adopt
+  =C-M-<arrows>= (standard CSI, modifier 7; free in org, which uses
+  M-<arrows> and M-S-<arrows> for structure editing and S-<arrows>
+  for timestamps/shift-select).  Keep the WASD chords on the GUI if
+  wanted; the arrows are the universal set.
+- /Tab-line next/prev/: C-tab / C-S-tab need injection.  Adopt evil
+  normal-state =g t= / =g T= (vim's tab convention, free in evil) or
+  =M-n= / =M-p= where a mode leaves them free; the g1-g9 jumps already
+  cover direct selection once the tab-line split ships.
+- /C-backspace/: use =M-DEL= or, in insert state, evil's =C-w=.
+- /C-S-<letter>/ in general (C-S-t org-babel-tangle, C-S-r in the
+  minibuffer, C-S-d delete-other-windows, C-S-j/k pdf paging): each
+  becomes a =M-<uppercase>= twin (=M-T=, =M-R=, =M-D=) or moves under
+  the =,= map.  M-uppercase is ESC + the shifted char and always
+  arrives.
+- /s- bindings/ (118): no universal twin exists.  Triage into the =,=
+  launch map (already the modal leader) for the ones wanted on the
+  hub; the rest stay GUI-only.  Do not map Cmd to Alt wholesale: the
+  s- set would land on top of the existing M- set.
+- Avoid on any tty: =M-[= (CSI), =M-O=, C-b/C-h/C-^, and any binding
+  that distinguishes C-i from TAB, C-m from RET, C-[ from ESC.
+
+** The real Super key in headless (research, [2026-09-11])
+
+Goal: press the same Cmd chords in GUI and headless.  Three cases.
+
+*** Blink (iPad), mosh or ssh: Cmd as the "8-bit" modifier role
+
+Blink's Modifiers panel offers six roles per modifier key: None,
+8-bit, Escape, Shift, Control, Meta (=KB/Native/Model/KeyModifier.swift=).
+Read from the bundled hterm (=Resources/hterm_all.min.js=):
+
+- /8-bit/ ("Add 128 to the unshifted character as in xterm") is an
+  Alt-role with =altSendsWhat="8-bit"=: for a one-character key the
+  chord sends =String.fromCharCode(code + 128)= -- a JS character, so
+  the transport UTF-8-encodes it.  Cmd-b becomes U+00E2 "â" (bytes C3
+  A2), Cmd-B (shift) U+00C2 "Â", Cmd-1 U+00B1, Cmd-, U+00AC.  Mosh
+  passes input bytes untouched, tmux passes UTF-8, Emacs's keyboard
+  coding is utf-8: the key arrives as ONE character event, no
+  negotiation, no lead-byte stall.
+- /Escape/ is the same Alt-role with =altSendsWhat="escape"= (ESC
+  prefix: Emacs Meta).  The flag is a single field, BUT =_mod()= is
+  re-evaluated on every modifier keydown/keyup from that key's own
+  configured role, so Option=Escape and Cmd=8-bit coexist: the flag
+  follows the modifier currently held.  (Holding both at once is the
+  one ambiguous case.)
+- /Meta/ (=metaSendsEscape=false=) only adds the modifier parameter to
+  control sequences: Cmd-<arrow> would come as =CSI 1;9A=.  For
+  letters it sends nothing useful.  The JS also knows a "Meta-Escape"
+  role the Swift picker does not expose.
+- Not covered by 8-bit: Cmd with arrows, F-keys, Tab, Return
+  (multi-character sequences skip the +128 path).  Those few can be
+  Custom presses, or the "Meta" role on the OTHER Cmd key plus decode
+  entries for modifier 9.
+
+Emacs side, headless template, tty-only: one =input-decode-map= loop
+mapping each Latin-1 character U+00A1..U+00FE back to =[s-<char>]=
+(uppercase keeps its case, so Cmd-Shift-b is =s-B=, as in the GUI).
+Every existing =s-= binding then works unchanged.  Cost: those Latin-1
+characters cannot be TYPED on the hub while the map is active (é is
+s-i, ñ is s-q, ü is s-u, ç is s-g); limit the loop to the characters
+the config actually binds if that matters, or keep a toggle.  To
+verify: whether bracketed paste of Latin-1 text goes through
+=input-decode-map= (xterm-paste reads the pasted characters itself; if
+it does not, pasting is unaffected).
+
+Chords iPadOS keeps for itself never reach Blink: Cmd-Tab, Cmd-Space,
+Cmd-H, Cmd-Shift-3/4/5, Cmd-Option-D, Globe combinations.  Blink's own
+Cmd shortcuts (Cmd-T/W/N/O/K, Cmd-digits, Cmd-[ ], font size) are all
+reassignable in Blink Shortcuts.
+
+Verify with Blink's built-in =showkey= (prints each byte): Cmd-b should
+print 0xC3 0xA2; then in Emacs =C-h k Cmd-b= should say =s-b=.
+
+*** Mac terminal, local or ssh (Ghostty, kitty, WezTerm, iTerm2 3.5+): kitty keyboard protocol
+
+Emacs 31 has no native support (checked NEWS); the =kkp= package
+(MELPA) enables the protocol from =tty-setup-hook= where the terminal
+answers the capability query, and decodes super/hyper natively, so the
+physical Cmd key arrives as =s-= with no per-key work.  Terminal.app
+does not speak it.  Two conditions: the terminal must not consume the
+chord itself (Ghostty binds Cmd-C/V/N/T/W/Q/digits/+/-/0 by default;
+=keybind = cmd+b=unbind= per key in its config, or use its
+=text:= binding to inject), and tmux in the path must relay the
+protocol -- tmux 3.4 relays the CSI u form, the kitty flags only
+partly, so ssh-into-tmux needs a test; a plain ssh session without
+tmux is clean.  macOS keeps Cmd-Tab, Cmd-Space, Cmd-H/M/Q.
+
+The Blink 8-bit trick also works from a Mac terminal that can send
+text for a chord (Ghostty =text:=, kitty =send_text=), but per key,
+so kkp is the generic answer there.
+
+*** Any terminal, last resort: the built-in modifier prefix
+
+=C-x @ s <key>= is =s-<key>= on every tty (=event-apply-super-modifier=
+in =function-key-map=; =C-x @ c= for control, =C-x @ S= shift).  Bind a
+shorter prefix in the headless template.  Two keystrokes, zero
+terminal cooperation, always available.
+
+*** Summary
+
+| Client                              | Real Cmd works?  | How                                              | Per-key work |
+|-------------------------------------+------------------+--------------------------------------------------+--------------|
+| Blink over mosh or ssh              | yes (letters, digits, punctuation) | Cmd role = 8-bit, Option = Escape; one decode loop in the template | none (arrows/F-keys: custom presses) |
+| Ghostty / kitty / WezTerm / iTerm2, local or ssh | yes, all keys | =kkp= package                                      | unbind the terminal's own Cmd chords |
+| Terminal.app, unknown terminals     | no               | prefix key                                       | none |
+
+** Test recipe (from Blink, on the hub)
+
+In a tmux pane: =cat -v=, press the chord, read the bytes; =^[= is
+ESC.  Or in Emacs: =C-h k= then the chord (works: C-h is the help
+prefix on a tty), which shows the decoded event.  Expected today:
+Ctrl-, prints =,=; Ctrl-Backspace prints =^H=; Ctrl-Shift-a prints
+=^A=; Ctrl-Right prints =^[[1;5C= (that one is the good news).  After
+a Custom press, Ctrl-, should print =^[[27;5;44~= and =C-h k= should
+say =C-,=.
+
+* Noted, no action
+
+- Four "Missing lexical-binding cookie" warnings at load: three
+  third-party themes (nord, rebecca, cyberpunk) and =~/.private.el=
+  (the hub's is a single =;;=).  Upstream files; a cookie line in the
+  private file would silence that one.
+- =(with-temp-buffer (python-ts-mode))= signals =stringp nil= from a
+  pyvenv hook (=zetta-pyvenv-activate-project=) that wants a file name.
+  File buffers are fine; only a probe ever does this.
+
+* Fixed
+
+** DONE Mode-line segments throw on every redisplay
+:PROPERTIES:
+:SEEN: [2026-09-11] *Messages* on the hub daemon, 206 "Error during redisplay" lines within minutes, count rising with every redraw
+:FILE: modules/ui/telephone-line.el
+:END:
+
+Batch 1 -- on =dev= [2026-09-11], not yet pushed.  Guards in =modules/ui/telephone-line.el= (every segment that reaches for another module, latent ones included; =zt-ace-1= is a =when-let= on the parameter).  Also: the evil tag faces moved off the stoplight onto the brushup ink ladder (=zetta-telephone-line-evil-tag-faces=), which the cursor item needs.
+
+Three segments assume modules the headless profile excludes.
+telephone-line catches each error so the mode line still draws, but it
+is three signals per redisplay on one core, and it buries everything
+else in =*Messages*=.
+
+| Segment                     | Fails on                                        | Why                                                            |
+|-----------------------------+-------------------------------------------------+----------------------------------------------------------------|
+| =zt-icon-file-or-buffer=    | =void-function all-the-icons-icon-for-mode=     | all-the-icons is a keep-out (GUI font)                          |
+| =zt-parrot=                 | =void-variable zetta-parrot-window=             | parrot is a keep-out                                           |
+| =zt-ace-1=                  | =wrong-type-argument stringp nil= in =propertize= | ace-window is autoloaded only; its display mode never set the window parameter |
+
+Latent, same cause, will fire once their condition is true:
+=zt-icon-lsp=, =zt-icon-copilot=, =zt-vc-segment-repo-icon=,
+=zt-popper-popup= (all-the-icons); =zt-nyan= (nyan-mode, in a
+magit-status buffer).
+
+Fix: =fboundp= / =boundp= guards, the pattern =zt-flycheck-segment=
+already uses; =zt-ace-1= becomes a =when-let= on the parameter.  No
+behaviour change on the Mac, where every one of these is loaded.
+
+** DONE brushup style: "Invalid face: ghostel-color-black"
+:PROPERTIES:
+:SEEN: [2026-09-11] *Messages* on the hub daemon, twice (once per theme pass)
+:FILE: modules/tools/ghostel.el
+:END:
+
+Batch 1 -- on =dev= [2026-09-11], not yet pushed.  =zetta-ghostel--push-palette= returns early until =(facep 'ghostel-color-black)=.
+
+=zetta-ghostel--push-palette= reads the sixteen =ghostel-color-*=
+faces with =face-attribute= and no =facep= check.  ghostel is
+autoloaded (=:commands=), so until the first =M-x ghostel= the faces do
+not exist and every brushup pass logs the error.  Its sibling
+=zetta-ghostel--apply-palette= already guards each face with =facep=.
+
+Fix: bail out of the push when =(facep 'ghostel-color-black)= is nil
+(all sixteen are defined together by ghostel).  On the Mac ghostel is
+loaded early enough that this never showed.
+
+** DONE No tab line on the hub (the whole tab-line system lives in the SVG module)
+:PROPERTIES:
+:SEEN: [2026-09-11] hub daemon: =tab-line-mode= is void, =(featurep 'tab-line)= nil; =tab-bar-mode= is on (core/cleanup.el) and frame F2 shows one tab-bar line
+:FILE: modules/ui/tab-line-svg.el (lines 36-265), modules/ui/tab-bar-svg.el
+:END:
+
+Batch 1 -- on =dev= [2026-09-11], not yet pushed.  Split done: =modules/ui/tab-line.el= (base block, three guards: icon on =fboundp=, overline knobs on =bound-and-true-p=, listed in =zetta--default-file-order= so it precedes the SVG file); =tab-line-svg.el= keeps the renderer and =(require 'tab-line)=; =modules/ui/disabled/tab-line.el= deleted.  NOT done, lower priority as noted: the tab bar's text format still lives in =tab-bar-svg.el= -- its entries name segment functions from modules the hub excludes (zmc, gptel, blinker, spotify, space-tree), so moving it needs guards of its own first.
+
+=tab-line-svg.el= is "the complete tab-line module": its
+=use-package tab-line= block owns =global-tab-line-mode=, the buffer
+selector and scopes, =tab-line-close-tab-1=, the g1-g9 / C-tab / s-w
+keys, the faces (=zetta-tab-line-faces= on =brushup-styles=), the
+built-in labels (=zetta-tab-line-tab-name-buffer=, =ct/circle-number=)
+and the =zetta-tab-line-ensure= sweep.  The SVG renderer is the rest of
+the file.  The capability predicate in =zetta-module-conditions= skips
+the FILE, so on a build with no SVG the system goes with the renderer:
+no tab line, no g1-g9, no C-tab.  The tab bar survives only because
+=core/cleanup.el= turns =tab-bar-mode= on by itself; the icon-rich text
+format (=zetta-tab-bar-default-format=, =zetta-tab-bar-use-builtin=) is
+inside =tab-bar-svg.el= and is skipped the same way, so the hub shows
+the stock =tab-bar.el= format.
+
+Fix: split.  Move lines 36-265 (the =zetta-tab-line-name-space-ok=
+defcustom and the =use-package tab-line= block) into a new
+=modules/ui/tab-line.el= that loads on both profiles; =tab-line-svg.el=
+keeps the renderer and the switch commands and =(require 'tab-line)=
+first.  Three guards the base block needs before it can run on the hub:
+
+- =zetta-tab-line-tab-name-buffer= calls =all-the-icons-icon-for-file=
+  / =-for-mode= unguarded (keep-out on the hub) -- =fboundp=, drop the
+  icon;
+- =zetta-tab-line-faces= reads =zetta-tab-line-svg-overline= and
+  =zetta-tab-line-svg-overline-strength=, defcustoms that stay in the
+  SVG half -- =bound-and-true-p=, or move the overline fallback into
+  the renderer's own style;
+- load order: unlisted files in a category load alphabetically
+  (=zetta--module-files=), and "tab-line-svg.el" sorts BEFORE
+  "tab-line.el" (hyphen before dot), so either add both to
+  =zetta--default-file-order= in init-data.el in the right order or
+  have the SVG file =require= the base.
+
+=modules/ui/disabled/tab-line.el= is the pre-merge ancestor (283
+lines, commit 184958c merged it in); delete it with the split rather
+than resurrect it, the merged block is the newer code.  Same shape,
+lower priority, for the tab bar: the text format could move out of
+=tab-bar-svg.el= so the hub gets the multi-line icon format too.
+
+** DONE Cursor shape does not follow evil state on the hub
+:PROPERTIES:
+:SEEN: [2026-09-11] Blink over mosh; hub daemon reports evil on, =evil-insert-state-cursor= = (bar . 2), tty frames' =cursor-type= nil/box
+:FILE: modules/editor/evil.el (cursor values), new module or hub/tmux.conf
+:END:
+
+Batch 1 -- on =dev= [2026-09-11], not yet pushed.  New =modules/editor/evil-tty-cursor.el=: DECSCUSR (steady bar/underline/block) sent after =evil-refresh-cursor= on tty frames, de-duplicated per terminal, reset on frame delete; =hl-line= background stepped to =brushup-bg-2= in insert state, frame-local so GUI frames keep the underline; the mode-line tag is on the ladder (see the mode-line item).  Verify from Blink both ways still owed.
+
+Two separate limits, one visible symptom.
+
+1. /Emacs cannot shape a tty cursor itself./  =cursor-type= (and so
+   evil's per-state cursor) only reaches a window system; on a tty the
+   cursor is the terminal's, and the only way to change it is the
+   DECSCUSR escape (=CSI n SP q=: 1/2 block, 3/4 underline, 5/6 bar).
+   Emacs never sends it.  The usual bridge is the
+   =evil-terminal-cursor-changer= package (sends DECSCUSR and OSC 12
+   colour on every evil state change); it is not in the config or the
+   lock file.  A two-hook =send-string-to-terminal= would do the same
+   without a package.
+
+2. /mosh drops it./  The chain is Emacs -> tmux -> mosh -> Blink.
+   tmux 3.4 forwards cursor style to a client whose terminal advertises
+   =cstyle=, and the Blink client does (measured:
+   =client_termfeatures= carries =cstyle=).  Blink renders DECSCUSR
+   (blinksh/blink#22, closed 2016).  But mosh 1.4.0, both ends, has no
+   DECSCUSR: mobile-shell/mosh#1355 "Cursor shape support" is still
+   OPEN, and #1084 (cursor style works over ssh, never over mosh) was
+   closed as a duplicate of #352, which also covers the OSC 12 cursor
+   colour.  So over mosh neither shape nor colour can carry the state,
+   whatever Emacs sends.  Over plain ssh from Blink both would.
+
+Fix, in two parts:
+
+- Send DECSCUSR anyway: bar in insert, block in normal, underline in
+  replace, from =evil-*-state-entry-hook= (or the package), guarded on
+  =(not (display-graphic-p))=.  Harmless where the chain drops it,
+  correct over ssh and on any future mosh with #1355 merged.
+- Encode the state in something mosh cannot strip, for the mosh path:
+  the mode line already carries =telephone-line-evil-tag-segment= on
+  the hub (it is the first segment), so the cheapest step is making
+  that tag loud -- the state's face on the ink ladder, insert stepped
+  up, normal at rest; or =hl-line='s background per state (a
+  =zetta-evil-state-hl-line= style on =brushup-styles=), which the eye
+  catches without reading.  Prominence ladder only, no stoplight
+  colours.
+
+Verify from Blink both ways: =mosh= (expect tag/hl-line only) and =ssh=
+(expect the bar).  The kj chord and C-, rows of the Phase C table are
+the same session.
+
+** DONE TAB in evil normal state runs evil-jump-forward, not org-cycle
+:PROPERTIES:
+:SEEN: [2026-09-11] hub daemon, ~/kb/inbox.org in normal state: =(key-binding (kbd "TAB"))= is =evil-jump-forward=, =(key-binding [tab])= is =org-cycle=
+:FILE: templates/zetta.headless.el (or modules/editor/evil.el)
+:END:
+
+Batch 1 -- on =dev= [2026-09-11], not yet pushed.  =(setq evil-want-C-i-jump nil)= in the headless template; =C-M-o= is =evil-jump-forward= in the motion map.  Checked: the config binds no =C-m= / =C-i= / =C-[= anywhere.
+
+Not a broken evil config; a terminal fact.  On a tty the Tab key and
+C-i are the same byte (0x09): there is no separate =<tab>= event, the
+way there is in a GUI frame.  Evil binds C-i to =evil-jump-forward= in
+=evil-motion-state-map= (=evil-want-C-i-jump= is t, the default; the
+config never sets it), and a state map outranks =org-mode-map=, so the
+byte lands on the jump.  In a GUI frame Tab arrives as =<tab>=, a
+different event from =C-i=, org's binding is found first, and the
+same config behaves.  Measured: =org-mode-map= has TAB -> =org-cycle=,
+the motion map has C-i -> =evil-jump-forward=, and the tty lookup
+picks the latter.
+
+Nothing in the tmux/Blink chain can separate them: even with
+=modifyOtherKeys= on, xterm.el decodes a modified C-i back to the
+character 9.
+
+Fix: in the headless template, before evil loads (the template is
+read first), =(setq evil-want-C-i-jump nil)= -- evil then leaves C-i
+alone and Tab falls through to the major mode everywhere.  Give the
+jump another key on the hub so the C-o / C-i pair survives, e.g.
+=g ,= or =C-M-o= in the motion map.  Alternative with the same effect
+and no template change: unbind C-i in =evil-motion-state-map= from
+=tty-setup-hook=, but that map is global, so a mixed GUI+tty daemon
+would lose it on both; the hub is tty-only, so either works, the
+template setting is the smaller one.
+
+Same family, worth checking while there: C-m is RET and C-[ is ESC on
+a tty.  Evil handles ESC itself (=evil-esc-mode=, with
+=evil-esc-delay= for the Alt-as-ESC ambiguity); RET is not rebound by
+evil.  Any =C-m= / =C-i= / =C-[= binding elsewhere in the config
+collides the same way on the hub.
+
+** DONE corfu: "corfu-terminal is not needed on Emacs 31"
+:PROPERTIES:
+:SEEN: [2026-09-11] one line in *Warnings* at daemon start, after the 31.1 switch
+:FILE: modules/completion/corfu-terminal.el, source/bootstrap/bootstrap-modules.el
+:END:
+
+Batch 1 -- on =dev= [2026-09-11], not yet pushed.  =zetta-module-conditions= skips =completion/corfu-terminal.el= where =(featurep 'tty-child-frames)= (corfu's own test), so the nox row on 29.3 still loads it.
+
+The module loads on both profiles because the package gates itself on
+=display-graphic-p= per call; on 31 corfu has native tty child frames
+and says so.  Harmless.  If wanted: a =zetta-module-conditions= entry
+skipping =completion/corfu-terminal.el= when =emacs-major-version= is
+31 or more, so the CI nox row (29.3) still exercises it.  Cosmetic;
+low priority.
+

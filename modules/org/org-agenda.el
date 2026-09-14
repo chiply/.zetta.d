@@ -26,6 +26,8 @@
 ;;   ,-o-v f   Areas      by category
 ;;   ,-o-v r   Review     what closed or moved in the last seven days
 ;;   ,-o-v b   Blocked    stuck on a thing, stuck on a person, or ready
+;;   ,-o-v j   Dormant    projects with no next step (org-queue-dormant)
+;;   ,-o-v o   Orphan     open work serving no mission (org-queue-season)
 ;;
 ;; Views that group on computed buckets (Neglected, Chase, Horizon) do it
 ;; with named `:pred' functions in org-super-agenda.el rather than
@@ -66,6 +68,9 @@
   ;; Required here rather than at startup: the cost lands on the first
   ;; agenda of the session, not on every session.
   (require 'org-ql-search nil t)
+  ;; The `dormant-project' predicate the j view names.
+  (require 'org-queue-dormant nil t)
+  (require 'org-queue-season nil t)
 
   (setq org-agenda-restore-windows-after-quit t
         ;; Match `org-tags-column' in org.el: tags right after the
@@ -125,7 +130,13 @@
            ((org-ql-block '(level 1)
                           ((org-ql-block-header "Inbox")
                            (org-super-agenda-groups
-                            zetta-org-agenda-inbox-groups))))
+                            zetta-org-agenda-inbox-groups)))
+            ;; Commits as evidence of DONE (G13c): open entries a recent
+            ;; commit named by ID, over the whole corpus, with the same
+            ;; accept key -- C-c a marks the entry DONE.
+            (org-ql-block '(and (todo) (property "EVIDENCE_DONE"))
+                          ((org-ql-block-header "Commit evidence -- C-c a marks DONE")
+                           (org-agenda-files (org-agenda-files)))))
            ;; An org-ql block, not `alltodo': the `n' and `N' templates
            ;; capture a bare heading with no TODO keyword, and `alltodo'
            ;; cannot see those at all -- which is most of why the inbox
@@ -217,6 +228,23 @@
                      ((org-agenda-overriding-header "")
                       (org-super-agenda-groups
                        zetta-org-agenda-blocked-groups)))))
+
+          ;; The project invariant (G8): `dormant-project' is an org-ql
+          ;; predicate from org-queue-dormant, so the view is live whether
+          ;; or not `org-queue-dormant-check' has written the tag yet.
+          ("j" "Dormant -- projects with no next step"
+           ((org-ql-block '(dormant-project)
+                          ((org-ql-block-header "Dormant -- every child parked or done")))
+            (org-ql-block '(project-status finished)
+                          ((org-ql-block-header "Finished? -- every child done; close the project")))))
+
+          ;; Horizons (G5): open work that reaches no mission through
+          ;; its parents, and the missions themselves.
+          ("o" "Orphan -- open work serving no mission"
+           ((org-ql-block '(orphan)
+                          ((org-ql-block-header "Serving no mission")))
+            (org-ql-block '(todo "MISSION")
+                          ((org-ql-block-header "The missions")))))
 
           ("u" "Untriaged -- what has no metadata yet"
            ((org-ql-block '(and (todo)

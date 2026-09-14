@@ -4,89 +4,99 @@
 #+COLUMNS: %40ITEM(Task) %TODO %3PRIORITY(P) %6IMPACT(Imp) %17Effort(Estimate){:} %CLOCKSUM(Clocked) %DEADLINE %SCHEDULED %TAGS
 #+FILETAGS: :buy:
 
-* DONE England shirt  :@errand:@fresh:
-CLOSED: [2026-08-27 Thu 14:28] SCHEDULED: <2026-08-21 Fri>
+* TODO England shirt  :@errand:
+SCHEDULED: <2026-10-04 Sun>
 :PROPERTIES:
-:ID:       1CC7770F-8E71-4E97-A712-23662AF35517
-:CREATED:  [2026-08-02 Sun]
-:Effort:   0:30
-:IMPACT:   1
-:END:
-:LOGBOOK:
-- State "DONE"       from "PROG"       [2026-08-27 Thu 14:28]
-- State "PROG"       from "TODO"       [2026-08-27 Thu 14:00]
-- State "TODO"       from "PROG"       [2026-08-26 Wed 14:42]
-- State "PROG"       from              [2026-08-26 Wed 14:15]
+:ID:       9640311B-7D45-4ADB-A851-517906EA6E9B
+:CREATED:  [2026-08-05 Wed]
+:Effort:   0:05
 :END:
 
-* NOPE Replacement picture frame glass  :@errand:@tired:
-CLOSED: [2026-08-14 Fri 16:57] SCHEDULED: <2026-08-24 Mon>
+- [X] first pass
+- [ ] second pass
+
+* WAIT Replacement picture frame glass  :@errand:@fresh:
+DEADLINE: <2026-10-04 Sun>
 :PROPERTIES:
-:ID:       A2C07178-2AB8-4E8E-BC1B-E4B3CB3C2799
-:CREATED:  [2026-08-09 Sun]
+:ID:       0E220BB0-88B8-4863-AFCF-D3F255C0C4F1
+:CREATED:  [2026-07-30 Thu]
+:Effort:   0:20
+:IMPACT:   3
+:WAITING_ON: IT
+:END:
+:LOGBOOK:
+- State "WAIT"       from "TODO"       [2026-09-03 Thu 11:20] \\
+  Sent the details, waiting on confirmation.
+:END:
+
+* DONE [#C] Kindle for the reading backlog  :@shallow:
+CLOSED: [2026-09-08 Tue 09:38] SCHEDULED: <2026-10-03 Sat>
+:PROPERTIES:
+:ID:       E9AE08DF-7145-47F4-AF72-A0E1D75C817A
+:CREATED:  [2026-08-10 Mon]
 :Effort:   0:15
 :END:
 :LOGBOOK:
-- State "NOPE"       from "PROG"       [2026-08-14 Fri 16:57] \\
-  Superseded by the new pipeline.
-- State "PROG"       from              [2026-08-14 Fri 16:30]
-:END:
-
-* DONE [#C] Kindle for the reading backlog  :@shallow:@tired:
-CLOSED: [2026-08-15 Sat 09:50] SCHEDULED: <2026-08-24 Mon> DEADLINE: <2026-10-06 Tue -5d>
-:PROPERTIES:
-:ID:       59930DE9-E6B6-4E18-BDFE-6D4F245DBFC5
-:CREATED:  [2026-07-29 Wed]
-:Effort:   0:15
-:END:
-:LOGBOOK:
-- State "DONE"       from "PROG"       [2026-08-15 Sat 09:50]
-- State "PROG"       from              [2026-08-15 Sat 09:30]
-- Rescheduled from "[2026-08-17 Mon]" on [2026-09-07 Mon 08:55]
-- New deadline from "[2026-09-26 Sat]" on [2026-09-02 Wed 12:30]
+- State "DONE"       from "PROG"       [2026-09-08 Tue 09:38]
+- State "PROG"       from "TODO"       [2026-09-08 Tue 09:30]
+- State "TODO"       from "PROG"       [2026-09-06 Sun 11:22]
+- State "PROG"       from              [2026-09-06 Sun 11:15]
 :END:
 
 Decided plain Kindle over Boox -- see the ereader research note.
 
-* IDEA [#B] New desk lamp  :@shallow:@fresh:
+* IDEA New desk lamp  :@shallow:@tired:
+SCHEDULED: <2026-09-09 Wed>
 :PROPERTIES:
-:ID:       E73F0D4D-A396-485B-B677-4EEE345D5FBF
-:CREATED:  [2026-08-23 Sun]
-:Effort:   0:30
+:ID:       B258508B-E25A-4B61-B159-5E5DF6C3490A
+:CREATED:  [2026-07-04 Sat]
+:IMPACT:   3
+:REVIEW_ON: [2026-10-05 Mon]
+:SURFACED: 2
 :END:
 
 * TODO Coffee grinder burrs  :@shallow:
-DEADLINE: <2026-09-14 Mon>
+DEADLINE: <2026-09-18 Fri>
 :PROPERTIES:
-:ID:       3D04EE3F-B1F3-4F44-8754-3F5E5821ECB6
-:CREATED:  [2026-07-11 Sat]
-:Effort:   0:20
-:IMPACT:   3
+:ID:       FD2C6BB9-2AAE-4E30-9595-B2B9529FCF35
+:CREATED:  [2026-08-21 Fri]
+:Effort:   0:05
+:IMPACT:   5
+:DEADLINE_TYPE: soft
 :END:
 
 * IDEA Winter walking boots  :@errand:
-DEADLINE: <2026-09-01 Tue>
+SCHEDULED: <2026-10-10 Sat> DEADLINE: <2026-09-19 Sat>
 :PROPERTIES:
-:ID:       F4834A1E-8559-41E4-BA22-A74F24E6C18E
-:CREATED:  [2026-08-19 Wed]
-:Effort:   0:15
-:END:
-
-* NOPE [#C] Standing desk mat  :@shallow:@fresh:
-CLOSED: [2026-08-22 Sat 11:05] SCHEDULED: <2026-08-14 Fri>
-:PROPERTIES:
-:ID:       D8361E68-C2DE-4BE3-87A9-3D00DF928E96
-:CREATED:  [2026-07-23 Thu]
-:Effort:   0:10
-:IMPACT:   4
+:ID:       B8D70C4B-C4CC-4D34-9135-E6482E7C34F3
+:CREATED:  [2026-08-16 Sun]
+:Effort:   0:05
+:DEADLINE_TYPE: soft
+:REVIEW_ON: [2026-09-07 Mon]
+:SURFACED: 1
 :END:
 :LOGBOOK:
-- State "NOPE"       from "PROG"       [2026-08-22 Sat 11:05] \\
-  No longer relevant after the rewrite.
-- State "PROG"       from "TODO"       [2026-08-22 Sat 11:00]
-- State "TODO"       from "PROG"       [2026-08-21 Fri 09:05]
-- State "PROG"       from "TODO"       [2026-08-21 Fri 09:00]
-- State "TODO"       from "PROG"       [2026-08-19 Wed 16:05]
-- State "PROG"       from              [2026-08-19 Wed 16:00]
+- New deadline from "[2026-09-09 Wed]" on [2026-09-05 Sat 12:30]
 :END:
+
+* NOPE [#A] Standing desk mat  :@shallow:
+CLOSED: [2026-09-07 Mon 16:35] SCHEDULED: <2026-08-23 Sun> DEADLINE: <2026-10-06 Tue>
+:PROPERTIES:
+:ID:       BA8770BE-F1F0-4950-8A1A-B122349CA452
+:CREATED:  [2026-08-29 Sat]
+:Effort:   0:15
+:IMPACT:   2
+:END:
+:LOGBOOK:
+- State "NOPE"       from "PROG"       [2026-09-07 Mon 16:35] \\
+  Duplicate of another entry.
+- State "PROG"       from "TODO"       [2026-09-07 Mon 16:30]
+- State "TODO"       from "PROG"       [2026-09-06 Sun 11:35]
+- State "PROG"       from "TODO"       [2026-09-06 Sun 11:30]
+- State "TODO"       from "PROG"       [2026-09-03 Thu 16:05]
+- State "PROG"       from              [2026-09-03 Thu 16:00]
+:END:
+
+- [X] first pass
+- [ ] second pass
 

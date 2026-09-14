@@ -1,0 +1,39 @@
+#+TITLE: Inbox (fixture)
+
+* dryer sheets
+:PROPERTIES:
+:ID:       INBOX-1
+:CREATED:  [2026-08-14 Fri 09:41]
+:END:
+
+* orderless not working in consult-theme?
+:PROPERTIES:
+:ID:       INBOX-2
+:CREATED:  [2026-09-03 Thu 14:23]
+:END:
+
+* TODO the recruiter: Re: interview loop scheduling
+:PROPERTIES:
+:ID:       INBOX-3
+:CREATED:  [2026-09-08 Mon 16:02]
+:END:
+[[mu4e:msgid:abc@example.com][Re: interview loop scheduling]]
+They propose Thursday at 2pm or Friday morning; asked me to confirm.
+
+* call the dentist by friday
+:PROPERTIES:
+:ID:       INBOX-4
+:CREATED:  [2026-09-09 Wed 08:10]
+:END:
+
+* my salary expectations  :private:
+:PROPERTIES:
+:ID:       INBOX-5
+:CREATED:  [2026-09-09 Wed 08:12]
+:END:
+
+* dryer sheets
+:PROPERTIES:
+:ID:       INBOX-6
+:CREATED:  [2026-09-10 Thu 07:00]
+:END:

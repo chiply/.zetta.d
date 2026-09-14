@@ -7,6 +7,12 @@
 ;; so variables set here are available to all modules.
 ;;
 ;; The only required section is `zetta-modules!' — everything else is optional.
+;;
+;; This is the FULL profile (bin/zetta install copies it by default).  Two
+;; siblings: zetta.headless.el for a tty-only box with no SVG and no
+;; toolchain (headless-zetta.org), and zetta.work.el for an employer-
+;; managed machine, the GUI config minus every personal app
+;; (work-profile.org).  README.md, "Profiles".
 
 ;;; ————————————————————————————————————————————————
 ;;; Appearance
@@ -41,6 +47,11 @@
 
 ;; Logseq pages directory for org-capture integration
 ;; (setq zetta-logseq-dir "~/logseq/pages/")
+
+;; Where Customize saves.  init.el defaults this to .data/custom.el under
+;; the config directory (gitignored), so a `M-x customize' save never
+;; edits the tracked init.el.  Point it elsewhere if you prefer.
+;; (setq custom-file (expand-file-name ".data/custom.el" user-emacs-directory))
 
 ;;; ————————————————————————————————————————————————
 ;;; Package management

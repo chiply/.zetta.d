@@ -4,20 +4,17 @@
 #+COLUMNS: %40ITEM(Task) %TODO %3PRIORITY(P) %6IMPACT(Imp) %17Effort(Estimate){:} %CLOCKSUM(Clocked) %DEADLINE %SCHEDULED %TAGS
 #+FILETAGS: :emacs:
 
-* PROG [#A] Memoize svg-line renderers with a content hash [1/4]  :@deep:perf:@tired:
-SCHEDULED: <2026-10-01 Thu>
+* PROG [#A] Memoize svg-line renderers with a content hash [1/4]  :@deep:perf:@fresh:
+SCHEDULED: <2026-09-30 Wed>
 :PROPERTIES:
-:ID:       FBF48200-8133-4B9D-BA14-86061C9C08D3
-:CREATED:  [2026-07-22 Wed]
+:ID:       8133FB9D-FA14-4606-9C9C-08D37BF71937
+:CREATED:  [2026-07-26 Sun]
 :Effort:   4:00
-:IMPACT:   3
 :END:
 :LOGBOOK:
-- State "PROG"       from "TODO"       [2026-09-06 Sun 09:00]
-- State "TODO"       from "PROG"       [2026-09-04 Fri 13:37]
-- State "PROG"       from "TODO"       [2026-09-04 Fri 13:00]
-- State "TODO"       from "PROG"       [2026-09-01 Tue 13:52]
-- State "PROG"       from              [2026-09-01 Tue 13:15]
+- State "PROG"       from "TODO"       [2026-09-11 Fri 13:00]
+- State "TODO"       from "PROG"       [2026-09-05 Sat 11:55]
+- State "PROG"       from              [2026-09-05 Sat 10:15]
 :END:
 
 `svg-line--render' rebuilds unconditionally on every call; the only
@@ -27,86 +24,88 @@ windows, ~20x/second.
 See [[file:OPTIMIZATIONS.org][OPTIMIZATIONS.org]] for the measurements.
 
 ** DONE Hash the built SVG string per (NAME . window)
-CLOSED: [2026-08-22 Sat 09:47]
+CLOSED: [2026-09-03 Thu 15:17]
 :PROPERTIES:
-:ID:       2C7E08DE-7EC0-458B-8685-DDB4D5662B40
+:ID:       134773DE-BDBB-4531-A713-13296B06B5E1
 :Effort:   1:00
 :END:
 :LOGBOOK:
-- State "DONE"       from "PROG"       [2026-08-22 Sat 09:47]
-- State "PROG"       from              [2026-08-22 Sat 09:00]
+- State "DONE"       from "PROG"       [2026-09-03 Thu 15:17]
+- State "PROG"       from              [2026-09-03 Thu 14:15]
 :END:
 
 ** PROG Return the memoized display string on a match
 :PROPERTIES:
-:ID:       D70FB337-30ED-4ACC-9B39-C3E1E643DB5B
+:ID:       1E4D0D48-1496-4633-B874-5C6E0D6AEC46
 :Effort:   1:00
 :END:
 
 ** TODO Keep store-placements outside the short-circuit
 :PROPERTIES:
-:ID:       C32DE594-CA58-4E5D-88DB-233E5D675092
+:ID:       D70FB337-30ED-4ACC-9B39-C3E1E643DB5B
 :Effort:   0:30
 :END:
 
 ** TODO Benchmark before and after
 :PROPERTIES:
-:ID:       F94E5528-1689-4B6F-BD5C-EBAA5D76DADF
+:ID:       C32DE594-CA58-4E5D-88DB-233E5D675092
 :Effort:   0:30
 :END:
 
 * DONE Drop the flappy-fish 5Hz mode-line timer  :@shallow:perf:@fresh:
-CLOSED: [2026-08-24 Mon 14:44] SCHEDULED: <2026-09-06 Sun>
+CLOSED: [2026-08-28 Fri 16:37] SCHEDULED: <2026-08-31 Mon>
 :PROPERTIES:
-:ID:       09A1453B-B867-468B-8C3D-F7A745F4EBAD
-:CREATED:  [2026-07-24 Fri]
-:Effort:   0:30
-:IMPACT:   3
+:ID:       4C3DF7A7-45F4-4BAD-B9F2-224DEC9DBA0A
+:CREATED:  [2026-07-04 Sat]
+:Effort:   0:15
 :END:
 :LOGBOOK:
-- State "DONE"       from "PROG"       [2026-08-24 Mon 14:44]
-- State "PROG"       from "TODO"       [2026-08-24 Mon 14:30]
-- State "TODO"       from "PROG"       [2026-08-21 Fri 16:28]
-- State "PROG"       from              [2026-08-21 Fri 16:15]
+- State "DONE"       from "PROG"       [2026-08-28 Fri 16:37]
+- State "PROG"       from "TODO"       [2026-08-28 Fri 16:30]
+- State "TODO"       from "PROG"       [2026-08-26 Wed 14:21]
+- State "PROG"       from              [2026-08-26 Wed 14:15]
 :END:
 
 Five forced redisplays a second to animate a string
 nothing renders -- telephone-line is not active.
 
-* PROG [#A] Restore gc-cons-percentage in bootstrap-gcmh  :@shallow:perf:@fresh:
-SCHEDULED: <2026-09-08 Tue>
+* WAIT [#A] Restore gc-cons-percentage in bootstrap-gcmh  :@shallow:perf:
+SCHEDULED: <2026-09-20 Sun> DEADLINE: <2026-09-16 Wed -5d>
 :PROPERTIES:
-:ID:       34DB7683-7C16-4C44-906B-A1990BCA1986
-:CREATED:  [2026-09-01 Tue]
-:Effort:   0:15
-:IMPACT:   3
-:END:
-:LOGBOOK:
-- State "PROG"       from "TODO"       [2026-09-08 Tue 11:00]
-- State "TODO"       from "PROG"       [2026-09-01 Tue 14:35]
-- State "PROG"       from "TODO"       [2026-09-01 Tue 14:30]
-- State "TODO"       from "PROG"       [2026-08-31 Mon 16:35]
-- State "PROG"       from              [2026-08-31 Mon 16:30]
-:END:
-
-* IDEA [#B] Move read-process-output-max back to 4MB  :@shallow:perf:
-SCHEDULED: <2026-09-21 Mon>
-:PROPERTIES:
-:ID:       91228A7C-FDB0-4DB9-9A3D-CAE5194B6D48
-:CREATED:  [2026-09-01 Tue]
-:Effort:   0:10
-:END:
-
-* TODO [#B] Byte-compile modules instead of load-file [0/2]  :@deep:perf:
-SCHEDULED: <2026-09-25 Fri>
-:PROPERTIES:
-:ID:       2F95C7F0-6E8A-41FB-A0DD-1CE4A9D95E9A
-:CREATED:  [2026-08-29 Sat]
-:Effort:   4:00
+:ID:       D52D063F-9CB0-476A-9BC4-AE0CA374E70F
+:CREATED:  [2026-07-19 Sun]
+:Effort:   0:30
 :IMPACT:   2
+:DEADLINE_TYPE: soft
+:WAITING_ON: IT
 :END:
 :LOGBOOK:
-- Rescheduled from "[2026-09-18 Fri]" on [2026-09-05 Sat 08:55]
+- State "WAIT"       from "TODO"       [2026-09-01 Tue 11:20] \\
+  Blocked until they come back from leave.
+:END:
+
+* TODO [#B] Move read-process-output-max back to 4MB  :@shallow:perf:@fresh:
+SCHEDULED: <2026-10-07 Wed>
+:PROPERTIES:
+:ID:       5FCF5B4E-3598-48A5-8E1A-9256C8C6AF9F
+:CREATED:  [2026-09-07 Mon]
+:Effort:   0:10
+:IMPACT:   1
+:END:
+:LOGBOOK:
+- Rescheduled from "[2026-09-30 Wed]" on [2026-09-08 Tue 08:55]
+:END:
+
+* DONE [#B] Byte-compile modules instead of load-file [0/2]  :@deep:perf:
+CLOSED: [2026-08-30 Sun 18:30] SCHEDULED: <2026-08-23 Sun>
+:PROPERTIES:
+:ID:       EB1D7CC8-17F5-4E18-B2FF-324DDA602E9F
+:CREATED:  [2026-07-23 Thu]
+:Effort:   6:00
+:END:
+:LOGBOOK:
+- State "DONE"       from "PROG"       [2026-08-30 Sun 18:30]
+- State "PROG"       from              [2026-08-30 Sun 14:30]
 :END:
 
 662 of 702 zetta-* functions run interpreted. The .elc files exist
@@ -114,176 +113,171 @@ and are fresh; `load-file' just can't prefer them.
 
 ** TODO Prefer .elc with a per-file condition-case
 :PROPERTIES:
-:ID:       EB1D7CC8-17F5-4E18-B2FF-324DDA602E9F
+:ID:       75D1F320-B148-4FC7-97FA-CA352F1829E9
 :Effort:   2:00
 :END:
 
 ** TODO Verify as-elc goes 0 -> 294 via the load-history probe
 :PROPERTIES:
-:ID:       32FBB3CA-6486-4F69-A5D8-7C3EFCA191E6
+:ID:       6AEE5355-3DDF-419A-BC3E-B01CF6458A86
 :Effort:   0:30
 :END:
 
-* TODO [#B] Replace vc segment shell-outs with filesystem reads  :@deep:perf:
-SCHEDULED: <2026-09-07 Mon>
+* TODO Replace vc segment shell-outs with filesystem reads  :@deep:perf:@fresh:
 :PROPERTIES:
-:ID:       EF9AE782-1D97-4656-AAEE-53553DDFF19A
-:CREATED:  [2026-08-10 Mon]
-:Effort:   1:30
-:IMPACT:   4
-:BLOCKED_BY: BC900692-1BD3-433C-B925-7D68114E1FD2
+:ID:       67C454E4-35E3-41D8-9D7D-705FE19690FA
+:CREATED:  [2026-09-01 Tue]
+:IMPACT:   3
+:BLOCKED_BY: 0D0B25B2-99DD-4F76-A96D-BAB396D91443
 :END:
 
-- [X] first pass
-- [ ] second pass
-
-* TODO [#A] Make zetta-op-read lazy so startup stops blocking  :@deep:startup:@tired:
-DEADLINE: <2026-09-08 Tue>
+* TODO [#A] Make zetta-op-read lazy so startup stops blocking  :@deep:startup:
+DEADLINE: <2026-09-13 Sun>
 :PROPERTIES:
-:ID:       081338E0-FF8D-4F89-8D0B-25B299DD9F76
-:CREATED:  [2026-07-28 Tue]
-:Effort:   2:00
-:DEADLINE_TYPE: soft
+:ID:       6A4B23B5-D042-498A-985D-3F500B686790
+:CREATED:  [2026-07-30 Thu]
+:Effort:   1:00
+:END:
+:LOGBOOK:
+- New deadline from "[2026-09-03 Thu]" on [2026-09-03 Thu 12:30]
 :END:
 
 Measured 1.05-1.21s of a 9.17s init, and that is with the
 vault already unlocked.
 
-* DONE Add :commands to pr-review and ein  :@shallow:startup:
-CLOSED: [2026-08-21 Fri 14:05] SCHEDULED: <2026-08-13 Thu>
+* DONE Add :commands to pr-review and ein  :@shallow:startup:@tired:
+CLOSED: [2026-09-03 Thu 09:45] SCHEDULED: <2026-09-05 Sat>
 :PROPERTIES:
-:ID:       2AEC42DF-5E2D-4E85-8405-DC76A4369C41
-:CREATED:  [2026-07-30 Thu]
-:Effort:   0:05
-:IMPACT:   3
+:ID:       F84F61ED-099A-4915-9F62-105AA3ABB8F9
+:CREATED:  [2026-07-13 Mon]
+:Effort:   0:30
+:IMPACT:   2
 :END:
 :LOGBOOK:
-CLOCK: [2026-08-19 Wed 16:00]--[2026-08-19 Wed 16:10] =>  0:10
-- State "DONE"       from              [2026-08-21 Fri 14:05]
-- Rescheduled from "[2026-08-06 Thu]" on [2026-09-05 Sat 08:55]
+CLOCK: [2026-09-01 Tue 14:00]--[2026-09-01 Tue 14:15] =>  0:15
+CLOCK: [2026-09-04 Fri 16:00]--[2026-09-04 Fri 16:15] =>  0:15
+- State "DONE"       from              [2026-09-03 Thu 09:45]
 :END:
 
-* NEXT [#A] Fix TLS trust config in security.el  :@deep:security:
-SCHEDULED: <2026-10-03 Sat> DEADLINE: <2026-10-16 Fri>
+* TODO [#A] Fix TLS trust config in security.el  :@deep:security:
+SCHEDULED: <2026-09-28 Mon>
 :PROPERTIES:
-:ID:       AE192D42-914F-4E5F-8A4B-FDED7D8908FE
-:CREATED:  [2026-09-02 Wed]
-:Effort:   1:00
-:END:
-:LOGBOOK:
-- Rescheduled from "[2026-09-26 Sat]" on [2026-09-02 Wed 08:55]
+:ID:       96C8F55A-DCE3-48C9-8687-81C0F412330A
+:CREATED:  [2026-07-19 Sun]
+:IMPACT:   4
 :END:
 
 gnutls-trustfiles is literally ("zsh:1: command not found: -m")
 while gnutls-verify-error is t.
 
-* TODO Wire org-other-agenda into the org module [0/2]  :@deep:org:
-SCHEDULED: <2026-10-02 Fri>
+* TODO Wire org-other-agenda into the org module [0/2]  :@deep:org:@fresh:
+SCHEDULED: <2026-09-28 Mon>
 :PROPERTIES:
-:ID:       44E84D2D-82BA-4C36-A8F5-BB8D17054D35
-:CREATED:  [2026-08-07 Fri]
-:IMPACT:   2
+:ID:       10C7EA3F-F5BF-4C94-92A1-FCCE845BE68A
+:CREATED:  [2026-08-12 Wed]
+:Effort:   1:30
+:IMPACT:   4
 :END:
 
 Needs TextUI vendored too -- not on MELPA.
 
 ** TODO Add the textui elpaca recipe
 :PROPERTIES:
-:ID:       F5BF5C94-52A1-4CCE-845B-E68A26043C2A
+:ID:       316C621F-F1AF-4BD4-92C7-2425232FB195
 :Effort:   0:30
 :END:
 
 ** TODO Configure org-other-agenda-series
 :PROPERTIES:
-:ID:       B403176F-207D-4F76-A68D-638C10C7EA3F
+:ID:       0C02B810-8C37-4733-A4D4-939C38DEECC9
 :Effort:   1:00
 :END:
 
 * PROG [#A] Prototype org-transclusion live-sync task view  :@deep:org:@fresh:
-SCHEDULED: <2026-09-08 Tue>
+SCHEDULED: <2026-09-13 Sun>
 :PROPERTIES:
-:ID:       0C02B810-8C37-4733-A4D4-939C38DEECC9
-:CREATED:  [2026-08-05 Wed]
-:Effort:   6:00
-:IMPACT:   4
+:ID:       6C7A9EAA-1DAD-4C0F-B4BD-2C9EE9488C97
+:CREATED:  [2026-07-05 Sun]
+:Effort:   5:00
+:IMPACT:   3
 :END:
 :LOGBOOK:
-- State "PROG"       from "TODO"       [2026-09-08 Tue 13:00]
-- State "TODO"       from "PROG"       [2026-08-31 Mon 14:30]
-- State "PROG"       from              [2026-08-31 Mon 13:00]
+- State "PROG"       from "TODO"       [2026-09-12 Sat 11:00]
+- State "TODO"       from "PROG"       [2026-09-05 Sat 17:13]
+- State "PROG"       from              [2026-09-05 Sat 14:30]
 :END:
 
 The only item in the plan with real design risk. Does live-sync
 feel first class, or does the modal `e' gesture grate?
 
-* HOLD Write ERT tests for the queue scorer  :@deep:org:test:@tired:
+* TODO [#A] Write ERT tests for the queue scorer  :@deep:org:test:@tired:
 :PROPERTIES:
-:ID:       28B2B04C-6139-4268-B7AB-415017BF84E0
-:CREATED:  [2026-09-02 Wed]
-:Effort:   1:30
-:IMPACT:   3
-:REVIEW_ON: [2026-10-14 Wed]
-:END:
-:LOGBOOK:
-- State "HOLD"       from "TODO"       [2026-08-22 Sat 16:40] \\
-  Waiting to see if this solves itself.
+:ID:       92499A66-3BF3-4320-80C0-45E165C69566
+:CREATED:  [2026-08-20 Thu]
+:Effort:   2:00
 :END:
 
-* HOLD [#C] Audit which of the 145 eager use-package blocks matter  :@deep:startup:@tired:
-DEADLINE: <2026-09-05 Sat -5d>
+- [X] first pass
+- [ ] second pass
+
+* HOLD Audit which of the 145 eager use-package blocks matter  :@deep:startup:@tired:
+SCHEDULED: <2026-09-11 Fri> DEADLINE: <2026-10-13 Tue>
 :PROPERTIES:
-:ID:       54802101-EDE5-4070-B0D5-C62FF1656084
-:CREATED:  [2026-07-22 Wed]
-:Effort:   4:00
-:IMPACT:   4
-:REVIEW_ON: [2026-09-22 Tue]
+:ID:       F38B197E-DCF3-4DD1-8171-9611A4502709
+:CREATED:  [2026-09-01 Tue]
+:IMPACT:   5
+:REVIEW_ON: [2026-09-16 Wed]
+:SURFACED: 2
 :END:
 :LOGBOOK:
-- State "HOLD"       from "TODO"       [2026-08-09 Sun 16:40] \\
+- State "HOLD"       from "TODO"       [2026-09-06 Sun 16:40] \\
   Waiting to see if this solves itself.
-- New deadline from "[2026-08-26 Wed]" on [2026-09-04 Fri 12:30]
 :END:
 
 Parked until use-package-compute-statistics says whether
 they are actually the missing 7.7s.
 
-- [X] first pass
-- [ ] second pass
-
-* DONE [#C] Teach brushup about org-timegrid event rungs  :@shallow:ui:@tired:
-CLOSED: [2026-08-26 Wed 09:28] SCHEDULED: <2026-09-23 Wed>
+* DONE [#A] Teach brushup about org-timegrid event rungs  :@shallow:ui:
+CLOSED: [2026-08-24 Mon 09:33] SCHEDULED: <2026-09-25 Fri> DEADLINE: <2026-10-07 Wed>
 :PROPERTIES:
-:ID:       06C04EF4-5BA0-4E21-92C4-136FAA5F71EB
-:CREATED:  [2026-07-13 Mon]
-:IMPACT:   3
+:ID:       D702AFD6-95EE-489D-8755-6C6B160CCC2A
+:CREATED:  [2026-08-18 Tue]
+:Effort:   0:15
 :END:
 :LOGBOOK:
-- State "DONE"       from "PROG"       [2026-08-26 Wed 09:28]
-- State "PROG"       from "TODO"       [2026-08-26 Wed 09:00]
-- State "TODO"       from "PROG"       [2026-08-25 Tue 13:43]
-- State "PROG"       from              [2026-08-25 Tue 13:15]
+- State "DONE"       from "PROG"       [2026-08-24 Mon 09:33]
+- State "PROG"       from              [2026-08-24 Mon 09:15]
 :END:
 
-* IDEA [#C] Cut dimmer-mode, keep solaire  :@shallow:ui:
+* IDEA [#B] Cut dimmer-mode, keep solaire  :@shallow:ui:
 :PROPERTIES:
-:ID:       54B73461-976F-4871-8FBC-1321E374866B
-:CREATED:  [2026-08-31 Mon]
-:Effort:   0:05
+:ID:       ACE913C4-863D-4FB0-A1D8-389C9E5C91CD
+:CREATED:  [2026-07-06 Mon]
+:Effort:   0:30
+:SURFACED: 3
 :END:
 
-* IDEA Kill the Spotify HTTP buffer leak  :@deep:perf:
+* QUES [#C] Kill the Spotify HTTP buffer leak  :@deep:perf:@fresh:
 :PROPERTIES:
-:ID:       4F14FD99-5CFD-40A2-A0E1-0FD0C4D00EE4
-:CREATED:  [2026-08-11 Tue]
-:Effort:   3:00
+:ID:       F91A80D5-384B-41AF-8A9F-6BEAE231FE99
+:CREATED:  [2026-08-26 Wed]
+:Effort:   1:30
+:WAITING_ON: Sam
 :END:
 
 51 of 86 buffers were *http api.spotify.com:443*.
 
-* QUES [#C] Should QUES entries be queueable at all?  :@deep:org:@fresh:
+* QUES [#B] Should QUES entries be queueable at all?  :@deep:org:
+SCHEDULED: <2026-10-02 Fri> DEADLINE: <2026-10-07 Wed -5d>
 :PROPERTIES:
-:ID:       F91A80D5-384B-41AF-8A9F-6BEAE231FE99
-:CREATED:  [2026-08-22 Sat]
-:WAITING_ON: Sam
+:ID:       97EEA58D-87DC-41EA-9F35-A313BA8CAC18
+:CREATED:  [2026-07-24 Fri]
+:Effort:   0:10
+:IMPACT:   2
+:DEADLINE_TYPE: soft
+:WAITING_ON: legal
 :END:
+
+- [X] first pass
+- [ ] second pass
 

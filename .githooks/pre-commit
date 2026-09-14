@@ -13,6 +13,24 @@
 # Bypass deliberately with:  git commit --no-verify
 set -euo pipefail
 
+# ── Secret scan of the staged changes (work-security-audit.org SEC-C3) ──
+# The cheap layer that catches the case that matters: a value typed into
+# a module.  gitleaks reads .gitleaks.toml at the repository root, which
+# allow-lists the documented placeholders; --redact keeps any hit out of
+# the terminal.  Skipped with a note when the binary is absent
+# (brew install gitleaks; it is in the .files Brewfile).
+if command -v gitleaks >/dev/null 2>&1; then
+    if ! gitleaks git --pre-commit --staged --redact --no-banner --exit-code 1 . ; then
+        echo "pre-commit: gitleaks found a secret in the staged changes." >&2
+        echo "  Unstage the value (the shape goes in .private.sample.el, the value in ~/.private.el or the vault)," >&2
+        echo "  or allow-list a documented placeholder in .gitleaks.toml." >&2
+        exit 1
+    fi
+else
+    echo "pre-commit: gitleaks is not installed; the staged changes were NOT scanned for secrets (brew install gitleaks)." >&2
+fi
+
+# ── Lockfile nag ──────────────────────────────────────────────────────
 paths=(modules/*.el modules/**/*.el source/**/*.el)
 
 lock_staged=$(git diff --cached --name-only | grep -c '^elpaca-lock\.el$' || true)

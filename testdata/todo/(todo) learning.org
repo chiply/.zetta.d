@@ -4,118 +4,156 @@
 #+COLUMNS: %40ITEM(Task) %TODO %3PRIORITY(P) %6IMPACT(Imp) %17Effort(Estimate){:} %CLOCKSUM(Clocked) %DEADLINE %SCHEDULED %TAGS
 #+FILETAGS: :learn:
 
-* PROG [#B] Finish the MPS garbage collector paper  :@deep:reading:@tired:
-SCHEDULED: <2026-09-08 Tue>
+* PROG [#B] Finish the MPS garbage collector paper  :@deep:reading:@fresh:
+SCHEDULED: <2026-09-12 Sat>
 :PROPERTIES:
-:ID:       4AF3F017-A667-4F0D-91B8-A0377133AE70
-:CREATED:  [2026-08-02 Sun]
-:Effort:   1:00
+:ID:       4D719F3F-F051-4AED-BD49-C96F2A97D585
+:CREATED:  [2026-07-19 Sun]
+:Effort:   0:45
+:IMPACT:   2
 :END:
 :LOGBOOK:
-- State "PROG"       from "TODO"       [2026-09-07 Mon 09:00]
-- State "TODO"       from "PROG"       [2026-09-01 Tue 09:58]
-- State "PROG"       from              [2026-09-01 Tue 09:30]
+- State "PROG"       from "TODO"       [2026-09-10 Thu 10:00]
+- State "TODO"       from "PROG"       [2026-09-07 Mon 14:09]
+- State "PROG"       from "TODO"       [2026-09-07 Mon 14:00]
+- State "TODO"       from "PROG"       [2026-09-04 Fri 13:08]
+- State "PROG"       from              [2026-09-04 Fri 13:00]
 :END:
 
 Relevant to whether feature/igc3 is worth evaluating.
 
-* HOLD [#C] Work through the Rust ownership chapter  :@deep:reading:
+* TODO Work through the Rust ownership chapter  :@deep:reading:
+SCHEDULED: <2026-09-25 Fri>
 :PROPERTIES:
-:ID:       34F6FD93-03DC-4160-89E9-E1AA2AC0FA27
-:CREATED:  [2026-08-24 Mon]
-:Effort:   1:00
-:IMPACT:   4
+:ID:       758040E7-FD53-4143-8F3F-A0944F1F18CD
+:CREATED:  [2026-08-05 Wed]
 :END:
 :LOGBOOK:
-- State "HOLD"       from "TODO"       [2026-08-19 Wed 16:40] \\
-  Revisit when there is budget.
+- Rescheduled from "[2026-09-18 Fri]" on [2026-09-09 Wed 08:55]
 :END:
 
-* DONE Watch the EmacsConf talk on org-ql  :@shallow:video:@fresh:
-CLOSED: [2026-08-19 Wed 14:46] SCHEDULED: <2026-09-23 Wed> DEADLINE: <2026-10-13 Tue>
+* DONE [#C] Watch the EmacsConf talk on org-ql  :@shallow:video:@tired:
+CLOSED: [2026-09-09 Wed 11:05] SCHEDULED: <2026-09-05 Sat>
 :PROPERTIES:
-:ID:       66B08058-EFB3-452E-A7D9-AFE21BA56794
-:CREATED:  [2026-07-25 Sat]
+:ID:       20E03D03-8490-4E90-BFAE-7D3939D069F3
+:CREATED:  [2026-07-18 Sat]
+:Effort:   0:10
 :END:
 :LOGBOOK:
-- State "DONE"       from "PROG"       [2026-08-19 Wed 14:46]
-- State "PROG"       from "TODO"       [2026-08-19 Wed 14:30]
-- State "TODO"       from "PROG"       [2026-08-17 Mon 13:15]
-- State "PROG"       from              [2026-08-17 Mon 13:00]
-- Rescheduled from "[2026-09-16 Wed]" on [2026-09-04 Fri 08:55]
-- New deadline from "[2026-10-03 Sat]" on [2026-09-04 Fri 12:30]
+- State "DONE"       from "PROG"       [2026-09-09 Wed 11:05]
+- State "PROG"       from "TODO"       [2026-09-09 Wed 11:00]
+- State "TODO"       from "PROG"       [2026-09-06 Sun 14:20]
+- State "PROG"       from              [2026-09-06 Sun 14:15]
 :END:
 
 - [X] first pass
 - [ ] second pass
 
 * IDEA [#B] Read the Ravenbrook MPS design docs  :@deep:reading:
-SCHEDULED: <2026-10-05 Mon>
+DEADLINE: <2026-09-10 Thu>
 :PROPERTIES:
-:ID:       8C421104-5560-47E1-A133-D85BA469F007
-:CREATED:  [2026-07-17 Fri]
+:ID:       15D9C6EE-4021-4D2A-9D21-200ABBFC3C51
+:CREATED:  [2026-09-04 Fri]
 :Effort:   6:00
-:IMPACT:   4
-:END:
-
-* IDEA Try the new tree-sitter query syntax  :@deep:practice:
-:PROPERTIES:
-:ID:       6DED3269-2979-4DFD-ADDA-13562778A9CA
-:CREATED:  [2026-08-16 Sun]
-:Effort:   1:30
-:END:
-
-* TODO Take notes on the retrieval-augmentation survey  :@deep:reading:@tired:
-SCHEDULED: <2026-09-06 Sun>
-:PROPERTIES:
-:ID:       46984E2F-30BE-452B-9198-D7E354E5FAAA
-:CREATED:  [2026-07-09 Thu]
-:Effort:   0:45
-:END:
-
-* HOLD Rebuild the SQL study deck  :@shallow:practice:
-DEADLINE: <2026-09-23 Wed>
-:PROPERTIES:
-:ID:       2EB56C3C-189E-4CFA-9BF2-D2DD1BC7806F
-:CREATED:  [2026-08-31 Mon]
-:Effort:   1:00
+:IMPACT:   3
 :DEADLINE_TYPE: soft
-:REVIEW_ON: [2026-11-06 Fri]
+:REVIEW_ON: [2026-10-02 Fri]
+:END:
+
+- [X] first pass
+- [ ] second pass
+
+* DONE Try the new tree-sitter query syntax  :@deep:practice:
+CLOSED: [2026-09-02 Wed 11:42] SCHEDULED: <2026-09-04 Fri>
+:PROPERTIES:
+:ID:       95599992-3F81-4EE5-B957-AEC203F8F106
+:CREATED:  [2026-08-14 Fri]
 :END:
 :LOGBOOK:
-- State "HOLD"       from "TODO"       [2026-08-10 Mon 16:40] \\
-  Revisit when there is budget.
-- New deadline from "[2026-09-13 Sun]" on [2026-09-07 Mon 12:30]
+- State "DONE"       from "PROG"       [2026-09-02 Wed 11:42]
+- State "PROG"       from "TODO"       [2026-09-02 Wed 11:15]
+- State "TODO"       from "PROG"       [2026-08-31 Mon 13:41]
+- State "PROG"       from              [2026-08-31 Mon 13:15]
 :END:
 
-* TODO [#B] Read up on org-element caching  :@deep:reading:
-DEADLINE: <2026-10-16 Fri>
+- [X] first pass
+- [ ] second pass
+
+* PROG [#B] Take notes on the retrieval-augmentation survey  :@deep:reading:@fresh:
 :PROPERTIES:
-:ID:       C654E555-1C99-4A7F-9FBC-0791EFA87277
-:CREATED:  [2026-08-29 Sat]
-:Effort:   3:00
+:ID:       8BCF235F-FB4D-4DFE-BE2F-7F3B73BF0539
+:CREATED:  [2026-08-02 Sun]
+:Effort:   1:30
 :IMPACT:   3
+:END:
+:LOGBOOK:
+- State "PROG"       from "TODO"       [2026-09-11 Fri 10:00]
+- State "TODO"       from "PROG"       [2026-09-04 Fri 14:31]
+- State "PROG"       from "TODO"       [2026-09-04 Fri 14:00]
+- State "TODO"       from "PROG"       [2026-09-01 Tue 10:00]
+- State "PROG"       from              [2026-09-01 Tue 09:30]
+:END:
+
+* WAIT [#C] Read the Emacs 31 NEWS file  :@shallow:reading:
+SCHEDULED: <2026-09-18 Fri>
+:PROPERTIES:
+:ID:       1529AC6F-83BC-4684-9155-97EBD03C4D2F
+:CREATED:  [2026-09-05 Sat]
+:Effort:   0:15
+:WAITING_ON: my accountant
+:END:
+:LOGBOOK:
+- State "WAIT"       from "TODO"       [2026-09-08 Tue 11:20] \\
+  Pinged again, no reply yet.
+- Rescheduled from "[2026-09-11 Fri]" on [2026-09-09 Wed 08:55]
+:END:
+
+- [X] first pass
+- [ ] second pass
+
+* HOLD Rebuild the SQL study deck  :@shallow:practice:
+SCHEDULED: <2026-09-26 Sat>
+:PROPERTIES:
+:ID:       486470A7-BA75-4B01-8C96-531ACCBDCD09
+:CREATED:  [2026-09-03 Thu]
+:Effort:   1:00
+:IMPACT:   3
+:SURFACED: 1
+:END:
+:LOGBOOK:
+- State "HOLD"       from "TODO"       [2026-08-28 Fri 16:40] \\
+  Waiting to see if this solves itself.
+:END:
+
+- [X] first pass
+- [ ] second pass
+
+* TODO Read up on org-element caching  :@deep:reading:
+SCHEDULED: <2026-09-24 Thu>
+:PROPERTIES:
+:ID:       65330ED4-7FFF-481E-B25C-53BF971175AA
+:CREATED:  [2026-08-16 Sun]
+:Effort:   1:00
+:IMPACT:   5
 :END:
 
 Prompted by org-fold-core-style being set to `overlays' by something
 unidentified.
 
 * DONE [#B] Weekly review  :@deep:review:
-CLOSED: [2026-08-21 Fri 10:52] SCHEDULED: <2026-09-10 Thu .+1w>
+CLOSED: [2026-08-24 Mon 16:14] SCHEDULED: <2026-09-14 Mon .+1w>
 :PROPERTIES:
-:ID:       42E34135-F817-404D-82D7-1344537A78C8
-:CREATED:  [2026-07-26 Sun]
-:Effort:   3:00
-:IMPACT:   5
-:LAST_REPEAT: [2026-09-05 Sat]
+:ID:       E818B3AA-C3EF-44C5-81FD-6ACE87117B89
+:CREATED:  [2026-08-10 Mon]
+:IMPACT:   3
+:LAST_REPEAT: [2026-09-09 Wed]
 :END:
 :LOGBOOK:
-- State "DONE"       from "PROG"       [2026-08-21 Fri 10:52]
-- State "PROG"       from "TODO"       [2026-08-21 Fri 09:00]
-- State "TODO"       from "PROG"       [2026-08-19 Wed 15:22]
-- State "PROG"       from              [2026-08-19 Wed 13:30]
+- State "DONE"       from "PROG"       [2026-08-24 Mon 16:14]
+- State "PROG"       from "TODO"       [2026-08-24 Mon 16:00]
+- State "TODO"       from "PROG"       [2026-08-23 Sun 10:13]
+- State "PROG"       from "TODO"       [2026-08-23 Sun 10:00]
+- State "TODO"       from "PROG"       [2026-08-20 Thu 09:28]
+- State "PROG"       from              [2026-08-20 Thu 09:15]
 :END:
-
-- [X] first pass
-- [ ] second pass
 

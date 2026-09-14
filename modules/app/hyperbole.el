@@ -115,8 +115,9 @@ every file."
 (declare-function hyrolo-grep "hyrolo")
 
 (defcustom zetta-hyrolo-base-file-list
-  '("~/.rolo.org" "~/kb/notes/" "~/kb/wiki/" "~/kb/inbox.org"
-    "~/kb/readwise/" "~/kb/org-remark/")
+  (list "~/.rolo.org"
+        (zetta-kb-file "notes/") (zetta-kb-file "wiki/") (zetta-kb-file "inbox.org")
+        (zetta-kb-file "readwise/") (zetta-kb-file "org-remark/"))
   "Rolo sources that are not the (todo) corpus.
 `zetta-hyrolo-update-file-list' appends the active (todo) directory to
 these to produce `hyrolo-file-list'."
@@ -125,7 +126,7 @@ these to produce `hyrolo-file-list'."
 (defun zetta-hyrolo-todo-dir ()
   "Return the active (todo) directory as a rolo path."
   (file-name-as-directory
-   (if (fboundp 'zetta-org-todo-dir) (zetta-org-todo-dir) "~/kb/todo/")))
+   (if (fboundp 'zetta-org-todo-dir) (zetta-org-todo-dir) (zetta-kb-file "todo/"))))
 
 (defun zetta-hyrolo-update-file-list ()
   "Rebuild `hyrolo-file-list' from the active (todo) corpus.
@@ -544,7 +545,7 @@ otherwise appear as a bogus `zsh#...' completion candidate."
   ;; where the generated chiply.dev WikiWord pages live.  Follow a WikiWord
   ;; with the Action Key {s-H} (relocated from {M-RET} below).
   ;;(require 'hywiki)
-  (setq hywiki-directory (expand-file-name "~/kb/wiki"))
+  (setq hywiki-directory (zetta-kb-file "wiki"))
   (hywiki-mode 1)
 
   (add-to-list 'brushup-styles

@@ -1,0 +1,1215 @@
+#+title: Task Tracking — How to Schedule and Track Work
+#+author: Charlie Holland
+#+startup: overview
+
+# A tutorial, not a design doc.  The design and its argued decisions live in
+# time-management.org, productivity.org and scheduling.org; this file says
+# how to USE what those produced, and grows as features are added.  Keep it
+# honest: if a gesture does not exist yet, say so here rather than describe
+# the wished-for one.
+
+* The one-paragraph version
+
+Work lives in the =(todo)= org files.  A task is an org heading with a TODO
+state, an optional =:Effort:=, and optional SCHEDULED / DEADLINE / priority.
+=,-o-Q= reads those files, packs one day out of them against the minutes
+each *bucket* of the day has (work, reading, housekeeping...) after the
+day's *habits* are reserved, and draws the result as a report.  The report
+writes nothing.  You change what gets planned by editing the entries --
+state, SCHEDULED, DEADLINE, priority -- and pressing =g=; or by pressing one
+of five keys on a line, which writes that one decision to the entry; or by
+asking for a *proposal* over a week or a month, accepting the lines you
+agree with, and applying them.  Everything the machine writes carries a
+=:PLACED:= stamp, so it stays distinguishable from what you wrote, can be
+moved by a later proposal, and can be undone.
+
+Around the plan sit the *rituals*: buffers with keys, never prompts, each
+run on a cadence and each deriving what it shows from the files rather
+than asking you to type it.  You close the day with a key, review the
+week from one generated pack, let a model propose how to file each
+inbox capture and accept with a key, hand a task to an agent and get it
+back as a landing, and set a theme and three missions a season.  The
+capacity every plan packs against comes from the routine table in
+=schedule.org=; time comes from TODO state transitions, never org-clock.
+Every write any of it makes to a task entry goes through one apply
+layer, is logged, and is undone by =,-o-u=.  Three things write files
+outside it: a journal line, a promoted page, and the mail stub.
+
+* A day, a week, a season
+
+The rituals in the order you meet them.  Each has its own section below.
+
+| when                   | you press                 | what happens                                                                                                                                  |
+|------------------------+---------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 05:30, plan the day    | =,-o-Q=                   | today packed against the routine's capacity; the second line says whether yesterday was closed; the third what the chains in flight will cost |
+|                        | =N= / =S= on a line       | up to three picks; a placement                                                                                                                |
+| a block starts         | =C-c C-t p=               | into PROG: the derived clock starts; inside the dip a timer starts too                                                                        |
+|                        | =,-o-i=                   | kick a prompt to an agent; the entry goes AGENT                                                                                               |
+| at a switch            | =,-o-o j=                 | a journal line, linked to what is in PROG                                                                                                     |
+| a pomodoro break       | Day view / =,-o-v a=      | what landed (NEXT from AGENT), what is asking; =C-c C-t p= to review                                                                          |
+| the admin slot         | =,-o-f= then =,-o-v i=    | the inbox decorated; =C-c a= accepts each proposal, =C-c r= rejects                                                                           |
+| before a new deadline  | =,-o-I= (or just =,-o-D=) | what the date costs, against the window's capacity                                                                                            |
+| the fixed stop         | =,-o-x=                   | close: carried, done, the PROG sweep, tomorrow's draft, the phrase                                                                            |
+| Monday, thirty minutes | =,-o-m=                   | the pack; =y= on a raised item -- keep, park or dismiss; =w= writes the three answers                                                         |
+| once a season          | =,-o-n=                   | last quarter's walk beside the horizons file; the theme and three missions                                                                    |
+| any time               | =,-o-M= / =,-o-R=         | a note becomes a wiki page with its reason; a quiet page resurfaces                                                                           |
+
+Nothing in that table runs on a timer except the landing watch and the
+KICK_AT kicks; the rituals happen when you press the key.
+
+* Vocabulary
+
+| term           | meaning                                                                                                      |
+|----------------+--------------------------------------------------------------------------------------------------------------|
+| corpus         | the set of =(todo)= files the agenda and queue read (=org-agenda-files=)                                     |
+| plan           | the report =,-o-Q= draws for one day                                                                         |
+| bucket         | a named pool of minutes per day claimed by tag or category (work, reading...)                                |
+| habit          | an entry with =:STYLE: habit=: time reserved from a bucket, never planned                                    |
+| routine        | the day's habits, listed and subtracted before packing                                                       |
+| committed      | on the plan because of a fact: a date, a start-by, or the NEXT state                                         |
+| chosen         | on the plan because it scored highest and fit its bucket                                                     |
+| pulled forward | scheduled for a later day, drawn in because its bucket still had room                                        |
+| cut            | eligible, but did not fit (no room in its bucket, WIP limit, bucket overcommitted)                           |
+| deferred       | scheduled for a later day and not needed today                                                               |
+| excluded       | never competed: done, HOLD/IDEA, blocked, waiting, a habit, an appointment elsewhere                         |
+| capacity       | minutes a bucket is worth on a weekday (=org-queue-buckets=)                                                 |
+| usable         | =(capacity - routine) x (1 - slack)=, per bucket                                                             |
+| start-by       | the latest day a hard-deadline task can start and still finish in time                                       |
+| slice          | part of a task planned on one day by the horizon simulator                                                   |
+| horizon        | the day packer run across a range of days, read-only (=,-o-P=)                                               |
+| placement      | a SCHEDULED the machine wrote, stamped =:PLACED:=                                                            |
+| proposal       | the list of placements a horizon implies, shown for review (=,-o-p=)                                         |
+| derived clock  | minutes computed from PROG state transitions in the LOGBOOK; no org-clock                                    |
+| apply          | one all-or-none write of several actions, logged with its reverse; =,-o-u= undoes the last                   |
+| ritual         | a buffer with keys run on a cadence: the close, the pack, the season, clarify                                |
+| routine table  | the =#+NAME: routine= table in =schedule.org=: blocks with a kind, days, bucket; capacity is derived from it |
+| dip            | the routine's =dip= block (13:30-15:00): where pomodoros ring, never in a deep block                         |
+| close          | =,-o-x=: the day's account and tomorrow's draft, stamped in the plan history                                 |
+| pack           | =,-o-m=: the Monday review, generated from the files                                                         |
+| decoration     | =AI_*= properties a model proposed for an inbox entry; accepted, edited or rejected by a key                 |
+| surfaced       | =:SURFACED:= count: how often a parked item was shown without being pulled; at 3 the pack proposes dismissal |
+| dormant        | a project whose children are all parked or done: no next step; tagged =:dormant:= by the check               |
+| chain          | an entry an agent works on: AGENT while it runs, landing as NEXT or QUES                                     |
+| landing        | a line the Claude Code hooks append when a session stops or asks; Emacs applies it                           |
+| mission        | a =* MISSION= heading in the horizons file; a project serves one with =:MISSION:=, children inherit          |
+| orphan         | open work that reaches no mission                                                                            |
+| season         | a quarter: the theme and at most three missions; =,-o-n=                                                     |
+| gate           | =,-o-I=: what a deadline would cost, against the window's capacity                                           |
+
+* States
+
+Defined in =modules/org/org.el=.
+
+| state | key | meaning                                                  | queue behaviour                                     |
+|-------+-----+----------------------------------------------------------+-----------------------------------------------------|
+| TODO  | =t= | open work                                                | scored candidate                                    |
+| NEXT  | =N= | you have decided this is next, whatever the formula says | *commitment*, never scored                          |
+| PROG  | =p= | in progress; entering it starts the derived clock        | scored, with a "finishing" bonus; at most 3 per day |
+| AGENT | =a= | an agent has the ball: a chain in flight                 | excluded, reason =in-flight=; never human capacity  |
+| WAIT  | =w= | waiting on someone; asks for a note                      | excluded unless a deadline is within 7 days         |
+| QUES  | =q= | an open question; asks for a note                        | scored, docked 1.5                                  |
+| HOLD  | =h= | paused by choice; asks for a note                        | excluded                                            |
+| IDEA  | =i= | someday / maybe                                          | excluded                                            |
+| DONE  | =d= | finished                                                 | excluded; feeds calibration                         |
+| NOPE  | =n= | abandoned; asks for a note                               | excluded; feeds calibration                         |
+
+Change a state with =C-c C-t= on the heading, then the state's key.  The
+states you leave work in (WAIT, QUES, HOLD, NOPE) prompt for a one-line
+note; PROG and DONE do not.  There is no =,-o-t= for this yet: the key is
+bound to the Logseq todo search (=org-capture.el= loads after =org.el= and
+rebinds it), and the command =org.el= meant for it calls =zetta-org-todo=,
+which is defined nowhere.
+
+* Keys
+
+Under the =,-o= prefix (=launch-map= → =menu-org-map=) unless shown
+otherwise; the decoration keys are =C-c= plus a letter, in Org buffers and
+agendas alike.
+
+** The day
+
+| key    | command                       | what it does                                   |
+|--------+-------------------------------+------------------------------------------------|
+| =,-o-Q=  | =org-queue-today=               | pack today and draw the plan                   |
+| =C-u ,-o-Q= | =org-queue-today=            | prompt for a day ("tue", "+2", a date) and pack that |
+| =,-o-x=  | =org-queue-close=               | close the day: carried, done, PROG sweep, tomorrow's draft |
+| =,-o-E=  | =org-queue-day-log=             | the day's evidence in time order, with the gaps |
+| =,-o-e=  | =org-queue-timer=               | a unit timer on the entry, only inside the routine's dip |
+| =,-o-i=  | =org-chain-kick=                | kick the entry at point to an agent; =C-u= past the limit, =C-u C-u= headless |
+| =,-o-I=  | =org-queue-intake=              | what a deadline for the entry at point would cost |
+| =,-o-u=  | =org-queue-undo-apply=          | reverse the last write anything here made      |
+
+** Beyond the day
+
+| key    | command                       | what it does                                   |
+|--------+-------------------------------+------------------------------------------------|
+| =,-o-P=  | =org-queue-horizon=             | simulate a range of days, read-only            |
+| =,-o-p=  | =org-queue-propose=             | propose placements for a range, review, apply  |
+| =,-o-m=  | =org-queue-review-week=         | Monday: the review pack; =w= writes the three answers |
+| =,-o-y=  | =org-queue-still-worth-it=      | one parked entry's evidence; =k= keep, =p= park, =d= dismiss |
+| =,-o-n=  | =org-queue-season=              | the season: last quarter's walk beside the horizons file |
+| =,-o-C=  | =org-queue-calibration=         | estimate versus derived clock, per category    |
+| =,-o-w=  | =org-gantt=                     | planned over actual, with the clock table      |
+| =,-o-W=  | =org-gantt-timegrid-composite=  | the same week as a grid, plan versus spent     |
+| =,-o-c=  | =org-timegrid-week=             | the writable week grid (drag moves timestamps) |
+
+** The inbox and the notes
+
+| key    | command                       | what it does                                   |
+|--------+-------------------------------+------------------------------------------------|
+| =,-o-f=  | =org-decorate-inbox=            | send every undecorated inbox entry to the model |
+| =C-c a=  | =org-decorate-accept=           | on an entry or an agenda line: every proposal becomes its real field; refiled |
+| =C-c e=  | =org-decorate-accept-field=     | one proposed field, by completion              |
+| =C-c r=  | =org-decorate-reject=           | strip the proposals; not re-proposed under this prompt |
+| =C-c d=  | =org-decorate-this=             | decorate the entry at point                    |
+| =,-o-M=  | =org-knowledge-promote=         | the heading becomes a HyWiki page; one link and its reason stay |
+| =,-o-R=  | =org-knowledge-resurface=       | the page untouched longest, beside what mentions it |
+| =,-o-V=  | =zetta-org-todo-rolo=           | HyRolo browse over the active corpus (=C-u= = whole backlog) |
+| =,-o-d=  | =zetta-hyrolo-day=              | every entry that mentions a given day          |
+
+** The views: =,-o-v= then a letter
+
+| letter | view       | shows                                                        |
+|--------+------------+--------------------------------------------------------------|
+| =d=      | Day        | today: landed for review, next, overdue, due, appointments, in progress, in flight, agent asks; then the backlog |
+| =w=      | Week       | seven days, ungrouped                                        |
+| =c=      | Context    | the open backlog by @-tag                                    |
+| =u=      | Untriaged  | no estimate, no priority, no date                            |
+| =i=      | Inbox      | captured before, proposed (stale date first), not yet a task, a task; commit evidence under it |
+| =p=      | Projects   | the backlog by parent heading                                |
+| =n=      | Neglected  | by how long since anything happened                          |
+| =W=      | Chase      | WAIT and QUES by who has it and how long                     |
+| =I=      | Parked     | HOLD and IDEA; those whose REVIEW_ON has arrived first       |
+| =E=      | Capacity   | by effort                                                    |
+| =h=      | Horizon    | by deadline distance                                         |
+| =P=      | Priority   | the cookie ladder                                            |
+| =f=      | Areas      | by mission, then by category                                 |
+| =r=      | Review     | what closed or moved in the last seven days                  |
+| =b=      | Blocked    | on a thing, on a person, or ready                            |
+| =j=      | Dormant    | projects with no next step, and finished ones                |
+| =o=      | Orphan     | open work serving no mission, and the missions               |
+| =a=      | Chains     | in flight, landed for review, asking                         |
+
+=,-o-b= is the pinned block agenda (=org-other-agenda=).
+
+** By name only
+
+| command                        | what it does                                                  |
+|--------------------------------+---------------------------------------------------------------|
+| =org-routine-report=             | today's blocks, windows and dip from the routine table        |
+| =org-routine-generate-habits=    | write =(todo) routine.org= from the table's habit rows          |
+| =org-queue-dormant-check=        | tag dormant projects (the pack does this too)                 |
+| =org-queue-habit-update=         | score every habit (the close does this too)                   |
+| =org-chain-land=                 | apply the landing log by hand (it is watched anyway)          |
+| =org-decorate-git-evidence=      | commits naming an entry's ID become =EVIDENCE_DONE=             |
+| =org-decorate-strip-all=         | remove every decoration from the inbox                        |
+| =org-queue-mail-waiting=         | flagged sent questions become WAIT entries in the mail stub   |
+| =org-knowledge-on-this-day=      | the rolo for this day a year and a month ago                  |
+
+** Editing an entry
+
+| key    | command          | what it does                                |
+|--------+------------------+---------------------------------------------|
+| =C-c C-t= | =org-todo=         | change the state; the fast-selection key follows |
+| =,-o-S=  | =org-schedule=     | set SCHEDULED; =C-u= removes it               |
+| =,-o-D=  | =org-deadline=     | set DEADLINE; =C-u= removes it                |
+| =,-o-z=  | =org-add-note=     | add a LOGBOOK note                          |
+| =,-o-r=  | =org-refile=       | move the entry to another file or heading   |
+| =,-o-o=  | =org-capture=      | capture; =t= is the task template with effort |
+| =,-o-o j= | =org-capture=     | a journal line under today's heading, linked to what is in PROG |
+
+** Inside the =*org-queue*= buffer
+
+| key   | does                                                |
+|-------+-----------------------------------------------------|
+| =RET=   | jump to the entry                                   |
+| =o=     | show the entry in another window                    |
+| =g=     | replan from the files as they are now               |
+| =TAB=   | expand cut, deferred and excluded work with reasons |
+| =c=     | calibration report                                  |
+| =n= / =p= | next / previous task line                          |
+| =q=     | bury                                                |
+| =s # e i d B w k t f= | toggle one metadata column each; see below |
+| =a=     | every column on, or back to state alone             |
+| =S=     | *write*: schedule the task on this day, stamped     |
+| =L=     | *write*: schedule it on a day you choose, stamped   |
+| =N=     | *write*: mark it NEXT                               |
+| =H=     | *write*: put it on HOLD (asks for the note)         |
+| =U=     | *write*: remove its SCHEDULED (asks first if you wrote it) |
+
+The five write keys are the only writes this buffer makes.  Each is one
+decision on one line, applied at once, saved, logged, and undoable with
+=,-o-u=.
+
+The close, the day log, the pack, the season and the horizon buffers are
+all drawn in this mode: the same columns, =RET=, =o=, =n=/=p= and the column
+toggles work in every one of them, and each adds its own keys, listed in
+its section.
+
+* The planner, step by step
+
+** What one run does
+
+1. Harvests every TODO-state heading in =org-agenda-files= with org-ql.
+   Each becomes a plist: state, effort, dates, priority, tags, category,
+   impact, blockers, habit flags, the =:PLACED:= stamp, and the minutes the
+   derived clock has measured.
+2. Marks tasks that were on the previous plan and are still open as
+   carried.  This is kept in =.data/org/queue-history.el= as a list of IDs.
+3. Filters.  Done, HOLD, IDEA, blocked, waiting-with-no-near-deadline,
+   wrong context or energy, habits, and appointments on other days are
+   excluded, each with a named reason.  Tasks scheduled after today are
+   deferred.
+4. Builds the day's buckets.  Each bucket's minutes for this weekday,
+   less the habits that fall on it, less slack, is what it can hold.
+5. Stamps every hard-deadline task with its *start-by* day.
+6. Admits commitments, unscored and in date order: scheduled ON today,
+   deadline today or earlier, a plain active timestamp today, NEXT, or
+   start-by reached.  If these overflow a bucket, that bucket says
+   OVERCOMMITTED and nothing more is planned in it; the other buckets
+   still fill.
+7. Fills each bucket from its candidates, highest score first, holding at
+   most =org-queue-wip-limit= (3) PROG items across the day.  A bucket
+   with =:spill t= hands what it did not use to =default=.
+8. If a bucket still has room, pulls deferred work in it forward.
+9. Draws it.  Every harvested task lands in exactly one of planned, cut,
+   deferred or excluded, with a reason you can read.
+
+** Granularity
+
+- One day per run.  Plain =,-o-Q= is today; =C-u ,-o-Q= asks for a day.
+  Longer ranges are the horizon and the proposal, below.
+- Whole tasks, in minutes.  The day packer never splits a task; the
+  horizon does (slices), and only for commitments.
+- Capacity is per bucket per weekday, *derived from the routine table*
+  (see "The routine table, read by code"): focus and dip minutes are
+  =work=, admin minutes are =housekeeping=, each habit row reserves its
+  bucket, =default= is a fixed floor.  Which tags and categories each
+  bucket claims is =org-routine-bucket-matches=:
+
+  | bucket       | claims                                   |
+  |--------------+------------------------------------------|
+  | work         | categories work, emacs, cal              |
+  | reading      | tag reading, category learn              |
+  | body         | tag body                                 |
+  | housekeeping | tag housekeeping, categories home, buy   |
+  | default      | everything else                          |
+
+  Until the real =schedule.org= has the table's columns, the fallback
+  table in =modules/org/org-queue.el= is in force (work 5:00, reading
+  1:00, body 2:00, housekeeping 1:00, default 1:00, flat across the
+  week) and the echo area says so when the queue loads.
+- A task with no =:Effort:= is planned as 30 minutes and drawn in the italic
+  "guessed" face.  An estimate is encouraged, never required.
+- The plan is recomputed from scratch on every =g=.
+
+** How a candidate is scored
+
+#+begin_example
+score =  deadline * urgency(days until deadline)   convex; overdue pinned to 1
+                                                    soft deadlines x0.35
+       + priority * priority weight                A > B > none > C
+       + impact   * (IMPACT - 3) / 2                 -1 to 1 around a neutral 3
+       + age      * log(1 + days since CREATED)
+       + progress * (state is PROG)                finishing beats starting
+       + quick    * (effort <= 15 min)
+       + carry    * (was on an earlier plan, or scheduled for a day gone by)
+       + stick    * (a machine placement already on this day, while proposing)
+       + mission  * (serves a mission of the season)      the priority-B weight
+       - glut     * (tasks already picked from this category)
+       + state weight                              QUES: -1.5
+#+end_example
+
+A stale SCHEDULED in the past is deliberately *not* a commitment.  It feeds
+the carry term instead.  A past DEADLINE *is* a commitment, and stays one
+until you move it or close the task.
+
+*A future SCHEDULED wins over everything.*  The filter sorts a task
+scheduled after today into "deferred" before the commitment check runs, so
+a NEXT task or an overdue task that also carries a later SCHEDULED is
+deferred, not committed.  If you mean "now", clear the schedule
+(=C-u ,-o-S=) as well as setting NEXT.
+
+** Start-by: deadlines push back
+
+A hard DEADLINE commits a task from its *start-by* day: the latest day on
+which the calibrated effort still fits into the free minutes of the days
+up to and including the deadline.  Six hours due Friday with two free
+hours a day has a start-by of Wednesday; on Wednesday it is a commitment,
+before that a candidate.  The note reads =start by <day>, due <day>=; the
+=d= column shows =by <day>=.  The deadline day counts as workable, because
+an Org deadline is inclusive.  Soft deadlines (=DEADLINE_TYPE: soft=) get
+none of this.
+
+In the single-day plan a start-by commitment bigger than the day still
+lands whole and the bucket says OVERCOMMITTED, which is the truth of it.
+The horizon is where it gets sliced.
+
+** Reading the report
+
+#+begin_example
+Tuesday 8 September 2026   3:47 planned of 4:00 usable (5:00 capacity, routine 1:30, 20% slack)
+   work 3:40 of 4:00   reading 0:48 of 0:48   housekeeping 0:00 of 0:24 (unfilled)
+   columns: s state  # priority  ...
+
+Routine
+    1:00  routine TODO   Lift weights                              reserved
+
+Committed
+    1:30  cal     TODO   Architecture review                       appointment
+    0:13  work    TODO   File expenses for the August conference   due today
+    2:00  work    TODO   Prepare slides                            start by 2026-09-08, due 2026-09-10
+
+Chosen
+    0:36  emacs   TODO   Restore gc-cons-percentage in bootstrap-gcmh   12.4
+
+25 cut, 47 excluded, 4 deferred.  TAB to see why.
+#+end_example
+
+Under the date, before the bucket line, two more lines may appear:
+"yesterday closed at 17:02" (or "was not closed"), and the chains' line
+("2 chains in flight: about 6 landings in a 240-minute block, 120
+minutes of review").  The bucket line appears when there is more than
+one bucket: each bucket's planned minutes of its usable, =OVER= when its
+commitments overflow it, =(unfilled)= when nothing claimed it.  The right-hand note on a Committed
+line names the fact that put it there: =appointment=, =due today=, =overdue
+since ...=, =scheduled today=, =placed today= (a machine placement), =start by
+..., due ...=, =next=.  On a Chosen line it is the score.  Press TAB and
+every task that lost is listed with its reason; a bucket with no minutes
+today cuts with "its bucket has no minutes today".
+
+** Metadata columns
+
+A line shows minutes, category, the TODO state and the title by default.
+Everything else is one key away, per column, and the legend line under the
+date shows which are on (dim = off):
+
+| key | column   | shows                                                   |
+|-----+----------+---------------------------------------------------------|
+| =s=   | state    | the TODO keyword                                        |
+| =#=   | priority | the cookie, =#A=                                          |
+| =e=   | estimate | the entry's own =:Effort:=, before calibration; =?= if none |
+| =i=   | impact   | =:IMPACT:=, as =i4=                                         |
+| =d=   | dates    | =S= scheduled (=*= = machine placed), =D= deadline (=~= soft), =by= start-by |
+| =B=   | bucket   | which bucket claimed it                                 |
+| =w=   | age      | days since =:CREATED:=                                    |
+| =k=   | clocked  | minutes the derived clock has measured so far           |
+| =t=   | tags     | trailing, after the note                                |
+| =f=   | file     | trailing, after the note                                |
+| =a=   | all      | everything on; press again for state alone              |
+
+Toggling writes the choice back to =org-queue-columns=, so the next plan in
+the session opens the same way; the same columns work in the horizon and
+proposal buffers.
+
+** Reading an overcommitted report
+
+The first real run, before the fixture was tuned, looked like this:
+
+#+begin_example
+Saturday 12 September 2026   33:16 planned of 1:12 usable (1:30 capacity, 20% slack)
+
+OVERCOMMITTED by 32:04 -- nothing was planned on top.
+
+Committed
+    0:19  home    Cancel Hodinkee insurance before renewal  due today
+    4:36  work    Prepare slides for the architecture review  overdue since 20260909
+    ...
+27 cut, 51 excluded, 6 deferred.  TAB to see why.
+#+end_example
+
+How to read it:
+
+- The commitments alone exceed usable time, so the scorer never ran in
+  that bucket.  Every candidate there is cut with "the day is already
+  overcommitted".  With buckets, only the overflowing bucket is affected.
+- Minutes are larger than the entries' =:Effort:= when calibration found
+  finished work overran its estimates.  =c= shows the per-category factors.
+- The tally line accounts for every entry: committed + cut + excluded +
+  deferred is the whole corpus.
+- The fix is triage, not tuning: move each overdue deadline (=,-o-D=), close
+  what is done (=C-c C-t d=), park what you are consciously not doing (=H= on
+  the line), un-NEXT what you no longer mean, then =g=.
+
+* Buckets
+
+A day is a few named pools, not one.  Each bucket is a *reservation and a
+limit*: the packer fills it even when better-scoring work exists elsewhere,
+and never past its minutes.  =housekeeping= with 30 minutes means the day
+holds up to half an hour of housekeeping and will look for some.
+
+- A task belongs to the *first* bucket whose match holds, in table order;
+  =:match= can name categories, tags (any of), or a predicate.  Unclaimed
+  tasks go to =default=.
+- =:minutes= is one number or a per-weekday alist.  A weekday missing from
+  the alist closes the bucket that day.
+- =:spill t= lets a bucket's unused minutes go to =default= at the end.
+  Off by default: an unfilled reading hour is a finding, not free work time.
+- Overcommitment is per bucket.  A meeting-heavy day overflows =work= and
+  still packs =reading=.
+- With =org-queue-buckets= nil, =org-queue-capacity= is the only bucket and
+  the planner behaves as it did before.
+
+* Habits
+
+An entry with =:STYLE: habit= is time already decided, not work to finish.
+It is subtracted from its bucket before packing and listed under Routine.
+
+#+begin_example
+,* TODO Lift weights  :body:
+SCHEDULED: <2026-09-12 Sat .+1d>
+:PROPERTIES:
+:STYLE:      habit
+:Effort:     1:00
+:HABIT_DAYS: Mon Tue Wed Thu Fri Sat
+:END:
+#+end_example
+
+- =:HABIT_DAYS:= is the weekday set ("except Sundays"); absent means every
+  day.
+- =:Effort:= is the reservation.  Slack is taken after it: a five-hour
+  bucket with an hour of habits has =(300 - 60) x 0.8= usable minutes.
+- A repeater *without* =STYLE=habit= is still a task ("Water the plants
+  +3d" queues as work).  You decide per entry.
+- Ticking DONE rolls the repeater as org always did, and is the tick the
+  strength score counts (see "Habits, phase 2" below).
+
+Habits live in =(todo) routine.org=, *generated* from the routine table's
+habit rows by =M-x org-routine-generate-habits= (the fixture's has lift,
+bike, clean, read, laundry).  The real corpus has no such file yet; it
+appears once =schedule.org= has the table's columns.
+
+* The horizon: more than one day, read-only
+
+=,-o-P= asks for a scope -- today, tomorrow, 3 days, week, fortnight,
+month, backlog (until the pool is empty or 90 days), or until a date --
+and runs the day packer across it with the pool evolving: a task planned
+on one day is gone the next, deferred work arrives on its day, habits
+reserve every day they fall on, and a commitment too big for its day is
+*sliced* across the days before its deadline.  Nothing is written.
+
+#+begin_example
+Horizon 2026-09-12 to 2026-09-18
+   7 days, 33 tasks placed, 17 unplaced, 0 deadlines missed
+
+Sat 12 Sep 4:47 of 6:08   4 committed, 0 chosen, 0 pulled
+Sun 13 Sep 5:01 of 7:20   3 committed, 1 chosen, 0 pulled
+...
+Never fits in 7 days (17)
+Missed deadlines (0)
+#+end_example
+
+=TAB= on a day opens the full plan for it, with the same columns, notes and
+keys as =*org-queue*= (including the write keys, which act on that day).
+"Never fits" is what is still eligible after the last day.  "Missed
+deadlines" are hard deadlines inside the range the days could not cover,
+with the shortfall.
+
+Known limit: a repeating appointment appears on one day of the range, its
+first occurrence, because the harvest rolls repeaters forward once.
+
+* Proposals: the write-back loop
+
+=,-o-p= asks for the same scopes and turns the simulation into a list of
+placements for review:
+
+#+begin_example
+Proposal 2026-09-12 to 2026-09-18
+   14 to schedule, 0 to move, 0 to unschedule, 0 findings;  0 accepted (0:00), 0 rejected
+
+Sat 12 Sep   5:05
+       0:50  emacs   TODO  Make zetta-op-read lazy so startup stops blocking  -> 2026-09-12   start by 2026-09-12 for 2026-09-13
+       2:22  work    TODO  Prepare slides for the architecture review  -> 2026-09-12   start by ..., first slice; 2 slices to 2026-09-13
+
+Mon 14 Sep   0:30
+       0:30  home    NEXT  Track down the old TIAA 401k  -> 2026-09-14   next
+#+end_example
+
+What it proposes, and what it never does:
+
+- *schedule* a task that has no date, on the day the simulation placed it;
+- *move* a machine placement (=:PLACED:=) the simulation now puts elsewhere;
+- *unschedule* a machine placement inside the range the simulation no
+  longer uses;
+- never a date you wrote yourself, never a DEADLINE, never a state;
+- never a SCHEDULED that a date already fixes: an appointment on its day,
+  a task on its deadline day;
+- a deadline the days cannot cover is a *finding*, listed, not acted on;
+- accept everything and run again: the proposal is empty;
+- a rejected line is remembered for 14 days and not proposed again for
+  that day.
+
+| key       | does                                                        |
+|-----------+-------------------------------------------------------------|
+| =a= / =r=   | accept / reject the line, or every line in the active region |
+| =A= / =R=   | accept / reject the whole day at point                      |
+| =C-c C-a= | accept everything                                           |
+| =e=       | change the day for this line; it becomes /your/ placement, no stamp |
+| =RET= / =o= | jump to / show the entry                                    |
+| =g=       | propose again; marks survive on unchanged lines             |
+| =C-c C-c= | apply the accepted lines, remember the rejected, propose again |
+| =q=       | abandon; nothing written                                    |
+
+Apply is all-or-none: every accepted line is written in its buffer, then
+every buffer is saved; an error before that point reverts and reports.  A
+buffer with unsaved changes is refused, so save first.  The apply is
+logged with its reverse in =.data/org/queue-applies.el=; =,-o-u= plays the
+last one back, and is itself logged, so a second =,-o-u= redoes.
+
+An accepted placement is a SCHEDULED stamp with =:PLACED:=.  From then on
+the day packer treats it as it treats any schedule: a commitment on its
+day (note =placed today=), deferred before it, carry-over after it.  That
+is what "pulled in" means once you have accepted it.
+
+* Manual edits
+
+Every change is made on the org entry, or with a write key on its line.
+From the plan, =RET= or =o= takes you there; edit; =g= back in the plan.
+Four things decide whether a task is /committed, a candidate, or
+excluded/: state, SCHEDULED, DEADLINE (with its start-by), and a plain
+timestamp.  Once it is a candidate, its score reads priority, IMPACT, age,
+effort, and whether it was on an earlier plan; effort is what it costs
+its bucket; tags and category decide which bucket.
+
+** Take something off today
+
+Look at the note on the line first; it tells you which lever applies.
+
+- *Scheduled today* → =L= on the line (or =,-o-S= in the entry) to a future
+  day.  It becomes deferred.  It can still be pulled forward if its bucket
+  underfills.  =U= removes the schedule and it drops back to a candidate.
+- *Due today or overdue* → =,-o-D= to move the deadline.  A past deadline
+  stays a commitment forever otherwise.
+- *Start by today* → the deadline is the lever; or accept that the day is
+  the day.
+- *NEXT* → =C-c C-t= and set it back to TODO.
+- *Chosen by score* → there is no "skip today" gesture.  =H= parks it with a
+  note until you change it back.  WAIT with no deadline in the next 7 days
+  is also excluded.  Lowering priority nudges the score but may not be
+  enough on its own.
+
+** Pull something in
+
+=N= on the line is the designed override: a commitment from you, not a
+date.  =S= schedules it on the day and stamps it, which is the same thing
+through the date path and is what the proposal would have written.  Both
+make it a commitment on the next =g=.  Marking six things NEXT overcommits
+the bucket and the plan will say so in as many words.
+
+** Push something back to the backlog
+
+=U= removes a SCHEDULED; =C-u ,-o-D= removes a DEADLINE; =C-c C-t t= takes it
+back to TODO.  Leaving a stale SCHEDULED alone is also fine; it only adds a
+carry-over bonus.
+
+** Start and finish work
+
+- =C-c C-t p= moves it to PROG.  The timestamp on that transition is when the
+  derived clock starts.
+- =C-c C-t d= moves it to DONE and stops the clock.  Leaving PROG for any
+  other state also stops it.
+- A task left in PROG overnight keeps accruing.  The gantt marks such a
+  row =~= (provisional) rather than capping it.  Move it out of PROG when
+  you stop.
+- There is no org-clock.  Do not clock in; the state change is the clock.
+- Entering PROG inside the dip starts a timer for the entry's Effort; a
+  bell, nothing more.
+- =,-o-o j= at a switch writes a journal line linked to the PROG entry;
+  any other capture made meanwhile records what it interrupted.
+- =,-o-i= hands the entry to an agent: AGENT while it runs, back as NEXT
+  (review it: =C-c C-t p=) or QUES.  See "Chains".
+
+* The day's frame
+
+Four rituals over the same corpus, built 2026-09-12 (composite.org wave
+1).  Each is a buffer in the queue's style -- the same columns, =RET= and
+=o= to jump, =g= to redraw -- and each write goes through the apply layer,
+so =,-o-u= undoes it.
+
+** The routine table, read by code
+
+=~/kb/notes/schedule.org= is still the prose note.  Its table gains a
+=#+NAME: routine= line and four columns:
+
+#+begin_example
+#+NAME: routine
+| Time        | Activity               | Notes | kind  | days     | bucket       | habit |
+|-------------+------------------------+-------+-------+----------+--------------+-------|
+| 05:00–05:30 | Clean apartment        |       | fixed |          | housekeeping | yes   |
+| 06:00–07:00 | Lift weights           |       | fixed | Mon-Sat  | body         | yes   |
+| 08:00–12:00 | Focus block 1 (4h)     |       | focus | weekdays | work         |       |
+| 13:30–15:00 | Focus block 2, the dip |       | dip   | weekdays | work         |       |
+| 15:00–17:00 | Focus block 2, vague   |       | focus | weekdays | work         |       |
+| 18:00–20:00 | Free time / admin      |       | admin | weekdays |              |       |
+#+end_example
+
+- =kind=: =fixed=, =focus=, =dip=, =admin= or =off=.  =days=: =Mon Tue=, =Mon-Fri=,
+  =weekdays=, =weekend=, blank for every day.  =bucket=: which queue bucket
+  the minutes belong to (blank: focus and dip are =work=, admin is
+  =housekeeping=).  =habit=: the row should exist as a habit entry.
+- A =#+NAME: variants= table overrides rows on named days; name the day in
+  =org-routine-variant-days=.
+- From it, *the queue's buckets and capacity are derived* when the queue
+  loads and whenever the corpus toggles.  The =setq= in
+  =modules/org/org-queue.el= is now the fallback, used only when the table
+  is absent or malformed, and the echo area says so.  A malformed row
+  fails with its line number, never with a partial capacity.
+- =M-x org-routine-generate-habits= writes =(todo) routine.org= from the
+  rows marked =habit=.  The file starts with =#+GENERATED= and the generator
+  refuses to overwrite one that does not; IDs survive by title.  The
+  hand-written routine.org in the fixture was regenerated this way.
+- =M-x org-routine-report= shows today's blocks, the dip, and the kick /
+  review / quiet windows the chains will use.
+- The fixture's copy is =testdata/routine.org=; a test session reads it.
+- Part 6 question 1 (pomodoros in the dip only, or also block one's first
+  two hours): =org-routine-dip-first-hours=, default nil -- the dip only.
+
+The real =schedule.org= has not been given the columns yet: until it is,
+the fallback tables are in force and the echo area says "keeping the
+hand-written buckets" when the queue loads.
+
+** Close the day: =,-o-x=
+
+At the fixed stop.  One buffer:
+
+- *Unfinished* -- planned today and still open, each with how many plans
+  have carried it.
+- *Done today* -- finished today, once each, planned or =unplanned=.
+- *Overdue* (hard deadlines) and *Due tomorrow* (tomorrow's, and soft
+  deadlines by then).
+- *Still in PROG* -- with the captures that interrupted each.  =T= marks a
+  line to go back to TODO, =W= to WAIT; =C-c C-c= applies the marks
+  together, logged once, undone together.  No note is asked for in the
+  sweep; =,-o-z= on the entry adds one.
+- *Tomorrow's routine* and *appointments*, the *inbox* count.
+- *Tomorrow's draft* -- the same packer run for tomorrow, so it respects
+  tomorrow's capacity.  =N= marks a line NEXT; a fourth is refused
+  (=org-queue-pick-limit= 3, counted over every open NEXT).
+- The phrase.  Printed, not asked.
+
+Closing stamps today in the plan history (=:closed=), once; the next
+morning's report says "yesterday closed at 17:02" or "yesterday was not
+closed" -- when yesterday had a plan at all; a day never planned gets no
+line.
+
+** Dormant projects: =,-o-v j= and =M-x org-queue-dormant-check=
+
+A project is a heading with a child that has a TODO keyword.  It is
+*live* when a child is open and not parked (TODO, NEXT, PROG, AGENT, WAIT, QUES)
+or the project carries a plain timestamp within =org-queue-dormant-days=
+(14); *finished?* when every child is DONE or NOPE; *dormant* otherwise.
+The check tags dormant projects =:dormant:= and clears the tag from the
+rest; an unchanged corpus writes nothing.  The packer drops a dormant
+parent's children with reason =dormant-project=.  The =j= view lists the
+dormant and the finished, live, without the check having run.  The check
+runs by hand and from the review pack; never from a timer.
+
+** The day log: =,-o-E=
+
+One day in time order: each PROG interval's start and end, every state
+change, the captures made that day (joined to the PROG entry they
+interrupted, by the =:INTERRUPTED:= property or by time), journal lines.
+Under it: the stretches inside a focus or dip block with nothing in PROG
+longer than =org-queue-daylog-gap-threshold= (15 minutes), and the
+interruptions per block, internal against external.
+
+** The journal line and interruptions
+
+=,-o-o j= captures =* HH:MM what I am doing= under today's =[[Sep 12th, 2026]]=
+heading in =~/kb/notes/journal.org= (one file; the heading is created on
+first use), with a link to the entry most recently moved to PROG.  Any
+other capture made while something is in PROG records that entry's ID as
+=:INTERRUPTED:=, which the close counts.  Any plain date in any buffer --
+=2026-09-12= or =Sep 12th, 2026= -- is a Hyperbole button opening that day
+in the rolo; inside an Org timestamp the button stands aside.
+
+* The week
+
+Built 2026-09-12 (composite.org wave 2).
+
+** The review pack: =,-o-m=
+
+Monday, thirty minutes.  One buffer, sections in a fixed order so two
+packs diff readably, assembled from what the files already say:
+
+- the three questions at the top (=w= asks for the answers and writes
+  them under today in the datetree of =~/kb/notes/reviews.org=);
+- *Moved* and *Finished* in the window (seven days,
+  =org-queue-review-window=);
+- *Neglected*: every open, unparked item in exactly one bucket by its
+  last touch (month, quarter, longer, never; this week's are not drawn);
+- *Chase*: WAIT and QUES untouched for =org-queue-chase-days= (7), by
+  who has it;
+- *Parked, due for another look*: HOLD and IDEA whose =REVIEW_ON= has
+  arrived and were not kept since -- raised once;
+- *Untriaged*: no estimate, no priority, or no date of any kind;
+- the inbox count with its age split; *Dormant projects* and *Finished?*
+  (the check runs as part of the pack; =D= reruns it);
+- *Still worth it?*: items surfaced =org-queue-dismiss-after= (3) times
+  without a pull, proposed for dismissal -- proposed, never automatic;
+- *Calibration* when at least =org-queue-calibration-prior= tasks finished;
+- *Time by category* from the derived clock, *Against the routine* per
+  bucket (under half, over one and a half, or on), and, once horizons
+  exist, areas against their floors;
+- *Rescheduled*: the ROTTEN count, the sum of "Rescheduled from" lines,
+  worst first;
+- the chains' week, once there are chains.
+
+Showing a parked item counts as surfacing it: the pack bumps =SURFACED=
+on every parked-due and proposed item, in one apply (so =,-o-u= right
+after the pack undoes the counters, not a decision).  =g= redraws
+without counting again.  =y= on any line asks the question.
+
+** Still worth it?  =,-o-y=
+
+On an entry in an Org buffer, or on any queue line.  Age, plans that
+carried it, times surfaced, days since anything happened to it,
+reschedules, when it was last kept, and Forster's four questions.  One
+key:
+
+| key | writes                                              |
+|-----+-----------------------------------------------------|
+| =k=   | =KEPT= stamped today, =SURFACED= removed                |
+| =p=   | =HOLD= with =REVIEW_ON= a season out (=org-queue-season-days=, 90) |
+| =d=   | =NOPE= with =DISMISSED= stamped; the state asks for its note |
+| =q=   | nothing                                             |
+
+Each is an apply.  Dismissed is a state, not a deletion: the entry stays
+in its file and is never proposed again.
+
+** Small adoptions
+
+=org-archive-location= is a datetree now, so =(todo) archive.org= reads
+chronologically.  =(queue-score N)= is an org-ql predicate over the
+packer's score, for any agenda block.
+
+
+* Clarify
+
+Built 2026-09-12 (composite.org wave 3).  The inbox is classified by a
+model against the config's own lists; you accept or correct.
+
+** Decorating the inbox: =,-o-f=
+
+Every undecorated entry in =~/kb/inbox.org= (no =AI_HASH=, or a stale one;
+not =:private:=; not rejected under this prompt version) is sent one at a
+time.  The model sees the closed
+lists -- keywords minus NEXT/PROG/DONE/NOPE, the agenda files'
+categories, the refile targets (files, and the live projects' headings),
+the context and energy groups, the corpus's tags, =Effort_ALL=, hard/soft,
+the people =WAITING_ON= has named, the WikiWords with a page -- the note,
+the day it was written, and the irs neighbours when irs answers.  It
+returns JSON; everything outside a list is dropped and the drop written
+into =AI_WHY=.  Dates come back as the phrase the note used and are
+resolved in elisp against =:CREATED:= ("tue" written on Thursday the 3rd
+is the 8th whatever day this runs; a date already past is kept and
+flagged =AI_DATE_STALE=).  The proposals land as =AI_*= properties through
+the apply layer -- =,-o-u= undoes a decoration -- and the heading and body
+are left byte-identical.
+
+The model is local (=org-decorate-backend= =local=: Ollama's =qwen2.5:7b=
+through its OpenAI-compatible endpoint); set it to =claude= to send the
+inbox to Claude through gptel's registered backend.  A =:private:= entry
+is never sent either way.  There is no idle timer: decoration runs when
+you ask.
+
+** The confirm gesture
+
+In the Inbox view (=,-o-v i=) the groups are now: captured before
+(=DUPLICATE_OF=), proposed with a stale date, proposed, not yet a task, a
+task.  Under them, a block of open entries a recent commit named
+(=EVIDENCE_DONE=).  On any line, or on the entry itself:
+
+| key   | does                                                                          |
+|-------+-------------------------------------------------------------------------------|
+| =C-c a= | accept: keyword, tags, Effort, IMPACT, dates, WAITING_ON, a Related line, strip every =AI_*=, refile to the target -- one apply, one undo.  On a commit-evidence line: mark DONE |
+| =C-c e= | accept one field, chosen by completion; the others are recorded as corrections |
+| =C-c r= | reject: strip, stamp =AI_REJECTED= so this prompt does not re-propose        |
+| =C-c d= | decorate this entry                                                           |
+
+A field the entry already carries is never overwritten.  Corrections --
+a rejected field, a field not accepted -- go to
+=.data/org/decoration-corrections.el= as training examples for the
+prompt.
+
+** Duplicates and commits
+
+Every capture (except a journal line) is checked after finalize: an open
+entry with the same normalised title makes it =DUPLICATE_OF= that entry's
+ID; a match against a finished entry is not a duplicate -- it came back,
+which the pack reports.  =M-x org-decorate-git-evidence= reads the last
+thirty days of commits in =~/kb= and the repositories =zetta-git-repos=
+names, and an open entry whose ID a commit message contains gets
+=EVIDENCE_DONE= with the SHA, once.  Commits also appear in the day log.
+
+* Chains
+
+Built 2026-09-12 (composite.org wave 4).  Most code is written by an
+agent you kick off and review; the config now knows it is happening.
+
+** The lifecycle
+
+One new state, =AGENT=, after PROG: an agent has the ball.  You write the
+prompt in PROG and kick; the entry is =AGENT= while the run lasts; it
+lands as =NEXT= when the run finished (you committed to the review the
+moment you kicked it off) or =QUES= when the agent stopped to ask; you
+review in PROG; then DONE, AGENT again for the next iteration, or NOPE.
+Every hop is a logged transition, so the derived clock gets the split:
+PROG intervals are your minutes, AGENT intervals are the machine's,
+drawn as the chain's own lane in the gantt (=org-gantt-machine-states=)
+and never in a human total; kick to landing is latency, landing to PROG
+is review lag, AGENT transitions per chain is the iteration count.
+
+** Kicking: =,-o-i=
+
+On the entry.  The prompt is the body, or the body of a =Prompt=
+sub-heading when the entry holds notes too; it is passed to the session
+untouched.  Refused without a prompt, or with =org-chain-limit= (3)
+chains already in flight -- =C-u= kicks past the limit and the log says
+so.  The kick writes =:AGENT_SESSION:= (a UUID), asks once for the
+repository (kept as =:AGENT_REPO:=; a decoration's =AI_REPO= is used when
+there is one), opens a vterm running =claude --session-id UUID "<prompt>"=
+in it, and transitions to AGENT.  =C-u C-u= runs headless instead:
+=claude -p= in a git worktree of the repository, output to a buffer.  An
+entry with =:KICK_AT: HH:MM= before dawn runs headless only, kicked by a
+ten-minute timer when its time comes; an interactive kick of such an
+entry is refused.
+
+** Landing
+
+The Claude Code =Stop= and =Notification= hooks run
+=~/.claude/claude-landing.sh= (in the .files repo), which appends one
+plist per line to =.data/org/agent-landings.el= and nothing else.  Emacs
+watches the file (and reads it every minute besides): the entry in
+AGENT whose session matches becomes NEXT on a stop, QUES on a question
+(the question is appended to the body as "Agent asks: ..."), each line
+once, through the apply layer.  A line no entry owns is an orphan,
+reported, never dropped.  A stop is a notification unless the routine
+says this is a quiet window; a question is a mark in the mode line
+(=?2=) and nothing more.
+
+** Where chains appear
+
+- The Day view: *Landed -- review* at the top beside NEXT, *In flight*
+  and *Agent asks* after the work in progress.
+- =,-o-v a=: the Chains view, the same three groups.
+- The morning report: one line -- chains in flight, the landings expected
+  in the first focus block at the measured latency and your measured
+  cycle, the review minutes they imply, and when fewer chains would do.
+- The queue: AGENT is excluded (=in-flight=); a landed entry is planned at
+  =org-queue-review-share= (0.5) of its effort -- an agent task's effort
+  is your minutes per cycle, spec plus review.
+- The close: each chain in flight, primed (its prompt is there) or not.
+- The pack: the chains' week -- kicks, latency, review lag, your minutes
+  against the machine's.
+
+* The season
+
+Built 2026-09-12 (composite.org wave 5).
+
+** Horizons: =,-o-n=
+
+One file, =~/kb/todo/(todo) horizons.org= (made from a template the
+first time =,-o-n= runs): a =Theme= heading with a =:SEASON:= and one
+sentence; at most three =* MISSION= headings for the season (saving the
+file with a fourth is refused, naming them); =* AREA <category>=
+headings with =:MIN_HOURS_WEEK:= and =:MAX_HOURS_WEEK:=.  A project serves
+a mission by carrying =:MISSION:= (the mission's ID); its children
+inherit it.
+
+- The queue adds one term: =mission= (2.4, the priority-B weight) for a
+  task that reaches a mission, so aligned work rises without
+  out-arguing a deadline.
+- =,-o-v o=: open work (TODO, NEXT, PROG) that reaches no mission, and
+  the missions themselves.  The Areas view groups by mission too.
+- The pack reads the areas' floors and ceilings: *Areas against their
+  floors*.
+- =,-o-n= draws the last twelve weeks as a pack, with the season, the
+  theme (stale after =org-queue-season-days=, 90) and each mission --
+  "no rock this week" when nothing NEXT, PROG or scheduled serves it --
+  and opens the file beside it.  The theme and the missions are typed
+  there.  The daily plan never opens the file.
+
+** The intake gate: =,-o-I=
+
+On an entry, asks for a date and says what committing to it means: the
+minutes already committed on or before it against the capacity in the
+window, the hard deadlines ahead, and either the first day the work
+fits or that it does not, by how many minutes, and which deadlines it
+would push past ("or move X").  Nothing is written.  After an
+interactive =,-o-D= the same line is shown for the deadline just set.
+A soft deadline, a habit, a HOLD or an IDEA never consults the gate.
+
+** The knowledge loop: =,-o-M= and =,-o-R=
+
+=,-o-M= on a heading asks for the WikiWord (the title, capitalised and
+run together, by default) and the reason, and only then writes: the
+body moves verbatim into =~/kb/wiki/WikiWord.org= (created with its
+title line, or extended), and the source keeps its heading with one
+line in place of the body: =[[hy:WikiWord]] the reason.=  =,-o-R= opens
+the page untouched longest (30 days, =org-knowledge-resurface-days=)
+beside a rolo search for its name.  =M-x org-knowledge-on-this-day=
+searches the rolo for this day a year ago and a month ago.
+
+=~/kb/wiki/FavouriteProblems.org='s headings are the favourite problems:
+decoration names one in =AI_PROBLEM= when a capture bears on it.  Anki
+is not wired.
+
+* The body, and the outside feeds
+
+Built 2026-09-12 (composite.org wave 6).
+
+** Habits, phase 2
+
+=org-habit= is loaded: the consistency graph appears beside each habit
+in the agenda, for today's habits only, its faces walking the ink
+ladder rather than red, yellow and green.  Under it, a strength score
+with Loop's arithmetic: with =m = 0.5^(1/13)= (=org-queue-habit-half-life=),
+a done day moves the score toward one, a missed day multiplies it by
+=m=, a skipped day (=:HABIT_SKIP: 2026-09-10 ...=) leaves it alone.  Thirty
+straight days from nothing give 0.80, sixty 0.96, ninety 0.99; one miss
+costs a fraction, never everything.  The series comes from the habit's
+own LOGBOOK (every DONE is a tick) over the last ninety days.  The close
+writes =:HABIT_STRENGTH:= and =:HABIT_ALERT:= on every habit in one apply
+(=M-x org-queue-habit-update= does it by hand) and two consecutive
+misses raise a notification.  Frequency habits ("three a week") are not
+built.
+
+** The timer in the dip: =,-o-e=
+
+Entering PROG while now is inside the routine's dip starts
+=org-timer-set-timer= with the entry's Effort (25 minutes without one);
+=,-o-e= offers the same by hand and says why not outside the dip.  The
+bell is a notification; the interval still comes from the state log.
+Part 6 question 1: =org-routine-dip-first-hours= adds block one's first
+two hours to the dip.
+
+** Feeds
+
+- *Mail.* =M-x org-queue-mail-waiting= asks =mu= for the flagged messages
+  in the sent folders and the inbox.  A flagged message you sent whose
+  thread ends with you asking a question becomes a =WAIT= with
+  =WAITING_ON= the recipient; a flagged message you received becomes a
+  =NEXT=; a thread whose newest message is theirs yields nothing.  The
+  entries go to =~/kb/todo/mail.org_archive= -- outside the agenda and
+  the refile targets, found by text search only -- once per message ID,
+  with a mu4e link and no body text.
+- *Calendar.* Not built: there is no external calendar to bridge (Part 6
+  question 3); appointments stay as plain timestamps in
+  =(todo) calendar.org=.
+
+* Working against the test data
+
+The fixture is eight =(todo)= files under =testdata/todo/=, with full
+metadata: efforts, dates, LOGBOOK transitions, IDs, five habits in
+=(todo) routine.org= (lift, bike, clean, read, laundry, each with three
+weeks of ticks), a dormant project, a finished one, a project serving a
+mission and three agent chains in =(todo) work.org=, the season in
+=(todo) horizons.org=, =reading= / =housekeeping= tags for the buckets,
+and the routine table in =testdata/routine.org=.
+
+1. =M-x zetta-org-toggle-todo-source=.  The echo line should read
+   =test (8 agenda files, ...)=.  It rebuilds =org-agenda-files= and the
+   HyRolo file list together, so nothing from the real kb is visible.  It
+   resets to =real= on restart.
+2. The fixture is centred on a date; every stamp is an offset from it.
+   Regenerate whenever the centre date has drifted from today, or for a
+   clean slate after applies:
+
+   #+begin_src sh
+   python3 testdata/generate.py              # centred on today
+   python3 testdata/generate.py --today 2026-09-08
+   #+end_src
+
+   It is deterministic for a date and seed, and ends by printing what the
+   centre day is committed to in raw minutes.  Random dates never land on
+   the centre day; what is committed there is pinned by hand in the spec.
+
+A first session that touches every lever:
+
+1. Toggle to test.  =,-o-Q=.  Read the bucket line and the Routine section.
+2. =TAB=.  Read the cut and excluded lists and their reasons; =B= to see
+   which bucket each task fell in.
+3. On a Chosen line, =H=, write a note.  It moves to Excluded.
+4. =TAB=, on a cut line, =N=.  It appears under Committed, =next=.
+5. On a deferred line, =S=.  Committed, =placed today=; the =d= column shows
+   =S <date>*=.  =,-o-u= puts it back.
+6. =,-o-P=, "week".  =TAB= on a day.  Find a sliced task.
+7. =,-o-p=, "week".  =a= on a few lines, =r= on one, =C-c C-c=.  =,-o-Q=: the
+   accepted ones are committed today.  =,-o-p= again: the proposal is
+   smaller, and the rejected line is gone.  =,-o-u= undoes the apply.
+8. =,-o-w= for the derived clock; =,-o-C= for calibration.
+9. =,-o-x=.  Read the sections; =T= on a PROG line, =C-c C-c=; =,-o-u=.
+   =,-o-v j= for the dormant project; =,-o-E= for the day.
+10. =,-o-m=.  Read the pack; =y= on a parked line, =k=; =,-o-u=.
+11. =,-o-v a= for the three fixture chains; =,-o-v d= for "Landed --
+    review".  (=,-o-i= opens a real session: try it on a real entry.)
+12. =,-o-n=: the season over the fixture's =(todo) horizons.org=; =,-o-v o=
+    for the orphans.  On any TODO, =,-o-I= and a date a week out.
+13. =,-o-v i= is empty in test mode (the inbox is the real one); =,-o-f=
+    and =C-c a= are exercised on the real inbox, with Ollama running.
+14. =,-o-M= writes into the real =~/kb/wiki= even in test mode; try it on
+    a note you mean to promote.
+
+Every ritual writes (tags, stamps, scores), so regenerate the fixture
+afterwards; =source/zettapkg/run-tests.sh= runs every suite and then the
+modules over a temporary copy of it.
+
+* Working against the real files
+
+The real corpus is =~/kb/todo/(todo) *.org= plus =~/kb/inbox.org= and the
+files in =zetta-extra-agenda-files= (set in =~/.private.el=).  =(todo)
+archive.org= is left out of that glob on purpose: =org-archive-location=
+writes into it, and text search (=C-c a s=) still reaches it.
+
+On 2026-09-13 the corpus was cut to four files (buy, calendar, emacs -
+categorized, todo); the rest were deleted rather than migrated.  What
+remains is still mostly unestimated and undated, and the queue can only
+plan what is written down.  The tooling for that exists:
+
+- =M-x zetta-org-todo-census= reports what metadata each file has.
+- =M-x zetta-org-insert-todo-header= adds the file preamble (Effort_ALL,
+  COLUMNS) that column view needs.
+- =M-x zetta-org-migrate-checkboxes= converts one buffer: =- [ ]= → =* TODO=,
+  =- [X]= → =* DONE=, =- [-]= → =* PROG=.  It shows the count and asks first.
+  One undo puts the file back.
+
+Then, in this order, each one a week before the next (the plan's own
+gate: would going back be a relief?):
+
+1. The routine table: give =schedule.org='s table its =#+NAME: routine=
+   line and the =kind= / =days= / =bucket= / =habit= columns (the fixture's
+   =testdata/routine.org= is the model), check =M-x org-routine-report=,
+   and =M-x org-routine-generate-habits= for =(todo) routine.org=.  The
+   buckets follow from the table; =org-routine-bucket-matches= says which
+   tags and categories each bucket claims.  Close the day with =,-o-x=.
+2. Monday: =,-o-m=.  The first pack is mostly "untriaged"; that is the
+   finding.  =~/kb/notes/reviews.org= is created by =w=.
+3. The inbox: Ollama's =qwen2.5:7b= is installed; =,-o-f= sends the inbox
+   to it and never leaves the machine.  Set =org-decorate-backend= to
+   =claude= if the local proposals are not worth having.
+4. Chains: the landing hook is already wired in =~/.claude/settings.json=;
+   =,-o-i= on an entry whose body is a prompt.
+5. The season: =,-o-n= makes =(todo) horizons.org= from a template; type
+   the theme and the missions; =:MISSION:= on the projects that serve
+   them.  =,-o-I= before any new deadline.
+6. The mail stub: =M-x org-queue-mail-waiting= once flagged mail exists.
+
+Give one file its estimates and dates first, live with it for a week, and
+only then do the rest.
+
+* Tuning knobs
+
+All are =setq=-able; the queue ones live in =org-queue-core.el= and are set
+in =modules/org/org-queue.el=.
+
+| variable                     | default              | what it controls                          |
+|------------------------------+----------------------+-------------------------------------------|
+| =org-queue-buckets=            | the table above (module); nil = one pool | minutes per kind per weekday |
+| =org-queue-capacity=           | 300 every day        | the one pool when there are no buckets    |
+| =org-queue-slack-fraction=     | 0.2                  | share of each bucket left unplanned, after routine |
+| =org-queue-default-effort=     | 30                   | minutes assumed for an unestimated task   |
+| =org-queue-wip-limit=          | 3                    | most PROG items on one plan               |
+| =org-queue-start-by=           | t                    | hard deadlines commit from their start-by day |
+| =org-queue-min-slice=          | 15                   | smallest slice the horizon will plan      |
+| =org-queue-horizon-max-days=   | 90                   | ceiling on a backlog run                  |
+| =org-queue-rejection-days=     | 14                   | how long a rejected placement stays out   |
+| =org-queue-placed-property=    | PLACED               | the stamp on a machine placement          |
+| =org-queue-excluded-states=    | HOLD IDEA            | states that never enter the queue         |
+| =org-queue-state-weights=      | QUES -1.5            | per-state score adjustment                |
+| =org-queue-wait-horizon-days=  | 7                    | WAIT tasks re-enter within this many days of a deadline |
+| =org-queue-soft-deadline-factor= | 0.35               | urgency multiplier for =DEADLINE_TYPE: soft= |
+| =org-queue-quick-threshold=    | 15                   | minutes at or under which the quick bonus applies |
+| =org-queue-contexts= / =org-queue-energy= | nil       | restrict to tasks tagged for a context or energy; untagged tasks are always available |
+| =org-queue-calibrate=          | t                    | scale estimates by measured clock ratios  |
+| =org-queue-history-file=       | =.data/org/queue-history.el= | carried IDs                       |
+| =org-queue-apply-log-file=     | =.data/org/queue-applies.el= | applies and their reverses        |
+| =org-queue-rejections-file=    | =.data/org/queue-rejections.el= | rejected placements            |
+
+The rituals' knobs, each in the file its section names:
+
+| variable                       | default                | what it controls                                  |
+|--------------------------------+------------------------+---------------------------------------------------|
+| =org-routine-file=               | =~/kb/notes/schedule.org= | the note holding the routine table (the fixture's in test mode) |
+| =org-routine-bucket-matches=     | the table above        | which tags and categories each derived bucket claims |
+| =org-routine-dip-first-hours=    | nil                    | block one's first two hours count as dip (Part 6 question 1) |
+| =org-routine-variant-days=       | nil                    | alist of (YYYYMMDD . variant): days that run a variant row set |
+| =org-queue-pick-limit=           | 3                      | NEXT picks the close allows                       |
+| =org-queue-inbox-file=           | =~/kb/inbox.org=         | counted by the close and the pack                 |
+| =org-queue-dormant-days=         | 14                     | a timestamp within this many days keeps a project live |
+| =org-queue-daylog-gap-threshold= | 15                     | minutes with nothing in PROG before a gap is reported |
+| =org-queue-journal-file=         | =~/kb/notes/journal.org= | the journal the =j= template and the day log use   |
+| =org-queue-review-window=        | 7                      | days the pack looks back                          |
+| =org-queue-chase-days=           | 7                      | days a WAIT/QUES may sit untouched                |
+| =org-queue-dismiss-after=        | 3                      | surfacings before dismissal is proposed           |
+| =org-queue-season-days=          | 90                     | a parked item's REVIEW_ON is a season out; a theme is stale after this |
+| =org-queue-reviews-file=         | =~/kb/notes/reviews.org= | where =w= writes the review lines, in a datetree  |
+| =org-decorate-backend=           | =local=                  | =local= (Ollama) or =claude=                        |
+| =org-decorate-local-model=       | =qwen2.5:7b=             | the Ollama model                                  |
+| =org-decorate-git-repos=         | =~/kb= + =zetta-git-repos= | repositories read for commit evidence            |
+| =org-chain-limit=                | 3                      | chains in flight at once; =C-u= overrides, logged   |
+| =org-queue-review-share=         | 0.5                    | share of a landed entry's effort that is your review |
+| =org-chain-landings-file=        | =.data/org/agent-landings.el= | the log the hooks append to                 |
+| =org-queue-horizons-file=        | =~/kb/todo/(todo) horizons.org= | the theme, the missions, the areas' floors |
+| =org-queue-mission-limit=        | 3                      | missions a season holds                           |
+| =org-knowledge-resurface-days=   | 30                     | days untouched before a page resurfaces           |
+| =org-queue-habit-half-life=      | 13                     | days a daily habit's score halves over when missed |
+| =org-queue-timer-on-prog=        | t                      | entering PROG inside the dip starts the timer     |
+| =org-queue-mail-stub=            | =~/kb/todo/mail.org_archive= | where mail-derived entries land            |
+
+* What is designed but not built
+
+So this file does not overpromise.  Each item is argued in
+=productivity.org= Part 3.2, =time-management.org= Part 6, or
+=scheduling.org=.
+
+From =scheduling.org=: sub-day placement into routine blocks, timed
+SCHEDULED stamps, round-tripping through the writable timegrid (step 7).
+
+From =composite.org=, whose six waves are otherwise built (above):
+
+- the calendar feed: no external calendar exists to bridge;
+- the decoration precision harness (=make decorate-eval=), which needs a
+  key and a network, and the decoration idle timer, off until a week
+  says the proposals are worth having;
+- frequency habits ("three a week"), and the Anki push;
+- the Parked view does not count surfacings; only the pack does;
+- verified in batch against fixtures and stubs, not yet in the live
+  daemon: the timer's ring, the mail reader against the real store,
+  decoration against a running model (the request chain was tested with
+  a stubbed model), a real kick through vterm and its landing (the log
+  reader was tested on lines shaped as the hook writes them), and the
+  gate line after =,-o-D=.  Each has a by-name command to try it on
+  purpose.
+
+And still: migration of the real =(todo)= files (milestone 5): tooling
+exists, not run; and the routine table's columns in the real
+=schedule.org=, without which the buckets are the typed fallback.
+
+* Where the rest lives
+
+- =time-management.org= — the design and build record for the queue, views,
+  fixture, gantt and derived clock, with per-milestone status.
+- =scheduling.org= — buckets, habits, start-by and slices, the horizon and
+  the proposal loop: the argument, the tests, and what was built how.
+- =composite.org= — the plan for the assay's remaining gaps: six waves,
+  keys, what each built mechanism made cheaper, and the decisions with
+  their assumed defaults.
+- =productivity.org= — the assay of time-management systems and the ranked
+  gap list the next features come from.
+- =source/zettapkg/org-queue/README.md= — the package's own summary and the
+  batch test commands; the close, the day log, the pack, "still worth
+  it?", the season, the intake gate, habits and the mail reader are
+  files inside it.
+- =source/zettapkg/org-gantt/= — the chart and week grids.
+- =source/zettapkg/org-routine/=, =org-decorate/=, =org-chain/=,
+  =org-knowledge/= — the routine table, decoration, chains and the
+  knowledge loop, each with its README.
+- =source/zettapkg/run-tests.sh= — every suite, then the modules over a
+  copy of the fixture.
+- =modules/org/org-queue.el=, =org-agenda.el=, =org-super-agenda.el=,
+  =org-gantt.el=, =org-routine.el=, =org-daylog.el=, =org-decorate.el=,
+  =org-chain.el=, =org-knowledge.el=, =org-todo-schema.el=, =org.el= — the
+  configuration.
+- =~/.claude/claude-landing.sh= (in the .files repo) — the hook that
+  writes the landing log.

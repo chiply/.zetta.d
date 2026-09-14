@@ -1,0 +1,29 @@
+# gitleaks configuration for the pre-commit hook (.githooks/pre-commit)
+# and for scanning the tree by hand: gitleaks dir . --redact --no-banner
+#
+# The default rule set (provider token shapes) is extended, and the
+# allow-list covers the documented placeholders that work-security-audit.org
+# S11 confirmed are not secrets, so the hook stays quiet on them.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "documented placeholders (work-security-audit.org S11)"
+regexes = [
+  # modules/tools/ai.el: the local router proxy ignores its key; gptel
+  # only requires the string to be non-empty.
+  '''sk-llm-router-local-proxy-no-auth-needed''',
+  # slack.md: the shape of a token and a cookie, not values.
+  '''xoxc-<token>''',
+  '''d=<cookie-value>''',
+  '''xoxc-1234567890-\.\.\.''',
+  '''d=xoxd-abc123\.\.\.''',
+]
+
+[[allowlists]]
+description = "generated and pinned data, not source"
+paths = [
+  '''elpaca-lock\.el''',
+  '''testdata/todo/.*\.org''',
+]

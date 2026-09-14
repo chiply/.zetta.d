@@ -1,0 +1,641 @@
+#+title: Scheduling — Buckets, Habits, Horizons and Write-back
+#+author: Charlie Holland
+#+startup: overview
+
+# Design and implementation plan for the next layer over org-queue: capacity
+# by kind (buckets), habits as reservations, planning at scales other than
+# one day, and a propose/review/apply loop that actually writes schedules.
+# Same rules as time-management.org: evidence stays with the claim, inference
+# is labelled.  TASK-TRACKING.org is the tutorial; this is the argument.
+#
+# Status [2026-09-12, evening]: steps 0-5 of Part 5 BUILT the same day --
+# accept keys, buckets, habits phase 1, start-by, the horizon with slices,
+# and the propose/review/apply/undo loop -- 116 batch tests green, rendered
+# in the daemon against the fixture.  Steps 6-8 (routine table read by
+# code, sub-day, habits phase 2) are not started.  Deviations from the
+# text below are listed at the end of each part under "As built".
+
+* Part 0 — The questions, answered against the code
+
+** Which design docs?
+
+Two, both at the repo root, with different numbering:
+
+- =time-management.org= — the build record for org-queue, the views, the
+  fixture, the gantt and the derived clock.  Its Part 6 numbers
+  *milestones* 0-8.  "Milestone 8, deadline backpressure" is from here.
+- =productivity.org= — the assay of ~44 time-management systems and the
+  composite built from them, mapped onto this config as a ranked *gap
+  list* G1-G16 (Part 3.2) with a test catalogue (3.8).  "G2 close the
+  day", "G12 the intake gate", "G4 habits", "G6 the routine template" and
+  "G11 backpressure" are from here.  G11 and milestone 8 are the same item.
+
+This document takes over the four gaps it touches (G4, G6, G11 and the
+new write-back loop, which neither doc has) and leaves the rest where they
+are.
+
+** What is deadline backpressure, and should we build it?
+
+*What it is.*  Today a task is either a commitment (due today or earlier)
+or a candidate scored by urgency.  A six-hour task due Friday is a
+candidate on Tuesday, Wednesday and Thursday -- it may win on urgency,
+but nothing /forces/ it in until Friday, when it becomes a commitment
+that cannot fit.  Backpressure is the rule that the deadline pushes work
+backwards into the days before it:
+
+- *start-by* = deadline minus the days the calibrated effort needs at the
+  free capacity of those days.  A task past its start-by is committed,
+  not scored.
+- *slicing* = the packer plans /part/ of a task on a day (a =:slice= of
+  minutes), so the six hours land as 2+2+2 across Tuesday to Thursday.
+
+Soft deadlines get none of this.  It was ranked last (G11, size L) on the
+plan's own rule: only once the packer is trusted and calibration has real
+data, because slicing changes what a plan /is/ -- every invariant in the
+core assumes whole tasks.
+
+*Recommendation.*  Build it in two halves, neither of them as a separate
+feature.  Start-by is cheap and belongs in the day packer (Part 3, one
+function and four tests).  Slicing is a property of the *horizon
+scheduler* (Part 3): once the planner simulates several days at once,
+"fit this before Friday" is just what it does, and slices fall out of
+placing a task across the days it needs.  Doing slicing inside the
+single-day packer would be building the multi-day scheduler without
+admitting it.
+
+** Does the planner respond to tags?  To effort?
+
+*Effort: yes, it is the unit of everything.*  The packer works in minutes:
+each task's =:Effort:= (calibrated by the measured estimate-versus-clock
+ratio for its category) is subtracted from the day's usable minutes as it
+is admitted; a task with no estimate costs =org-queue-default-effort= (30)
+and is drawn as guessed.  The =quick= term rewards efforts at or under 15
+minutes.  Effort is why a day fills, not just how many tasks it holds.
+
+*Tags: only two ways, and neither is capacity.*  Tags are harvested and
+used for (1) the context/energy /availability/ filter --
+=org-queue-contexts= '("@call") drops tasks that carry a different
+context tag, untagged tasks always pass -- and (2) nothing else.  The
+=glut= penalty is per /category/ (the file), not per tag, and it is a
+score nudge, not a budget.  "Five hours for work, one for reading, thirty
+minutes for housekeeping" does not exist.  Part 1 designs it.
+
+The sentence in TASK-TRACKING.org ("the planner reacts to four things")
+is about what makes a task /committed or excluded/; it should say so, and
+now does.
+
+** What time scales exist?
+
+| scale     | planner                                 | views                                                   |
+|-----------+-----------------------------------------+---------------------------------------------------------|
+| sub-day   | none                                    | timegrid (=,-o-c=, writable by drag), agenda day grid     |
+| day       | =,-o-Q= / =C-u ,-o-Q=, one day, read-only   | agenda =d=, org-other-agenda                              |
+| week      | none                                    | gantt =,-o-w=, week grids =,-o-W=, timegrid, agenda =w=       |
+| fortnight | none                                    | agenda with a span argument                             |
+| month     | none                                    | calfw, agenda                                           |
+| backlog   | none                                    | HyRolo =,-o-V=, the untriaged/horizon agenda views        |
+
+The planner is one day deep.  Every longer view shows what is /already
+written/ (SCHEDULED, DEADLINE, LOGBOOK), not what the planner would do.
+Part 3 designs the horizon simulator; Part 4 makes its output writable.
+
+** Does it update any metadata?
+
+No.  The only file it writes is =.data/org/queue-history.el= (the IDs it
+planned, for carry-over scoring).  "Pulled in" is a label on a report.
+This was a deliberate choice -- a planner that writes SCHEDULED stamps is
+distrusted the first time it guesses wrong -- and Part 4 keeps the
+argument while adding the write: nothing lands without review, and what
+lands stays distinguishable from what a person wrote.
+
+** Habits?
+
+Nothing.  =org-habit= is not loaded; no entry carries =:STYLE: habit=; the
+fixture's repeaters ("Water the plants +3d", "Take the bins out +1w",
+"Weekly review .+1w") are harvested as ordinary tasks -- scored
+candidates on most days, commitments on the day their repeater lands.
+The day's fixed routine (lift, bike, clean) lives in prose in
+=~/kb/notes/schedule.org= and the planner has never read it, so today's
+"5:00 capacity" is a guess that silently includes or excludes the lift
+depending on how you read it.  Part 2 designs habits as *reservations*.
+
+* Part 1 — Buckets: capacity by kind
+
+** The idea
+
+A day is not one pool of minutes.  It is a few pools with names: focus
+work, reading, housekeeping, calls.  Each has a budget, and a task
+belongs to one of them.  The packer fills each pool from the tasks that
+belong to it.  Overflow in one pool is reported as overflow /of that
+pool/; an empty pool is reported as unfilled, not silently handed to
+another.
+
+** Definition
+
+#+begin_src emacs-lisp
+(setq org-queue-buckets
+      '((work         :minutes ((1 . 300) (2 . 300) (3 . 300) (4 . 300) (5 . 240))
+                      :match (:category ("work" "emacs")))
+        (reading      :minutes 60
+                      :match (:tags ("reading" "@read")))
+        (housekeeping :minutes 30
+                      :match (:tags ("housekeeping" "@errand" "home")))
+        (default      :minutes 60)))
+#+end_src
+
+- =:minutes= is an integer (every day) or a per-weekday alist like
+  =org-queue-capacity=.  A weekday absent from the alist has 0 -- the
+  bucket does not exist that day, and its tasks are cut with reason
+  =bucket-closed=.
+- =:match= is a plist of any of =:category=, =:tags= (any of), =:pred= (a
+  function of the task plist).  The *first* bucket whose match holds
+  wins, in list order.  A task no bucket claims goes to =default=.
+- =:spill t= (optional) lets a bucket's unspent minutes be used by
+  =default= at the end of packing.  Off by default: a reserved half hour
+  for housekeeping that nothing claims is a finding ("nothing to do in
+  the house today"), not free work time.
+- Slack (=org-queue-slack-fraction=) is taken per bucket.
+- When =org-queue-buckets= is nil, the planner behaves exactly as today:
+  =org-queue-capacity= /is/ the default bucket.  Nothing existing changes.
+
+*Semantics chosen: partition, not ceilings.*  A bucket is a reservation
+(a floor: the packer will fill it even when higher-scoring work exists
+elsewhere) and a limit (a ceiling: no more than its minutes).  The
+alternative -- one pool with per-tag caps -- answers "no more than 30
+minutes of housekeeping" but not "make sure I read for an hour", and the
+second is the one the routine actually wants.  =:spill= recovers the
+ceiling-only behaviour per bucket for anyone who wants it.
+
+** Packing with buckets
+
+1. Classify every eligible task into a bucket.
+2. Admit commitments into their buckets.  A commitment overflows only
+   its own bucket; the report says "work OVERCOMMITTED by 0:40" and still
+   packs reading and housekeeping.  Today's all-or-nothing OVERCOMMITTED
+   becomes per bucket, and the alarm banner appears when /any/ bucket
+   overflows.
+3. Fill each bucket from its candidates, highest score first, against
+   its own usable minutes.  WIP limit stays global.  The glut penalty
+   stays as it is (category, within a bucket).
+4. Spill pass for buckets that allow it.
+5. Pull-forward pass, per bucket.
+
+Cut reasons gain =bucket-full= (with the bucket's name) and
+=bucket-closed=.  The invariant -- every task in exactly one of planned,
+cut, dropped, deferred -- holds unchanged; a task also carries
+=:queue-bucket=.
+
+** Report
+
+The header line becomes one line per bucket:
+
+#+begin_example
+Tuesday 8 September 2026
+   work          3:40 of 4:00     reading   0:48 of 0:48     housekeeping  0:00 of 0:24  (nothing claimed)
+#+end_example
+
+A =b= key groups the planned lines by bucket instead of by reason; the
+bucket name is also available as a column (Part 4 of TASK-TRACKING's
+column table gains =B=).
+
+** Where the table lives, eventually
+
+First cut: a =setq= in =modules/org/org-queue.el=, like capacity.  Once G6
+(the routine table in =schedule.org=) is read by code, the buckets are
+derived from its rows -- "Focus block 1 (4h)" is the work bucket, "Free
+time / admin" is housekeeping -- and the =setq= goes away.  Do not block
+buckets on G6; the derivation is a later, small step.
+
+** Tests (batch, no Org)
+
+- a task tagged housekeeping never consumes work minutes;
+- a reading bucket with 60 minutes and 90 minutes of reading candidates
+  plans 60 and cuts the rest with =bucket-full reading=;
+- a bucket with no candidates reports 0 planned and =default= does not
+  grow unless =:spill= is set;
+- a commitment overflows its bucket alone: work overcommitted, reading
+  still packed;
+- a weekday absent from a bucket's alist cuts its tasks with
+  =bucket-closed=;
+- with =org-queue-buckets= nil, every existing test passes unchanged;
+- every task still lands in exactly one of the four lists.
+
+** Fixture
+
+Add =housekeeping= and =reading= tags to a handful of entries in
+=testdata/generate.py= and a bucket table to the test session, so the
+per-bucket header can be seen on day one.
+
+** As built [2026-09-12]
+
+As designed, plus: appointments (=cal=) are matched into the work bucket in
+the module table, because a meeting consumes the working day whatever
+its category; a bucket's =:usable= is =(capacity - routine) x (1 - slack)=
+(Part 2's rule); the alarm banner names each overcommitted bucket; =B= is
+a column.  Seven tests.
+
+* Part 2 — Habits as reservations
+
+** What a habit is, to the planner
+
+A habit is time you have already decided to spend, on a repeating
+pattern, that is not a task to be finished.  Lifting an hour a day
+except Sundays; guitar; the bike; laundry; dishes.  It does not compete
+with the backlog.  It is *subtracted from the day before packing
+begins*, like an appointment with a repeater, and then shown so the day
+adds up.
+
+That is all Phase 1 does.  Strength, streak-free scoring, the two-miss
+alert and the graph are Phase 2 and follow G4's design.
+
+** Entry shape
+
+In a =(todo) routine.org= (real corpus and fixture alike):
+
+#+begin_example
+* TODO Lift weights  :body:
+SCHEDULED: <2026-09-12 Sat .+1d>
+:PROPERTIES:
+:STYLE:     habit
+:Effort:    1:00
+:HABIT_DAYS: Mon Tue Wed Thu Fri Sat
+:END:
+
+* TODO Guitar practice  :music:
+SCHEDULED: <2026-09-12 Sat .+1d>
+:PROPERTIES:
+:STYLE:     habit
+:Effort:    0:30
+:END:
+#+end_example
+
+- =:STYLE: habit= is the discriminator, as org-habit expects.  A repeater
+  /without/ it stays a repeating *task* ("Water the plants +3d" still
+  queues as work).  You decide per entry.
+- =:HABIT_DAYS:= is a weekday set; absent means every day.  This is the
+  "except Sundays".
+- =:Effort:= is the reservation.  A habit with no effort reserves
+  =org-queue-default-effort= and is drawn as guessed, like a task.
+- Ticking DONE rolls the repeater forward, as org does today; the
+  reservation for that day is unchanged (it was spent).
+
+** Planner treatment
+
+- Harvest keeps habits (they are TODO headings) but tags the plist
+  =:habit t=.
+- The filter drops them from candidates with reason =habit= -- never
+  planned, never cut, never scored.
+- Before packing, the day's habits (those whose =:HABIT_DAYS:= includes
+  the day) are summed and subtracted from capacity: with buckets, from
+  the bucket they match (the lift matches a =body= bucket if there is
+  one; otherwise =default=).  If the routine alone exceeds the day, that
+  is reported as such -- "routine 5:30 exceeds capacity 5:00" -- before
+  any task is considered.
+- The report gains a *Routine* section above Committed, drawn dim, and
+  the header shows the arithmetic: =capacity 5:00, routine 1:30, usable
+  2:48=.
+
+** Interaction with the routine table
+
+=schedule.org= already lists the lift, the bike and the clean as timed
+rows.  When G6 lands, those rows can /generate/ =(todo) routine.org= (the
+G6 text says exactly this), so the file above is the machine-readable
+form and the table stays the prose.  Until then the file is written by
+hand; four entries is not a burden.
+
+** Phase 2 (later, G4)
+
+Load =org-habit= for the agenda graph and consistency window; strength
+via =org-habit-stats= or a pure core with Loop's 13-day half-life; the
+two-miss alert through =zetta-notify=; =K= to hide habits in the agenda.
+None of that changes the planner; Phase 1 is complete on its own.
+
+** Tests
+
+- a habit is never in planned or cut; it is dropped with reason =habit=;
+- a habit with =HABIT_DAYS= excluding Sunday reserves nothing on Sunday;
+- the reservation reduces usable minutes before commitments are admitted;
+- a habit matching a bucket reduces that bucket alone;
+- a routine that exceeds capacity is reported and the packer plans nothing;
+- a repeater without =STYLE=habit= is still a task.
+
+** As built [2026-09-12]
+
+Phase 1 as designed.  Slack is taken /after/ the routine -- =(capacity -
+routine) x (1 - slack)= -- because routine is fixed time and slack is for
+the work that is not.  The fixture gained =(todo) routine.org= with five
+habits (lift, bike, clean, guitar, laundry) and =HABIT_DAYS=.  The
+generator's self-check skips them.  Six tests.
+
+* Part 3 — Horizons: planning more than one day (read-only)
+
+** The simulator
+
+=org-queue-core-horizon (tasks from to &optional capacity-fn)= runs the
+existing day packer once per day across a range and returns a list of
+day plans plus the remainder.  The pool evolves:
+
+- a task planned on day N is removed from the pool for N+1 (the
+  simulation assumes it gets done; the report shows this assumption);
+- a task deferred to day D becomes eligible on D;
+- appointments and habits apply to the day they fall on, repeaters
+  rolled forward;
+- carry-over is not simulated (it describes the past, not the future).
+
+Scales are just ranges: rest-of-today, day, N days, week, fortnight,
+month, and *backlog* (run until the pool is empty or a ceiling of 90
+days, and report what never fit).  Sub-day is Part 4's last step.
+
+** Backpressure lives here
+
+Two additions to the core, in this order:
+
+1. *Start-by* (in the day packer, immediately usable): for a task with a
+   hard deadline, =start-by= = the latest day on which the remaining
+   calibrated effort still fits into the free minutes of the days up to
+   the deadline (free = usable minus commitments, from the simulator; or,
+   in the single-day command, from =org-queue-capacity= alone as a first
+   approximation).  On or after start-by the task is a commitment.  The
+   note reads "start by <date>" or "past start-by".
+2. *Slices* (in the simulator only): when the day packer is asked for a
+   day and a committed task's remaining effort exceeds the day's free
+   minutes, it admits a slice -- =:queue-minutes= smaller than the
+   effort, =:slice t= -- and the remainder stays in the pool for the next
+   day.  A task is sliced only when it is a commitment via start-by or
+   deadline; candidates are never split.  Each day's invariant holds;
+   the horizon's per-task summary shows placed versus total.
+
+Soft deadlines get neither.  This is G11 in full, without a separate
+feature.
+
+** Display
+
+=org-queue-horizon= (=,-o-h=; the agenda's =h= is under =,-o-v=, so no clash)
+draws one section per day, collapsed to a single line each:
+
+#+begin_example
+Tue 15   4:00 of 4:00   work 3:40  reading 0:20     Q4 roadmap (slice 2 of 3), …
+Wed 16   3:10 of 4:00   …
+Thu 17   OVERCOMMITTED by 1:20   …
+
+Never fits: 4 tasks, 11:30   TAB to see why.
+#+end_example
+
+TAB on a day expands to the full day report with the same columns and
+keys as =*org-queue*=.  It is read-only.  Its point is to show what the
+proposal in Part 4 would do before asking anything.
+
+** As built [2026-09-12]
+
+Two deviations, both decided by a test that would not pass any other way:
+
+1. *The deadline day counts.*  Start-by walks back from the deadline
+   /inclusive/, because an Org deadline is inclusive and the day view
+   already calls work on that day "due today".  So six hours due Friday
+   at two free hours a day is Wednesday to Friday, not Tuesday to
+   Thursday, and Tuesday is free.  If "deliver the day before" is the
+   rule you want, that is a one-line change in =org-queue-core-start-by=.
+2. *In the simulation every commitment is sliced to what fits*, including
+   one due today.  The single-day packer is unchanged (admits whole, says
+   OVERCOMMITTED); the simulator instead reports the shortfall under
+   =:missed=.  Appointments are the exception: a meeting has a time of day
+   and is admitted whole.
+
+Also: the free-minutes walk excludes the task asking the question (its
+own deadline-day minutes are not "already booked"), and ignores machine
+placements while proposing.  A repeating appointment is rolled forward
+once by the harvest, so a daily standup appears on one day of a range;
+known limit, noted in the file header.  Sixteen tests.
+
+** Tests
+
+- three days with two free hours each and a six-hour hard-deadline task
+  due on the fourth: slices of 2+2+2, the task committed from day one;
+- a task before its start-by is a candidate; the day after, a commitment;
+- a slice never exceeds the day's free minutes and counts once against WIP;
+- a soft deadline produces no slice and no start-by;
+- a task planned on day N is absent from day N+1's pool;
+- a backlog run terminates at the ceiling with the remainder reported.
+
+* Part 4 — Write-back: propose, review, apply
+
+** Principles, so the trust argument survives
+
+1. *Nothing is written without a review.*  The proposal is a buffer; the
+   apply is a keystroke on lines you have accepted.
+2. *Human placements are facts.*  A SCHEDULED a person wrote is never
+   moved by a proposal.  The proposal may /say/ "this would fit better on
+   Thursday" as a finding, but it does not propose the move unless asked
+   (=C-u=).
+3. *Machine placements stay distinguishable.*  An accepted placement
+   writes SCHEDULED /and/ a =:PLACED:= property with the apply stamp.  A
+   later proposal may move a machine placement (it was a guess the
+   machine made); the review shows it as a move, from → to.
+4. *Deadlines are never proposed.*  They are facts the planner reads.  A
+   task that cannot fit before its deadline is a finding in the proposal
+   ("does not fit: 3:00 short by Friday"), not a suggested new date.
+5. *States are never proposed.*  NEXT, HOLD, DONE are human decisions.
+   The proposal places; it does not decide.
+6. *Idempotent.*  Accept everything, run again, and the proposal is
+   empty.  The proposal is the diff between the simulated horizon and
+   what the files already say.
+7. *Reversible.*  Every apply writes a log with the reverse actions;
+   =org-queue-undo-apply= plays the last one back.
+
+** The atom first: accept keys in =*org-queue*= (M0)
+
+Before any bulk loop, the single-task version, because it is what the
+loop applies many times and because it closes the gap already found in
+TASK-TRACKING ("there is no gesture that makes a pull real"):
+
+| key | on the task at point                          | writes                      |
+|-----+-----------------------------------------------+-----------------------------|
+| =S=   | schedule it today                             | SCHEDULED today, =:PLACED:=   |
+| =L=   | schedule it later (prompts with =org-read-date=)| SCHEDULED that day, =:PLACED:= |
+| =N=   | mark it NEXT                                  | state NEXT (org logs it)    |
+| =H=   | hold it, with the note the state asks for     | state HOLD                  |
+| =U=   | unschedule a machine placement                | removes SCHEDULED, =:PLACED:= |
+
+Each redraws.  =N= and =H= write state, which contradicts principle 5 --
+deliberately: these are /you/ pressing a key on one line, not a proposal.
+The bulk loop never emits them.
+
+** Actions
+
+A proposal is a list of action plists, each self-describing:
+
+#+begin_src emacs-lisp
+(:action schedule   :id ID :to 20260915 :minutes 120 :bucket work :why "start-by passed; 2 of 3 slices")
+(:action move       :id ID :from 20260914 :to 20260916 :why "Tuesday overcommitted by 0:40")
+(:action unschedule :id ID :from 20260913 :why "no longer fits before its deadline; see finding")
+(:finding :id ID :text "does not fit before 2026-09-18: short by 3:00")
+#+end_src
+
+=:id= is the entry's =:ID:=; an entry without one gets one at apply time
+(the harvest already reads IDs, and =org-id= is configured).  Sub-day
+actions (Part 4, last step) add =:start= and =:end= as minutes of the day
+and write a timed SCHEDULED.
+
+** Proposing
+
+=org-queue-propose= (=,-o-p=) asks for a scope -- rest of today, today, N
+days, week, fortnight, month, backlog -- runs the horizon simulator with
+the current files as the starting state, then diffs:
+
+- a task the simulation places on day D that has no SCHEDULED → =schedule=;
+- a machine placement (=:PLACED:= present) on day A that the simulation
+  puts on day B → =move=;
+- a machine placement the simulation no longer places at all → =unschedule=;
+- a human placement the simulation would have moved → a finding only;
+- a task the simulation could not fit before its hard deadline → a finding.
+
+*Stickiness.*  The simulator gives a task already placed on day D a
+bonus for D, so a re-run does not churn last week's accepted plan for a
+marginal score difference.  Moves are proposed only when D no longer
+fits or a commitment displaced it.
+
+*Rejection memory.*  A rejected line is recorded in
+=.data/org/queue-rejections.el= as =(ID . TO-DATE)= with a stamp and is not
+proposed again for =org-queue-rejection-days= (14).  This is Forster's
+re-decision made cheap: you say no once, not every morning.  A different
+target date is a new proposal.
+
+** Reviewing
+
+=*org-queue proposal*= is an org-queue-style buffer: sections per day,
+one line per action, columns and toggles shared with =*org-queue*=, plus
+=from → to= and the =why=.  Findings sit in their own section.
+
+| key     | does                                                        |
+|---------+-------------------------------------------------------------|
+| =a= / =r=   | accept / reject the line (or every line in the active region) |
+| =A= / =R=   | accept / reject the whole day section                       |
+| =C-c C-a= | accept everything                                           |
+| =e=       | edit the target date for this line; it becomes a /human/ placement on apply |
+| =RET= / =o= | jump to / show the entry                                    |
+| =g=       | re-propose (keeps accept/reject marks by ID where the action is unchanged) |
+| =C-c C-c= | apply the accepted lines                                    |
+| =q=       | abandon; nothing written                                    |
+
+Accepted lines are marked in the header face, rejected in the guess
+face; the summary line counts both and the minutes that would land.
+
+** Applying
+
+1. Collect the accepted actions; group by file.
+2. For each file, in its buffer, for each action: locate the entry by ID
+   (never by position), then =org-schedule= with the date string (or
+   =org-schedule '(4)= to remove), set or remove =:PLACED:=.  Org's own
+   =org-log-reschedule= should be ='time= so the LOGBOOK carries the
+   "Rescheduled from" line (an existing org mechanism; the fixture
+   already emits such lines).
+3. Only after every action in every buffer succeeded, save the buffers.
+   Any error before that point: revert the modified buffers and report
+   the failing action.  No partial apply.
+4. Append the apply to =.data/org/queue-applies.el= with the reverse
+   actions and a stamp.  =org-queue-undo-apply= reverses the most recent
+   one through the same code path, so undo is itself logged.
+5. Replan the =*org-queue*= buffer if it is open.
+
+Never through =emacsclient --eval= with a prompt (see
+[[file:TASK-TRACKING.org]] and the feedback memory); every prompt here is in
+the interactive command only.
+
+** What an accepted placement means afterwards
+
+It is a SCHEDULED stamp, so the day packer treats it as it treats any
+schedule: a commitment on its day, deferred before it, carry-over after
+it.  The note shows =placed <date>= from the property.  That is the answer
+to "what does pulled in mean": once accepted, it is on the calendar, and
+=,-o-Q= reads it back like anything a person wrote.
+
+** Sub-day: "the next four hours" (last step)
+
+Requires blocks: G6's routine table read by code, so a day is a sequence
+of blocks with a kind and, per Part 1, a bucket and a context/energy
+restriction.  Then:
+
+- "rest of today" = the blocks remaining after now; each block packed as
+  a bucket of its own minutes;
+- placements write a timed SCHEDULED (=<2026-09-12 Sat 14:00-15:00>=),
+  which the timegrid draws as a block and lets you drag -- the writable
+  grid becomes the manual edit surface, and the harvest reads the moved
+  time back;
+- a task larger than the block is sliced across blocks the same way
+  slices work across days.
+
+This is the piece with the most moving parts and the least evidence
+behind it; it goes last, after day-level proposals have been lived with.
+
+** Tests
+
+- proposing twice with everything accepted in between yields an empty
+  proposal;
+- a human placement is never in a =move=, and appears as a finding when
+  the simulation would have moved it;
+- a rejected (ID . date) is absent from the next proposal within the
+  window and present after it;
+- apply with one failing action writes nothing and reports the action;
+- undo after apply restores every SCHEDULED and removes every =:PLACED:=
+  it wrote, and leaves human placements alone;
+- an accepted placement is a commitment on its day in the next =,-o-Q=.
+
+** As built [2026-09-12]
+
+As designed, with these particulars:
+
+- The atom is =org-queue-apply.el=: =org-queue-apply-actions= applies a
+  list all-or-none, refuses a buffer with unsaved changes, reverts touched
+  buffers on error, saves, and logs =:actions= and =:reverse= to
+  =.data/org/queue-applies.el=.  =org-queue-undo-apply= (=,-o-u=) plays the
+  reverse back and is itself logged, so a second undo redoes.
+- =:PLACED:= carries an inactive stamp; the harvest reads it as =:placed=.
+- The proposal additionally *skips what a date already fixes*: an
+  appointment on its day and a task on its deadline day are not given a
+  SCHEDULED they would only repeat.  A start-by commitment is.
+- Rejections are =(KEY DATE DAY-RECORDED)= in =.data/org/queue-rejections.el=,
+  KEY being the ID or (file . point).
+- =e= on a line re-dates it and marks it accepted; on apply it is written
+  /without/ the stamp, so it is yours from then on.
+- Keys: =,-o-p= propose, =,-o-P= horizon (=h=/=H= are org-metaleft), =,-o-u=
+  undo.  In the plan buffer =S L N H U=.  Eight apply tests, five proposal
+  tests.
+
+Sub-day (the last step) is not built.
+
+* Part 5 — Order
+
+Each step is usable alone and the risky item is not first.
+
+| # | step                                            | size | depends on | delivers                                             |
+|---+-------------------------------------------------+------+------------+------------------------------------------------------|
+| 0 | Accept keys in =*org-queue*= (S L N H U, =:PLACED:=) | S    | --         | *BUILT* 2026-09-12                                      |
+| 1 | Buckets                                         | M    | --         | *BUILT* 2026-09-12                                      |
+| 2 | Habits, phase 1 (reservations, routine.org)     | S    | 1 (nice)   | *BUILT* 2026-09-12                                      |
+| 3 | Start-by in the day packer                      | S    | --         | *BUILT* 2026-09-12                                      |
+| 4 | Horizon simulator + slices + =,-o-P=              | M    | 1, 3       | *BUILT* 2026-09-12                                      |
+| 5 | Propose / review / apply / undo, day-level      | L    | 0, 4       | *BUILT* 2026-09-12                                      |
+| 6 | Routine table read by code (G6) → buckets, habits derived | S | 1, 2 | the =setq= tables go away                            |
+| 7 | Sub-day: blocks, timed placements, timegrid round trip | M | 5, 6   | "next four hours"                                     |
+| 8 | Habits phase 2 (org-habit, strength, alert)     | M    | 2          | G4 proper                                            |
+
+0 and 1 can start the same day; 0 is an afternoon.  G2 (close the day)
+becomes small once 5 exists and is not in this table.
+
+* Part 6 — Open questions, yours
+
+- *Partition or ceiling?*  Part 1 chose reservations with optional spill.
+  If most days you would rather the packer just take the best work
+  wherever it comes from, the default should be =:spill t=.
+- *Should accepted placements be commitments?*  Part 4 says yes (they are
+  SCHEDULED).  The alternative -- a softer "planned" that the next day's
+  packer may quietly drop -- avoids overcommitting on the machine's
+  guesses but reintroduces "what does this stamp mean".
+- *Property name.*  =:PLACED:= is short; =:QUEUE_PLACED:= is unambiguous.
+- *Rejection memory.*  Fourteen days, or until the entry changes
+  (effort, deadline)?
+- *Is a repeating task a habit?*  Part 2 says only with =STYLE=habit=.
+  "Take the bins out +1w" is arguably a habit; you decide per entry, and
+  the census can list repeaters without the property.
+- *Is the timegrid the sub-day surface?*  It already writes timestamps
+  on drag; Part 4 leans on it rather than building a second grid.

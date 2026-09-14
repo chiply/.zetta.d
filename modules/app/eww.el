@@ -94,7 +94,7 @@
   ;; PDFs land in the synced kb tree, per-domain like org-remark notes;
   ;; they sync everywhere and are annotatable on iOS in Preview via
   ;; Files -> Synctrain.
-  (defvar zetta-kb-pdf-directory (expand-file-name "~/kb/pdf/")
+  (defvar zetta-kb-pdf-directory (zetta-kb-file "pdf/")
     "Root for PDFs saved into the synced kb tree (existing kb layout).")
 
   ;; eww renders PDFs into a separate "*eww pdf*" pdf-view buffer that is
@@ -185,7 +185,7 @@ RET accepts and editing fixes garbage metadata.  Files land in
         target)))
 
   ;; Images: same idea as PDFs — point at it, one key, lands in kb.
-  (defvar zetta-kb-image-directory (expand-file-name "~/kb/images/")
+  (defvar zetta-kb-image-directory (zetta-kb-file "images/")
     "Root for images saved into the synced kb tree.")
 
   (defun zetta-eww--wikimedia-fullsize (url)

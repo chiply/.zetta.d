@@ -734,17 +734,17 @@ direction.
 
 Sequenced so each step is usable on its own and the risky item comes early.
 
-| # | Milestone                                | State [2026-09-08]                          |
-|---+------------------------------------------+---------------------------------------------|
-| 0 | Test corpus + toggle                     | *done*                                        |
-| 1 | Prototype the transclusion smart tree    | *answered: no* -- built, tried, removed       |
-| 2 | Configure =org-agenda= + =org-super-agenda=  | *done*                                        |
-| 3 | =org-queue-core.el= + ERT, no Org at all    | *done* -- 41 tests, green                     |
+| # | Milestone                                   | State [2026-09-08]                             |
+|---+---------------------------------------------+------------------------------------------------|
+| 0 | Test corpus + toggle                        | *done*                                         |
+| 1 | Prototype the transclusion smart tree       | *answered: no* -- built, tried, removed        |
+| 2 | Configure =org-agenda= + =org-super-agenda= | *done*                                         |
+| 3 | =org-queue-core.el= + ERT, no Org at all    | *done* -- 41 tests, green                      |
 | 4 | =org-queue-harvest.el= + the day command    | *done* -- verified against the 94-entry corpus |
-| 5 | Migrate the real (todo) files            | *tooling built, deliberately not run*         |
-| 6 | Install and configure =org-other-agenda=    | *done* -- installed live, pinned, renders     |
-| 7 | Estimate calibration from CLOCK data     | *code done*, waiting on real clock data       |
-| 8 | Deadline backpressure                    | not started -- see below                    |
+| 5 | Migrate the real (todo) files               | *tooling built, deliberately not run*          |
+| 6 | Install and configure =org-other-agenda=    | *done* -- installed live, pinned, renders      |
+| 7 | Estimate calibration from CLOCK data        | *code done*, waiting on real clock data        |
+| 8 | Deadline backpressure                       | not started -- see below                       |
 
 Note the ordering of 3 before 5: the queue can be developed entirely against
 the test corpus, so migration is not a blocker for it.  And 7 genuinely

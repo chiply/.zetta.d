@@ -78,7 +78,10 @@ the live theme, which is exactly what a calendar wants."
         org-use-fast-todo-selection 'expert
         org-attach-store-link-p 'file
         org-hide-leading-stars nil
-        org-archive-location "(todo) archive.org::* From %s"
+        ;; A datetree, so the done log reads chronologically (composite.org,
+        ;; the small adoptions): archived entries land under the day they
+        ;; were archived rather than under one heading per source file.
+        org-archive-location "(todo) archive.org::datetree/* From %s"
         org-agenda-files '()
         org-persist-directory (expand-file-name
                                ".data/org-persist"
@@ -139,10 +142,15 @@ the live theme, which is exactly what a calendar wants."
         ;; same argument the `t' capture template already makes about
         ;; estimates.  Starting something (PROG) and finishing it (DONE)
         ;; need no explanation, so they stay silent.
+        ;; AGENT (G16): an agent has the ball.  After PROG, because that
+        ;; is where a chain starts -- you write the prompt in PROG and
+        ;; kick.  A timestamp only: the kick and the landing are the
+        ;; log, and org-chain writes the session ID beside them.
         '((sequence
            "TODO(t!)"
            "NEXT(N!)"
            "PROG(p!)"
+           "AGENT(a!)"
            "WAIT(w@/!)"
            "QUES(q@/!)"
            "HOLD(h@/!)"
@@ -614,10 +622,17 @@ Regenerate it with `python3 testdata/generate.py'."
     zetta-logseq-pages-dir))
 
 (defun zetta-logseq-todo-files ()
-  "Return list of files in the active corpus starting with '(todo)'."
+  "Return list of files in the active corpus starting with '(todo)'.
+
+The archive is not part of the corpus even though its name matches:
+`org-archive-location' writes into it, and a plan that read it back
+would harvest every archived entry on every run.  Text search still
+reaches it through `org-agenda-text-search-extra-files'."
   (let ((dir (zetta-org-todo-dir)))
     (when (file-directory-p dir)
-      (directory-files dir t "^(todo).*\\.org$"))))
+      (seq-remove (lambda (file)
+                    (equal (file-name-nondirectory file) "(todo) archive.org"))
+                  (directory-files dir t "^(todo).*\\.org$")))))
 
 (defun zetta-logseq-todo-file-name (file)
   "Extract the name part from a (todo) FILE path.
@@ -660,7 +675,7 @@ Uses first letter, or first two letters if conflicts exist."
   "Additional files to add to `org-agenda-files'.
 Set this in ~/.private.el before modules load.")
 
-(defvar zetta-org-inbox-file "~/kb/inbox.org"
+(defvar zetta-org-inbox-file (zetta-kb-file "inbox.org")
   "Where the capture templates land, and the file the Inbox view reads.
 
 Part of the real corpus rather than an entry in `zetta-extra-agenda-files'
@@ -726,19 +741,19 @@ reopen the both-corpora-live hole this toggle exists to close."
   ;; specialization — the sender/subject prefill has no generic
   ;; equivalent (%:fromname/%:subject only bind in mail buffers).
   (setq org-capture-templates
-        '(("n" "Note"
+        `(("n" "Note"
            entry
-           (file "~/kb/inbox.org")
+           (file ,zetta-org-inbox-file)
            "* %?\n:PROPERTIES:\n:CREATED: %U\n:END:\n"
            :prepend t)
           ("N" "Note (with backlink)"
            entry
-           (file "~/kb/inbox.org")
+           (file ,zetta-org-inbox-file)
            "* %?\n:PROPERTIES:\n:CREATED: %U\n:END:\n%a\n"
            :prepend t)
           ("m" "Mail (capture message link)"
            entry
-           (file "~/kb/todo/(todo) email.org")
+           (file ,(zetta-kb-file "todo/(todo) email.org"))
            "* TODO %:fromname: %:subject\n:PROPERTIES:\n:CREATED: %U\n:END:\n%a\n%?"
            :prepend t)
           ;; The one template that asks for metadata, and it asks for it
@@ -750,7 +765,7 @@ reopen the both-corpora-live hole this toggle exists to close."
           ;; routing is C-c C-w, same as every other capture.
           ("t" "Task (estimate and tags up front)"
            entry
-           (file "~/kb/inbox.org")
+           (file ,zetta-org-inbox-file)
            "* TODO %^{Task} %^G\n:PROPERTIES:\n:CREATED: %U\n:END:\n%^{Effort}p%?"
            :prepend t)))
   (zetta-logseq-update-agenda-files))

@@ -19,7 +19,7 @@
 (declare-function zetta-kb--sanitize-file-name "eww")
 
 (defvar zetta-kb-yt-transcript-directory
-  (expand-file-name "~/kb/yt-transcript/")
+  (zetta-kb-file "yt-transcript/")
   "Root for YouTube transcripts saved into the synced kb tree.")
 
 (defun zetta-kb--yt-video-json (url)

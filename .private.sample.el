@@ -3,14 +3,29 @@
 ;; Copy this file to ~/.private.el and fill in your credentials.
 ;; ~/.private.el is loaded early in init.el and is NOT tracked by git.
 ;;
-;; Two ways to supply secrets:
+;; Where the values come from is decided per machine by
+;; `zetta-secrets-backend' in ~/.zetta.el (secrets.md has the table):
 ;;
-;;   (a) Manual — paste literal values below (the YOUR_X placeholders).
+;;   (a) authinfo — no cache.  Put values in ~/.authinfo.gpg and let the
+;;       packages read auth-source, or paste literals below (the YOUR_X
+;;       placeholders) if you must.
 ;;
-;;   (b) 1Password CLI — populate `op-secrets.env.tpl` with item refs,
-;;       then call `(zetta-op-read "KEY")` here.  See `secrets.md` for
-;;       the full setup.  The `zetta-op-auth-source-entries` block
-;;       below is the auth-source bridge for that mode.
+;;   (b) op — 1Password CLI.  Populate the template (source/op-secrets.env.tpl,
+;;       or `zetta-op-template-file' pointed at an untracked one) with
+;;       item references, call (zetta-secrets-load) once and
+;;       (zetta-secrets-read "KEY") per value.  `zetta-op-load' and
+;;       `zetta-op-read' are aliases of the same functions.
+;;
+;;   (c) command — any vault that prints KEY=VALUE lines, e.g. in ~/.zetta.el:
+;;         (setq zetta-secrets-backend 'command
+;;               zetta-secrets-command "pass show emacs/env")
+;;       then the same (zetta-secrets-load) / (zetta-secrets-read "KEY").
+;;
+;; For (b) and (c) the `zetta-op-auth-source-entries' block at the end is
+;; the auth-source bridge: it maps the (host, user) a package asks for to
+;; a cache key.
+;;
+;; (zetta-secrets-load)   ; uncomment for (b) and (c)
 
 ;; IRC (erc)
 (setq erc-nick "YOUR_IRC_NICK")
@@ -53,6 +68,26 @@
 
 ;; GitHub notifications
 (setq github-notifier-token "YOUR_GITHUB_TOKEN")
+
+;; ──────────────────────────────────────────────────────────────────
+;; Work tools.  The modules ship with these nil and stay inert until the
+;; private file supplies values -- an employer's host, project key or
+;; workspace never lives in a tracked module (work-security-audit.org S3).
+;; ──────────────────────────────────────────────────────────────────
+
+;; Jira (modules/tools/jira.el): the instance and the saved queries.
+;; (setq zetta-jira-url  "https://example.atlassian.net"
+;;       zetta-jira-jqls '((:jql "assignee = currentUser() and sprint in openSprints() ORDER BY priority DESC, created ASC"
+;;                          :limit 200 :filename "My sprint")))
+
+;; Slack (modules/tools/slack.el): one plist per workspace; the token and
+;; cookie live in auth-source under :host / :user (slack.md).
+;; (setq zetta-slack-teams '((:name "example" :host "example.slack.com"
+;;                            :user "alice@example.com" :default t)))
+
+;; Hosts for `zetta-ssh' / `zetta-ssh-shell' (modules/core/remote.el).  The
+;; default is the Host aliases of ~/.ssh/config; set this to override.
+;; (setq zetta-ssh-hosts '("dev-box" "bastion"))
 
 ;; ──────────────────────────────────────────────────────────────────
 ;; Mail sending (mu4e / message-mode via msmtp)
@@ -115,8 +150,8 @@
 ;;   account default : example-account
 
 ;; ──────────────────────────────────────────────────────────────────
-;; 1Password auth-source entries (only needed if using mode (b) above)
-;; Maps (host, user, port) tuples to 1Password cache keys.
+;; Cache-backed auth-source entries (backends (b) and (c) above).
+;; Maps (host, user, port) tuples to cache keys.
 ;; Used by forge, gptel, erc, mastodon, etc. via auth-source-search.
 ;; ──────────────────────────────────────────────────────────────────
 ;; (setq zetta-op-auth-source-entries

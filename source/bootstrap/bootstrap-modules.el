@@ -4,6 +4,8 @@
 ;; Provides `zetta-modules!' macro for declaring which modules to load.
 ;; Also defines user-configurable variables for distro customization.
 
+(require 'cl-lib)
+
 ;;; User-configurable variables
 ;; These can be set in ~/.zetta.el before `zetta-modules!' is called.
 
@@ -17,9 +19,39 @@ Download Terminus TTF from https://files.ax86.net/terminus-ttf/")
 (defvar zetta-literature-dir "~/.lit/"
   "Directory for bibliography files and PDFs.  Set in ~/.zetta.el.")
 
+;; The knowledge base: ONE root, every kb path in the modules derived
+;; from it through `zetta-kb-file' (WP-Z9; before it, 40-odd literal
+;; "~/kb/..." strings across 20 files were the convention).  A work
+;; machine keeps the same path and makes it a local, unsynced tree
+;; (work-profile.org Part 3); a different root is one setq here.
+(defvar zetta-kb-dir "~/kb/"
+  "Root of the knowledge base: the (todo) corpus, notes, wiki, inbox, PDFs.
+Set in ~/.zetta.el.  The modules derive every kb path from it through
+`zetta-kb-file'; the standalone zettapkg packages read it when bound and
+fall back to the same default on their own.")
+
+(defun zetta-kb-file (relative)
+  "Absolute name of RELATIVE under `zetta-kb-dir'."
+  (expand-file-name relative zetta-kb-dir))
+
 ;; name is vestigial (logseq era); points at the kb todo dir since 2026-07
-(defvar zetta-logseq-dir "~/kb/todo/"
-  "Directory containing Logseq pages.  Set in ~/.zetta.el.")
+(defvar zetta-logseq-dir (zetta-kb-file "todo/")
+  "Directory containing the (todo) corpus.  Set in ~/.zetta.el.
+Derived from `zetta-kb-dir' when this file loads; a ~/.zetta.el that
+moves the root without setting this is followed by `zetta-kb-follow-root'.")
+
+(defvar zetta--logseq-dir-default zetta-logseq-dir
+  "What `zetta-logseq-dir' was before ~/.zetta.el loaded.")
+
+(defun zetta-kb-follow-root ()
+  "Re-derive the kb defaults this file computed before ~/.zetta.el loaded.
+init.el calls this right after the user file.  `zetta-logseq-dir' was
+derived from `zetta-kb-dir' at load time, so a user file that only
+moves the root would leave the (todo) corpus behind (measured 2026-09-13
+in the WP-Z9 rehearsal); unless the user file set the corpus directory
+itself, it follows the root."
+  (when (equal zetta-logseq-dir zetta--logseq-dir-default)
+    (setq zetta-logseq-dir (zetta-kb-file "todo/"))))
 
 (defvar zetta-use-lockfile t
   "When non-nil, pin packages to versions in elpaca-lock.el.
@@ -28,6 +60,47 @@ Set to nil in ~/.zetta.el for bleeding-edge packages.")
 ;; Apply lockfile preference (elpaca-lock-file is set in bootstrap-elpaca.el)
 (unless zetta-use-lockfile
   (setq elpaca-lock-file nil))
+
+;;; Profile and secrets
+;; Set in ~/.zetta.el.  init.el reads the backend decision AFTER that file
+;; has loaded (bootstrap-secrets.el), so each machine chooses for itself
+;; and no personal vault is ever assumed (work-profile.org Part 4).
+
+(defvar zetta-profile 'full
+  "Which profile this machine runs: `full', `headless' or `work'.
+A marker the templates set and `bin/zetta doctor' reports.  Policy does
+not live here but in the module lists of ~/.zetta.el, so modules should
+not need to test it.")
+
+(defvar zetta-secrets-backend nil
+  "How ~/.private.el and auth-source get their secrets.  Set in ~/.zetta.el.
+nil        pick `op' when the `op' binary and `zetta-op-template-file'
+           both exist, else `authinfo'.  (The behaviour before this
+           variable existed.)
+op         1Password CLI: one `op inject' over `zetta-op-template-file'.
+command    run `zetta-secrets-command'; it prints KEY=VALUE lines.
+authinfo   Emacs's own auth-source files; no cache, no subprocess.
+none       no secrets at all: `auth-sources' is nil (CI, the hub).")
+
+(defvar zetta-op-template-file
+  (expand-file-name "source/op-secrets.env.tpl" user-emacs-directory)
+  "Template `op inject' resolves for the `op' backend.
+A work vault points this outside the repo, for example
+~/.config/zetta/secrets.env.tpl holding op://<WorkVault>/... references.")
+
+(defvar zetta-secrets-command nil
+  "Shell command for the `command' backend.
+It must print KEY=VALUE lines, one per secret: `pass show emacs/env', or
+a bw / vault / aws secretsmanager call piped through jq -- secrets.md
+has one line per vault.")
+
+(defun zetta-secrets-effective-backend ()
+  "The secrets backend in force: `zetta-secrets-backend', or the nil rule."
+  (or zetta-secrets-backend
+      (if (and (executable-find "op")
+               (file-exists-p zetta-op-template-file))
+          'op
+        'authinfo)))
 
 ;;; Module system
 
@@ -86,7 +159,14 @@ in the order they appear in the `zetta-modules!' declaration.")
            "svg-margin.el"
            "breadcrumb.el" "parrot.el" "hl-block.el" "awesome-tray.el"
            "telephone-line.el" "ef-themes.el" "doric-themes.el"
-           "adaptive-wrap.el" "svg-lib.el" "explain-pause-mode.el" "spacetree.el"))
+           "adaptive-wrap.el" "svg-lib.el" "explain-pause-mode.el" "spacetree.el"
+           ;; tab-line.el (the system: global-tab-line-mode, keys, faces)
+           ;; must precede tab-line-svg.el (the renderer), and the
+           ;; alphabetical tail puts them the other way round: hyphen
+           ;; sorts before dot, so "tab-line-svg.el" < "tab-line.el".
+           ;; Listing the base here is enough -- listed files load before
+           ;; every unlisted one.
+           "tab-line.el"))
     (editor . ("super-save.el" "editing.el" "smartparens.el"
                "hungry-delete.el" "vimish-fold.el" "narrow.el" "ov.el" "iedit.el"
                "dumb-jump.el" "snippets.el" "ace-mc.el" "move-text.el"
@@ -132,12 +212,25 @@ in the order they appear in the `zetta-modules!' declaration.")
     ;; grouping variables it defines are what the custom commands there
     ;; name.
     (org . ("org.el" "org-todo-schema.el"
-            "org-super-agenda.el" "org-agenda.el" "org-other-agenda.el"
+            ;; org-ql.el right after org-super-agenda.el (its elpaca
+            ;; dependency, so the dependent is not declared first) and
+            ;; BEFORE the queue, daylog, decorate and chain modules: the
+            ;; zettapkg files those load `(require 'org-ql)', and
+            ;; org-decorate's :init requires its package as soon as
+            ;; org-capture is up -- with org-ql.el listed after it, batch
+            ;; startup failed with "Cannot open load file: org-ql"
+            ;; (measured 2026-09-13, ci-test on the dev tree at 422f10d).
+            "org-super-agenda.el" "org-ql.el" "org-agenda.el" "org-other-agenda.el"
             ;; org-queue.el before org-gantt.el: the chart takes its
             ;; working-state vocabulary from the queue's, and reads the
             ;; queue's plan history for the planned rail.
             "org-queue.el" "org-gantt.el"
-            "org-ql.el" "org-capture.el" "org-ref.el" "ob-mermaid.el"
+            ;; org-routine.el after org-queue.el: it derives the queue's
+            ;; buckets from the routine table.  org-daylog.el after both:
+            ;; its day log is drawn in the queue's buffer.
+            "org-routine.el" "org-daylog.el" "org-decorate.el" "org-chain.el"
+            "org-knowledge.el"
+            "org-capture.el" "org-ref.el" "ob-mermaid.el"
             "pdf-tools.el" "biblio.el" "citar.el" "org-remark.el"
             "org-tree-slide.el" "org-transclusion.el"))
     (term . ("shell.el" "foreman.el" "foreman-conf.el" "vterm.el")))
@@ -288,10 +381,18 @@ piece of SVG chrome would fail at its first render."
   ;; The predicate, not a profile exclusion, so the same user config is
   ;; right on the GUI daily driver and on a headless box, and becomes
   ;; right again the day the headless box gets an SVG-capable build.
-  (mapcar (lambda (file) (cons file #'zetta--svg-available-p))
-          '("ui/svg-line.el" "ui/svg-lib.el" "ui/svg-margin.el"
-            "ui/modeline-svg.el" "ui/header-line-svg.el"
-            "ui/tab-bar-svg.el" "ui/tab-line-svg.el" "ui/poimap.el"))
+  (append
+   (mapcar (lambda (file) (cons file #'zetta--svg-available-p))
+           '("ui/svg-line.el" "ui/svg-lib.el" "ui/svg-margin.el"
+             "ui/modeline-svg.el" "ui/header-line-svg.el"
+             "ui/tab-bar-svg.el" "ui/tab-line-svg.el" "ui/poimap.el"))
+   ;; corfu-terminal draws corfu's popup with overlays where a tty frame
+   ;; cannot have a child frame.  Emacs 31 grew tty child frames (the
+   ;; `tty-child-frames' feature, which corfu itself tests), and the
+   ;; package then warns at load that it is not needed.  Skip it on that
+   ;; capability, so CI's nox row (29.3) still exercises it.
+   (list (cons "completion/corfu-terminal.el"
+               (lambda () (not (featurep 'tty-child-frames))))))
   "Alist of (MODULE-FILE . PREDICATE) for conditionally loaded modules.
 
 MODULE-FILE is the same \"category/file.el\" string used in `user-files'.

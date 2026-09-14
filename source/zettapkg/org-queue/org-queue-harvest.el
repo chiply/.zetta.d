@@ -312,9 +312,111 @@ people is a worse problem than a typo."
     (let ((trimmed (string-trim raw)))
       (unless (string-empty-p trimmed) trimmed))))
 
+(defconst org-queue-harvest--weekdays
+  '(("sun" . 0) ("mon" . 1) ("tue" . 2) ("wed" . 3) ("thu" . 4) ("fri" . 5) ("sat" . 6))
+  "Weekday names as HABIT_DAYS writes them, to day-of-week numbers.")
+
+(defun org-queue-harvest--habit-days ()
+  "Return HABIT_DAYS as a list of weekday numbers, or nil for every day."
+  (when-let* ((days (org-entry-get (point) "HABIT_DAYS")))
+    (delq nil (mapcar (lambda (word)
+                        (alist-get (downcase (substring word 0 (min 3 (length word))))
+                                   org-queue-harvest--weekdays nil nil #'equal))
+                      (split-string days)))))
+
+(defun org-queue-harvest--habit-p ()
+  "Return non-nil if the entry at point is a habit (STYLE habit)."
+  (equal (org-entry-get (point) "STYLE") "habit"))
+
+(defun org-queue-harvest--placed ()
+  "Return the date a machine placement wrote this entry's SCHEDULED, or nil."
+  (org-queue-harvest--timestamp-date (org-entry-get (point) "PLACED")))
+
 (defun org-queue-harvest--review-on ()
   "Return the entry's REVIEW_ON date as a YYYYMMDD integer, or nil."
   (org-queue-harvest--timestamp-date (org-entry-get (point) "REVIEW_ON")))
+
+(defun org-queue-harvest--closed ()
+  "Return the entry's CLOSED stamp as a YYYYMMDD integer, or nil."
+  (org-queue-harvest--timestamp-date (org-entry-get (point) "CLOSED")))
+
+(defun org-queue-harvest--last-transition ()
+  "Return (STATE . DATE) of the entry's newest state change, or nil."
+  (when-let* ((last (car (last (org-queue-state-log)))))
+    (cons (car last) (org-queue-harvest--date (cdr last)))))
+
+(defun org-queue-harvest--transitions ()
+  "Return every state change of the entry as (STATE . DATE), oldest first."
+  (mapcar (lambda (entry) (cons (car entry) (org-queue-harvest--date (cdr entry))))
+          (org-queue-state-log)))
+
+(defun org-queue-harvest--touched ()
+  "Return the newest date stamped anywhere in the entry, LOGBOOK included.
+Nil when the entry carries no timestamp at all.  Staleness means
+\"nothing has happened to this\", not \"this has no planning date\"."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (org-back-to-heading t)
+      (let ((end (save-excursion (outline-next-heading) (point)))
+            latest)
+        (while (re-search-forward "[[<]\\([0-9]\\{4\\}\\)-\\([0-9]\\{2\\}\\)-\\([0-9]\\{2\\}\\)" end t)
+          (let ((date (+ (* 10000 (string-to-number (match-string 1)))
+                         (* 100 (string-to-number (match-string 2)))
+                         (string-to-number (match-string 3)))))
+            (when (or (null latest) (> date latest))
+              (setq latest date))))
+        latest))))
+
+(defun org-queue-harvest--rotten ()
+  "Return how many times the entry was rescheduled, from the LOGBOOK.
+`org-log-reschedule' writes one \"Rescheduled from\" line per move;
+Koenig's ROTTEN count is that number."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (org-back-to-heading t)
+      (let ((end (save-excursion (outline-next-heading) (point))))
+        (count-matches "^[ \t]*- Rescheduled from" (point) end)))))
+
+(defun org-queue-harvest--integer (property)
+  "Return PROPERTY as an integer, 0 when absent or not a number."
+  (let ((raw (org-entry-get (point) property)))
+    (if (and raw (string-match-p "\\`[0-9]+\\'" (string-trim raw)))
+        (string-to-number raw)
+      0)))
+
+(defun org-queue-harvest--interrupted ()
+  "Return the ID of the entry a capture interrupted, from INTERRUPTED."
+  (when-let* ((raw (org-entry-get (point) "INTERRUPTED")))
+    (let ((trimmed (string-trim raw)))
+      (unless (string-empty-p trimmed) trimmed))))
+
+(defcustom org-queue-dormant-tag "dormant"
+  "Tag the project check writes on a parent with no next step.
+Read by the harvest as `:dormant-parent' on the children."
+  :type 'string
+  :group 'org-queue)
+
+(defun org-queue-harvest--landed-p (state)
+  "Return non-nil if the entry is NEXT straight from an agent state.
+The transition before the newest one was into AGENT: the run finished
+and the review is what is left."
+  (and (equal state "NEXT")
+       (let ((log (org-queue-state-log)))
+         (and (>= (length log) 2)
+              (equal (car (car (last log))) "NEXT")
+              (member (car (car (last log 2))) org-queue-agent-states)
+              t))))
+
+(defun org-queue-harvest--dormant-parent-p ()
+  "Return non-nil if an ancestor of the entry carries the dormant tag."
+  (save-excursion
+    (let (found)
+      (while (and (not found) (org-up-heading-safe))
+        (when (member org-queue-dormant-tag (org-get-tags nil t))
+          (setq found t)))
+      found)))
 
 (defun org-queue-harvest-entry (&optional today)
   "Return the Org entry at point as a queue task plist.
@@ -344,8 +446,73 @@ TODAY, a YYYYMMDD integer, anchors repeating timestamps."
           :deadline-soft (org-queue-harvest--soft-deadline-p)
           :waiting-on (org-queue-harvest--waiting-on)
           :review-on (org-queue-harvest--review-on)
+          :habit (org-queue-harvest--habit-p)
+          :habit-days (org-queue-harvest--habit-days)
+          :placed (org-queue-harvest--placed)
+          :closed (org-queue-harvest--closed)
+          :last-transition (org-queue-harvest--last-transition)
+          :transitions (org-queue-harvest--transitions)
+          :touched (org-queue-harvest--touched)
+          :rotten (org-queue-harvest--rotten)
+          :surfaced (org-queue-harvest--integer "SURFACED")
+          :kept (org-queue-harvest--timestamp-date (org-entry-get (point) "KEPT"))
+          :dismissed (org-queue-harvest--timestamp-date (org-entry-get (point) "DISMISSED"))
+          :parent (save-excursion
+                    (when (org-up-heading-safe) (org-get-heading t t t t)))
+          :agent-session (org-entry-get (point) "AGENT_SESSION")
+          :mission (org-entry-get (point) "MISSION" t)
+          :landed (org-queue-harvest--landed-p (nth 2 components))
+          :interrupted (org-queue-harvest--interrupted)
+          :dormant-parent (org-queue-harvest--dormant-parent-p)
           :timestamp (car stamps)
           :timestamp-past (cdr stamps))))
+
+
+;;;; Finding an entry again
+
+(defun org-queue-harvest-locate (task)
+  "Return (BUFFER . POSITION) of TASK's heading, or signal a user error.
+
+The recorded position is only as fresh as the last harvest, so the
+heading there is checked against the title and the ID is the fallback
+-- it survives any amount of editing."
+  (let* ((file (plist-get task :file))
+         (position (plist-get task :point))
+         (id (plist-get task :id))
+         (buffer (and file (find-file-noselect file))))
+    (unless buffer (user-error "No file recorded for this task"))
+    (with-current-buffer buffer
+      (save-restriction
+        (widen)
+        (let ((found (and position
+                          (save-excursion
+                            (goto-char (min position (point-max)))
+                            (and (ignore-errors (org-back-to-heading t))
+                                 (equal (org-get-heading t t t t)
+                                        (plist-get task :title))
+                                 (point))))))
+          (setq position
+                (or found
+                    (when id
+                      (when-let* ((marker (ignore-errors (org-id-find id t))))
+                        (and (eq (marker-buffer marker) buffer)
+                             (marker-position marker))))
+                    ;; org-id may not track globally, or not know this
+                    ;; ID yet; the file itself always does.
+                    (when id
+                      (save-excursion
+                        (goto-char (point-min))
+                        (when (re-search-forward
+                               (concat "^[ \t]*:ID:[ \t]+" (regexp-quote id) "[ \t]*$") nil t)
+                          (org-back-to-heading t)
+                          (point))))
+                    ;; No ID and the title does not match: the recorded
+                    ;; position is a guess about a file that has changed.
+                    ;; Writing to whatever heading sits there now would be
+                    ;; worse than refusing.
+                    (and (null id) position)))
+          (unless position (user-error "Cannot find %s" (plist-get task :title)))
+          (cons buffer position))))))
 
 
 ;;;; Reading the corpus
@@ -406,6 +573,16 @@ queue stops re-litigating the same decision every morning."
                                       (< (plist-get entry :date) today))
                                     (org-queue-history))))
     (plist-get previous :ids)))
+
+;;;; An org-ql predicate over the score
+
+(org-ql-defpred queue-score (&optional min)
+  "Return the entry's queue score when it is at least MIN.
+Exposes `org-queue-core-score' to any agenda block, so a block can be
+sorted or filtered by what the packer would think of it."
+  :body (let ((score (org-queue-core-score (org-queue-harvest-entry)
+                                           (org-queue-core-today))))
+          (and (>= score (or min 0)) score)))
 
 (provide 'org-queue-harvest)
 ;;; org-queue-harvest.el ends here

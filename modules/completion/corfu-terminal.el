@@ -9,8 +9,9 @@
 ;; the headless one: `emacsclient -t' into any daemon gets a popup.
 ;;
 ;; Emacs 31 grows native tty child frames, at which point this package is
-;; redundant there but still harmless; drop it once nothing older than 31
-;; is a target.
+;; redundant there and says so in *Warnings*; `zetta-module-conditions'
+;; (bootstrap-modules.el) skips this file wherever the `tty-child-frames'
+;; feature is present, so it loads only on the Emacs versions that need it.
 
 (use-package corfu-terminal
   :after corfu

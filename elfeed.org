@@ -27,7 +27,6 @@
 ** [[https://www.natesilver.net/feed][Silver Bulletin (Nate Silver)]] :natesilver:
 ** [[https://flowingdata.com/feed][FlowingData]] :data:dataviz:
 ** [[https://www.youtube.com/feeds/videos.xml?channel_id=UCJetJ7nDNLlEzDLXv7KIo0w][Gavin Freeborn]] :youtube:
-** [[https://www.google.com/alerts/feeds/13130175312220372401/9762467059344056332][Google Alert - REMOVED-EMPLOYER]] :googlealert:
 ** [[https://feeds.feedburner.com/GoogleOpenSourceBlog][Google Open Source Blog]] :faangblog:opensource:
 ** [[http://ftr.fivefilters.org/makefulltextfeed.php?url=https://news.ycombinator.com/rss][Hacker News]] :hackernews:
 ** [[https://hnrss.org/best][Hacker News: Best]] :hackernews:

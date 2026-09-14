@@ -4,7 +4,7 @@
 # Usage: zetta <command> [args]
 #
 # Commands:
-#   install   Install packages and native-compile
+#   install   Install packages and native-compile  [--profile full|headless|work]
 #   build     Same phases, multi-hour window, no cache purge (slow boxes, updates)
 #   sync      Re-evaluate config, install new packages
 #   freeze    Write lockfile and optionally commit
@@ -37,6 +37,39 @@ _error() { echo -e "${RED}✗${NC} $*"; }
 _sha256() {
     if command -v sha256sum &>/dev/null; then sha256sum "$1" | cut -d' ' -f1
     else shasum -a 256 "$1" | cut -d' ' -f1; fi
+}
+
+# ——————————————————————————————————————————
+# profiles
+# ——————————————————————————————————————————
+# Three templates ship under templates/: the full profile (zetta.example.el,
+# what a plain `install' copies), the headless one for a tty-only box and
+# the work one for an employer-managed machine (work-profile.org).  A
+# profile is the user's ~/.zetta.el; nothing here ever overwrites one.
+_template_for_profile() {
+    case "$1" in
+        full|example)  echo "$ZETTA_DIR/templates/zetta.example.el" ;;
+        headless|work) echo "$ZETTA_DIR/templates/zetta.$1.el" ;;
+        *) return 1 ;;
+    esac
+}
+
+# Put a ~/.zetta.el in place when there is none, from PROFILE's template
+# (default: full).  An existing file is the user's and is left alone.
+_ensure_user_config() {
+    local profile="${1:-full}" tpl
+    if ! tpl=$(_template_for_profile "$profile"); then
+        _error "Unknown profile: $profile (one of: full, headless, work)"
+        return 1
+    fi
+    if [[ -f ~/.zetta.el ]]; then
+        if [[ "$profile" != full && "$profile" != example ]]; then
+            _info "A user config exists at \$HOME/.zetta.el; not overwriting it with the $profile template (copy $tpl over it to switch)"
+        fi
+    else
+        _info "Copying the $profile profile template to ~/.zetta.el"
+        cp "$tpl" ~/.zetta.el
+    fi
 }
 
 # ——————————————————————————————————————————
@@ -148,6 +181,14 @@ _native_compile_packages() {
 # build that compiled it, and cross-compiling on headless Linux CI
 # for other platforms produced a long tail of incompatibilities.
 cmd_install() {
+    local profile=full
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --profile) profile="${2:-}"; shift 2 ;;
+            --profile=*) profile="${1#--profile=}"; shift ;;
+            *) _error "install: unknown argument $1"; return 1 ;;
+        esac
+    done
     _info "Installing Zetta Emacs packages..."
 
     # Create required files
@@ -158,10 +199,9 @@ cmd_install() {
         echo ";; See $ZETTA_DIR/.private.sample.el for required variables." >> ~/.private.el
     fi
 
-    if [[ ! -f ~/.zetta.el ]]; then
-        _info "Copying default user config to ~/.zetta.el"
-        cp "$ZETTA_DIR/templates/zetta.example.el" ~/.zetta.el
-    fi
+    # The profile must be in place BEFORE the first Emacs loads init.el:
+    # the full profile builds and starts the personal apps.
+    _ensure_user_config "$profile" || return 1
 
     # Purge stale compiled artifacts BEFORE the install Emacs starts.  The
     # phase-1 Emacs loads the bootstrap from whatever compiled form exists,
@@ -212,6 +252,7 @@ cmd_build() {
         _error "No ~/.zetta.el -- choose a profile first:"
         echo "  full:      cp $ZETTA_DIR/templates/zetta.example.el ~/.zetta.el"
         echo "  headless:  cp $ZETTA_DIR/templates/zetta.headless.el ~/.zetta.el"
+        echo "  work:      cp $ZETTA_DIR/templates/zetta.work.el ~/.zetta.el"
         return 1
     fi
     touch ~/.dir-locals.el
@@ -427,6 +468,86 @@ cmd_doctor() {
         _warn "No ~/.private.el found (API keys will not be available)"
     fi
 
+    # Secrets hygiene (work-security-audit.org SEC-C2).  These files hold
+    # credentials, or the token that unlocks them; a mode wider than 600
+    # exposes them to other local accounts and to backup or sync tools
+    # that honour modes.  A plaintext ~/.authinfo is a second, unencrypted
+    # credential store next to whatever the secrets backend serves.
+    local f mode
+    for f in ~/.private.el ~/.authinfo ~/.authinfo.gpg ~/.zshenv.local; do
+        [[ -e "$f" ]] || continue
+        mode=$(stat -f '%Lp' "$f" 2>/dev/null || stat -c '%a' "$f" 2>/dev/null)
+        if [[ "$mode" == "600" ]]; then
+            _ok "Mode 600: $f"
+        else
+            _warn "Mode $mode on $f (expected 600): chmod 600 $f"
+        fi
+    done
+    if [[ -f ~/.authinfo ]]; then
+        _warn "~/.authinfo is a plaintext credential store; move it to ~/.authinfo.gpg, or aside, once the backend serves its entries (secrets.md)"
+    fi
+
+    # Profile and secrets backend (work-profile.org Part 4, WP-Z10).  Read
+    # the way init.el reads them -- bootstrap-modules.el, then ~/.zetta.el
+    # -- in a batch Emacs that loads none of the modules.  The template
+    # or the command is only ever COUNTED, never printed.
+    local probe profile backend template command want got
+    probe=$("$EMACS" -Q --batch --init-directory="$ZETTA_DIR" \
+        -l "$ZETTA_DIR/source/bootstrap/bootstrap-modules.el" \
+        --eval '(condition-case nil (load (expand-file-name "~/.zetta.el") nil t) (error nil))' \
+        --eval '(princ (format "%s\n%s\n%s\n%s\n" zetta-profile (zetta-secrets-effective-backend) zetta-op-template-file (or zetta-secrets-command "")))' \
+        2>/dev/null | tail -4 || true)
+    profile=$(sed -n 1p <<<"$probe")
+    backend=$(sed -n 2p <<<"$probe")
+    template=$(sed -n 3p <<<"$probe")
+    command=$(sed -n 4p <<<"$probe")
+    if [[ -z "$profile" ]]; then
+        _warn "Could not read zetta-profile (does ~/.zetta.el load on its own?)"
+    else
+        _ok "Profile: $profile"
+    fi
+    case "$backend" in
+        op)
+            if [[ ! -f "$template" ]]; then
+                _warn "Secrets backend: op, but the template is missing: $template"
+            elif ! command -v op &>/dev/null; then
+                _warn "Secrets backend: op, but no op binary on PATH"
+            else
+                want=$(grep -cE '^[A-Za-z_][A-Za-z0-9_]*=' "$template" || true)
+                got=$(op inject -i "$template" 2>/dev/null | grep -cE '^[A-Za-z_][A-Za-z0-9_]*=.+$' || true)
+                if [[ "${want:-0}" -gt 0 && "${got:-0}" -eq "$want" ]]; then
+                    _ok "Secrets backend: op ($got of $want keys resolve from $template)"
+                else
+                    _warn "Secrets backend: op, but ${got:-0} of ${want:-0} keys resolve from $template (is the vault unlocked?)"
+                fi
+            fi ;;
+        command)
+            if [[ -z "$command" ]]; then
+                _warn "Secrets backend: command, but zetta-secrets-command is nil"
+            else
+                got=$(bash -c "$command" 2>/dev/null | grep -cE '^[A-Za-z_][A-Za-z0-9_]*=.+$' || true)
+                if [[ "${got:-0}" -gt 0 ]]; then
+                    _ok "Secrets backend: command ($got KEY=VALUE lines)"
+                else
+                    _warn "Secrets backend: command, but it printed no KEY=VALUE line"
+                fi
+            fi ;;
+        authinfo)
+            local present=""
+            for f in ~/.authinfo.gpg ~/.authinfo; do
+                [[ -f "$f" ]] && present="$present $f"
+            done
+            if [[ -n "$present" ]]; then
+                _ok "Secrets backend: authinfo (files:$present)"
+            else
+                _info "Secrets backend: authinfo (no authinfo file yet; packages needing a token will prompt)"
+            fi ;;
+        none)
+            _ok "Secrets backend: none (auth-sources nil)" ;;
+        *)
+            _warn "Secrets backend: could not determine (got '$backend')" ;;
+    esac
+
     # Elpaca directory
     if [[ -d "$ZETTA_DIR/elpaca/builds" ]]; then
         local pkg_count
@@ -636,10 +757,11 @@ ZETTA_CI_WATCHDOG="(progn
 cmd_ci_sync() {
     _info "Syncing packages (stale cache detected)…"
 
-    # Create required files if missing
+    # Create required files if missing.  ZETTA_TEMPLATE (example | headless
+    # | work) picks the profile when there is no ~/.zetta.el yet.
     touch ~/.dir-locals.el
     [[ -f ~/.private.el ]] || echo ";;" > ~/.private.el
-    [[ -f ~/.zetta.el ]] || cp "$ZETTA_DIR/templates/zetta.example.el" ~/.zetta.el
+    _ensure_user_config "${ZETTA_TEMPLATE:-example}" || return 1
 
     local exit_code=0
     "$EMACS" --init-directory="$ZETTA_DIR" --batch \
@@ -703,10 +825,11 @@ cmd_ci_sync() {
 cmd_ci_test() {
     _info "Running CI test (batch mode)…"
 
-    # Create required files if missing
+    # Create required files if missing.  ZETTA_TEMPLATE (example | headless
+    # | work) picks the profile when there is no ~/.zetta.el yet.
     touch ~/.dir-locals.el
     [[ -f ~/.private.el ]] || echo ";;" > ~/.private.el
-    [[ -f ~/.zetta.el ]] || cp "$ZETTA_DIR/templates/zetta.example.el" ~/.zetta.el
+    _ensure_user_config "${ZETTA_TEMPLATE:-example}" || return 1
 
     local logfile exit_code=0
     logfile=$(mktemp)
@@ -841,7 +964,7 @@ cmd_help() {
     echo "Usage: zetta <command> [args]"
     echo ""
     echo "Commands:"
-    echo "  install          Install packages and native-compile"
+    echo "  install [--profile P]  Install packages and native-compile; P = full (default) | headless | work"
     echo "  build            Same phases, 4 h window, no eln-cache purge (slow boxes, updates)"
     echo "  sync             Re-evaluate config, install new packages"
     echo "  freeze [--commit]  Write lockfile (optionally commit)"
@@ -857,13 +980,18 @@ cmd_help() {
     echo "  ZETTA_DIR          Path to Zetta config (default: auto-detected)"
     echo "  ZETTA_BUILD_TIMEOUT  build: wall-clock window in seconds (default: 14400)"
     echo "  ZETTA_BUILD_STALL    build: no-progress limit in seconds (default: 1800)"
+    echo "  ZETTA_TEMPLATE       ci-sync/ci-test: profile to install when ~/.zetta.el is missing"
+    echo "                       (example | headless | work; default: example)"
+    echo ""
+    echo "Profiles (templates/): zetta.example.el = full, zetta.headless.el, zetta.work.el."
+    echo "  The user's ~/.zetta.el is never overwritten; copy a template by hand to switch."
 }
 
 # ——————————————————————————————————————————
 # Main dispatch
 # ——————————————————————————————————————————
 case "${1:-help}" in
-    install) cmd_install ;;
+    install) shift; cmd_install "$@" ;;
     build)   cmd_build ;;
     sync)    cmd_sync ;;
     freeze)  cmd_freeze "${2:-}" ;;

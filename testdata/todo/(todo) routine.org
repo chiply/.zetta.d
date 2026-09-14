@@ -1,0 +1,127 @@
+#+TITLE: Routine
+#+CATEGORY: routine
+#+PROPERTY: Effort_ALL 0 0:05 0:10 0:15 0:20 0:30 0:45 1:00 1:30 2:00 3:00 4:00 5:00 6:00 7:00
+#+COLUMNS: %40ITEM(Task) %TODO %3PRIORITY(P) %6IMPACT(Imp) %17Effort(Estimate){:} %CLOCKSUM(Clocked) %DEADLINE %SCHEDULED %TAGS
+#+FILETAGS: :routine:
+
+* TODO Lift weights  :body:
+SCHEDULED: <2026-09-12 Sat .+1d>
+:PROPERTIES:
+:ID:       503E14DE-586F-4A01-B3D5-8BE5F6AA1A69
+:STYLE:    habit
+:Effort:   1:00
+:CREATED:  [2026-08-04 Tue]
+:HABIT_DAYS: Mon Tue Wed Thu Fri Sat
+:END:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-08-25 Tue 07:05]
+- State "DONE"       from "TODO"       [2026-08-26 Wed 07:05]
+- State "DONE"       from "TODO"       [2026-08-27 Thu 07:05]
+- State "DONE"       from "TODO"       [2026-08-28 Fri 07:05]
+- State "DONE"       from "TODO"       [2026-08-31 Mon 07:05]
+- State "DONE"       from "TODO"       [2026-09-01 Tue 07:05]
+- State "DONE"       from "TODO"       [2026-09-02 Wed 07:05]
+- State "DONE"       from "TODO"       [2026-09-03 Thu 07:05]
+- State "DONE"       from "TODO"       [2026-09-04 Fri 07:05]
+- State "DONE"       from "TODO"       [2026-09-05 Sat 07:05]
+- State "DONE"       from "TODO"       [2026-09-07 Mon 07:05]
+- State "DONE"       from "TODO"       [2026-09-08 Tue 07:05]
+- State "DONE"       from "TODO"       [2026-09-09 Wed 07:05]
+- State "DONE"       from "TODO"       [2026-09-10 Thu 07:05]
+- State "DONE"       from "TODO"       [2026-09-11 Fri 07:05]
+:END:
+
+* TODO Bike  :body:
+SCHEDULED: <2026-09-12 Sat .+1d>
+:PROPERTIES:
+:ID:       6ADB3267-C02E-4CC0-BD86-5E42C13B301E
+:STYLE:    habit
+:Effort:   0:45
+:CREATED:  [2026-05-13 Wed]
+:HABIT_DAYS: Mon Tue Wed Thu Fri
+:END:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-08-24 Mon 07:05]
+- State "DONE"       from "TODO"       [2026-08-25 Tue 07:05]
+- State "DONE"       from "TODO"       [2026-08-26 Wed 07:05]
+- State "DONE"       from "TODO"       [2026-08-28 Fri 07:05]
+- State "DONE"       from "TODO"       [2026-09-01 Tue 07:05]
+- State "DONE"       from "TODO"       [2026-09-03 Thu 07:05]
+- State "DONE"       from "TODO"       [2026-09-04 Fri 07:05]
+- State "DONE"       from "TODO"       [2026-09-07 Mon 07:05]
+- State "DONE"       from "TODO"       [2026-09-08 Tue 07:05]
+- State "DONE"       from "TODO"       [2026-09-09 Wed 07:05]
+- State "DONE"       from "TODO"       [2026-09-10 Thu 07:05]
+- State "DONE"       from "TODO"       [2026-09-11 Fri 07:05]
+:END:
+
+* TODO Clean apartment  :housekeeping:
+SCHEDULED: <2026-09-12 Sat .+1d>
+:PROPERTIES:
+:ID:       C2EAB81F-0F7A-4B53-9BF6-8E65D7EC1C8F
+:STYLE:    habit
+:Effort:   0:20
+:CREATED:  [2026-04-04 Sat]
+:END:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-08-23 Sun 07:05]
+- State "DONE"       from "TODO"       [2026-08-24 Mon 07:05]
+- State "DONE"       from "TODO"       [2026-08-25 Tue 07:05]
+- State "DONE"       from "TODO"       [2026-08-26 Wed 07:05]
+- State "DONE"       from "TODO"       [2026-08-27 Thu 07:05]
+- State "DONE"       from "TODO"       [2026-08-30 Sun 07:05]
+- State "DONE"       from "TODO"       [2026-08-31 Mon 07:05]
+- State "DONE"       from "TODO"       [2026-09-01 Tue 07:05]
+- State "DONE"       from "TODO"       [2026-09-03 Thu 07:05]
+- State "DONE"       from "TODO"       [2026-09-04 Fri 07:05]
+- State "DONE"       from "TODO"       [2026-09-05 Sat 07:05]
+- State "DONE"       from "TODO"       [2026-09-06 Sun 07:05]
+- State "DONE"       from "TODO"       [2026-09-07 Mon 07:05]
+- State "DONE"       from "TODO"       [2026-09-08 Tue 07:05]
+- State "DONE"       from "TODO"       [2026-09-09 Wed 07:05]
+- State "DONE"       from "TODO"       [2026-09-10 Thu 07:05]
+:END:
+
+* TODO Read  :reading:
+SCHEDULED: <2026-09-12 Sat .+1d>
+:PROPERTIES:
+:ID:       04E70890-09C8-4603-8238-73AA64DB06C2
+:STYLE:    habit
+:Effort:   1:00
+:CREATED:  [2026-08-06 Thu]
+:END:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-08-23 Sun 07:05]
+- State "DONE"       from "TODO"       [2026-08-24 Mon 07:05]
+- State "DONE"       from "TODO"       [2026-08-25 Tue 07:05]
+- State "DONE"       from "TODO"       [2026-08-26 Wed 07:05]
+- State "DONE"       from "TODO"       [2026-08-27 Thu 07:05]
+- State "DONE"       from "TODO"       [2026-08-28 Fri 07:05]
+- State "DONE"       from "TODO"       [2026-09-01 Tue 07:05]
+- State "DONE"       from "TODO"       [2026-09-02 Wed 07:05]
+- State "DONE"       from "TODO"       [2026-09-03 Thu 07:05]
+- State "DONE"       from "TODO"       [2026-09-04 Fri 07:05]
+- State "DONE"       from "TODO"       [2026-09-05 Sat 07:05]
+- State "DONE"       from "TODO"       [2026-09-06 Sun 07:05]
+- State "DONE"       from "TODO"       [2026-09-07 Mon 07:05]
+- State "DONE"       from "TODO"       [2026-09-08 Tue 07:05]
+- State "DONE"       from "TODO"       [2026-09-09 Wed 07:05]
+- State "DONE"       from "TODO"       [2026-09-10 Thu 07:05]
+- State "DONE"       from "TODO"       [2026-09-11 Fri 07:05]
+:END:
+
+* TODO Laundry  :housekeeping:
+SCHEDULED: <2026-09-12 Sat .+1d>
+:PROPERTIES:
+:ID:       3631F1AA-3470-4EAF-A0A9-C9C3679BC1BB
+:STYLE:    habit
+:Effort:   0:30
+:CREATED:  [2026-08-11 Tue]
+:HABIT_DAYS: Sat
+:END:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-08-22 Sat 07:05]
+- State "DONE"       from "TODO"       [2026-08-29 Sat 07:05]
+- State "DONE"       from "TODO"       [2026-09-05 Sat 07:05]
+:END:
+

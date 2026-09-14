@@ -120,7 +120,7 @@ yesterday's work does not go stale in five minutes."
    :id (format "%s/%s/%d" (plist-get row :id) kind index)
    :title (concat (when (memq kind '(queue schedule)) org-gantt-timegrid-plan-prefix)
                   (when (and (plist-get row :stale)
-                             (memq kind '(working waiting)))
+                             (memq kind '(working waiting machine)))
                     org-gantt-timegrid-stale-prefix)
                   (or (plist-get row :title) "?"))
    :start (org-gantt-timegrid--to-minutes start)
@@ -153,7 +153,7 @@ yesterday's work does not go stale in five minutes."
         ;; must not paint the night.
         (when (memq 'actual kinds)
           (dolist (segment (plist-get row :clipped))
-            (when (memq (plist-get segment :class) '(working waiting))
+            (when (memq (plist-get segment :class) '(working waiting machine))
               (push (org-gantt-timegrid--event
                      row (plist-get segment :class)
                      (plist-get segment :start) (plist-get segment :end)

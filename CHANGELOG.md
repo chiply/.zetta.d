@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.8](https://github.com/chiply/.zetta.d/compare/v0.2.7...v0.2.8) (2026-09-14)
+
+
+### Features
+
+* work-machine profile, per-machine secrets backend, security scrub and hardening ([58826b4](https://github.com/chiply/.zetta.d/commit/58826b41bcf80eb1a95622afe5de815561cba43f))
+
 ## [0.2.7](https://github.com/chiply/.zetta.d/compare/v0.2.6...v0.2.7) (2026-09-11)
 
 

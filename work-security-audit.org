@@ -763,6 +763,25 @@ still live until group A is done.
    -- the tracked content it runs from is unchanged.
 2. SEC-D5: ask GitHub support to remove cached views, the pull-request
    references and unreachable objects for both repos.
-3. SEC-D6: the next release-please PR on .zetta.d should open normally;
-   the CHANGELOG's links to pre-rewrite hashes are the known casualty.
+3. SEC-D6, measured [2026-09-14]: release-please ran green on the
+   merge of #147 and correctly found v0.2.7 at its REWRITTEN sha -- the
+   rewrite did not confuse it -- but opened no release PR: the squash
+   commit's message was the 19 KB PR body (gh pr merge --squash uses
+   it), and a line beginning with "(" made its conventional-commit
+   parser give up ("commit could not be parsed"), so it saw no
+   user-facing commit.  Fixed with the follow-up PR that carries this
+   note: its body holds a BEGIN_COMMIT_OVERRIDE block naming the
+   feature, release-please's documented remedy.  Lesson: keep squash
+   bodies short and plain, or pass --body to gh pr merge.
 4. Group A, per ~/kb/notes/ROTATE.org.
+
+** Merged and dispatched [2026-09-14, measured]
+
+- .zetta.d #147 (dev -> main, squash d7497fd) after the four test rows
+  passed (29.4, 30.2, release-snapshot, nox-29.3); .files #15 (squash
+  641b1f4) after the bootstrap and hub lint passed.  The push runs on
+  both mains started; the .zetta.d cache job and the .files bootstrap
+  are reported in work-profile.org's status section.
+- Manual dispatches on the merged mains: ci.yml with =template=work=
+  (run 34802915159, a cold build) and test_install.yml with
+  =profile=work= (run 34802916713).  Outcomes recorded when they finish.

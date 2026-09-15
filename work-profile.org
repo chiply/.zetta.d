@@ -957,6 +957,29 @@ run under the new =brew bundle check= assertion:
 Outcome on the machine at the time of writing: Emacs 32.0.50 built
 from source; the package install (=bin/zetta install=) still to run.
 
+** Install day, second round [2026-09-15, measured on the work machine]
+
+The package install ran; the daemon's second start died with "Symbol's
+value as variable is void: compile-angel".  Cause, reproduced in batch:
+zetta's early-init.el had never loaded on that machine.  The shims start
+Emacs through chemacs v1 (=--with-profile=), which sets the directory
+from ~/.emacs -- after Emacs has already looked for early-init.el in
+~/.emacs.d.  On the personal Mac a hand-made ~/.emacs.d/early-init.el
+symlink hid this, and nothing in either repo created it.  Without the
+early-init deny-list the first start after an install natively compiled
+the bootstrap's SOURCE in a bare worker, where =elpaca= is not a macro,
+and the second start preferred that =.eln= over the good =.elc=.  Fixed in
+.files: zemacs passes =--init-directory= (Emacs 29+; the profile's
+early-init.el and eln-cache are then its own), and
+install_emacs_distros.sh links ~/.emacs.d/early-init.el for launches
+that bypass the shims.  Repair on an affected machine: stop the daemon,
+delete =bootstrap-*.eln= and =init-data-*.eln= from eln-cache, restart.
+
+Also found: the tmuxinator sessions were linked but the program was not
+(bootstrap's =gem install= failed under Apple's Ruby 2.6).  It and the
+tools the sessions call are Brewfile entries now, and the zetta session
+starts the source build instead of the Homebrew Emacs.
+
 ** Rehearsal [2026-09-13, measured]
 
 Part 7.2's recipe: an =.elc=-free overlay of the working tree (48d2334

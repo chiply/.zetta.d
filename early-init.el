@@ -87,8 +87,12 @@
 (setq-default cursor-in-non-selected-windows nil)
 (setq highlight-nonselected-windows nil)
 
-;; Faster scrolling over unfontified regions
-(setq fast-but-imprecise-scrolling t)
+;; Not `fast-but-imprecise-scrolling': it lets a long scroll skip
+;; fontification, so text is painted in the body face and reshaped once its
+;; faces arrive -- a visible jitter under any preset whose faces carry
+;; different families.  See "Fontification stays INSIDE redisplay" in
+;; modules/core/interface.el.
+(setq fast-but-imprecise-scrolling nil)
 
 ;; Reduce idle UI refresh frequency (default 0.5s)
 (setq idle-update-delay 1.0)

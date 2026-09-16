@@ -681,6 +681,9 @@ Three things need doing that `fontaine-set-preset' does not:
         ;; need a remap -- and which can drop theirs.
         (when (fboundp 'zetta-fontaine-refresh-buffer-presets)
           (zetta-fontaine-refresh-buffer-presets))
+        ;; and the minibuffers and which-key buffer that already exist
+        (when (fboundp 'zetta-fontaine-pin-live-buffers)
+          (zetta-fontaine-pin-live-buffers))
         (force-mode-line-update t))))
 
   (add-hook 'fontaine-set-preset-hook #'zetta-fontaine--sync)
@@ -995,6 +998,72 @@ enabled."
     (ignore-errors (enable-theme 'fontaine))))
 
 (add-hook 'enable-theme-functions #'zetta-fontaine-reassert-after-theme)
+
+;;; ------------------------------------------------------------------
+;;; The minibuffer keeps the default family
+;;; ------------------------------------------------------------------
+;; A preset may hand `bold', `italic' or `fixed-pitch' a family other than
+;; `default''s -- that is the point of the wild presets -- and the
+;; completion UI inherits from exactly those faces: `which-key-key-face',
+;; `consult-key', `marginalia-key' and `vertico-current' are bold and
+;; fixed-pitch, the prompt is whatever the theme makes it.  So under such a
+;; preset the prompt line and the which-key popup came out in two or three
+;; families at once: the key in one, its description in another.
+;;
+;; Pin those faces to the preset's default family in minibuffers and in
+;; which-key's buffer, with buffer-local remaps.  Weight and slant still
+;; apply -- bold is still bold -- only the family is held.  A candidate that
+;; names its own family (`zetta-fontaine-pick-preset' renders each preset in
+;; its font) is untouched: that is an explicit attribute on the text, not
+;; an inherited one.
+
+(defvar zetta-fontaine-pinned-faces
+  '(bold italic bold-italic fixed-pitch fixed-pitch-serif variable-pitch)
+  "Faces held to the default family in minibuffers and the which-key buffer.")
+
+(defvar-local zetta-fontaine--pin-cookies nil
+  "Face-remap cookies of `zetta-fontaine-pin-default-family' in this buffer.")
+
+(defun zetta-fontaine--default-family ()
+  "The global preset's default family, else the selected frame's.
+Nil on a tty, whose `default' reports the placeholder family \"default\"."
+  (let ((family (and (bound-and-true-p fontaine-current-preset)
+                     (fboundp 'fontaine--get-preset-property)
+                     (fontaine--get-preset-property
+                      fontaine-current-preset :default-family))))
+    (cond ((stringp family) family)
+          ((display-graphic-p)
+           (let ((frame-family (face-attribute 'default :family nil t)))
+             (and (stringp frame-family) frame-family))))))
+
+(defun zetta-fontaine-pin-default-family (&optional buffer)
+  "Hold `zetta-fontaine-pinned-faces' to the default family in BUFFER.
+BUFFER defaults to the current one.  Idempotent: earlier pins are removed
+first, so the reused minibuffer does not accumulate remaps and a preset
+change simply re-pins."
+  (with-current-buffer (or buffer (current-buffer))
+    (mapc #'face-remap-remove-relative zetta-fontaine--pin-cookies)
+    (setq zetta-fontaine--pin-cookies nil)
+    (let ((family (zetta-fontaine--default-family)))
+      (when (stringp family)
+        (dolist (face zetta-fontaine-pinned-faces)
+          (when (facep face)
+            (push (face-remap-add-relative face (list :family family))
+                  zetta-fontaine--pin-cookies)))))))
+
+(defun zetta-fontaine-pin-live-buffers ()
+  "Re-pin every live minibuffer and the which-key buffer.
+Called from `zetta-fontaine--sync' so a preset change reaches buffers that
+already exist; new ones are pinned by the hooks below."
+  (dolist (buf (buffer-list))
+    (when (or (minibufferp buf)
+              (eq buf (bound-and-true-p which-key--buffer)))
+      (zetta-fontaine-pin-default-family buf))))
+
+(add-hook 'minibuffer-setup-hook #'zetta-fontaine-pin-default-family)
+(with-eval-after-load 'which-key
+  ;; runs once, when the buffer is created, with it current
+  (add-hook 'which-key-init-buffer-hook #'zetta-fontaine-pin-default-family))
 
 ;;; ------------------------------------------------------------------
 ;;; A picker: consult preview, marginalia annotations, in-font candidates

@@ -623,7 +623,13 @@ Three things need doing that `fontaine-set-preset' does not:
         ;; the theme disabled fontaine's spec is not consulted, so `default'
         ;; falls back to the generic sans (Helvetica).  The metric derivation
         ;; below clears the cache, so without this the font silently reverts.
-        (when (custom-theme-p 'fontaine)
+        ;; Only when it is not already enabled: `enable-theme' runs
+        ;; `enable-theme-functions', i.e. brushup, and this is too early
+        ;; for that -- the metric derivation and `set-frame-font' below
+        ;; would wipe what brushup had just set.  It is run once, at the
+        ;; end, instead.
+        (when (and (custom-theme-p 'fontaine)
+                   (not (memq 'fontaine custom-enabled-themes)))
           (ignore-errors (enable-theme 'fontaine)))
         (when (and family height)
           nil)
@@ -657,6 +663,13 @@ Three things need doing that `fontaine-set-preset' does not:
         ;; the hook idempotent by construction rather than by luck.
         (when (and (fboundp 'fontaine--set-faces) fontaine-current-preset)
           (ignore-errors (fontaine--set-faces fontaine-current-preset)))
+        ;; The same re-realization drops everything brushup set with
+        ;; `set-face-attribute' -- the mode-line and header-line
+        ;; backgrounds, the comment colour, the org heading heights -- which
+        ;; is why a preset change used to need a manual M-x brushup.  Run
+        ;; its styles here, after the last step that could undo them.
+        (when (fboundp 'brushup)
+          (ignore-errors (brushup)))
 
         ;; the SVG lines lay text out on a px-per-char grid tied to that font
         (when (fboundp 'zetta-svg-line-derive-char-advance)
@@ -911,8 +924,13 @@ survives a restart.  Candidates render in the font they select."
 (defun zetta-fontaine-apply-buffer-preset ()
   "Apply the preset in force for this buffer's mode.
 Does nothing for excluded modes, or when that preset is already the global
-one -- remapping to what is already active only costs redisplay."
-  (unless (apply #'derived-mode-p zetta-fontaine-buffer-exclude)
+one -- remapping to what is already active only costs redisplay.  Nor
+before fontaine has loaded: this runs from `after-change-major-mode-hook',
+installed when this file loads, and under elpaca the package arrives
+later; `zetta-fontaine-refresh-buffer-presets' revisits every buffer once
+the startup preset is applied."
+  (unless (or (not (featurep 'fontaine))
+              (apply #'derived-mode-p zetta-fontaine-buffer-exclude))
     (when-let* ((entry (zetta-fontaine--mode-entry))
                 (preset (zetta-fontaine--mode-preset entry)))
       (unless (or (eq preset fontaine-current-preset)
@@ -938,6 +956,45 @@ gains it."
       (when zetta-fontaine--buffer-preset
         (zetta-fontaine-unset-preset-locally))
       (zetta-fontaine-apply-buffer-preset))))
+
+;;; ------------------------------------------------------------------
+;;; A theme change leaves the font alone
+;;; ------------------------------------------------------------------
+;; Fontaine writes each preset as face specs under a custom theme named
+;; `fontaine', which it enables once, at load.  `consult-theme' -- and any
+;; switcher built the same way -- begins with `(mapc #'disable-theme
+;; custom-enabled-themes)', which disables that theme along with the one
+;; being replaced.  Its specs then take no part in `face-spec-recalc':
+;; `default' keeps its family only because the frame font carries it, while
+;; `bold', `italic', `fixed-pitch', `variable-pitch' and `line-number' fall
+;; back to whatever the new theme or Emacs says -- "Sans Serif" for
+;; variable-pitch -- so choosing a theme changed the fonts.  Fontaine 3.1
+;; has no hook for this.
+;;
+;; Re-enable the theme after any other theme is enabled.  `enable-theme'
+;; puts it back in front, where its family specs win, and it runs
+;; `enable-theme-functions' again, so brushup's styles land after the faces
+;; fontaine's theme has just rebuilt -- the same order a preset change now
+;; uses.  That second round is filtered out here by the theme's name.
+
+;; Installed when this FILE loads, which under elpaca is before the package
+;; does -- the use-package body above is queued, the top level below is not.
+;; fontaine.el enables its theme on line 51 and defines
+;; `fontaine-current-preset' on line 447, so a bare reference here ran
+;; inside `require' and aborted the package's own load (measured in the
+;; batch CI load, 2026-09-16).  Hence `bound-and-true-p' on every path.
+(defun zetta-fontaine-reassert-after-theme (theme)
+  "Re-enable the `fontaine' theme after THEME, so the preset's fonts survive.
+For `enable-theme-functions'.  Does nothing for THEME `fontaine' itself,
+before fontaine has loaded and set a preset, or while the theme is still
+enabled."
+  (when (and (not (eq theme 'fontaine))
+             (bound-and-true-p fontaine-current-preset)
+             (custom-theme-p 'fontaine)
+             (not (memq 'fontaine custom-enabled-themes)))
+    (ignore-errors (enable-theme 'fontaine))))
+
+(add-hook 'enable-theme-functions #'zetta-fontaine-reassert-after-theme)
 
 ;;; ------------------------------------------------------------------
 ;;; A picker: consult preview, marginalia annotations, in-font candidates

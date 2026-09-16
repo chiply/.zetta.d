@@ -8,6 +8,16 @@
   (when (string= system-type "darwin")
     (setq dired-use-ls-dired nil))
 
+  ;; No free-space annotation.  Emacs 29+ hangs "(43G available)" off the
+  ;; directory header, as a `display' property on its colon
+  ;; (`dired-free-space' `first').  all-the-icons-dired manages `display'
+  ;; through font-lock, so every fontification pass strips it: the
+  ;; annotation was never visible in steady state, only during the
+  ;; deferred-fontification window after a revert, where it blinked in
+  ;; beside the directory name.  Say so rather than rely on the side
+  ;; effect.  (`separate' would put it on a line hide-details conceals.)
+  (setq dired-free-space nil)
+
   ;; ---------------------------------------------------------------------------
   ;; Helpers
   ;; ---------------------------------------------------------------------------
@@ -150,17 +160,23 @@ When INTERACTIVE-P is non-nil, call OP interactively."
   ;; Subtree helpers
   ;; ---------------------------------------------------------------------------
 
+  ;; No `revert-buffer' after a toggle.  The revert dated from
+  ;; all-the-icons-dired 1.x, which drew icons as overlays from
+  ;; `dired-after-readin-hook' and so never saw the lines a subtree
+  ;; inserted.  2.0 draws them through font-lock, and what dired-subtree
+  ;; inserts is unfontified text that jit-lock icons the moment it is
+  ;; displayed.  The revert had become pure churn: re-read the directory,
+  ;; unfontify the whole listing (icons gone), re-insert every open
+  ;; subtree, fontify again (icons back) -- a full flash per TAB.
   (defun zetta-dired-subtree-cycle ()
-    "Cycle dired subtree and revert."
+    "Cycle the dired subtree at point through its depths."
     (interactive)
-    (dired-subtree-cycle 10)
-    (unless (file-remote-p default-directory) (revert-buffer)))
+    (dired-subtree-cycle 10))
 
   (defun zetta-dired-subtree-toggle ()
-    "Toggle dired subtree and revert."
+    "Toggle the dired subtree at point."
     (interactive)
-    (dired-subtree-toggle)
-    (unless (file-remote-p default-directory) (revert-buffer)))
+    (dired-subtree-toggle))
 
   ;; ---------------------------------------------------------------------------
   ;; Search / external-app helpers

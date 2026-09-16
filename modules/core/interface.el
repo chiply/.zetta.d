@@ -744,18 +744,24 @@ preset switch, and a missing font must never be able to break either."
 ;; reverting on their own -- safe on local APFS.  OPTIMIZATIONS.org item 9.
 (setq auto-revert-avoid-polling t)
 
-;; Redisplay and fontification, all measured live as unset.
+;; Fontification stays INSIDE redisplay.
 ;;
-;; `jit-lock-defer-time' nil means every keystroke that dirties a region
-;; fontifies INSIDE redisplay; after the timer treadmill this was the largest
-;; remaining per-keystroke cost in org buffers.  0.05 defers it to just after
-;; the pass instead.  `redisplay-skip-fontification-on-input' lets a pass
-;; abandon fontifying when input is waiting, so a held key scrolls rather
-;; than fontifies.  `hl-line-sticky-flag' t maintains the highlight overlay
-;; in EVERY window on every command instead of only the selected one.
-;; OPTIMIZATIONS.org items 10 and 11.
-(setq jit-lock-defer-time 0.05
-      redisplay-skip-fontification-on-input t
+;; OPTIMIZATIONS.org items 10 and 11 set `jit-lock-defer-time' to 0.05 and
+;; `redisplay-skip-fontification-on-input' to t: a pass painted text
+;; unfontified and fontified it 50 ms later, or not at all while a key was
+;; held.  Invisible when every face shares one family -- only the colours
+;; arrive late -- and unmissable under a preset that does not: org-wild
+;; draws prose, headings and code in different Monaspace cuts, so a
+;; scrolled-in line was painted in the body face and then reshaped, glyph
+;; widths and all, a beat later.  The same lag was the dired flash
+;; (all-the-icons-dired 2.0 draws its icons through font-lock) and let the
+;; free-space header annotation blink in after a revert.  Both are back at
+;; their defaults, as is `fast-but-imprecise-scrolling' in early-init.el.
+;; `hl-line-sticky-flag' nil keeps the highlight in the selected window
+;; only; `auto-window-vscroll' nil is the other half of item 11 and has
+;; nothing to do with fonts.
+(setq jit-lock-defer-time nil
+      redisplay-skip-fontification-on-input nil
       auto-window-vscroll nil
       hl-line-sticky-flag nil)
 

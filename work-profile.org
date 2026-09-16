@@ -104,6 +104,17 @@ Assumes the tasks in Part 8 have landed on =main= in both repos.  Part
    if there is a seat; =M-x org-jira-get-issues= once
    =zetta-jira-url= is set.
 
+One-shot alternative [2026-09-14]: =.files/setup-work-machine.sh= does
+steps 2 to 7 in one run and is value-free, so it can travel by e-mail
+or be fetched from the repository's =main=.  It also takes the other
+Emacs decision the owner made after the doc was written: the work
+machine runs the SOURCE-BUILT Emacs alone, no =emacs-plus@31=
+(=INCLUDE_EMACS_PLUS=f= in ~/.zshenv.local skips the formula, the tap
+stays for the NS patches, =EMACS= points at the bundle so =bin/zetta=
+uses it, and the bundle's own =emacsclient= goes on PATH for the Claude
+Code hook).  The "emacs-plus on day one" rows above are the fallback,
+not the plan.
+
 If the machine must be set up before Part 8 lands, the manual path is
 the same list with step 4 replaced by: run =main.py= after deleting the
 manifest's paths from a scratch copy of =files/=, =brew bundle= on a
@@ -897,10 +908,11 @@ and why, and what is left to the owner.
 
 ** Left to the owner
 
-1. [done 2026-09-13] both =dev= branches pushed and merged with the new
-   mains, poimap pinned (217fa8d), the PRs opened with the docs as
-   descriptions (.zetta.d #147, .files #15); the two manual dispatches
-   follow the merges (outcome in the audit's status section).
+1. [done 2026-09-14] both PRs merged (.zetta.d #147, .files #15),
+   release 0.2.8 out (#150), and both manual dispatches green: the .files
+   bootstrap with =profile=work= on macOS, and ci.yml with =template=work=
+   as a cold build on all four rows (277 modules on the three GUI rows,
+   the headless template on nox).  Details in the audit's status section.
 2. Live checks batch cannot do: gptel and forge with ~/.authinfo
    retired; a Customize save landing in =.data/custom.el=; the tab bar
    and mail (nothing in this work touches them, and =bin/zetta test=
@@ -915,6 +927,58 @@ and why, and what is left to the owner.
    work=.
 5. Part 9's calls: Slack with the employer, the AI default at work,
    Copilot, =INCLUDE_SNOWFLAKE=, when to flip =INCLUDE_EMACS_SRC=.
+
+** Install day [2026-09-14, measured on the work machine]
+
+The first genuinely fresh Mac exposed what neither the personal Mac
+nor CI could: .files' bootstrap had never run where Homebrew was not
+already on PATH and its taps not already trusted, and CI judged only
+the script's final exit status.  Fixed in .files PRs #17, #18 and #19,
+all merged the same day, the last with a green end-to-end bootstrap
+run under the new =brew bundle check= assertion:
+
+- Homebrew installed but not on the bootstrap shell's PATH, so every
+  =brew= line failed silently (=brew shellenv= now follows the installer).
+- =brew bundle --no-lock=: Homebrew 7 rejects it, so the whole Brewfile
+  was skipped (flag removed).
+- Homebrew 7 refuses to tap an untrusted tap and to load its formulae;
+  =brew trust --tap= now precedes each =brew tap= (the order matters).
+- Three casks broken upstream -- vial and openscad disabled for
+  Gatekeeper, font-miriam-mono-clm's download gone -- commented out.
+- =install_emacs_distros.sh= returns the status of its last section (the
+  optional canvas module), so a canvas failure read as a failed Emacs;
+  only a missing EmacsSrc.app is critical now.
+- The shell files (bash and zsh) errored on tools the bundle had not
+  installed; every optional tool is guarded.
+- The bootstrap records its critical steps and exits 1; the workflow
+  runs =brew bundle check= afterwards; =setup-work-machine.sh= pulls
+  before a re-run.
+
+Outcome on the machine at the time of writing: Emacs 32.0.50 built
+from source; the package install (=bin/zetta install=) still to run.
+
+** Install day, second round [2026-09-15, measured on the work machine]
+
+The package install ran; the daemon's second start died with "Symbol's
+value as variable is void: compile-angel".  Cause, reproduced in batch:
+zetta's early-init.el had never loaded on that machine.  The shims start
+Emacs through chemacs v1 (=--with-profile=), which sets the directory
+from ~/.emacs -- after Emacs has already looked for early-init.el in
+~/.emacs.d.  On the personal Mac a hand-made ~/.emacs.d/early-init.el
+symlink hid this, and nothing in either repo created it.  Without the
+early-init deny-list the first start after an install natively compiled
+the bootstrap's SOURCE in a bare worker, where =elpaca= is not a macro,
+and the second start preferred that =.eln= over the good =.elc=.  Fixed in
+.files: zemacs passes =--init-directory= (Emacs 29+; the profile's
+early-init.el and eln-cache are then its own), and
+install_emacs_distros.sh links ~/.emacs.d/early-init.el for launches
+that bypass the shims.  Repair on an affected machine: stop the daemon,
+delete =bootstrap-*.eln= and =init-data-*.eln= from eln-cache, restart.
+
+Also found: the tmuxinator sessions were linked but the program was not
+(bootstrap's =gem install= failed under Apple's Ruby 2.6).  It and the
+tools the sessions call are Brewfile entries now, and the zetta session
+starts the source build instead of the Homebrew Emacs.
 
 ** Rehearsal [2026-09-13, measured]
 

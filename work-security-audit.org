@@ -782,6 +782,23 @@ still live until group A is done.
   641b1f4) after the bootstrap and hub lint passed.  The push runs on
   both mains started; the .zetta.d cache job and the .files bootstrap
   are reported in work-profile.org's status section.
-- Manual dispatches on the merged mains: ci.yml with =template=work=
-  (run 34802915159, a cold build) and test_install.yml with
-  =profile=work= (run 34802916713).  Outcomes recorded when they finish.
+- Manual dispatches: test_install.yml with =profile=work= on the merged
+  .files main (run 34802916713) -- bootstrap job success, 13 min, which
+  is WP-F9's done-when.  ci.yml with =template=work= on the .zetta.d
+  main (run 34802915159) was CANCELLED, not failed: ci.yml groups every
+  run on one ref under =cancel-in-progress=, and the merge of #148 (the
+  D6 fix) pushed main and killed both it and the cache job it had
+  itself displaced.  Re-dispatched on =dev= (the identical tree, its own
+  group), run 34804922327: all four rows green in a cold build --
+  =ZETTA-OK packages=297 modules=277= on 29.4, 302/277 on 30.2, 300/277
+  on the 31 release snapshot, and 210/208 on the nox row (which always
+  runs the headless template); no ELPACA-FAILED, LOCK-MISSING or
+  use-package line.  Lesson: dispatch on a branch nobody is about to
+  push to.
+- The D6 fix: #148 (docs plus the override block) merged as 58826b4
+  after its rows passed; release-please then opened #150 "chore(main):
+  release 0.2.8", merged as 2eb5df3 after its rows passed; v0.2.8 is
+  published.  After each squash merge =dev= was reset to =main= (a
+  squash leaves dev's own commits unmerged in git's eyes, and the next
+  PR conflicts on every file the squash "added"); dev equals main at
+  2eb5df3 in .zetta.d and 641b1f4 in .files.

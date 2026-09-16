@@ -351,6 +351,16 @@ largest remaining per-keystroke cost in org buffers.
 *Applied [2026-09-09]: `jit-lock-defer-time' 0.05, in interface.el beside the
 other redisplay settings.*
 
+*Reverted [2026-09-16]: back to nil.*  The deferral paints a region in the
+body face and fontifies it 50 ms later.  Under one family per buffer that is
+a colour change nobody notices; under a preset whose faces carry different
+families (org-wild: Radon prose, Neon headings, Krypton code) it reshapes
+every scrolled-in line a beat after it appears, and in dired it was the icon
+flash -- all-the-icons-dired 2.0 draws its icons through font-lock, so each
+revert showed the listing bare and then iconed.  Visual stability won over
+the per-keystroke saving.  =fast-but-imprecise-scrolling= (early-init.el)
+went back to nil for the same reason.
+
 ** TODO consult preview still opens real files for five commands
 :PROPERTIES:
 :FOUND:    [2026-09-08]
@@ -544,6 +554,11 @@ command rather than only the selected one.
       auto-window-vscroll nil
       hl-line-sticky-flag nil)
 #+end_src
+
+*Applied [2026-09-09]; =redisplay-skip-fontification-on-input= reverted
+[2026-09-16]* for the reason given under item 10: a held key showed text
+before its faces, which under a mixed-family preset means the wrong glyphs.
+=auto-window-vscroll= nil and =hl-line-sticky-flag= nil stay.
 
 
 *Applied [2026-09-09]: all three set in interface.el.*

@@ -751,9 +751,13 @@ Does nothing until a graphical frame exists; see the commentary above."
              (fboundp 'set-fontset-font)
              (seq-some #'display-graphic-p (frame-list)))
     (setq zetta-font--nerd-ranges-pinned t)
-    ;; every Nerd Font set but Material Design, then Material Design (nf-md)
-    (set-fontset-font t '(#xe000 . #xf8ff) "Terminess Nerd Font Mono" nil 'prepend)
-    (set-fontset-font t '(#xf0000 . #xfffff) "Terminess Nerd Font Mono" nil 'prepend)))
+    ;; Demoted: this sits on `after-make-frame-functions', where a signal
+    ;; takes down every function after it -- and the server's own frame
+    ;; bookkeeping with them.  A missing font is a wrong glyph, not that.
+    (with-demoted-errors "zetta-font: Nerd Font ranges not pinned: %S"
+      ;; every Nerd Font set but Material Design, then Material Design (nf-md)
+      (set-fontset-font t '(#xe000 . #xf8ff) "Terminess Nerd Font Mono" nil 'prepend)
+      (set-fontset-font t '(#xf0000 . #xfffff) "Terminess Nerd Font Mono" nil 'prepend))))
 
 (add-hook 'after-make-frame-functions #'zetta-font-pin-nerd-ranges)
 (zetta-font-pin-nerd-ranges)

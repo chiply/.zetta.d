@@ -523,11 +523,43 @@ otherwise appear as a bogus `zsh#...' completion candidate."
         (shell-command-switch "-c"))
     (apply orig args)))
 
+;; HyWiki's referent cache (`hywiki-cache-default-file', .hywiki.eld in
+;; `hywiki-directory') is written as one literal `(setq hyperb:version
+;; "..." hywiki-directory ... hywiki--referent-alist ...)' form and read
+;; back with `eval' by `hywiki-make-referent-hasht', which hywiki.el
+;; calls at top level while loading.  Every load therefore overwrites
+;; the `hyperb:version' constant with whatever version WROTE the cache,
+;; and the next `hywiki-cache-save' writes that stale value back -- so
+;; after an upgrade Hyperbole keeps reporting the old version forever
+;; (observed 2026-09-27: a fresh 9.2.0 build reported 9.0.2pre until
+;; ~/kb/wiki/.hywiki.eld was hand-edited).  Restore the true value
+;; around the rebuild.  Installed at top level, NOT in `:config':
+;; hyperbole.el's load-time `hyperb:init' enables `hywiki-mode', which
+;; loads hywiki and evaluates the cache before `:config' runs.  Advising
+;; a not-yet-defined function is fine; the advice attaches on definition.
+(defvar hyperb:version)
+(defun zetta-hywiki-keep-hyperb-version (orig &rest args)
+  "Call ORIG with ARGS, then undo any change the HyWiki cache made to `hyperb:version'.
+Around advice for `hywiki-make-referent-hasht'."
+  (let ((version (and (boundp 'hyperb:version) hyperb:version)))
+    (prog1 (apply orig args)
+      (when (and version (not (equal hyperb:version version)))
+        (setq hyperb:version version)))))
+(advice-add 'hywiki-make-referent-hasht :around #'zetta-hywiki-keep-hyperb-version)
+
 ;; Official GitHub mirror -- git.savannah.gnu.org is slow and
 ;; intermittently times out on CI runners (cold-run clone flake, PR
 ;; #114's 29.4 job, 2026-07-23).  A true mirror shares commit SHAs, so
 ;; the lockfile pin holds; verified the pinned f076ff8 present on the
 ;; mirror 2026-07-23.
+;;
+;; `:branch "rsw"' is the maintainer's development branch, which runs
+;; ahead of master (rsw 9.2.0 vs master 9.1.0 on 2026-09-27; the old pin
+;; f076ff8 was 9.0.2pre).  It does NOT move the install by itself: elpaca's
+;; checkout step lets the lockfile's :ref override :branch (its log
+;; says ":ref ... overriding :branch"), so bumping Hyperbole means
+;; moving the hyperbole :ref in elpaca-lock.el to the rsw tip and
+;; rebuilding -- `:branch' only makes a fresh clone fetch that branch.
 (use-package hyperbole
   :ensure (hyperbole :host github :repo "rswgnu/hyperbole")
   :defer 1
@@ -593,9 +625,12 @@ otherwise appear as a bogus `zsh#...' completion candidate."
   ;; Tradeoff: every standalone capital (I, A, ...) becomes a WikiWord *candidate*
   ;; for the Action Key and buttonize-as-you-type; persistent highlighting still
   ;; only fires for capitals that have a real page in `hywiki-directory'.
+  ;; `hywiki-file-extension' is 9.2.0's name for the page suffix (".org");
+  ;; it was `hywiki-file-suffix' up to the 9.0.2pre pin, and the void
+  ;; variable aborted this whole :config on the 2026-09-27 upgrade.
   (setq hywiki-word-regexp
         (format "\\<\\([[:upper:]][[:alpha:]]*\\)\\>\\(?:%s\\)?"
-                (regexp-quote hywiki-file-suffix))
+                (regexp-quote hywiki-file-extension))
         hywiki-word-with-optional-suffix-regexp
         (concat hywiki-word-regexp hywiki-word-section-regexp "??"
                 hywiki-word-line-and-column-numbers-regexp "?")

@@ -1936,8 +1936,8 @@
                       :source "elpaca-menu-lock-file" :id hyperbole
                       :type git :protocol https :inherit t :depth
                       treeless :ref
-                      "f076ff8c5997e9e9401d02da5034c1c10ba070f4" :host
-                      github :repo "rswgnu/hyperbole"))
+                      "5b9b72c29fb4095310cbd8f519bd4ea69a9ebbc3" :host
+                      github :repo "rswgnu/hyperbole" :branch "rsw"))
  (iedit :source "elpaca-menu-lock-file" :recipe
         (:package "iedit" :repo "victorhge/iedit" :fetcher github
                   :files

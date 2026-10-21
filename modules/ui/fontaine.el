@@ -55,7 +55,6 @@ known-good Terminess; pass your own if it passes
 
 (defvar zetta-fontaine-chrome-fonts
   '(:tab-bar "Monaspace Krypton NF"
-    :tab-line "Monaspace Krypton NF"
     :mode-line "Monaspace Krypton NF"
     :header-line "Monaspace Xenon NF")
   "`:svg-line-fonts' for every preset that does not choose its own chrome.
@@ -66,6 +65,13 @@ the one `monaspace-mixed' makes for itself: Krypton (mechanical) on the
 bars that read as instrumentation, Xenon (slab) on the header line that
 reads as a title.  The tab bar had been Krypton alone, set from
 ~/.zetta.el, until 2026-10-21; the mode line and header line now follow.
+Not the tab line: it stays in the bar default, Terminess, by request --
+one row of buffer tabs wants no second voice.
+
+This is the BASE family of each bar.  Inside the mode line and header
+line the rows and the transient segments take other families by role
+\(`zetta-svg-seg-fonts', `zetta-svg-in-font'), which is what tells row
+one from row two.
 
 A preset's `:svg-line-family' -- Terminess, which carries every icon --
 stays the fallback for a bar whose family is not installed

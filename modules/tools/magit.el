@@ -131,8 +131,8 @@
                              magit-blame-read-only-mode-map)
    "C-<tab>" 'tab-line-switch-to-next-tab
    "C-S-<tab>" 'tab-line-switch-to-prev-tab
-   "M-S-<tab>" 'st-switch-space-by-name
-   "M-<tab>" 'st-go-to-last-space
+   "M-S-<tab>" 'space-tree-switch-space-by-name
+   "M-<tab>" 'space-tree-go-to-last-space
    )
 
   )

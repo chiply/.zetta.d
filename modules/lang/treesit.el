@@ -17,8 +17,12 @@
           ;;(yaml "https://github.com/ikatyang/tree-sitter-yaml")
           ))
 
-  ;; Emacs 31: auto-install grammars when needed (no manual install step)
-  (setq treesit-auto-install-grammar t)
+  ;; Emacs 31: auto-install grammars when needed (no manual install step).
+  ;; The value is a symbol, not a boolean: `always' installs, `ask' (the
+  ;; default) prompts, and ANYTHING else -- t included, which is what this
+  ;; was -- means never.  So a fresh machine got no grammar at all and
+  ;; each one had to be installed by hand.
+  (setq treesit-auto-install-grammar 'always)
 
   ;; Emacs 31: centralized control over which ts-modes auto-activate.
   ;; `t' means all available ts-modes activate; use a list to restrict.

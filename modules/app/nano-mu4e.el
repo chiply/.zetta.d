@@ -7,7 +7,10 @@
 ;; NERD-font codepoints in the private-use planes with no ASCII
 ;; fallback (`nano-mu4e-symbol' always returns the NERD variant), and
 ;; Terminus has no private-use coverage, so those ranges are routed to
-;; the NERD-patched Terminess installed system-wide.
+;; the NERD-patched Terminess installed system-wide.  That routing is in
+;; modules/core/interface.el, beside the other terminal symbol blocks: it
+;; lived here until 2026-10, which left every profile without mail -- the
+;; work one -- with no font pinned for any Nerd Font glyph.
 ;;
 ;; Threading is off by default here (~/.private.el sets
 ;; `mu4e-headers-show-threads' nil); nano-mu4e handles both, but its
@@ -319,19 +322,6 @@ leave the headers buffer half-drawn."
   ;; re-apply there fires before the form above is registered, and the
   ;; faces (created by nano-mu4e loading, long after the theme was
   ;; applied) stay at upstream defaults until the first theme toggle.
-  (when (fboundp 'brushup) (brushup))
-  :init
-  (defvar zetta-nano-mu4e--fontset-done nil)
-  (defun zetta-nano-mu4e--fontset (&optional frame)
-    "Route NERD private-use glyph ranges to Terminess on the first GUI FRAME."
-    (when (and (not zetta-nano-mu4e--fontset-done)
-               (display-graphic-p frame))
-      (set-fontset-font t '(#xe000 . #xf8ff) "Terminess Nerd Font Mono" nil 'prepend)
-      (set-fontset-font t '(#xf0000 . #xfffff) "Terminess Nerd Font Mono" nil 'prepend)
-      (setq zetta-nano-mu4e--fontset-done t)))
-  ;; The daemon has no GUI frame at init time, so also catch the first
-  ;; frame created after startup.
-  (add-hook 'after-make-frame-functions #'zetta-nano-mu4e--fontset)
-  (zetta-nano-mu4e--fontset))
+  (when (fboundp 'brushup) (brushup)))
 
 ;;; nano-mu4e.el ends here

@@ -890,6 +890,12 @@
                             dash-functional :type git :protocol https
                             :inherit t :depth treeless :ref
                             "d3a84021dbe48dba63b52ef7665651e0cf02e915"))
+ (dbt-mode :source "elpaca-menu-lock-file" :recipe
+           (:source "elpaca-menu-lock-file" :package "dbt-mode" :id
+                    dbt-mode :host github :repo "CyberShadow/dbt-mode"
+                    :type git :protocol https :inherit t :depth
+                    treeless :ref
+                    "a859f3735e1b0005c8d7fa41479b1425116fb23f"))
  (ddp :source "elpaca-menu-lock-file" :recipe
       (:package "ddp" :fetcher github :repo "eki3z/ddp.el" :files
                 ("*.el") :source "elpaca-menu-lock-file" :id ddp :type
@@ -1959,6 +1965,22 @@
                 :source "elpaca-menu-lock-file" :id ivy :type git
                 :protocol https :inherit t :depth treeless :ref
                 "1005bff8a700b92dc464f770aff8a0db5b4a1c0b"))
+ (jinja2-mode :source "elpaca-menu-lock-file" :recipe
+              (:package "jinja2-mode" :repo
+                        "paradoxxxzero/jinja2-mode" :fetcher github
+                        :files
+                        ("*.el" "*.el.in" "dir" "*.info" "*.texi"
+                         "*.texinfo" "doc/dir" "doc/*.info"
+                         "doc/*.texi" "doc/*.texinfo" "lisp/*.el"
+                         "docs/dir" "docs/*.info" "docs/*.texi"
+                         "docs/*.texinfo"
+                         (:exclude ".dir-locals.el" "test.el"
+                                   "tests.el" "*-test.el" "*-tests.el"
+                                   "LICENSE" "README*" "*-pkg.el"))
+                        :source "elpaca-menu-lock-file" :id
+                        jinja2-mode :type git :protocol https :inherit
+                        t :depth treeless :ref
+                        "03e5430a7efe1d163a16beaf3c82c5fd2c2caee1"))
  (js2-mode :source "elpaca-menu-lock-file" :recipe
            (:package "js2-mode" :repo "mooz/js2-mode" :fetcher github
                      :files

@@ -167,6 +167,7 @@
    "lang/sql.el"
    "lang/sqlite.el"
    "lang/ein.el"
+   "lang/dbt.el"
 
    ;; tools
    "tools/grep.el"

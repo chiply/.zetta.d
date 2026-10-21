@@ -179,6 +179,97 @@ being displayed, otherwise returns nil"
   (interactive)
   (zetta-soda-cap "*info*"))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Work that needs a graphical frame
+;;
+;; Under the daemon, anything that measures fonts or lays out the SVG chrome
+;; has to wait for the first graphical frame.  The config used to wait on
+;; `server-after-make-frame-hook', and that hook is a poor promise: the
+;; server runs it only for frames it makes itself, skips it -- every
+;; function on it -- when the request arrives while the daemon sits in a
+;; minibuffer or an isearch (`server-execute'), and an error in one function
+;; on it silences every function after it.  Measured 2026-10-21: a daemon
+;; whose only GUI frame carried the server's `nowait' client mark still had
+;; every font function armed on that hook an hour later, `zetta-svg-line-fonts'
+;; never assigned, and the mode line drawn in the wrong family.
+;;
+;; So work is registered here instead and runs from the first graphical frame
+;; however that frame was made: `after-make-frame-functions' fires for all of
+;; them.  It runs from a zero-delay timer, so the frame is complete and we are
+;; outside `make-frame', and each function on its own, so one failure cannot
+;; take the rest down.
+
+(defvar zetta--graphic-frame-pending nil
+  "Functions waiting for a graphical frame, newest first.")
+
+(defvar zetta--graphic-frame-log nil
+  "What the dispatcher saw, newest first: (TIME EVENT . DETAILS).
+Kept because *Messages* does not survive a session here, and the one
+time the queue never drained (2026-10-21) nothing else said why.")
+
+(defun zetta--graphic-frame-note (event &rest details)
+  "Record EVENT with DETAILS in `zetta--graphic-frame-log'."
+  (push (append (list (format-time-string "%H:%M:%S.%3N") event
+                      :pending (length zetta--graphic-frame-pending)
+                      :graphic (and (seq-some #'display-graphic-p (frame-list)) t))
+                details)
+        zetta--graphic-frame-log))
+
+(defvar zetta--graphic-frame-watch nil
+  "The timer that drains the queue when no hook has; see below.")
+
+(defun zetta--graphic-frame-run-pending ()
+  "Run and drop every function in `zetta--graphic-frame-pending', oldest first.
+Only once a graphical frame exists; otherwise the queue is left for later."
+  (when (seq-some #'display-graphic-p (frame-list))
+    (let ((fns (reverse zetta--graphic-frame-pending)))
+      (setq zetta--graphic-frame-pending nil)
+      (zetta--graphic-frame-note 'run :fns fns)
+      (dolist (fn fns)
+        (condition-case err
+            (funcall fn)
+          (error (zetta--graphic-frame-note 'failed :fn fn :error err)
+                 (message "zetta: work deferred to the first frame failed: %s: %S"
+                          fn err)))))
+    (when (and zetta--graphic-frame-watch (null zetta--graphic-frame-pending))
+      (cancel-timer zetta--graphic-frame-watch)
+      (setq zetta--graphic-frame-watch nil))))
+
+(defun zetta--graphic-frame-made (frame)
+  "Schedule the pending work once FRAME, if graphical, is complete.
+On `after-make-frame-functions', at the front: a function ahead of it
+that signals would otherwise take it down with the rest of the hook."
+  (zetta--graphic-frame-note 'frame-made :frame (framep frame)
+                             :frame-graphic (display-graphic-p frame))
+  (when (and zetta--graphic-frame-pending (display-graphic-p frame))
+    (run-at-time 0 nil #'zetta--graphic-frame-run-pending)))
+
+(add-hook 'after-make-frame-functions #'zetta--graphic-frame-made -100)
+
+(defun zetta-when-graphic-frame (fn)
+  "Call FN, a function of no arguments, once a graphical frame exists.
+From the first one made, however it is made, when there is none yet.  When
+one already exists FN still runs from a timer, a second later: a caller
+that reaches for this while a frame exists wanted something more of it
+than `display-graphic-p' and has nothing to gain from spinning.
+Registering FN twice runs it once.
+
+Belt and braces: while the queue waits, a timer looks for a graphical
+frame once a second and drains the queue the moment it finds one, so the
+work happens even if the frame's creation never reached
+`after-make-frame-functions' -- which is what the log said about the
+2026-10-21 session, with no reason found.  A plain timer, not an idle
+one: an idle timer with a repeat fires once per idle PERIOD, and a daemon
+nobody has typed at yet is one long idle period, so it fired once before
+the frame existed and never again (measured on a probe daemon)."
+  (unless (memq fn zetta--graphic-frame-pending)
+    (push fn zetta--graphic-frame-pending))
+  (zetta--graphic-frame-note 'register :fn fn)
+  (if (seq-some #'display-graphic-p (frame-list))
+      (run-at-time 1 nil #'zetta--graphic-frame-run-pending)
+    (unless zetta--graphic-frame-watch
+      (setq zetta--graphic-frame-watch
+            (run-at-time 1 1 #'zetta--graphic-frame-run-pending)))))
+
 (when (fboundp 'repeatable-wrap)
   (general-define-key
    :keymaps 'menu-run-map

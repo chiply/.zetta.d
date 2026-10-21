@@ -50,7 +50,38 @@ known-good Terminess; pass your own if it passes
          :italic-family family
          :default-height 160
          :variable-pitch-height 1.0
-         :svg-line-family "Terminess Nerd Font Mono")))
+         :svg-line-family "Terminess Nerd Font Mono"
+         :svg-line-fonts zetta-fontaine-chrome-fonts)))
+
+(defvar zetta-fontaine-chrome-fonts
+  '(:tab-bar "Monaspace Krypton NF"
+    :mode-line "Monaspace Krypton NF"
+    :header-line "Monaspace Xenon NF")
+  "`:svg-line-fonts' for every preset that does not choose its own chrome.
+
+The bars in another family from the text, so that what the frame says
+ABOUT a buffer is told apart from the buffer at a glance.  The split is
+the one `monaspace-mixed' makes for itself: Krypton (mechanical) on the
+bars that read as instrumentation, Xenon (slab) on the header line that
+reads as a title.  The tab bar had been Krypton alone, set from
+~/.zetta.el, until 2026-10-21; the mode line and header line now follow.
+Not the tab line: it stays in the bar default, Terminess, by request --
+one row of buffer tabs wants no second voice.
+
+This is the BASE family of each bar.  Inside the mode line and header
+line the rows and the transient segments take other families by role
+\(`zetta-svg-seg-fonts', `zetta-svg-in-font'), which is what tells row
+one from row two.
+
+A preset's `:svg-line-family' -- Terminess, which carries every icon --
+stays the fallback for a bar whose family is not installed
+\(`zetta-svg-line-font-for'), so a missing font costs a bar its typeface
+and never its icons.
+
+Set through the preset and not in ~/.zetta.el: `zetta-fontaine--sync'
+assigns `zetta-svg-line-fonts' from the preset on every switch, nil
+included, so a value set anywhere else lasted until the first preset was
+applied.")
 
 (defvar zetta-fontaine-curated-presets nil
   "Hand-written presets.  Generated per-font presets are appended to these.")
@@ -146,6 +177,9 @@ always take precedence over a generated one of the same name."
   ;; its entry -- fontconfig will now resolve that name to a different file.
   (when (fboundp 'zetta-svg-line-forget-em-ratios)
     (zetta-svg-line-forget-em-ratios))
+  ;; and which of the chrome families the bars can draw with at all
+  (when (fboundp 'zetta-svg-line-forget-font-availability)
+    (zetta-svg-line-forget-font-availability))
   (setq zetta-fontaine-generated-presets (zetta-fontaine-generate-font-presets))
   ;; the `t' entry is fontaine's fallback and must come last
   (let* ((fallback (assq t zetta-fontaine-curated-presets))
@@ -249,7 +283,10 @@ always take precedence over a generated one of the same name."
            :line-number-family "Terminus (TTF)"
            :italic-family "Terminus (TTF)"
            :bold-family "Terminus (TTF)"
-           :svg-line-family "Terminess Nerd Font Mono")
+           :svg-line-family "Terminess Nerd Font Mono"
+           ;; Monaspace on the bars, Terminus in the buffer: see
+           ;; `zetta-fontaine-chrome-fonts'
+           :svg-line-fonts ,zetta-fontaine-chrome-fonts)
 
           ;; One family throughout -- the conservative Monaspace preset.
           (monaspace
@@ -513,13 +550,14 @@ always take precedence over a generated one of the same name."
            :line-number-height 1.0)))
 
   :config
-  (defvar zetta-fontaine-default-preset 'gohufont-11-nerd-font-mono
+  (defvar zetta-fontaine-default-preset 'terminus
     "Preset to fall back on when there is no saved state to restore.
 
-A GENERATED preset -- one per installed monospaced font -- rather than a
-curated one, so it exists only on a machine that actually has the font.
-`zetta-fontaine--apply-startup-preset' falls back to a curated preset
-where it does not.")
+A curated preset, so it exists on every machine.  It was a GENERATED one
+for a while (gohufont-11-nerd-font-mono: one preset per installed font,
+there only where the font is), which is what the retry below in
+`zetta-fontaine--apply-startup-preset' was written for; it still serves a
+saved state that names one.  Terminus everywhere since 2026-10-21.")
 
   (defvar zetta-fontaine--startup-preset-applied nil
     "Non-nil once the wanted startup preset has actually been applied.")
@@ -565,12 +603,15 @@ next frame."
   (if (seq-some #'display-graphic-p (frame-list))
       (zetta-fontaine-refresh-font-presets)
     (setq fontaine-presets zetta-fontaine-curated-presets)
-    (add-hook 'server-after-make-frame-hook
-              #'zetta-fontaine-refresh-font-presets)
-    ;; APPENDED, so it runs after the generation above on the same hook --
-    ;; the whole point is to get a second go once the preset exists.
-    (add-hook 'server-after-make-frame-hook
-              #'zetta-fontaine--apply-startup-preset t))
+    ;; `zetta-when-graphic-frame' (bootstrap-display.el) runs these from the
+    ;; first graphical frame however it is made, in this order: the second
+    ;; is the second go at the saved preset once generation has happened.
+    ;; It took over from `server-after-make-frame-hook' here on 2026-10-21;
+    ;; the server runs that hook only for its own frames and not at all
+    ;; when the request lands while the daemon is in a minibuffer, which
+    ;; left a whole session with every bar in the wrong family.
+    (zetta-when-graphic-frame #'zetta-fontaine-refresh-font-presets)
+    (zetta-when-graphic-frame #'zetta-fontaine--apply-startup-preset))
 
   (defun zetta-fontaine--sync ()
     "Carry a preset change through to the parts fontaine cannot reach.
@@ -610,8 +651,7 @@ Three things need doing that `fontaine-set-preset' does not:
     ;; skipping -- which left the chrome font switched but its layout grid
     ;; and the buffer font still on the old preset.
     (if (not (seq-some #'display-graphic-p (frame-list)))
-        (add-hook 'server-after-make-frame-hook #'zetta-fontaine--sync)
-      (remove-hook 'server-after-make-frame-hook #'zetta-fontaine--sync)
+        (zetta-when-graphic-frame #'zetta-fontaine--sync)
       (let* ((preset fontaine-current-preset)
              (family (fontaine--get-preset-property preset :default-family))
              (height (fontaine--get-preset-property preset :default-height))
@@ -709,9 +749,9 @@ Three things need doing that `fontaine-set-preset' does not:
 ;; breaks C-x C-+ in the buffer.  Cookies are kept so the remap can be undone.
 
 (defvar zetta-fontaine-buffer-presets
-  '((org-mode    org-wild iosevka-wild monaspace-prose)
+  '((org-mode    terminus org-wild iosevka-wild monaspace-prose)
     ;; before prog-mode, which it derives from
-    (sql-mode     monaspace-mixed))
+    (sql-mode     terminus monaspace-mixed))
   "Alist of major mode -> the presets offered for it, best first.
 
 Matched with `derived-mode-p', so a derived mode inherits its parent's
@@ -720,13 +760,20 @@ mode with more than one is offered as a menu by
 `zetta-fontaine-pick-mode-preset', and whatever is picked is remembered
 in `zetta-fontaine-mode-preset-file' across sessions.
 
+Terminus leads both lists (2026-10-21): the other fonts had got annoying
+in org and SQL buffers, so by default a buffer stays in the global preset
+-- `zetta-fontaine-apply-buffer-preset' remaps nothing when the two agree
+-- and the rest are ON OFFER through `zetta-fontaine-pick-mode-preset'
+rather than applied.  A pick is remembered as before; the saved choice
+that had org on iosevka-wild was cleared the same day.
+
 Offer only CURATED presets here.  The generated ones -- one per installed
 font -- do not exist until a graphical frame has measured the fonts, and a
 buffer can have its mode set before that under the daemon; a preset that
 is not there yet resolves to fontaine's `t' fallback without complaint.
 
-Deliberately short.  Every mode here is a buffer whose font DIFFERS from
-the global preset, and consult previews those buffers in-window while you
+Deliberately short.  Every mode here is one whose buffers MAY take a font
+other than the global preset's, and consult previews those buffers in-window while you
 are still moving through candidates -- so each one is a font that visibly
 swaps in and out mid-completion, taking the line height with it.  That is
 worth paying for org prose, which is a genuinely different kind of text.

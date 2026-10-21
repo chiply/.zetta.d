@@ -71,6 +71,56 @@ the live theme, which is exactly what a calendar wants."
   (setq org-preview-latex-default-process 'dvisvgm)
   (plist-put org-format-latex-options :scale 1.5)
 
+  ;; LaTeX previews stay out of code blocks.  `org-latex-preview' finds its
+  ;; fragments by regexp and asks `org-element-context' to confirm each one,
+  ;; and that answer comes from the element cache.  A fresh parse is right
+  ;; (checked in batch on org 9.8.7, 2026-10-21: every `$' in a src or
+  ;; example block types as the block), but a long session's cache can be
+  ;; stale enough to call the inside of a block a paragraph -- and then
+  ;; `$FOO and $BAR' in a shell block, or any `\[ ... \]', is drawn as
+  ;; maths.  So the decision is taken away from the cache: the bodies of
+  ;; these blocks are carved out of every region a preview is asked for,
+  ;; and org-fragtog is told the same about the fragment under the cursor
+  ;; (its block, further down).  Verse is not listed on purpose: it is
+  ;; prose, and may hold maths.
+  (defvar zetta-org-latex-opaque-blocks '("src" "example" "export" "comment")
+    "Block types whose bodies are never scanned for LaTeX to preview.")
+
+  (defun zetta-org-in-opaque-block-p ()
+    "Non-nil when point is inside one of `zetta-org-latex-opaque-blocks'.
+Decided by regexp (`org-in-block-p'), not by the element cache."
+    (org-in-block-p zetta-org-latex-opaque-blocks))
+
+  (defun zetta-org-latex-preview-skip-blocks (orig beg end)
+    "Call ORIG over BEG..END minus the bodies of opaque blocks.
+Around advice for `org--latex-preview-region'.  Each stretch of the
+region between blocks is handed to ORIG on its own; a block still open at
+END hides everything after its opener."
+    (let ((case-fold-search t)
+          (open-re (format "^[ \t]*#\\+begin_\\(%s\\)\\(?:[ \t]\\|$\\)"
+                           (regexp-opt zetta-org-latex-opaque-blocks)))
+          (start beg))
+      (save-excursion
+        (goto-char beg)
+        (while (and (< start end) (re-search-forward open-re end t))
+          ;; both taken before ORIG runs: it searches too, and clobbers the
+          ;; match data
+          (let ((block-beg (match-beginning 0))
+                (close-re (format "^[ \t]*#\\+end_%s\\(?:[ \t]\\|$\\)"
+                                  (regexp-quote (match-string 1)))))
+            (when (< start block-beg)
+              (funcall orig start block-beg))
+            (goto-char block-beg)
+            (forward-line 1)
+            (setq start (if (re-search-forward close-re end t)
+                            (line-end-position)
+                          end))
+            (goto-char start)))
+        (when (< start end)
+          (funcall orig start end)))))
+  (advice-add 'org--latex-preview-region :around
+              #'zetta-org-latex-preview-skip-blocks)
+
   (setq org-confirm-babel-evaluate nil
         org-src-preserve-indentation t
         org-tags-column 0
@@ -545,7 +595,12 @@ negative = backward)."
 
 ;; Auto-toggle LaTeX previews: render when cursor leaves, show source when entering
 (use-package org-fragtog
-  :hook (org-mode . org-fragtog-mode))
+  :hook (org-mode . org-fragtog-mode)
+  :config
+  ;; the cursor half of the block guard beside `org-format-latex-options'
+  ;; above: a "fragment" the element cache reports inside a src block is
+  ;; left alone
+  (add-to-list 'org-fragtog-ignore-predicates #'zetta-org-in-opaque-block-p))
 
 (with-eval-after-load 'evil
   (evil-set-initial-state 'org-mode 'normal))

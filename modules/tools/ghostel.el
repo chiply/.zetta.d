@@ -850,6 +850,70 @@ over, never visibility."
       (evil-refresh-cursor)
     (funcall orig-fn style visible)))
 
+;;; Navigated point
+;;
+;; Every redraw ends by putting point on the terminal cursor (src/render.zig,
+;; "Position cursor"), and `ghostel--delayed-redraw' spares it only when it
+;; sits in the scrollback above the viewport.  So in normal state anything
+;; evil moved point to INSIDE the viewport lasts exactly until the next
+;; redraw.
+;;
+;; And output is not the only thing that redraws.  Emacs calls
+;; `ghostel--window-adjust-process-window-size' from
+;; `window-configuration-change-hook', and that redraws synchronously whether
+;; or not the size actually changed.  Leaving the minibuffer resizes the
+;; mini-window, which runs the hook -- at the redisplay AFTER the command has
+;; finished.  Hence the symptom: `?pattern RET' lands on the match, then the
+;; redraw the minibuffer's exit provokes drags point back down to the prompt.
+;; `n' sticks because it never opens a minibuffer.  `/' is hit the same way;
+;; it shows less only because from the prompt it wraps to the top of the
+;; buffer, which is usually scrollback.
+;;
+;; The package's own answer is `evil-ghostel-mode', whose redraw advice pins
+;; point in every non-insert state.  Not used here: it exempts the alt screen
+;; (tmux holds that for a whole session), it stops point following output
+;; even when nobody has moved it, and it arrives with a family of
+;; PTY-editing advice on evil's operators.  So the narrow version: a redraw
+;; may not move a point the user has navigated away from the cursor, and
+;; talking to the terminal again gives point back to it.
+
+(defvar-local zetta-ghostel--cursor-point nil
+  "Where the last redraw left point: the terminal cursor as a buffer position.
+Only a redraw rewrites the buffer, so until the next one this stays an
+exact answer to whether point is still on the terminal cursor.")
+
+(defun zetta-ghostel--navigated-p ()
+  "Non-nil when evil navigation has taken point off the terminal cursor.
+One character before the cursor still counts as on it: that is where evil
+itself parks point, both leaving insert state (`evil-move-cursor-back')
+and after any normal-state command that ends on an end of line."
+  (and (bound-and-true-p evil-local-mode)
+       (not (memq (bound-and-true-p evil-state) '(insert emacs)))
+       zetta-ghostel--cursor-point
+       (not (memq (- zetta-ghostel--cursor-point (point)) '(0 1)))))
+
+(defun zetta-ghostel--keep-navigated-point (orig-fn &rest args)
+  "Redraw without dragging a navigated point back to the terminal cursor.
+The position is kept as a number rather than a marker, as
+`evil-ghostel--around-redraw' does: the renderer deletes and reinserts the
+rows it repaints, which would collapse a marker to the start of its row.
+
+Point that has not been moved keeps following the cursor exactly as
+before, in every state -- see `zetta-ghostel--navigated-p'."
+  (let ((keep (and (zetta-ghostel--navigated-p) (point))))
+    (prog1 (apply orig-fn args)
+      (setq zetta-ghostel--cursor-point (point))
+      (when keep
+        (goto-char (min keep (point-max)))))))
+
+(defun zetta-ghostel--return-to-cursor (&rest _)
+  "Hand a navigated point back to the terminal cursor.
+Advice on everything that talks to the terminal, so that sending it a key
+from normal state still snaps to the prompt the way typing always has.
+With point back on the cursor the redraw that follows is free to move it."
+  (when (zetta-ghostel--navigated-p)
+    (goto-char (min zetta-ghostel--cursor-point (point-max)))))
+
 (defun zetta-ghostel-send-up ()
   "Send the up-arrow key to the ghostel terminal."
   (interactive)
@@ -901,6 +965,17 @@ over, never visibility."
               #'zetta-ghostel--evil-owns-cursor)
   (advice-add 'ghostel--redraw :after
               #'zetta-ghostel--restore-cursor-column)
+  ;; Outside the column fix above, by depth rather than by order of
+  ;; addition: that one has to run while point is still on the terminal
+  ;; cursor, and what it leaves behind is the position recorded here.
+  (advice-add 'ghostel--redraw :around
+              #'zetta-ghostel--keep-navigated-point '((depth . -50)))
+  ;; Keys go out through one of the first two; paste and the two clears
+  ;; write to the process directly.  Leaving copy mode is here because it
+  ;; parks point at `point-max' and counts on the next redraw to collect it.
+  (dolist (fn '(ghostel--send-key ghostel--send-encoded ghostel--paste-text
+                ghostel-clear ghostel-clear-scrollback ghostel-copy-mode-exit))
+    (advice-add fn :after #'zetta-ghostel--return-to-cursor))
 
   ;; Item 5 -- let space-tree's navigation keys through.
   ;; `modules/ui/spacetree.el' binds M-<tab> (go-to-last-space),

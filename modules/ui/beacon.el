@@ -85,6 +85,13 @@ through a later `defun' -- so packages that have not loaded yet need no
     (advice-add cmd :after #'zetta-beacon--blink)))
 
 (use-package beacon
+  ;; OFF.  Disabled by request (2026-10-04, "looks awful"); the blinking
+  ;; cursor in minimalize.el answers "where is point?" instead.  Before
+  ;; that it was off once already, with the note "stops working after a
+  ;; while, laggy".  Everything below is kept so that M-x beacon-mode
+  ;; still gives the tuned beacon: deferred, the package loads -- and the
+  ;; commands get their advice -- only when the mode is switched on.
+  :commands (beacon-mode beacon-blink)
   :custom
   (beacon-blink-duration 0.2)                    ; fast blink
   (beacon-blink-when-window-scrolls nil)         ; distracting, so remove
@@ -95,11 +102,6 @@ through a later `defun' -- so packages that have not loaded yet need no
   ;; already have run before this package existed.
   (zetta-beacon-apply-palette)
   (zetta-beacon-install-blink-advice)
-  ;; Previously disabled here, with the note "stops working after a while,
-  ;; laggy" -- and hl-line.el still records beacon as the reason IT stays
-  ;; off.  Enabled by request; if the lag returns, those two notes are where
-  ;; the history is.
-  (beacon-mode 1)
   :brushup
   (add-to-list 'brushup-styles '(zetta-beacon-apply-palette)))
 ;;; beacon.el ends here

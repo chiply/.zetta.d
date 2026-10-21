@@ -45,6 +45,10 @@
 (defvar svg-margin-arrangement)
 (defvar svg-margin-provider-columns)
 (defvar svg-margin-renderer)
+(defvar svg-margin-global-predicate)
+(defvar svg-margin-mode)
+(defvar global-svg-margin-mode)
+(declare-function svg-margin-mode "svg-margin")
 (defvar evil-markers-alist)
 (defvar git-gutter:diffinfos)
 (defvar flycheck-current-errors)
@@ -208,27 +212,53 @@ one-cell column)."
                        out))))))
         out))))
 
+(defun zetta-svg-margin--evil-mark-alist (buffer)
+  "The letter evil marks set in BUFFER, as an alist of (CHAR . POSITION).
+
+Lowercase marks are buffer-local.  Uppercase marks are global, so evil keeps
+them in the DEFAULT value of `evil-markers-alist' -- as a marker while the
+buffer they point into is live, and as (FILE . POS) once it has been killed
+\(`evil-swap-out-markers').  Visiting the file again does not turn the cons
+back into a marker, so both forms are read; otherwise a file mark would
+vanish from the gutter the first time its buffer was closed."
+  (when (boundp 'evil-markers-alist)
+    (let ((file (buffer-local-value 'buffer-file-name buffer))
+          (max (1+ (buffer-size buffer)))
+          out)
+      (dolist (cell (buffer-local-value 'evil-markers-alist buffer))
+        (let ((char (car cell)) (val (cdr cell)))
+          (when (and (characterp char) (<= ?a char ?z)
+                     (markerp val) (eq (marker-buffer val) buffer))
+            (push (cons char (marker-position val)) out))))
+      (dolist (cell (default-value 'evil-markers-alist))
+        (let ((char (car cell)) (val (cdr cell)))
+          (when (and (characterp char) (<= ?A char ?Z))
+            (cond
+             ((markerp val)
+              (when (eq (marker-buffer val) buffer)
+                (push (cons char (marker-position val)) out)))
+             ((and file (stringp (car-safe val)) (integerp (cdr-safe val))
+                   (string= (car val) file))
+              (push (cons char (min (cdr val) max)) out))))))
+      out)))
+
 (defun zetta-svg-margin-evil-marks (buffer)
-  "Letter glyphs for buffer-local evil marks a-z in BUFFER."
+  "Letter glyphs for the evil marks in BUFFER: local a-z and global A-Z."
   (with-current-buffer buffer
-    (when (boundp 'evil-markers-alist)
-      (let (out)
-        (dolist (cell evil-markers-alist)
-          (let ((char (car cell)) (val (cdr cell)))
-            (when (and (markerp val) (eq (marker-buffer val) buffer)
-                       (>= char ?a) (<= char ?z))
-              (push (list :pos (marker-position val) :text (char-to-string char)
-                          :color (zetta-svg-margin--color 'accent)
-                          :help (format "evil mark `%c'" char)
-                          :action-help (format "jump to mark `%c'" char)
-                          :action (lambda () (interactive) (evil-goto-mark char))
-                          :menu (list (cons (format "Jump to mark `%c'" char)
-                                            (lambda () (interactive) (evil-goto-mark char)))
-                                      (cons (format "Delete mark `%c'" char)
-                                            (lambda () (interactive)
-                                              (evil-delete-marks (char-to-string char))))))
-                    out))))
-        out))))
+    (let (out)
+      (pcase-dolist (`(,char . ,pos) (zetta-svg-margin--evil-mark-alist buffer))
+        (push (list :pos pos :text (char-to-string char)
+                    :color (zetta-svg-margin--color 'accent)
+                    :help (format "evil mark `%c'" char)
+                    :action-help (format "jump to mark `%c'" char)
+                    :action (lambda () (interactive) (evil-goto-mark char))
+                    :menu (list (cons (format "Jump to mark `%c'" char)
+                                      (lambda () (interactive) (evil-goto-mark char)))
+                                (cons (format "Delete mark `%c'" char)
+                                      (lambda () (interactive)
+                                        (evil-delete-marks (char-to-string char))))))
+              out))
+      out)))
 
 (defun zetta-svg-margin-flycheck (buffer)
   "Severity icons for flycheck diagnostics in BUFFER (bug / alert / info)."
@@ -488,6 +518,51 @@ the recompute yields the same hunks we skip, breaking the cycle."
 (setq svg-margin-min-left-columns 4
       svg-margin-min-right-columns 2)
 
+;; --- Which buffers get the gutter -------------------------------------------
+;; The package default (`svg-margin-file-buffer-p') is file-visiting buffers
+;; only, and the activation below retires evil-fringe-mark -- so in a buffer
+;; with no file (*scratch*, a capture or src-edit buffer, an LLM chat) an evil
+;; mark had nowhere to draw at all: not the fringe, not the margin, and not
+;; the mode-line map either, which follows the gutter (see poimap.el).
+;;
+;; The rule instead: every buffer you EDIT gets the gutter, file or no file,
+;; and any other buffer gets it the moment it holds a letter mark.  Not simply
+;; "every buffer", for two reasons.  The gutter takes the window margins,
+;; which some modes own (magit's log margin); and the hygiene providers
+;; (trailing whitespace, TODO) are noise in a read-only listing.  A buffer
+;; where `m' is not `evil-set-marker' can never hold a mark, so it loses
+;; nothing by staying as it is.
+(defcustom zetta-svg-margin-modes
+  '(prog-mode text-mode conf-mode fundamental-mode)
+  "Major modes whose buffers always get the gutter, file or no file.
+Derived modes count.  `fundamental-mode' is here for *scratch*
+\(`initial-major-mode' in early-init.el) and matches only itself: no mode
+derives from it as far as `derived-mode-p' is concerned."
+  :type '(repeat symbol) :group 'zetta)
+
+(defcustom zetta-svg-margin-shell-modes
+  '(comint-mode eshell-mode term-mode vterm-mode eat-mode ghostel-mode)
+  "Major modes that never get the gutter: shells and terminal emulators.
+Derived modes count, so `comint-mode' covers `shell-mode' and the REPLs.
+Their output streams continuously, which would re-run every provider on
+each chunk, and a mark set in scrollback is not worth that."
+  :type '(repeat symbol) :group 'zetta)
+
+(defun zetta-svg-margin-buffer-p ()
+  "Whether the current buffer gets the gutter: `svg-margin-global-predicate'.
+A file-visiting buffer always does.  Otherwise it must not be the
+minibuffer, an internal (space-prefixed) buffer or one of
+`zetta-svg-margin-shell-modes', and must either be in one of
+`zetta-svg-margin-modes' or already hold a letter evil mark."
+  (and (not (minibufferp))
+       (or buffer-file-name
+           (and (not (string-prefix-p " " (buffer-name)))
+                (not (apply #'derived-mode-p zetta-svg-margin-shell-modes))
+                (or (apply #'derived-mode-p zetta-svg-margin-modes)
+                    (zetta-svg-margin--evil-mark-alist (current-buffer)))))))
+
+(setq svg-margin-global-predicate #'zetta-svg-margin-buffer-p)
+
 ;; Provider -> (side . priority).  Side/priority set here, not in the
 ;; providers, so moving one between margins is a one-line edit.
 (svg-margin-register-provider 'git-gutter   #'zetta-svg-margin-git-gutter   :side 'left  :priority 9)
@@ -566,9 +641,37 @@ buffer text does not jitter as indicators pop in and out."
       (zetta-svg-margin-fill)
     (zetta-svg-margin-fixed)))
 
+(defun zetta-svg-margin--refresh-visible (&rest _)
+  "Refresh the gutter of every buffer shown on the selected frame.
+For a change to a GLOBAL mark, which can leave a stale letter in a buffer
+other than the current one.  Buffers not on screen re-render when they are
+next displayed, so the visible ones are all that need telling."
+  (dolist (win (window-list nil 'no-minibuf))
+    (svg-margin-refresh (window-buffer win))))
+
+(defun zetta-svg-margin--mark-set (char &rest _)
+  "After `evil-set-marker' sets CHAR: give the mark a gutter, then redraw it.
+This is the second half of `zetta-svg-margin-buffer-p': a buffer outside
+`zetta-svg-margin-modes' qualifies once it holds a letter mark, and
+nothing re-asks the predicate when one is set -- the globalized mode only
+asks on a major-mode change.  Letters only: evil also sets its own marks
+\(`[', `]', `^') through here on every change and insert exit."
+  (when (and (characterp char)
+             (or (<= ?a char ?z) (<= ?A char ?Z)))
+    (when (and (bound-and-true-p global-svg-margin-mode)
+               (not (bound-and-true-p svg-margin-mode))
+               (funcall svg-margin-global-predicate))
+      (svg-margin-mode 1))
+    ;; an uppercase mark has just LEFT wherever it pointed before
+    (when (<= ?A char ?Z)
+      (zetta-svg-margin--refresh-visible)))
+  (svg-margin-refresh))
+
 ;; Refresh triggers, deferred until each source package loads.
 (with-eval-after-load 'evil
-  (advice-add 'evil-set-marker :after #'zetta-svg-margin--refresh))
+  (advice-add 'evil-set-marker :after #'zetta-svg-margin--mark-set)
+  ;; `:delmarks' changes no text, so nothing else would redraw the gutter.
+  (advice-add 'evil-delete-marks :after #'zetta-svg-margin--refresh-visible))
 (with-eval-after-load 'flycheck
   (add-hook 'flycheck-after-syntax-check-hook #'zetta-svg-margin--refresh))
 (add-hook 'post-command-hook #'zetta-svg-margin--symbol-watch)

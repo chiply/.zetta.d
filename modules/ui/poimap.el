@@ -168,7 +168,8 @@ a small object floating on a row and the box tells you which pixels are it."
 Called with no arguments in the buffer being rendered."
   :type 'function :group 'zetta)
 
-(defcustom zetta-poimap-shell-modes '(eshell-mode term-mode vterm-mode eat-mode)
+(defcustom zetta-poimap-shell-modes
+  '(eshell-mode term-mode vterm-mode eat-mode ghostel-mode)
   "Major modes that are interactive shells without deriving from `comint-mode'.
 Comint shells are recognised by `zetta-poimap-interactive-shell-p' itself."
   :type '(repeat symbol) :group 'zetta)
@@ -358,12 +359,20 @@ the command is not recognised) and a `compile' run in comint mode
 
 (defun zetta-poimap-default-predicate ()
   "Default `zetta-poimap-predicate'.
-A non-empty buffer that visits a file or holds the output of a command:
-`compilation-mode', or the comint buffers `zetta-poimap-interactive-shell-p'
-does not count as shells (`async-shell-command', comint `compile')."
+A non-empty buffer that visits a file, has the svg-margin gutter, or holds
+the output of a command: `compilation-mode', or the comint buffers
+`zetta-poimap-interactive-shell-p' does not count as shells
+\(`async-shell-command', comint `compile').
+
+The gutter clause is what carries the map past file buffers.  The map is
+the far-field view of the gutter, so it goes where the gutter goes -- and
+`zetta-svg-margin-buffer-p' sends that to every buffer that is edited
+\(*scratch*, a capture, a chat) and to any other one holding an evil mark.
+Without it a mark set in a buffer with no file showed on neither surface."
   (and (> (buffer-size) 0)
        (not (zetta-poimap-interactive-shell-p))
        (or buffer-file-name
+           (bound-and-true-p svg-margin-mode)
            (derived-mode-p '(compilation-mode comint-mode)))))
 
 (defun zetta-poimap--shape-fn (shape)
@@ -761,6 +770,36 @@ output continuously and would otherwise re-arm it on every chunk."
   (advice-add 'poimap--request-idle-update-for-buffer-text-change
               :before-while #'zetta-poimap--displayed-p)
   (add-hook 'kill-buffer-hook #'zetta-poimap--cancel-idle-timer))
+
+;;; ------------------------------------------------------------------
+;;; Evil marks: redraw when one is set or deleted
+;;; ------------------------------------------------------------------
+;;
+;; `zetta-poimap--gate-key' watches the text and the symbol at point, and
+;; setting a mark moves neither.  So a mark set within
+;; `zetta-poimap-max-staleness' of the last recompute stayed off the map
+;; until some later command found the gate stale -- which reads as the mark
+;; not having registered.  Dropping the gate makes the update that the
+;; command's own `post-command-hook' requests recompute at once: a buffer
+;; with no gate is always computed.
+;;
+;; Letter marks only.  Evil sets its own marks (`[', `]', `^') through
+;; `evil-set-marker' on every change and insert exit, and dropping the gate
+;; for those would hand the rate floor back to the typist.
+
+(defun zetta-poimap--marks-changed (&rest _)
+  "Let the next idle update recompute the current buffer's map."
+  (kill-local-variable 'zetta-poimap--gate))
+
+(defun zetta-poimap--mark-set (char &rest _)
+  "After `evil-set-marker' sets CHAR: recompute the map if it is a letter."
+  (when (and (characterp char)
+             (or (<= ?a char ?z) (<= ?A char ?Z)))
+    (zetta-poimap--marks-changed)))
+
+(with-eval-after-load 'evil
+  (advice-add 'evil-set-marker :after #'zetta-poimap--mark-set)
+  (advice-add 'evil-delete-marks :after #'zetta-poimap--marks-changed))
 
 ;;; ------------------------------------------------------------------
 ;;; Activation

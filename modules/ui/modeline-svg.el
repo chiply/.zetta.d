@@ -258,10 +258,10 @@ one contribution and leaves the bar working and the reason on screen."
                    zetta-modeline-svg--mode "  " zetta-modeline-svg--point))
     ;; line 2:  git:branch (clickable -> magit) | [copilot] lsp | flycheck | flags
     ;;          ......   doc-position   <progress pie, under the percent>
-    ;; (the git + branch glyphs are folded into the clickable vc segment)
-    (cons '(zetta-modeline-svg--vc " "
-            zetta-modeline-svg--copilot-icon " " zetta-modeline-svg--checkers " "
-            zetta-modeline-svg--flycheck " " zetta-modeline-svg--indicators)
+    ;; (the git + branch glyphs are folded into the clickable vc segment).
+    ;; One group, so the whole row takes the `:prose' family and is told
+    ;; from line 1 by its face; the doc position is `:script'.
+    (cons '(zetta-modeline-svg--status)
           '(zetta-modeline-svg--docpos)))
    ;; line 3+: whatever another module asked for (the buffer map).
    (zetta-modeline-svg--run-extras 'zetta-modeline-svg-extra-rows)))

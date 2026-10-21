@@ -180,7 +180,7 @@ in the order they appear in the `zetta-modules!' declaration.")
              "yaml-path.el" "yaml.el" "yaml-pro.el" "text-mode.el" "jmespath.el"
              "terraform.el" "json-mode.el" "jsonian.el" "typescript-ts-mode.el"
              "typescript-mode.el" "biome.el" "graphviz-dot-mode.el" "svelte.el"
-             "sql.el" "sqlite.el" "ein.el"))
+             "sql.el" "sqlite.el" "ein.el" "dbt.el"))
     (tools . ("grep.el" "replace.el" "ag.el" "wgrep.el" "vc.el" "transient.el"
               "magit.el" "forge.el" "git-gutter.el" "docker.el" "dockerfile-mode.el"
               "docker-compose-mode.el" "convention.el" "tree-mode.el" "dap-mode.el"

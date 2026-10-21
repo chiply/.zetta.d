@@ -677,10 +677,9 @@ Errors are swallowed on purpose -- this runs during startup and on every
 preset switch, and a missing font must never be able to break either."
   (interactive)
   (if (not (zetta-font--measurement-frame))
-      (add-hook 'server-after-make-frame-hook
-                #'zetta-font-apply-metric-corrections)
-    (remove-hook 'server-after-make-frame-hook
-                 #'zetta-font-apply-metric-corrections)
+      ;; bootstrap-display.el: from the first graphical frame however it
+      ;; is made, in place of `server-after-make-frame-hook' (2026-10-21)
+      (zetta-when-graphic-frame #'zetta-font-apply-metric-corrections)
     (with-selected-frame (zetta-font--measurement-frame)
     (condition-case err
         (let ((sig (list (face-attribute 'default :family nil 'default)
@@ -720,6 +719,48 @@ preset switch, and a missing font must never be able to break either."
                    (#x2700 . #x27bf)    ; Dingbats         -- ❯ ✚
                    (#x2800 . #x28ff)))  ; Braille          -- btop graphs
     (set-fontset-font t range "Terminess Nerd Font Mono" nil 'prepend)))
+
+;; The Nerd Font glyphs themselves: the tmux status bar and window icons,
+;; prompts, eza, Claude Code's status line.  These characters have no script,
+;; so with no fontset entry Emacs searches every installed font for one that
+;; has the glyph and takes the first -- any of a few hundred Nerd Font cuts,
+;; most of them not single-cell and none of them known to the rescaling above.
+;;
+;; Until 2026-10 the only thing pinning these two ranges was
+;; modules/app/nano-mu4e.el.  The work profile loads no mail module, so that
+;; machine drew every icon in a terminal buffer with whatever the search hit.
+;; A fontset is not a mail setting; it lives here now, for every profile.
+;;
+;; On a GUI frame rather than at load time, and that part is load-bearing.
+;; Creating the first graphical frame initializes the window system, which
+;; rebuilds the default fontset from nothing (`create-default-fontset' in
+;; term/ns-win.el; `new-fontset' clears the table first).  Under a daemon
+;; that happens long after init and takes every entry made before it.  The
+;; block above is lost exactly that way -- measured 2026-10-04 in the daemon:
+;; U+276F, which Terminess has and Terminus lacks, is drawn by "AnnotationM
+;; Nerd Font".  It is left alone here: bringing it to life changes which font
+;; draws every borrowed symbol, and the rescaling wants re-checking against
+;; that.
+(defvar zetta-font--nerd-ranges-pinned nil
+  "Non-nil once the Nerd Font ranges are routed to Terminess.")
+
+(defun zetta-font-pin-nerd-ranges (&optional _frame)
+  "Route the Nerd Font private-use ranges to Terminess, once.
+Does nothing until a graphical frame exists; see the commentary above."
+  (when (and (not zetta-font--nerd-ranges-pinned)
+             (fboundp 'set-fontset-font)
+             (seq-some #'display-graphic-p (frame-list)))
+    (setq zetta-font--nerd-ranges-pinned t)
+    ;; Demoted: this sits on `after-make-frame-functions', where a signal
+    ;; takes down every function after it -- and the server's own frame
+    ;; bookkeeping with them.  A missing font is a wrong glyph, not that.
+    (with-demoted-errors "zetta-font: Nerd Font ranges not pinned: %S"
+      ;; every Nerd Font set but Material Design, then Material Design (nf-md)
+      (set-fontset-font t '(#xe000 . #xf8ff) "Terminess Nerd Font Mono" nil 'prepend)
+      (set-fontset-font t '(#xf0000 . #xfffff) "Terminess Nerd Font Mono" nil 'prepend))))
+
+(add-hook 'after-make-frame-functions #'zetta-font-pin-nerd-ranges)
+(zetta-font-pin-nerd-ranges)
 
 (add-hook 'ghostel-mode-hook #'zetta-use-terminal-display-table)
 (add-hook 'vterm-mode-hook   #'zetta-use-terminal-display-table)

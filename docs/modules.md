@@ -103,6 +103,7 @@ Language-specific configurations.
 | terraform.el | Terraform | HCL editing + LSP |
 | json-mode.el, jsonian.el | JSON | JSON editing |
 | sql.el, sqlite.el | SQL | Database interaction |
+| dbt.el | dbt | SQL + Jinja models: dbt-mode (a polymode over sql-mode) inside any dbt project |
 | sh-script.el | Shell | Bash/Zsh scripting |
 | csv-mode.el | CSV | Tabular data |
 | treesit.el | — | Tree-sitter grammar management |

@@ -38,6 +38,8 @@
           (set-face-attribute (car spec) nil
                               :background (cdr spec)
                               :foreground 'unspecified)))))
+  ;; after every theme change: the theme has just put the italics back
+  (add-to-list 'brushup-styles '(zetta-magit-upright-faces))
   ;;:ensure (magit :type git :host github :repo "magit/magit" :tag "v4.1.1")
   :commands (magit-status magit-blame magit-log magit-branch magit-commit
              magit-push magit-pull magit-fetch magit-stage magit-stage-modified
@@ -52,7 +54,39 @@
 
   (setq magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1)
 
+  ;; No italics in magit.  The doric themes (and, for a face or two, modus
+  ;; and magit itself) use slant as a signal: file and hunk headings are
+  ;; italic, their -highlight twins are bold-italic or plain bold -- so a
+  ;; heading changes cut as the section highlight passes over it, and with
+  ;; a preset whose `italic' is another family altogether (fontaine's
+  ;; :italic-family) it changes typeface too.  Slant arrives two ways and
+  ;; both go: the :slant attribute, and `:inherit italic' / `bold-italic',
+  ;; which is how the themes spell it and what carries the family across.
+  (defun zetta-magit-upright-faces ()
+    "Remove italics from every magit, git-commit, git-rebase and forge face.
+Only faces that exist yet are touched, so this runs again whenever more
+of them have been defined: on magit's and forge's load, and after every
+theme change."
+    (dolist (face (face-list))
+      (when (string-match-p "\\`\\(?:magit\\|git-commit\\|git-rebase\\|forge\\)-"
+                            (symbol-name face))
+        (let ((inherit (face-attribute face :inherit nil)))
+          (unless (memq inherit '(nil unspecified))
+            (set-face-attribute
+             face nil :inherit
+             (or (delq nil (mapcar (lambda (parent)
+                                     (pcase parent
+                                       ('italic nil)
+                                       ('bold-italic 'bold)
+                                       (_ parent)))
+                                   (ensure-list inherit)))
+                 'unspecified))))
+        (set-face-attribute face nil :slant 'normal))))
+
   :config
+  (zetta-magit-upright-faces)
+  (with-eval-after-load 'forge (zetta-magit-upright-faces))
+
   (setq magit-git-executable (or (executable-find "git") "git"))
 
   ;; project.el
@@ -131,8 +165,8 @@
                              magit-blame-read-only-mode-map)
    "C-<tab>" 'tab-line-switch-to-next-tab
    "C-S-<tab>" 'tab-line-switch-to-prev-tab
-   "M-S-<tab>" 'st-switch-space-by-name
-   "M-<tab>" 'st-go-to-last-space
+   "M-S-<tab>" 'space-tree-switch-space-by-name
+   "M-<tab>" 'space-tree-go-to-last-space
    )
 
   )

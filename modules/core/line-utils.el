@@ -147,6 +147,12 @@ of one per segment:
   `:prose'   a humanist cut -- for text that is read rather than scanned
   `:chrome'  a mechanical cut -- for instrumentation
 
+The tab bar uses all three per segment.  The mode line and header line use
+them per ROW: row two of each is `:prose' (`zetta-modeline-svg--status',
+`zetta-header-line-svg--line2') and their transient readouts -- the PDF
+page, the font-preset badge -- are `:script', against a base family the
+preset sets per bar (`zetta-fontaine-chrome-fonts').
+
 A nil value for a role leaves those segments in the bar's own font."
   :type '(plist :key-type symbol :value-type (choice (const nil) string))
   :group 'zetta)
@@ -154,6 +160,40 @@ A nil value for a role leaves those segments in the bar's own font."
 (defun zetta-svg-seg-font (role)
   "Font family for segment ROLE, per `zetta-svg-seg-fonts', or nil."
   (plist-get zetta-svg-seg-fonts role))
+
+(defun zetta-svg-in-font (role items)
+  "Evaluate segment ITEMS and draw every segment among them in ROLE's family.
+
+ITEMS is what one side of a content row holds -- strings, segment
+functions, bound symbols, `:svg-seg' / `:svg-segs' values -- evaluated the
+way the engine evaluates them (`svg-line--render-runs') and returned as
+one spliced `:svg-segs' value, so a row builder can hand a whole side, or
+a whole row, to a family in one place.  This is how row two of the mode
+line and of the header line are told apart from row one (2026-10-21).
+
+Plain text between the segments keeps the bar's own font: it is the
+separators and the file icon, and the bar font is the one known to carry
+every icon.  A segment that already names a `:font' keeps it.  With no
+family for ROLE (`zetta-svg-seg-fonts'), the items pass through as they
+are."
+  (let ((font (zetta-svg-seg-font role)))
+    (cl-labels
+        ((eval-item (s)
+           (cond ((stringp s) s)
+                 ((and (consp s) (memq (car s) '(:svg-bar :svg-pie :svg-seg :svg-segs))) s)
+                 ((functionp s) (funcall s))
+                 ((and (symbolp s) (boundp s)) (symbol-value s))
+                 (t nil)))
+         (refont (v)
+           (cond ((null v) nil)
+                 ((and (consp v) (eq (car v) :svg-seg))
+                  (if (or (null font) (plist-member (cddr v) :font))
+                      v
+                    (cons :svg-seg (cons (cadr v) (cons :font (cons font (cddr v)))))))
+                 ((and (consp v) (eq (car v) :svg-segs))
+                  (cons :svg-segs (delq nil (mapcar #'refont (cdr v)))))
+                 (t v))))
+      (cons :svg-segs (delq nil (mapcar (lambda (s) (refont (eval-item s))) items))))))
 
 (defun zetta-svg-seg (text key &rest plist)
   "Return an interactive svg-line segment for TEXT, keyed by KEY.
@@ -1005,7 +1045,16 @@ fainter chip."
          (activep (mode-line-window-selected-p))
          (chip (zetta-modeline--lighter-bg (not activep))))
     (svg-line-seg
-     label
+     ;; Padded like every other chip on the line (the modal letter, the
+     ;; flycheck counts).  svg-line cuts a chip's chevron INTO its width
+     ;; rather than adding it on (`svg-line--seg-box'), on the
+     ;; understanding that the label carries its own leading and trailing
+     ;; space for the point to eat.  The bare name carried none, so the
+     ;; tip landed on the end of the text and the two diagonals ran
+     ;; through its last character.  One cell is enough: the default cut
+     ;; is ~0.3 of the row height, under one character advance at any
+     ;; font size this line is drawn at.
+     (concat " " label " ")
      ;; id includes the buffer so only THIS window's name boxes on hover
      :id (list 'ml-buffer buf)
      :bg chip
@@ -1163,7 +1212,21 @@ Shown whenever `flycheck-mode\=' is active."
                    (list (and (buffer-narrowed-p) (cons "Widen buffer" #'widen))
                          (and (bound-and-true-p repeat-in-progress) (cons "Repeat help" #'describe-bindings))))))))
 
+(defun zetta-modeline-svg--status ()
+  "Row two of the mode line: the vc cluster, copilot, lsp, flycheck, flags.
+In the `:prose' family.  Row one is scanned -- a name, a letter, a
+position -- and this row is read, a branch name and some counts, and the
+family is what tells the two apart (see `zetta-svg-in-font')."
+  (zetta-svg-in-font
+   :prose
+   '(zetta-modeline-svg--vc " "
+     zetta-modeline-svg--copilot-icon " " zetta-modeline-svg--checkers " "
+     zetta-modeline-svg--flycheck " " zetta-modeline-svg--indicators)))
+
 (defun zetta-modeline-svg--docpos ()
+  "Document position -- the PDF page -- on the right of row two.
+In the `:script' family: it is the transient readout of the line, and
+the handwriting cut is what the tab bar uses for the same kind of thing."
   (cond
    ((and (eq major-mode 'pdf-view-mode) (fboundp 'pdf-view-current-page))
     (let ((text (ignore-errors (format "%d/%d" (pdf-view-current-page)
@@ -1171,6 +1234,7 @@ Shown whenever `flycheck-mode\=' is active."
       (when text
         (zetta-svg-seg
          text 'ml-docpos
+         :font (zetta-svg-seg-font :script)
          :help "PDF page"
          :action-help "go to page"
          :action (if (fboundp 'pdf-view-goto-page) #'pdf-view-goto-page #'ignore)
@@ -1258,9 +1322,14 @@ Shown whenever `flycheck-mode\=' is active."
    (format-mode-line zetta-header-line-svg-line1-format) 'hl1))
 
 (defun zetta-header-line-svg--line2 ()
-  "Render the second breadcrumb row (lsp / org / imenu crumbs), crumbs clickable."
-  (zetta-svg-segs-from-propertized
-   (format-mode-line zetta-header-line-svg-line2-format) 'hl2))
+  "Render the second breadcrumb row (lsp / org / imenu crumbs), crumbs clickable.
+In the `:prose' family: row one is the path, a title in the bar's slab;
+this row is where you are inside the file, read rather than scanned, and
+the family tells the two rows apart (see `zetta-svg-in-font')."
+  (zetta-svg-in-font
+   :prose
+   (list (zetta-svg-segs-from-propertized
+          (format-mode-line zetta-header-line-svg-line2-format) 'hl2))))
 
 ;;; spinner-only header line content
 ;; The running-command spinner is an element of row 1 above, which means a
@@ -1345,11 +1414,42 @@ when one advance was measured once and handed to all four."
                                                      (string :tag "Family")))
   :group 'zetta)
 
+(defvar zetta-svg-line--font-available (make-hash-table :test 'equal)
+  "Memo for `zetta-svg-line-font-available-p': family -> t or `missing'.")
+
+(defun zetta-svg-line-forget-font-availability ()
+  "Drop the memo behind `zetta-svg-line-font-available-p'.
+For after fonts have been installed; `zetta-fontaine-refresh-font-presets'
+calls it."
+  (clrhash zetta-svg-line--font-available))
+
+(defun zetta-svg-line-font-available-p (family)
+  "Whether FAMILY is installed, as far as a graphical frame can tell.
+Decided once per family and remembered.  With no graphical frame to ask
+the answer is t and nothing is remembered: under the daemon the bars are
+not drawn before one exists, and a verdict taken on a tty would be wrong."
+  (let ((frame (seq-find #'display-graphic-p (frame-list))))
+    (if (null frame)
+        t
+      (let ((hit (gethash family zetta-svg-line--font-available 'miss)))
+        (when (eq hit 'miss)
+          (setq hit (if (ignore-errors (find-font (font-spec :family family) frame))
+                        t
+                      'missing))
+          (puthash family hit zetta-svg-line--font-available))
+        (eq hit t)))))
+
 (defun zetta-svg-line-font-for (bar)
   "Font family BAR is drawn in.
 BAR is `:tab-bar', `:tab-line', `:mode-line' or `:header-line'; the answer
-is its `zetta-svg-line-fonts' entry, or `zetta-svg-line-font'."
-  (or (plist-get zetta-svg-line-fonts bar) zetta-svg-line-font))
+is its `zetta-svg-line-fonts' entry, or `zetta-svg-line-font' -- also when
+the entry names a family this machine does not have (the work profile asks
+for Monaspace like the personal one; see `zetta-svg-line-font-available-p'),
+so a missing font costs the bar its typeface and never its icons."
+  (let ((family (plist-get zetta-svg-line-fonts bar)))
+    (if (and family (zetta-svg-line-font-available-p family))
+        family
+      zetta-svg-line-font)))
 
 (defun zetta-line--glyph (s)
   "Return nerd-icons glyph string S without text properties, or nil if empty."
@@ -2031,6 +2131,9 @@ to change it."
       (svg-line-seg
        (concat "6 " (zetta-fontaine--short-name preset))
        :id 'zetta-font-preset
+       ;; the incidental readout of the bar, in the handwriting cut like
+       ;; the tab bar's keycast and the mode line's PDF page
+       :font (zetta-svg-seg-font :script)
        :color (unless local
                 (zetta-svg-line--dim
                  (or (bound-and-true-p brushup-fg-3)

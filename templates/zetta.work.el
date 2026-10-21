@@ -123,9 +123,13 @@
 ;;; Appearance
 ;;; ————————————————————————————————————————————————
 
-;; Same chrome font as the personal machine; the Brewfile's font casks
-;; install it on both.  Falls back to `zetta-svg-line-font' if absent.
-(setq zetta-svg-line-fonts '(:tab-bar "Monaspace Krypton NF"))
+;; The chrome fonts -- Monaspace on the tab bar, tab line, mode line and
+;; header line, Terminus in the buffer -- are the `terminus' preset's, in
+;; modules/ui/fontaine.el, the default on every machine; the Brewfile's
+;; font casks install them here as on the personal Mac, and a bar whose
+;; family is missing falls back to `zetta-svg-line-font'.  Nothing to set
+;; here: the preset assigns `zetta-svg-line-fonts' on every switch, so a
+;; value given in this file lasted only until the first one was applied.
 
 ;;; ————————————————————————————————————————————————
 ;;; Modules

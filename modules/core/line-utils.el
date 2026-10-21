@@ -1354,11 +1354,42 @@ when one advance was measured once and handed to all four."
                                                      (string :tag "Family")))
   :group 'zetta)
 
+(defvar zetta-svg-line--font-available (make-hash-table :test 'equal)
+  "Memo for `zetta-svg-line-font-available-p': family -> t or `missing'.")
+
+(defun zetta-svg-line-forget-font-availability ()
+  "Drop the memo behind `zetta-svg-line-font-available-p'.
+For after fonts have been installed; `zetta-fontaine-refresh-font-presets'
+calls it."
+  (clrhash zetta-svg-line--font-available))
+
+(defun zetta-svg-line-font-available-p (family)
+  "Whether FAMILY is installed, as far as a graphical frame can tell.
+Decided once per family and remembered.  With no graphical frame to ask
+the answer is t and nothing is remembered: under the daemon the bars are
+not drawn before one exists, and a verdict taken on a tty would be wrong."
+  (let ((frame (seq-find #'display-graphic-p (frame-list))))
+    (if (null frame)
+        t
+      (let ((hit (gethash family zetta-svg-line--font-available 'miss)))
+        (when (eq hit 'miss)
+          (setq hit (if (ignore-errors (find-font (font-spec :family family) frame))
+                        t
+                      'missing))
+          (puthash family hit zetta-svg-line--font-available))
+        (eq hit t)))))
+
 (defun zetta-svg-line-font-for (bar)
   "Font family BAR is drawn in.
 BAR is `:tab-bar', `:tab-line', `:mode-line' or `:header-line'; the answer
-is its `zetta-svg-line-fonts' entry, or `zetta-svg-line-font'."
-  (or (plist-get zetta-svg-line-fonts bar) zetta-svg-line-font))
+is its `zetta-svg-line-fonts' entry, or `zetta-svg-line-font' -- also when
+the entry names a family this machine does not have (the work profile asks
+for Monaspace like the personal one; see `zetta-svg-line-font-available-p'),
+so a missing font costs the bar its typeface and never its icons."
+  (let ((family (plist-get zetta-svg-line-fonts bar)))
+    (if (and family (zetta-svg-line-font-available-p family))
+        family
+      zetta-svg-line-font)))
 
 (defun zetta-line--glyph (s)
   "Return nerd-icons glyph string S without text properties, or nil if empty."

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.9](https://github.com/chiply/.zetta.d/compare/v0.2.8...v0.2.9) (2026-10-21)
+
+
+### Features
+
+* dbt-mode, canvas-minimap, gutter fork-point reference; work-machine fixes; Terminus default with Monaspace chrome ([b2ca046](https://github.com/chiply/.zetta.d/commit/b2ca04625aebeac0859a140b637bc28a01b3e324))
+
+
+### Bug Fixes
+
+* font jitter, dired flash, theme/preset coupling, minibuffer fonts; dired-ranger bookmarks ([#151](https://github.com/chiply/.zetta.d/issues/151)) ([f792e8d](https://github.com/chiply/.zetta.d/commit/f792e8d46a5dd275aa227037b05ced55491bcc5e))
+
 ## [0.2.8](https://github.com/chiply/.zetta.d/compare/v0.2.7...v0.2.8) (2026-09-14)
 
 

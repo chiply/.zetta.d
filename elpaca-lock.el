@@ -440,6 +440,14 @@
                   :source "elpaca-menu-lock-file" :id calfw :type git
                   :protocol https :inherit t :depth treeless :ref
                   "36846cdca91794cf38fa171d5a3ac291d3ebc060"))
+ (canvas-minimap :source "elpaca-menu-lock-file" :recipe
+                 (:source "elpaca-menu-lock-file" :package
+                          "canvas-minimap" :id canvas-minimap :host
+                          github :repo "Daskeladden/canvas-minimap"
+                          :type git :protocol https :inherit t :depth
+                          treeless :ref
+                          "3b1dbe698e7ee228f7de8be410ef2c9c7f30bf3f"
+                          :files (:defaults ("tools" "tools/*.py"))))
  (cape :source "elpaca-menu-lock-file" :recipe
        (:package "cape" :repo "minad/cape" :fetcher github :files
                  ("*.el" "*.el.in" "dir" "*.info" "*.texi" "*.texinfo"

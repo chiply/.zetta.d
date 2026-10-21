@@ -1,4 +1,59 @@
-;;; minimap.el --- Configure minimap -*- lexical-binding: t; -*-
+;;; minimap.el --- Configure the minimap -*- lexical-binding: t; -*-
+
+;; Two minimaps behind one set of keys -- s-[ toggles, s-] redraws:
+;;
+;;   canvas-minimap  where Emacs has the canvas image type (Emacs 32, the
+;;                   source build).  A pixel picture of the buffer drawn on
+;;                   one canvas in a side window, not a second buffer at a
+;;                   one-point font, so it repaints only the rows that
+;;                   changed.  Its window is a real side window carrying
+;;                   `no-delete-other-windows' and `no-other-window', which
+;;                   is what the old one below never managed.
+;;   minimap         everywhere else.  The notes below are its history.
+;;
+;; Neither is on at startup: both redraw from `post-command-hook', and a
+;; map earns its column only while you are actually reading one.
+
+(defun zetta-minimap-canvas-p ()
+  "Non-nil when this Emacs can draw `canvas-minimap'."
+  (and (>= emacs-major-version 32)
+       (image-type-available-p 'canvas)))
+
+;; `when' around the form rather than `:if' inside it: use-package handles
+;; `:ensure' before `:if', and the package declares Emacs 32.0.50 -- queued
+;; on an older Emacs it is a failed order in the elpaca log on every start.
+(when (zetta-minimap-canvas-p)
+  (use-package canvas-minimap
+    :ensure (:host github :repo "Daskeladden/canvas-minimap"
+                   ;; the python helpers that rasterize a glyph table for the
+                   ;; frame's font and thumbnails for images sit outside the
+                   ;; default file set.  Optional at runtime: they need
+                   ;; `fc-match' and a python3 with Pillow, and without them
+                   ;; the shipped table and plain image blocks are used.
+                   :files (:defaults ("tools" "tools/*.py")))
+    :commands (canvas-minimap-mode canvas-minimap-refresh canvas-minimap-menu)
+
+    :config
+    ;; a terminal has no document to map (vterm and term are excluded
+    ;; upstream)
+    (dolist (mode '(ghostel-mode eshell-mode shell-mode))
+      (add-to-list 'canvas-minimap-exclude-modes mode))
+
+    ;; The map keeps its pixels between refreshes, so rows painted under
+    ;; the previous theme stay that colour until something redraws them.
+    :brushup
+    (add-to-list 'brushup-styles
+                 '(when (bound-and-true-p canvas-minimap-mode)
+                    (canvas-minimap-refresh)))
+
+    :general
+    (:keymaps 'override
+     "s-[" 'canvas-minimap-mode
+     "s-]" 'canvas-minimap-refresh
+     ;; every option, previewed as it is changed
+     "s-}" 'canvas-minimap-menu)))
+
+;;; The pre-canvas minimap
 
 ;; NOTE revisited on May 9th.  Basically the minimap doesn't work well
 ;; wiht spacetree.  Tried all different settings to get around this,
@@ -37,6 +92,8 @@
 ;; left off (and last for the day... when doing ,w c-S-D, this closes the minimap.  Need to change this special function to change the minimap setting prior to and after )
 
 (use-package minimap
+  ;; the fallback only: canvas-minimap above owns the keys where it runs
+  :if (not (zetta-minimap-canvas-p))
   :commands (minimap-mode minimap-update)
   :config
 

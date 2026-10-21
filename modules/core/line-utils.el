@@ -1005,7 +1005,16 @@ fainter chip."
          (activep (mode-line-window-selected-p))
          (chip (zetta-modeline--lighter-bg (not activep))))
     (svg-line-seg
-     label
+     ;; Padded like every other chip on the line (the modal letter, the
+     ;; flycheck counts).  svg-line cuts a chip's chevron INTO its width
+     ;; rather than adding it on (`svg-line--seg-box'), on the
+     ;; understanding that the label carries its own leading and trailing
+     ;; space for the point to eat.  The bare name carried none, so the
+     ;; tip landed on the end of the text and the two diagonals ran
+     ;; through its last character.  One cell is enough: the default cut
+     ;; is ~0.3 of the row height, under one character advance at any
+     ;; font size this line is drawn at.
+     (concat " " label " ")
      ;; id includes the buffer so only THIS window's name boxes on hover
      :id (list 'ml-buffer buf)
      :bg chip

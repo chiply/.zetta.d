@@ -8,10 +8,6 @@
  ;; arrives as super + capital P -- [8388688], where "s-S-p" is [41943152],
  ;; an event the keyboard never sends.  Same convention as the "s-V"
  ;; `vertico-repeat' binding in completion/vertico.el.
- ;;
- ;; The palette look is the other half of this: `execute-extended-command'
- ;; opens in a top-centred posframe, see `vertico-multiform-commands' in
- ;; completion/vertico.el.
  "s-P" 'execute-extended-command)
 
 (general-define-key

@@ -27,7 +27,11 @@
   (scroll-bar-mode -1))
 (fset 'yes-or-no-p 'y-or-n-p)
 
-(setq blink-cursor-mode nil)
+;; The cursor blinks: it is what says "point is here" now that the beacon
+;; is off (beacon.el).  Stock timing -- ten blinks after the last input,
+;; then steady, so an idle frame is not redrawn forever
+;; (`blink-cursor-blinks'; 0 would blink without end).
+(blink-cursor-mode 1)
 
 (setq frame-title-format nil)
 ;;; minimalize.el ends here

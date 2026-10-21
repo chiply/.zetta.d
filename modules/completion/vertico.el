@@ -1,11 +1,13 @@
 ;;; vertico.el --- Configure vertico -*- lexical-binding: t; -*-
 
-;; Posframe is NOT a global display: `vertico-posframe-mode' stays off
-;; and posframe is opted into per command through
-;; `vertico-multiform-commands' (M-x, see the vertico block below), or
-;; reached inside any live session with M-P
-;; (`vertico-multiform-posframe', which the package binds into
-;; `vertico-multiform-map').
+;; Posframe is NOT a global display: `vertico-posframe-mode' stays off,
+;; and since 2026-10-21 no command opts into it through
+;; `vertico-multiform-commands' either.  M-x went first (the top-centred
+;; palette, 2026-10-04), `zetta-magit-project' last; the verdict was that
+;; it does not work well enough to be in the way.  The package is kept,
+;; loaded and styled, for one reason: M-P (`vertico-multiform-posframe',
+;; which it binds into `vertico-multiform-map') still floats the session
+;; you are in when you ask for it.
 ;;
 ;; Demanded rather than deferred: the :brushup form below names faces
 ;; that only exist once the package is loaded, and brushup re-applies
@@ -59,31 +61,12 @@
   (vertico-flat-mode 1)
   (vertico-multiform-mode 1)
 
-  ;; NOTE experimenting with this for now.
-  (setq vertico-multiform-commands
-        '((zetta-magit-project
-           posframe
-           ;; NEED to do both here
-           (vertico-flat-mode . -1)
-           (vertico-vertical-mode . 1))
-
-          ;; M-x as a floating command palette.  A regexp rather than
-          ;; the bare symbol because multiform keys are matched against
-          ;; `this-command': reached through the window menu ("x" in
-          ;; `menu-window-map') that is the `repeatable-wrap-' wrapper,
-          ;; not the command itself.  The same pattern picks up
-          ;; `execute-extended-command-for-buffer'.
-          ("\\`\\(?:repeatable-wrap-\\)?execute-extended-command"
-           ;; flat is the global default; the posframe wants the
-           ;; vertical list back.  `:not' calls the mode function, so
-           ;; multiform switches flat back on when the session ends.
-           (:not flat)
-           posframe
-           ;; a palette belongs at the top of the frame, clear of the
-           ;; point; the global default stays `frame-center'
-           (vertico-posframe-poshandler . posframe-poshandler-frame-top-center))
-          ;;(t flat)
-          ))
+  ;; Nothing opens in a posframe by itself; see the note at the top of
+  ;; this file.  An entry here is the way to opt a command back in:
+  ;;   (zetta-magit-project posframe (vertico-flat-mode . -1) (vertico-vertical-mode . 1))
+  ;; -- the two mode cells because flat is the global default and the
+  ;; posframe wants the vertical list back.
+  (setq vertico-multiform-commands nil)
 
   ;; TODO add embark prompt for keybinding to present candidates in
   ;; GRID -- bc of how I bring these up (with veratile C-h), I'm

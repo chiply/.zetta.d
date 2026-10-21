@@ -349,20 +349,28 @@ request failed, which is worth hearing about however long it took."
               ("C-p" . copilot-previous-completion)
               )
   :init
+  (defcustom zetta-copilot-auto-enable nil
+    "Non-nil turns `copilot-mode' on by itself in code buffers.
+Off by default: Copilot is switched on by hand, per buffer, with
+\\[copilot-mode]."
+    :type 'boolean :group 'zetta)
+
   (defun zetta-copilot-maybe-enable ()
     "Enable `copilot-mode' only when actually editing a code buffer.
-Copilot is restricted to file-visiting buffers whose major mode derives
-from `prog-mode' (so Org, Markdown and other text modes are skipped) and
+Does nothing unless `zetta-copilot-auto-enable' is set.  Copilot is then
+restricted to file-visiting buffers whose major mode derives from
+`prog-mode' (so Org, Markdown and other text modes are skipped) and
 oversized files are left alone.  This keeps Copilot from activating -- or
 tripping its `copilot-max-char' warning -- in the transient buffers that
 tools like HyRolo or consult-grep open in the background to scan files."
-    (require 'copilot)
-    (when (and buffer-file-name
-               (derived-mode-p 'prog-mode)
-               (not (bound-and-true-p copilot-mode))
-               (or (< copilot-max-char 0)
-                   (<= (buffer-size) copilot-max-char)))
-      (copilot-mode 1)))
+    (when (and zetta-copilot-auto-enable
+               buffer-file-name
+               (derived-mode-p 'prog-mode))
+      (require 'copilot)
+      (when (and (not (bound-and-true-p copilot-mode))
+                 (or (< copilot-max-char 0)
+                     (<= (buffer-size) copilot-max-char)))
+        (copilot-mode 1))))
   (add-hook 'prog-mode-hook #'zetta-copilot-maybe-enable)
 
   :config

@@ -215,7 +215,7 @@ time the queue never drained (2026-10-21) nothing else said why.")
         zetta--graphic-frame-log))
 
 (defvar zetta--graphic-frame-watch nil
-  "The idle timer that drains the queue when no hook has; see below.")
+  "The timer that drains the queue when no hook has; see below.")
 
 (defun zetta--graphic-frame-run-pending ()
   "Run and drop every function in `zetta--graphic-frame-pending', oldest first.
@@ -253,11 +253,14 @@ that reaches for this while a frame exists wanted something more of it
 than `display-graphic-p' and has nothing to gain from spinning.
 Registering FN twice runs it once.
 
-Belt and braces: while the queue waits, an idle timer looks for a
-graphical frame once a second and drains the queue the moment it finds
-one, so the work happens even if the frame's creation never reached
+Belt and braces: while the queue waits, a timer looks for a graphical
+frame once a second and drains the queue the moment it finds one, so the
+work happens even if the frame's creation never reached
 `after-make-frame-functions' -- which is what the log said about the
-2026-10-21 session, with no reason found."
+2026-10-21 session, with no reason found.  A plain timer, not an idle
+one: an idle timer with a repeat fires once per idle PERIOD, and a daemon
+nobody has typed at yet is one long idle period, so it fired once before
+the frame existed and never again (measured on a probe daemon)."
   (unless (memq fn zetta--graphic-frame-pending)
     (push fn zetta--graphic-frame-pending))
   (zetta--graphic-frame-note 'register :fn fn)
@@ -265,7 +268,7 @@ one, so the work happens even if the frame's creation never reached
       (run-at-time 1 nil #'zetta--graphic-frame-run-pending)
     (unless zetta--graphic-frame-watch
       (setq zetta--graphic-frame-watch
-            (run-with-idle-timer 1 t #'zetta--graphic-frame-run-pending)))))
+            (run-at-time 1 1 #'zetta--graphic-frame-run-pending)))))
 
 (when (fboundp 'repeatable-wrap)
   (general-define-key

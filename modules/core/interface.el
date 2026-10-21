@@ -677,10 +677,9 @@ Errors are swallowed on purpose -- this runs during startup and on every
 preset switch, and a missing font must never be able to break either."
   (interactive)
   (if (not (zetta-font--measurement-frame))
-      (add-hook 'server-after-make-frame-hook
-                #'zetta-font-apply-metric-corrections)
-    (remove-hook 'server-after-make-frame-hook
-                 #'zetta-font-apply-metric-corrections)
+      ;; bootstrap-display.el: from the first graphical frame however it
+      ;; is made, in place of `server-after-make-frame-hook' (2026-10-21)
+      (zetta-when-graphic-frame #'zetta-font-apply-metric-corrections)
     (with-selected-frame (zetta-font--measurement-frame)
     (condition-case err
         (let ((sig (list (face-attribute 'default :family nil 'default)

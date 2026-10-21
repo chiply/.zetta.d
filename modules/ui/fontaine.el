@@ -597,12 +597,15 @@ next frame."
   (if (seq-some #'display-graphic-p (frame-list))
       (zetta-fontaine-refresh-font-presets)
     (setq fontaine-presets zetta-fontaine-curated-presets)
-    (add-hook 'server-after-make-frame-hook
-              #'zetta-fontaine-refresh-font-presets)
-    ;; APPENDED, so it runs after the generation above on the same hook --
-    ;; the whole point is to get a second go once the preset exists.
-    (add-hook 'server-after-make-frame-hook
-              #'zetta-fontaine--apply-startup-preset t))
+    ;; `zetta-when-graphic-frame' (bootstrap-display.el) runs these from the
+    ;; first graphical frame however it is made, in this order: the second
+    ;; is the second go at the saved preset once generation has happened.
+    ;; It took over from `server-after-make-frame-hook' here on 2026-10-21;
+    ;; the server runs that hook only for its own frames and not at all
+    ;; when the request lands while the daemon is in a minibuffer, which
+    ;; left a whole session with every bar in the wrong family.
+    (zetta-when-graphic-frame #'zetta-fontaine-refresh-font-presets)
+    (zetta-when-graphic-frame #'zetta-fontaine--apply-startup-preset))
 
   (defun zetta-fontaine--sync ()
     "Carry a preset change through to the parts fontaine cannot reach.
@@ -642,8 +645,7 @@ Three things need doing that `fontaine-set-preset' does not:
     ;; skipping -- which left the chrome font switched but its layout grid
     ;; and the buffer font still on the old preset.
     (if (not (seq-some #'display-graphic-p (frame-list)))
-        (add-hook 'server-after-make-frame-hook #'zetta-fontaine--sync)
-      (remove-hook 'server-after-make-frame-hook #'zetta-fontaine--sync)
+        (zetta-when-graphic-frame #'zetta-fontaine--sync)
       (let* ((preset fontaine-current-preset)
              (family (fontaine--get-preset-property preset :default-family))
              (height (fontaine--get-preset-property preset :default-height))

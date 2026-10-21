@@ -179,6 +179,56 @@ being displayed, otherwise returns nil"
   (interactive)
   (zetta-soda-cap "*info*"))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; Work that needs a graphical frame
+;;
+;; Under the daemon, anything that measures fonts or lays out the SVG chrome
+;; has to wait for the first graphical frame.  The config used to wait on
+;; `server-after-make-frame-hook', and that hook is a poor promise: the
+;; server runs it only for frames it makes itself, skips it -- every
+;; function on it -- when the request arrives while the daemon sits in a
+;; minibuffer or an isearch (`server-execute'), and an error in one function
+;; on it silences every function after it.  Measured 2026-10-21: a daemon
+;; whose only GUI frame carried the server's `nowait' client mark still had
+;; every font function armed on that hook an hour later, `zetta-svg-line-fonts'
+;; never assigned, and the mode line drawn in the wrong family.
+;;
+;; So work is registered here instead and runs from the first graphical frame
+;; however that frame was made: `after-make-frame-functions' fires for all of
+;; them.  It runs from a zero-delay timer, so the frame is complete and we are
+;; outside `make-frame', and each function on its own, so one failure cannot
+;; take the rest down.
+
+(defvar zetta--graphic-frame-pending nil
+  "Functions waiting for a graphical frame, newest first.")
+
+(defun zetta--graphic-frame-run-pending ()
+  "Run and drop every function in `zetta--graphic-frame-pending', oldest first."
+  (let ((fns (reverse zetta--graphic-frame-pending)))
+    (setq zetta--graphic-frame-pending nil)
+    (dolist (fn fns)
+      (with-demoted-errors "zetta: work deferred to the first frame failed: %S"
+        (funcall fn)))))
+
+(defun zetta--graphic-frame-made (frame)
+  "Schedule the pending work once FRAME, if graphical, is complete.
+On `after-make-frame-functions'."
+  (when (and zetta--graphic-frame-pending (display-graphic-p frame))
+    (run-at-time 0 nil #'zetta--graphic-frame-run-pending)))
+
+(add-hook 'after-make-frame-functions #'zetta--graphic-frame-made)
+
+(defun zetta-when-graphic-frame (fn)
+  "Call FN, a function of no arguments, once a graphical frame exists.
+From the first one made, however it is made, when there is none yet.  When
+one already exists FN still runs from a timer, a second later: a caller
+that reaches for this while a frame exists wanted something more of it
+than `display-graphic-p' and has nothing to gain from spinning.
+Registering FN twice runs it once."
+  (unless (memq fn zetta--graphic-frame-pending)
+    (push fn zetta--graphic-frame-pending))
+  (when (seq-some #'display-graphic-p (frame-list))
+    (run-at-time 1 nil #'zetta--graphic-frame-run-pending)))
+
 (when (fboundp 'repeatable-wrap)
   (general-define-key
    :keymaps 'menu-run-map

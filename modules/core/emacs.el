@@ -26,6 +26,12 @@
   ;; sooner after point lands on it (the default is 0.125).  Smaller
   ;; values flicker while point moves fast.
   (setq show-paren-delay 0.05)
+  ;; `blink-matching-paren' put a third match scan on every self-insert of
+  ;; a closer, for a blink `show-paren-mode' already provides; the one thing
+  ;; it added -- showing an opener that is off screen -- show-paren does in
+  ;; an overlay at the top of the window instead.
+  (setq blink-matching-paren nil
+        show-paren-context-when-offscreen 'overlay)
 
   (general-define-key
    :keymaps 'override

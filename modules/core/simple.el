@@ -4,7 +4,10 @@
   :ensure nil ;; builtin
   :commands (shell-command async-shell-command)
   :init
-  (setq kill-ring-max 10000)
+  ;; 10000 entries, serialised whole to savehist every 300 s and marked on
+  ;; every GC (770 entries / 711 KB after 26 min, OPTIMIZATIONS.org); the
+  ;; Emacs default is 120.
+  (setq kill-ring-max 500)
   :config
 
   ;; NOTE commenting out to prevent shell-command-to-string from

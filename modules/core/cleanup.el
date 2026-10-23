@@ -63,7 +63,8 @@
 (add-to-list 'savehist-additional-variables 'consult-project-extra--project-history)
 (add-to-list 'savehist-additional-variables 'consult-xref--history)
 (add-to-list 'savehist-additional-variables 'consult--yank-pop-history)
-(add-to-list 'savehist-additional-variables 'kill-ring)
+;; `kill-ring' is deliberately NOT saved: the whole ring went to disk every
+;; 300 s (1.1 MB on disk) and came back as live data at the next start.
 (add-to-list 'savehist-additional-variables 'biblio--search-history)
 (add-to-list 'savehist-additional-variables 'elfeed-search-filter-history)
 (add-to-list 'savehist-additional-variables 'transient-history)

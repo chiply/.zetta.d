@@ -4,7 +4,9 @@
   :init
   (setq sp-highlight-pair-overlay nil)
   (smartparens-global-mode t)
-  (show-smartparens-global-mode t)
+  ;; Not `show-smartparens-global-mode': `show-paren-mode' is on already,
+  ;; and the two ran independent match scans on every command.
+
 
   (setq smartparen-modes '(python-ts-mode rjsx-mode js2-mode web-mode css-mode sql-mode))
 

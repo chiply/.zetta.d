@@ -785,6 +785,12 @@ Does nothing until a graphical frame exists; see the commentary above."
 ;; reverting on their own -- safe on local APFS.  OPTIMIZATIONS.org item 9.
 (setq auto-revert-avoid-polling t)
 
+;; `vc-refresh-state' runs on `find-file-hook' -- and so once per
+;; candidate under consult preview -- and asks every backend in turn
+;; whether it owns the file.  The default names eight; this config uses
+;; one.  (minimal-emacs.d does the same.)
+(setq vc-handled-backends '(Git))
+
 ;; Fontification stays INSIDE redisplay.
 ;;
 ;; OPTIMIZATIONS.org items 10 and 11 set `jit-lock-defer-time' to 0.05 and
@@ -805,6 +811,15 @@ Does nothing until a graphical frame exists; see the commentary above."
       redisplay-skip-fontification-on-input nil
       auto-window-vscroll nil
       hl-line-sticky-flag nil)
+
+;; EXPERIMENT (2026-10-23).  Stealth fontification is the OPPOSITE trade from
+;; the deferral above: while Emacs is idle it fontifies text that is not yet
+;; on screen, so a scroll or a jump lands on lines whose faces -- and under a
+;; mixed-family preset, whose fonts -- are already final.  The price is idle
+;; CPU: `jit-lock-stealth-load' (200) stops it when the system is busy and
+;; `jit-lock-stealth-nice' (0.5 s) paces the chunks.  If the fans come on
+;; while Emacs sits idle, set this back to nil.
+(setq jit-lock-stealth-time 1.5)
 
 ;; need to turn this on per mode, causes too many issues
 (global-visual-line-mode -1)

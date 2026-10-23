@@ -10,6 +10,15 @@
 
   ;; NOTE testing for now as it creates files in unwanted places
   (setq undo-tree-auto-save-history nil)
+
+  ;; undo-tree's own limits are 80/120/360 MB per buffer, 500x Emacs's
+  ;; 160 KB/240 KB/24 MB, and it sets them buffer-locally in every buffer
+  ;; the mode is on in (25 at a time here).  History that large is live
+  ;; data for every GC mark phase of a long session.  Ten times Emacs's
+  ;; defaults is still a day of typing per buffer.
+  (setq undo-tree-limit 1600000
+        undo-tree-strong-limit 2400000
+        undo-tree-outer-limit 240000000)
   ;;(setq undo-tree-history-directory-alist '(("." . "~/.emacs-undo/undo")))
 
   ;; https://stackoverflow.com/questions/8370778/remove-glyph-at-end-of-truncated-lines

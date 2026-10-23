@@ -46,14 +46,10 @@
    "p" (** menu-project))
   )
 
-;; TODO seems like this is under active development, just enabling,
-;; but not using it yet
-(use-package ede
-  :ensure nil ;; builtin
-  :demand t
-  :config
-  (global-ede-mode)
-  ;; global-ede-mode replaces project-try-vc with project-try-ede in
-  ;; project-find-functions, breaking git project detection. Add it back.
-  (add-hook 'project-find-functions #'project-try-vc))
+;; `global-ede-mode' was enabled here "but not used yet" (its words).  It
+;; put `ede-turn-on-hook' on `find-file-hook' -- a walk up the directory
+;; tree looking for Project.ede, Makefile.am, CMakeLists.txt and the rest,
+;; once per file opened and once per consult preview candidate -- and it
+;; replaced `project-try-vc' in `project-find-functions', which this file
+;; then had to add back.  Removed 2026-10-23 (OPTIMIZATIONS.org, round 2).
 ;;; project.el ends here

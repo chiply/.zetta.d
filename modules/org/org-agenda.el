@@ -72,6 +72,15 @@
   (require 'org-queue-dormant nil t)
   (require 'org-queue-season nil t)
 
+  ;; From the manual's "Speeding Up Your Agendas".  Blocked-task dimming
+  ;; re-parses the file for every entry; the startup options run org's
+  ;; full mode setup in each agenda file; statistics cookies are not used
+  ;; in the (todo) files.  Tag inheritance and Effort are NOT touched: the
+  ;; queue and the capacity views read both through the agenda.
+  (setq org-agenda-dim-blocked-tasks nil
+        org-agenda-inhibit-startup t
+        org-agenda-ignore-properties '(stats))
+
   (setq org-agenda-restore-windows-after-quit t
         ;; Match `org-tags-column' in org.el: tags right after the
         ;; headline rather than flushed to a column that no longer lines

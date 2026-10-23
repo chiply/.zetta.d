@@ -19,6 +19,9 @@
 (use-package flycheck
   :config
   (setq flycheck-checker-error-threshold 5000)
+  ;; `new-line' ran the checker on every RET on top of the 0.5 s idle check;
+  ;; idle-change covers the same edit a beat later.
+  (setq flycheck-check-syntax-automatically '(save idle-change mode-enabled))
   (flycheck-define-checker proselint
     "A linter for prose."
     :command ("proselint" source-inplace)

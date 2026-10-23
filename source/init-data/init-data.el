@@ -115,6 +115,7 @@
    "editor/editing.el"
    "editor/expand-region.el"
    "editor/smartparens.el"
+   "editor/so-long.el"
    "editor/hungry-delete.el"
    "editor/vimish-fold.el"
    "editor/narrow.el"

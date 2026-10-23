@@ -81,6 +81,7 @@ Editing enhancements and modal editing.
 Key packages:
 - **Evil mode**: evil + evil-collection, evil-surround, evil-exchange, evil-anzu, evil-indent-plus
 - **Structural**: smartparens (parentheses), vimish-fold (code folding)
+- **Long lines**: so-long tuned to keep the major mode, highlighting and line numbers while shedding the heavy minor modes
 - **Navigation**: avy (jump-to-char), ace-window, dumb-jump
 - **Multi-cursor**: iedit, ace-mc
 - **Undo**: undo-tree (visual undo history)

@@ -167,7 +167,7 @@ in the order they appear in the `zetta-modules!' declaration.")
            ;; Listing the base here is enough -- listed files load before
            ;; every unlisted one.
            "tab-line.el"))
-    (editor . ("super-save.el" "editing.el" "smartparens.el"
+    (editor . ("super-save.el" "editing.el" "smartparens.el" "so-long.el"
                "hungry-delete.el" "vimish-fold.el" "narrow.el" "ov.el" "iedit.el"
                "dumb-jump.el" "snippets.el" "ace-mc.el" "move-text.el"
                "undo-tree.el" "macrostep.el" "highlight.el"

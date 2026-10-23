@@ -64,10 +64,11 @@ whose word-tracking functions sit on both command hooks in every buffer."
   :type '(repeat symbol) :group 'zetta)
 
 (defcustom zetta-terminal-lean-non-ghostel-minor-modes
-  '(eldoc-mode auto-composition-mode)
+  '(eldoc-mode auto-composition-mode ligature-mode)
   "Minor modes switched off in every terminal buffer except ghostel's.
 ghostel uses eldoc for its URL and file hints and auto-composition to
-compose text; the others want neither."
+compose text; the others want neither, and with composition off the
+ligature table (ui/ligature.el) has nothing left to do either."
   :type '(repeat symbol) :group 'zetta)
 
 (defun zetta-terminal-lean-buffer ()

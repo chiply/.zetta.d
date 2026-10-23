@@ -6,6 +6,10 @@
   :custom
   ;; (corfu-cycle t)                ;; Enable cycling for `corfu-next/previous'
   (corfu-auto t)                 ;; Enable auto completion
+  ;; the popup sooner after typing stops (default 0.2); lower and the
+  ;; completion work runs often enough while typing to show as lag
+  ;; (James Cherti, 2026-10-06)
+  (corfu-auto-delay 0.1)
   ;; (corfu-separator ?\s)          ;; Orderless field separator
   ;; (corfu-quit-at-boundary nil)   ;; Never quit at completion boundary
   ;; (corfu-quit-no-match nil)      ;; Never quit, even if there is no match

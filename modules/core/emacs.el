@@ -22,6 +22,11 @@
 
   (setq frame-inhibit-implied-resize t)
 
+  ;; After James Cherti (2026-10-06): the matching delimiter shows up
+  ;; sooner after point lands on it (the default is 0.125).  Smaller
+  ;; values flicker while point moves fast.
+  (setq show-paren-delay 0.05)
+
   (general-define-key
    :keymaps 'override
    "M-q" 'fill-paragraph))

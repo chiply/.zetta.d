@@ -429,19 +429,40 @@ the version number moves on.")
            (root (file-name-sans-extension file)))
       (cond
        ((string= "el" file-extension)
-        (load-file sourcefile-path))
+        ;; `load-file' takes an exact name, so it loaded every module from
+        ;; SOURCE and the fresh .elc (and the .eln found through it) beside
+        ;; each one went unused: 294 modules, 662 interpreted functions,
+        ;; mode-line segments among them (OPTIMIZATIONS.org).  Prefer the
+        ;; .elc when it is newer than the source; a stale one means the
+        ;; source was edited, and compile-angel recompiles it on this load.
+        ;; A bytecode load that signals falls back to the source for THIS
+        ;; file only, so one bad module can no longer truncate the sequence.
+        ;; What actually stopped the first attempt was not a bad module but
+        ;; use-package's compile-time pre-load, which under elpaca turned
+        ;; every compiled declaration into an eager load -- see the advice
+        ;; and its comment in bootstrap-elpaca.el; the .elc must be built
+        ;; with that advice in place (any `bin/zetta sync' or batch init is).
+        (let ((elc (concat sourcefile-path "c")))
+          (if (and (file-exists-p elc)
+                   (file-newer-than-file-p elc sourcefile-path))
+              (condition-case err
+                  (load elc nil nil t)
+                (error
+                 (message "zetta: %s failed from bytecode (%S); loading the source"
+                          file err)
+                 (load sourcefile-path nil nil t)))
+            (load sourcefile-path nil nil t))))
        ((string= "org" file-extension)
         (let* ((tanglefile-path (format "%smodules/tangled/%s.el" emacsdir root)))
           (org-babel-tangle-file sourcefile-path tanglefile-path)
           (load-file tanglefile-path)))))))
 
-;; NOTE: `load-file' takes an exact filename, so this loads every module
-;; INTERPRETED even though a fresh .elc and .eln sit beside it -- the whole
-;; config runs interpreted, and its compiled artefacts go unused.  Switching to
-;; extensionless `load' was measured to fix that (modules come back as
-;; BYTECODE) but breaks startup: loading org/org.el compiled stops the module
-;; sequence there and silently drops the remaining 16 modules.  Worth fixing
-;; properly, but it is not a one-line change.  See TODO.org.
+;; To check which form the modules loaded in (expect :as-elc 294, :as-source 0):
+;;   (let ((e 0) (s 0))
+;;     (dolist (h load-history)
+;;       (when (and (stringp (car h)) (string-match-p "/modules/" (car h)))
+;;         (if (string-suffix-p ".elc" (car h)) (cl-incf e) (cl-incf s))))
+;;     (list :as-elc e :as-source s))
 
 (defun zetta-touch-maybe (path)
   "Create file or directory at PATH if it doesn't already exist.

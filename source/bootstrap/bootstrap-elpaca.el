@@ -297,7 +297,55 @@ read the masked recipe and check out a branch tip instead of the pin
 
 ;; use-package is built-in in Emacs 29+, but we configure it after elpaca-use-package is ready
 (setq use-package-always-ensure t)
-(setq use-package-inject-hooks t)
+;; nil: `t' wrapped every :init and :config of all 311 blocks in `run-hooks'
+;; calls, and nothing in modules/ ever consumed the injected hooks.
+(setq use-package-inject-hooks nil)
+
+;; Why the modules could never be byte-compiled, and the fix.  While a file
+;; is being byte-compiled, `use-package-normalize-keywords' prepends a
+;; pre-load to every declaration's :preface --
+;;   (eval-when-compile (with-demoted-errors ... (unless (featurep 'NAME) (load "NAME"))))
+;; -- so the compiler can see the package's macros (use-package-core.el,
+;; "If byte-compiling, pre-load the package").  Under elpaca-use-package the
+;; whole expansion is QUOTED and handed to elpaca, which `eval's it when
+;; the order finishes; `eval-when-compile' evaluated by `eval' is a plain
+;; `progn'.  So a module loaded from its .elc loads every package it
+;; declares at startup, `:commands' and `:defer' notwithstanding, and a
+;; :config that assumes a private variable fails (signel, in the 2026-10-23
+;; smoke test; 1527 features from source against 2131 from such bytecode).
+;; That cascade is what the loader's old note called "loading org/org.el
+;; compiled stops the module sequence".
+;;
+;; The pre-load is the only thing in `use-package-normalize-keywords' gated
+;; on `byte-compile-current-file' (the other gates there add `defvar' and
+;; `declare-function' forms, no-ops at run time), so binding that variable
+;; to nil around the call removes exactly it, and the interpreted expansion
+;; is unchanged.  NOT `:no-require t': that also drops the `(require NAME)'
+;; use-package puts before the :config of an eager declaration, and a smoke
+;; test on such bytecode had seventeen :config bodies run before their
+;; package was loaded.
+;;
+;; Only for declarations elpaca will quote, i.e. ensured ones.  An `:ensure
+;; nil' declaration (a built-in, or a zettapkg on `:load-path') is not
+;; wrapped by elpaca-use-package: its expansion is compiled as ordinary
+;; code, and under `:after' the :config body is a lambda the compiler
+;; compiles -- there the pre-load does its real job, letting the compiler
+;; see the package's macros.  Without it embark-scope's
+;; `(embark-scope-deftap-finder brick)' compiled as a function call and
+;; `brick' as a variable (void, in the smoke test).  In compiled code
+;; `eval-when-compile' runs at compile time only, so that pre-load never
+;; reaches the running Emacs.
+(defvar byte-compile-current-file)
+(defun zetta-use-package--no-compile-time-load (orig name args)
+  "Around `use-package-normalize-keywords': no compile-time pre-load for
+a declaration elpaca will quote; an `:ensure nil' one keeps it."
+  (let ((m (memq :ensure args)))
+    (if (and m (cdr m) (null (cadr m)))
+        (funcall orig name args)
+      (let ((byte-compile-current-file nil))
+        (funcall orig name args)))))
+(advice-add 'use-package-normalize-keywords :around
+            #'zetta-use-package--no-compile-time-load)
 
 (global-set-key (kbd "s-u") 'elpaca-fetch-all)
 (global-set-key (kbd "s-U") 'elpaca-pull-all)

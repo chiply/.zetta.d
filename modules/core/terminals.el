@@ -26,8 +26,9 @@
 ;; - evil's jump hooks stay: his version drops them from the command hooks,
 ;;   which takes `C-o' / `C-i' with it, and point gets moved around in a
 ;;   ghostel buffer here (the search fix in tools/ghostel.el);
-;; - line numbers are ui/display-line-numbers.el's business: ghostel is
-;;   exempt at the turn-on there, vterm asks for them in term/vterm.el;
+;; - the line-number MODE is ui/display-line-numbers.el's business (ghostel
+;;   is exempt at the turn-on there); the display variable is handled
+;;   below, because the mode being off is not enough here;
 ;; - `read-process-output-max' is already 4 MB globally (early-init.el),
 ;;   above his 1 MB floor, and both bidi settings are global there too.
 
@@ -39,21 +40,27 @@
   (apply #'derived-mode-p zetta-terminal-modes))
 
 (defcustom zetta-terminal-lean-minor-modes
-  '(;; per-keystroke syntax work
+  '(;; per-keystroke syntax work (smartparens hangs on both command hooks)
     electric-pair-local-mode electric-indent-local-mode show-paren-local-mode
+    smartparens-mode show-smartparens-mode hungry-delete-mode
     ;; per-move overlay and margin work
-    hl-line-mode display-fill-column-indicator-mode
+    hl-line-mode display-fill-column-indicator-mode volatile-highlights-mode
+    svg-margin-hover-mode poimap-mode
     ;; checkers
     flycheck-mode flymake-mode
     ;; input interception and extra keymaps
-    evil-surround-mode yas-minor-mode
+    evil-surround-mode yas-minor-mode undo-tree-mode
     ;; completion
     corfu-mode company-mode
     ;; a terminal is not a file
     blamer-mode trailing-newline-indicator-mode anzu-mode)
   "Minor modes switched off in a terminal buffer by `zetta-terminal-lean-buffer'.
 Only a mode that is bound and on is touched.  `M-x describe-mode' in a
-terminal buffer lists what is still on; add to this list from there."
+terminal buffer lists what is still on; add to this list from there.
+The census of a live ghostel buffer on 2026-10-23 is where the second
+line of each group came from.  Still on and left alone: the global modes
+with nothing per buffer to switch off, and Hyperbole's `hywiki-mode',
+whose word-tracking functions sit on both command hooks in every buffer."
   :type '(repeat symbol) :group 'zetta)
 
 (defcustom zetta-terminal-lean-non-ghostel-minor-modes
@@ -83,6 +90,12 @@ On `after-change-major-mode-hook' at depth 90; see the commentary."
     (setq-local nobreak-char-display nil
                 bidi-paragraph-direction 'left-to-right
                 bidi-inhibit-bpa t)
+    ;; No line numbers: the gutter takes real columns off the width the
+    ;; emulator reports to the PTY.  The VARIABLE, not the mode -- this
+    ;; config gives `display-line-numbers' a default of `relative', so a
+    ;; buffer whose mode never turns on (ghostel is exempt at the turn-on
+    ;; in ui/display-line-numbers.el) still draws them from the default.
+    (setq-local display-line-numbers nil)
     ;; Terminal output is not something to undo.
     (buffer-disable-undo)
     ;; No micro-sleeps between short reads: output lands as it arrives.

@@ -9,6 +9,7 @@
    "core/simple.el"
    "core/utility.el"
    "core/interface.el"
+   "core/terminals.el"
    "core/desktop.el"
    "core/remote.el"
    "core/security.el"

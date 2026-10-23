@@ -124,7 +124,7 @@ in the order they appear in the `zetta-modules!' declaration.")
 ;; this order.  Files present on disk but not listed here are appended
 ;; alphabetically at the end.
 (defvar zetta--default-file-order
-  '((core . ("emacs.el" "simple.el" "utility.el" "interface.el" "desktop.el"
+  '((core . ("emacs.el" "simple.el" "utility.el" "interface.el" "terminals.el" "desktop.el"
              "remote.el" "security.el" "keys.el" "xref.el" "project.el"
              "persist.el" "smerge-mode.el" "repeat-mode.el" "saveplace.el"
              "savehist.el" "comint.el" "cleanup.el" "buffer.el" "ibuffer.el"

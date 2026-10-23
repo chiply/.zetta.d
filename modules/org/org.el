@@ -595,7 +595,21 @@ negative = backward)."
 
 ;; Auto-toggle LaTeX previews: render when cursor leaves, show source when entering
 (use-package org-fragtog
-  :hook (org-mode . org-fragtog-mode)
+  ;; Not on every org buffer: the mode's `post-command-hook' entry runs on
+  ;; every cursor move, and entering or leaving a fragment spawns latex +
+  ;; dvisvgm synchronously.  Most org files here have no fragment at all
+  ;; (OPTIMIZATIONS.org), so the hook turns the mode on only where one
+  ;; exists; `M-x org-fragtog-mode' for a buffer that gains its first later.
+  :init
+  (defun zetta-org-fragtog-maybe ()
+    "Enable `org-fragtog-mode' when the buffer holds a LaTeX fragment."
+    (when (save-excursion
+            (save-restriction
+              (widen)
+              (goto-char (point-min))
+              (re-search-forward "\\\\(\\|\\\\\\[\\|\\$\\$\\|\\\\begin{" nil t)))
+      (org-fragtog-mode 1)))
+  :hook (org-mode . zetta-org-fragtog-maybe)
   :config
   ;; the cursor half of the block guard beside `org-format-latex-options'
   ;; above: a "fragment" the element cache reports inside a src block is

@@ -1,8 +1,12 @@
 ;;; awesome-tray.el --- Configure mode-line styles -*- lexical-binding: t; -*-
 
-(use-package celestial-mode-line)
+;; Both deferred: the mode is never enabled here, and loading awesome-tray
+;; put a dead `awesome-tray-flycheck-status-update-cache' lambda on
+;; `window-buffer-change-functions' for the whole session (OPTIMIZATIONS.org).
+(use-package celestial-mode-line :defer t)
 (use-package awesome-tray
   :ensure (awesome-tray :type git :host github :repo "manateelazycat/awesome-tray")
+  :commands (awesome-tray-mode awesome-tray-enable)
   :config
   ;;;; NOTE this does actually work, but will actually result in
   ;;;; growing and shrinking of the echo area when going into and out

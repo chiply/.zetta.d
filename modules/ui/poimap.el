@@ -30,7 +30,7 @@
 ;; off its own propertized space; inside svg-line the whole bar is one image
 ;; and spans register no hot-spots, so the map draws but does not respond to
 ;; the mouse.  `poimap-mouse' is reusable if that is wanted later -- it needs
-;; a `poimap-width' window parameter (set below) and an image-map rectangle.
+;; a `poimap-width' window parameter (no longer set here, see the render) and an image-map rectangle.
 
 ;; brushup's palette (bootstrap-brushup.el), read by `zetta-poimap-apply-palette'
 ;; and by the `:brushup' registration below.
@@ -695,11 +695,12 @@ there is somewhere else in the file to be."
                                    poimap-visible-window-inactive-alpha)))
                             (poimap--svg win w h
                                          (mode-line-window-selected-p)))))
-          ;; `poimap-mouse' reads this parameter to turn an x coordinate
-          ;; back into a buffer position.  Nothing clicks the map yet (see
-          ;; the Commentary), but keeping it correct costs one setter and is
-          ;; what a hot-spot would need.
-          (set-window-parameter win 'poimap-width w)
+          ;; `poimap-mouse' would read a `poimap-width' window parameter to
+          ;; turn an x coordinate back into a buffer position.  Nothing clicks
+          ;; the map yet (see the Commentary), and this runs from inside
+          ;; redisplay for every window on every pass, where mutating window
+          ;; state is a correctness risk; a hot-spot should set it from its
+          ;; own command, not from here (OPTIMIZATIONS.org).
           (list (list :image rows (zetta-poimap--dom win svg) align gap)))))))
 
 ;;; ------------------------------------------------------------------

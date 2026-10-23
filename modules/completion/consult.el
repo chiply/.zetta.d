@@ -56,6 +56,14 @@
    consult-bookmark
    consult-project-buffer
    consult-theme
+   ;; These five open a REAL file per candidate move, paying the whole
+   ;; `find-file-hook' (Hyperbole's button scan, vc, org-remark, forge,
+   ;; recentf) on every arrow key (OPTIMIZATIONS.org).
+   consult-recent-file
+   consult-find
+   consult-grep
+   consult-git-grep
+   consult-locate
    :preview-key "C-=")
 
   ;;;; Keep the tab-line steady during buffer preview

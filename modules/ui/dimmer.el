@@ -1,6 +1,12 @@
 ;;; dimmer.el --- Configure dimmer -*- lexical-binding: t; -*-
 
+;; Disabled 2026-10-23 (OPTIMIZATIONS.org "Cut dimmer-mode"): it rewrote
+;; `face-remapping-alist' on every command and every window-configuration
+;; change, invalidating realized faces, and `solaire-global-mode' already
+;; encodes the focused/unfocused distinction.  Drop `:disabled' to bring it
+;; back; the package stays in the lockfile.
 (use-package dimmer
+  :disabled
   :demand
   :init
   (defun advise-dimmer-config-change-handler ()

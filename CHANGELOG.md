@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.10](https://github.com/chiply/.zetta.d/compare/v0.2.9...v0.2.10) (2026-10-24)
+
+
+### Features
+
+* **core:** lean terminal buffers ([5838dd2](https://github.com/chiply/.zetta.d/commit/5838dd2080f0536a131424bbdfb5f69984ca7110))
+* **editor:** so-long tuned to keep the file usable on very long lines ([5838dd2](https://github.com/chiply/.zetta.d/commit/5838dd2080f0536a131424bbdfb5f69984ca7110))
+
+
+### Performance Improvements
+
+* **line-utils:** no forks or scans inside redisplay ([5838dd2](https://github.com/chiply/.zetta.d/commit/5838dd2080f0536a131424bbdfb5f69984ca7110))
+* **lsp:** request classes nothing renders off; emacs-lsp-booster ([5838dd2](https://github.com/chiply/.zetta.d/commit/5838dd2080f0536a131424bbdfb5f69984ca7110))
+* modules load as bytecode; redisplay path cleared of timers and forks; lean terminals; lsp booster ([#154](https://github.com/chiply/.zetta.d/issues/154)) ([5838dd2](https://github.com/chiply/.zetta.d/commit/5838dd2080f0536a131424bbdfb5f69984ca7110))
+* shorter show-paren and corfu delays; consult async timers as an experiment ([5838dd2](https://github.com/chiply/.zetta.d/commit/5838dd2080f0536a131424bbdfb5f69984ca7110))
+* **startup:** modules load as bytecode; vault fill in the background ([5838dd2](https://github.com/chiply/.zetta.d/commit/5838dd2080f0536a131424bbdfb5f69984ca7110))
+* the one-line settings of the 2026-10-23 round ([5838dd2](https://github.com/chiply/.zetta.d/commit/5838dd2080f0536a131424bbdfb5f69984ca7110))
+* timers and hooks off the redisplay path ([5838dd2](https://github.com/chiply/.zetta.d/commit/5838dd2080f0536a131424bbdfb5f69984ca7110))
+* **ui:** relative line numbers with a fixed minimum width ([5838dd2](https://github.com/chiply/.zetta.d/commit/5838dd2080f0536a131424bbdfb5f69984ca7110))
+
 ## [0.2.9](https://github.com/chiply/.zetta.d/compare/v0.2.8...v0.2.9) (2026-10-21)
 
 

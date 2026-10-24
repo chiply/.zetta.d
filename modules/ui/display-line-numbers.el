@@ -3,10 +3,20 @@
 (use-package display-line-numbers
   :ensure nil
   :init
+  ;; After James Cherti, "Fixing slow scrolling in display-line-numbers-mode"
+  ;; (2026-09-12).  `relative' rather than `visual' (2026-10-23): visual
+  ;; numbers need the wrapped-line layout of every visible line on each
+  ;; vertical move, and differ from relative ones only where lines wrap --
+  ;; where they also disagree with what `15j' does.  A fixed minimum width
+  ;; instead of `display-line-numbers-width-start', which counted every
+  ;; line of the buffer at mode start to size the gutter; four columns
+  ;; covers 9999 lines, and the gutter still grows past that.
+  ;; `display-line-numbers-grow-only' stays nil: non-nil puts a width check
+  ;; on `pre-command-hook'.
   (setq-default
-   display-line-numbers-type 'visual
+   display-line-numbers-type 'relative
    display-line-numbers-current-absolute t
-   display-line-numbers-width-start 5 display-line-numbers-widen t
+   display-line-numbers-width 4 display-line-numbers-widen t
    display-line-numbers 'relative display-line-numbers-major-tick 20
    display-line-numbers-minor-tick 10)
   :hook (elpaca-after-init . global-display-line-numbers-mode)

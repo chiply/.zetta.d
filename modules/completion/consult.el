@@ -27,6 +27,17 @@
 
   ;;(setq recentf-save-file (expand-file-name ".data/recentf/recentf" user-emacs-directory))
   (setq consult-preview-key 'any)
+
+  ;; After James Cherti (2026-09-08).  Feedback timing only: the search is
+  ;; ripgrep's speed either way.  Debounce is how long after the last
+  ;; keystroke a search starts (default 0.2), throttle the fastest rate
+  ;; searches may start at (0.4), refresh how often results are painted
+  ;; (0.2).  Minad keeps the defaults for battery and GC, which is why this
+  ;; is an EXPERIMENT (2026-10-23): if the fans come on or the list feels
+  ;; jumpy, delete these three lines.
+  (setq consult-async-input-debounce 0.05
+        consult-async-input-throttle 0.1
+        consult-async-refresh-delay 0.05)
   (setq consult-project-root-function #'(project-root (project-current nil default-directory))
         ;; IMPORTANT!  otherwise completion-at-point doesn't use vertico!
         completion-in-region-function 'consult-completion-in-region)
@@ -45,6 +56,14 @@
    consult-bookmark
    consult-project-buffer
    consult-theme
+   ;; These five open a REAL file per candidate move, paying the whole
+   ;; `find-file-hook' (Hyperbole's button scan, vc, org-remark, forge,
+   ;; recentf) on every arrow key (OPTIMIZATIONS.org).
+   consult-recent-file
+   consult-find
+   consult-grep
+   consult-git-grep
+   consult-locate
    :preview-key "C-=")
 
   ;;;; Keep the tab-line steady during buffer preview

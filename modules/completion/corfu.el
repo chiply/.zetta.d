@@ -6,6 +6,16 @@
   :custom
   ;; (corfu-cycle t)                ;; Enable cycling for `corfu-next/previous'
   (corfu-auto t)                 ;; Enable auto completion
+  ;; the popup sooner after typing stops (default 0.2); lower and the
+  ;; completion work runs often enough while typing to show as lag
+  ;; (James Cherti, 2026-10-06)
+  (corfu-auto-delay 0.1)
+  ;; Emacs 30 puts `ispell-completion-at-point' on the capf list of every
+  ;; text-mode buffer (org included), and with `corfu-auto' that is a
+  ;; `look'/aspell subprocess whenever the earlier capfs return nothing --
+  ;; in prose, nearly always.  Corfu's README says to turn it off; words
+  ;; come from `cape-dict' on demand (s-c w).  Verified live 2026-10-23.
+  (text-mode-ispell-word-completion nil)
   ;; (corfu-separator ?\s)          ;; Orderless field separator
   ;; (corfu-quit-at-boundary nil)   ;; Never quit at completion boundary
   ;; (corfu-quit-no-match nil)      ;; Never quit, even if there is no match

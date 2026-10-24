@@ -14,6 +14,7 @@ Essential Emacs settings and built-in enhancements. Almost always required.
 | simple.el | — | Kill ring, tab-bar format, history |
 | utility.el | — | Bibliography paths, helper functions |
 | interface.el | — | Font, scrolling, margins, auto-revert |
+| terminals.el | — | Lean terminal buffers: per-keystroke machinery off in ghostel, vterm, term and eat |
 | desktop.el | desktop | Session persistence |
 | remote.el | tramp | Remote file editing |
 | security.el | — | Auth sources, GPG |
@@ -81,6 +82,7 @@ Editing enhancements and modal editing.
 Key packages:
 - **Evil mode**: evil + evil-collection, evil-surround, evil-exchange, evil-anzu, evil-indent-plus
 - **Structural**: smartparens (parentheses), vimish-fold (code folding)
+- **Long lines**: so-long tuned to keep the major mode, highlighting and line numbers while shedding the heavy minor modes
 - **Navigation**: avy (jump-to-char), ace-window, dumb-jump
 - **Multi-cursor**: iedit, ace-mc
 - **Undo**: undo-tree (visual undo history)

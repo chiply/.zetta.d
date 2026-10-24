@@ -17,8 +17,9 @@
 ;;(let ((process-connection-type nil))
 ;;(async-shell-command command buffer))
 
-;; remembering sudo pass
-(require 'em-tramp)
+;; remembering sudo pass.  em-tramp pulled eshell AND tramp into every
+;; startup; both now load with the first eshell (OPTIMIZATIONS.org).
+(with-eval-after-load 'eshell (require 'em-tramp))
 (setq password-cache t)
 (setq password-cache-expiry 3600)
 

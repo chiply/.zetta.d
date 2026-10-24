@@ -11,6 +11,9 @@
               vc-ignore-dir-regexp
               tramp-file-name-regexp))
 (setq tramp-verbose 1)
+;; A lock file is one more round trip per edit on a remote buffer, and
+;; nothing on the hub competes for the file.  (minimal-emacs.d.)
+(setq remote-file-name-inhibit-locks t)
 
 ;; Hosts for `zetta-ssh' and `zetta-ssh-shell' come from `zetta-ssh-hosts'
 ;; when it is set (in ~/.private.el), else from the Host entries of the

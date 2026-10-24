@@ -693,7 +693,31 @@ reset, which permanently wedges background updates."
     (when (and (boundp 'elfeed-curl-queue-active)
                (< elfeed-curl-queue-active 0))
       (setq elfeed-curl-queue-active 0)))
-  (advice-add 'elfeed-curl--run-queue :before #'zetta-elfeed-curl--floor-active))
+  (advice-add 'elfeed-curl--run-queue :before #'zetta-elfeed-curl--floor-active)
+
+  ;; One " *curl*" buffer was found holding 42 MB -- 98% of all buffer text
+  ;; in the session -- long after its fetch (OPTIMIZATIONS.org).  elfeed-curl
+  ;; gives every request its own " *curl*" buffer and kills it from the
+  ;; callbacks; a callback that signals leaves it behind.  Once the queue
+  ;; has drained, kill any such buffer that no longer has a process.  On an
+  ;; idle timer, not inline: `elfeed-curl--run-queue' is called from inside
+  ;; the finishing request's own callback, whose buffer must outlive it.
+  (defvar zetta-elfeed-curl--release-timer nil)
+  (defun zetta-elfeed-curl--release-buffers ()
+    (setq zetta-elfeed-curl--release-timer nil)
+    (when (and (boundp 'elfeed-curl-queue) (null elfeed-curl-queue)
+               (boundp 'elfeed-curl-queue-active) (<= elfeed-curl-queue-active 0))
+      (dolist (b (buffer-list))
+        (when (and (string-prefix-p " *curl*" (buffer-name b))
+                   (not (get-buffer-process b))
+                   (not (eq b (current-buffer))))
+          (kill-buffer b)))))
+  (defun zetta-elfeed-curl--schedule-release (&rest _)
+    (when (and (boundp 'elfeed-curl-queue) (null elfeed-curl-queue)
+               (not zetta-elfeed-curl--release-timer))
+      (setq zetta-elfeed-curl--release-timer
+            (run-with-idle-timer 10 nil #'zetta-elfeed-curl--release-buffers))))
+  (advice-add 'elfeed-curl--run-queue :after #'zetta-elfeed-curl--schedule-release))
 
 (unless zetta-elfeed--auto-update-timer
   (setq zetta-elfeed--auto-update-timer

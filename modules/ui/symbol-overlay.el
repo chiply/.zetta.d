@@ -3,7 +3,9 @@
 (use-package symbol-overlay
   :after transient
   :config
-  (setq symbol-overlay-idle-time 0.05)
+  ;; 0.05 was a full-buffer regexp scan 20x a second while the cursor moved
+  ;; (the mode is on in every org buffer).
+  (setq symbol-overlay-idle-time 0.5)
   (setq symbol-overlay-priority 90)
   ;; disable default keybindings, will use transient, hydra, hercules,
   ;; etc... instead

@@ -41,7 +41,17 @@
                      ".data/lsp/.lsp-session-v1" user-emacs-directory)
    lsp-log-io nil
    ;; performance
-   lsp-use-plists t)
+   lsp-use-plists t
+   ;; OPTIMIZATIONS.org round 2.  Each of these is a request class per edit
+   ;; or per idle that this config renders nothing from: code lenses,
+   ;; on-type formatting, folding ranges, document colours.  File watchers
+   ;; register one kqueue descriptor per directory of the workspace on
+   ;; macOS; the servers used here watch their own trees.
+   lsp-enable-file-watchers nil
+   lsp-lens-enable nil
+   lsp-enable-on-type-formatting nil
+   lsp-enable-folding nil
+   lsp-enable-text-document-color nil)
 
   ;; Custom variable for breadcrumb mode variant
   (defvar lsp-headerline-breadcrumb-enable-1 t)
@@ -74,6 +84,46 @@
   ;; lsp-sqls-connections entries come from ~/.private.el
 
   :config
+  ;; emacs-lsp-booster (blahgeek): a wrapper around the server that turns
+  ;; its JSON into elisp bytecode text, which Emacs reads about 4x faster
+  ;; than it parses JSON, and that buffers both directions in threads so
+  ;; neither side blocks on the other.  The advice is the README's, and it
+  ;; only engages when the binary is present, the directory is local,
+  ;; `lsp-use-plists' is on (it is, and the built lsp-protocol.elc was
+  ;; verified to produce plists) and Emacs has no native json-rpc.  Installed
+  ;; with `cargo install emacs-lsp-booster' -- the macOS binaries on the
+  ;; release page are unsigned -- so cargo's bin directory joins `exec-path'.
+  (let ((cargo-bin (expand-file-name "~/.cargo/bin")))
+    (when (file-directory-p cargo-bin)
+      (add-to-list 'exec-path cargo-bin t)))
+  (defun zetta-lsp-booster--advice-json-parse (old-fn &rest args)
+    "Try to parse bytecode instead of json."
+    (or (when (equal (following-char) ?#)
+          (let ((bytecode (read (current-buffer))))
+            (when (byte-code-function-p bytecode)
+              (funcall bytecode))))
+        (apply old-fn args)))
+  (advice-add (if (progn (require 'json) (fboundp 'json-parse-buffer))
+                  'json-parse-buffer
+                'json-read)
+              :around #'zetta-lsp-booster--advice-json-parse)
+  (defun zetta-lsp-booster--advice-final-command (old-fn cmd &optional test?)
+    "Prepend emacs-lsp-booster to the resolved server command CMD."
+    (let ((orig-result (funcall old-fn cmd test?)))
+      (if (and (not test?)                             ; `lsp-server-present?' probes with it
+               (not (file-remote-p default-directory)) ; the remote path adds a shell wrapper
+               lsp-use-plists
+               (not (functionp 'json-rpc-connection))  ; native json-rpc builds
+               (executable-find "emacs-lsp-booster"))
+          (progn
+            ;; resolve the server from `exec-path', since the booster execs it
+            (when-let* ((command-from-exec-path (executable-find (car orig-result))))
+              (setcar orig-result command-from-exec-path))
+            (message "Using emacs-lsp-booster for %s!" orig-result)
+            (cons "emacs-lsp-booster" orig-result))
+        orig-result)))
+  (advice-add 'lsp-resolve-final-command :around #'zetta-lsp-booster--advice-final-command)
+
   ;; Add ignored directories
   (add-to-list 'lsp-file-watch-ignored-directories "[/\\\\]\\.nx\\'")
   (add-to-list 'lsp-file-watch-ignored-directories "[/\\\\]\\.ruff_cache\\'")

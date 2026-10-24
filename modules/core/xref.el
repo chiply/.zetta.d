@@ -2,6 +2,11 @@
 
 (use-package xref
   :ensure nil
+  :init
+  ;; `project-find-regexp' and friends shell out to this when no xref
+  ;; backend answers; rg is already what consult uses.  grep stays where
+  ;; rg is not installed (the hub).
+  (setq xref-search-program (if (executable-find "rg") 'ripgrep 'grep))
   :commands (xref-find-definitions xref-go-back xref-go-forward)
   :config
   ;;(zetta-side "^\\*xref*" 'right -1)

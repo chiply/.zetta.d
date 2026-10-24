@@ -14,7 +14,13 @@
   (force-mode-line-update t))
 
 (add-hook 'post-command-hook 'ml-record-selected-window)
-(add-hook 'buffer-list-update-hook 'ml-update-all)
+;; `ml-update-all' used to sit on `buffer-list-update-hook': a rebuild of
+;; every bar in every window on each select-window, switch-to-buffer, kill,
+;; bury and named `get-buffer-create', and nothing in the SVG bars depends
+;; on the buffer list.  `window-selection-change-functions' (interface.el)
+;; and keycast's `post-command-hook' entry already cover the real cases.
+;; Removed 2026-10-23 (OPTIMIZATIONS.org).  The function stays for callers.
+
 
 ;;;; functions for generating icons
 (defun zetta-line-iedit-icon ()
@@ -68,39 +74,76 @@
 (defun zetta-line-narrowed-icon ()
   (when (buffer-narrowed-p) "N"))
 
-;; Repo/branch render inside mode-line :eval forms (treemacs,
+;; Repo/branch render inside mode-line :eval forms (the vc chip, treemacs,
 ;; telephone-line), so they run on every redisplay of those windows and
-;; must never fork a shell there: two `git rev-parse' subprocesses per
-;; window per redisplay block the main loop long enough to starve timers
-;; (async consult/irs results stall until a keypress).  Cache per
-;; directory instead; a branch switch shows up within `zetta-git-info-ttl'.
+;; must never fork a shell there.  The first version cached two `git
+;; rev-parse' forks behind a 10 s TTL; it still forked from inside
+;; redisplay, 2N times per 10 s (OPTIMIZATIONS.org "The vc segment forks
+;; git from inside redisplay").  This one reads the filesystem: the root is
+;; the nearest `.git' entry, memoized per directory, and the branch is the
+;; first line of that repository's HEAD file, cached against the file's
+;; modification time -- one `stat' per render, no fork, no TTL, and a
+;; branch switch shows at the next redisplay.
 (defvar zetta-git-info-ttl 10
-  "Seconds a cached repo/branch answer stays fresh.")
-(defvar zetta--git-info-cache (make-hash-table :test 'equal)
-  "Maps `default-directory' to (TIME REPO-NAME BRANCH-NAME).")
+  "Seconds a cached \"not in a repository\" answer stays fresh.
+A positive answer never expires: a directory does not leave its repository.")
+(defvar zetta--git-root-cache (make-hash-table :test 'equal)
+  "Maps a directory to (TIME . ROOT); ROOT is nil outside any repository.")
+(defvar zetta--git-branch-cache (make-hash-table :test 'equal)
+  "Maps a repository root to (HEAD-MTIME . BRANCH).")
+
+(defun zetta-git-root (&optional dir)
+  "The git working tree holding DIR (default `default-directory'), or nil.
+Memoized per directory; remote directories are never examined."
+  (let* ((dir (file-name-as-directory (expand-file-name (or dir default-directory))))
+         (hit (gethash dir zetta--git-root-cache))
+         (now (float-time)))
+    (if (and hit (or (cdr hit) (< (- now (car hit)) zetta-git-info-ttl)))
+        (cdr hit)
+      (let ((root (and (not (file-remote-p dir))
+                       (locate-dominating-file dir ".git"))))
+        (cdr (puthash dir
+                      (cons now (and root (file-name-as-directory
+                                           (expand-file-name root))))
+                      zetta--git-root-cache))))))
+
+(defun zetta--git-head-file (root)
+  "The HEAD file of the repository at ROOT.
+A worktree or submodule has a `.git' FILE holding \"gitdir: PATH\"; follow it."
+  (let ((dotgit (expand-file-name ".git" root)))
+    (cond ((file-directory-p dotgit) (expand-file-name "HEAD" dotgit))
+          ((file-regular-p dotgit)
+           (with-temp-buffer
+             (insert-file-contents dotgit nil 0 4096)
+             (when (looking-at "gitdir: *\\(.*\\)")
+               (expand-file-name "HEAD"
+                                 (expand-file-name (match-string 1) root))))))))
+
+(defun zetta-git-branch (root)
+  "The branch checked out at ROOT, a short hash when detached, else nil.
+Cached against the modification time of the HEAD file."
+  (when-let* ((head (zetta--git-head-file root))
+              (mtime (file-attribute-modification-time (file-attributes head))))
+    (let ((hit (gethash root zetta--git-branch-cache)))
+      (if (and hit (time-equal-p (car hit) mtime))
+          (cdr hit)
+        (cdr (puthash
+              root
+              (cons mtime
+                    (with-temp-buffer
+                      (insert-file-contents head nil 0 512)
+                      (cond ((looking-at "ref: refs/heads/\\(.*\\) ) (match-string 1))
+                            ((looking-at "ref: \\(.*\\) ) (match-string 1))
+                            ((looking-at "\\([0-9a-f]\\{7\\}\\)") (match-string 1)))))
+              zetta--git-branch-cache))))))
 
 (defun zetta--git-info ()
-  "Return (REPO-NAME BRANCH-NAME) for `default-directory', cached briefly.
+  "Return (REPO-NAME BRANCH-NAME) for `default-directory'.
 REPO-NAME is a one-element list, as `zetta-get-repo-name' has always
-returned; BRANCH-NAME is a string."
-  (let ((hit (gethash default-directory zetta--git-info-cache))
-        (now (float-time)))
-    (if (and hit (< (- now (car hit)) zetta-git-info-ttl))
-        (cdr hit)
-      (cdr (puthash
-            default-directory
-            (list now
-                  (last (split-string
-                         (nth 0 (split-string
-                                 (shell-command-to-string
-                                  "git rev-parse --show-toplevel")
-                                 "\n"))
-                         "/"))
-                  (nth 0 (split-string
-                          (shell-command-to-string
-                           "git rev-parse --abbrev-ref HEAD")
-                          "\n")))
-            zetta--git-info-cache)))))
+returned, (\"\") outside a repository; BRANCH-NAME is a string."
+  (let ((root (zetta-git-root)))
+    (list (list (if root (file-name-nondirectory (directory-file-name root)) ""))
+          (or (and root (zetta-git-branch root)) ""))))
 
 (defun zetta-get-repo-name ()
   (nth 0 (zetta--git-info)))
@@ -1097,11 +1140,13 @@ fainter chip."
 ;; segment so the whole thing opens magit -- the separate icon segments are
 ;; folded in here and dropped from the mode-line content.
 (defun zetta-modeline-svg--vc ()
-  (when (and (fboundp 'vc-git-root)
-             (vc-git-root (or (buffer-file-name) default-directory)))
-    (let* ((repo   (ignore-errors (nth 0 (zetta-get-repo-name))))
-           (branch (ignore-errors (vc-git--symbolic-ref
-                                   (or (buffer-file-name) default-directory))))
+  ;; `vc-git-root' walked up the tree with `file-exists-p' per render and
+  ;; `vc-git--symbolic-ref' forked git on a cache miss; both from inside
+  ;; redisplay.  `zetta-git-root' / `zetta-git-branch' read the filesystem
+  ;; and are memoized (see them, near the top of this file).
+  (when-let* ((root (zetta-git-root)))
+    (let* ((repo   (file-name-nondirectory (directory-file-name root)))
+           (branch (zetta-git-branch root))
            (vcg (and (buffer-file-name) (featurep 'nerd-icons)
                      (zetta-line--glyph (ignore-errors (nerd-icons-devicon "nf-dev-git")))))
            (brg (and (buffer-file-name) (featurep 'nerd-icons)
@@ -1244,9 +1289,25 @@ the handwriting cut is what the tab bar uses for the same kind of thing."
                            (and (fboundp 'pdf-view-last-page) (cons "Last page" #'pdf-view-last-page))))))))
    (t "")))
 
+(defvar-local zetta-modeline--line-total nil
+  "((CHARS-TICK POINT-MIN POINT-MAX) . TOTAL), see `zetta-modeline--line-total'.")
+
+(defun zetta-modeline--line-total ()
+  "Lines in the accessible portion of the buffer, recounted only on change.
+`line-number-at-pos' of `point-max' is a scan of the whole buffer --
+1 ms at 200k lines -- and the mode line asked for it once per window per
+render (OPTIMIZATIONS.org).  The count is keyed on the text and the
+narrowing, so a buffer being read costs nothing after the first render."
+  (let ((key (list (buffer-chars-modified-tick) (point-min) (point-max))))
+    (if (and zetta-modeline--line-total
+             (equal (car zetta-modeline--line-total) key))
+        (cdr zetta-modeline--line-total)
+      (cdr (setq zetta-modeline--line-total
+                 (cons key (max 1 (line-number-at-pos (point-max)))))))))
+
 (defun zetta-modeline-svg--point ()
   (let* ((cur (line-number-at-pos))
-         (tot (max 1 (line-number-at-pos (point-max))))
+         (tot (zetta-modeline--line-total))
          (pct (round (* 100.0 (/ (float cur) tot)))))
     (zetta-svg-seg
      (format "%s  %d%%" (format-mode-line "%l:%c") pct) 'ml-point
@@ -1288,32 +1349,76 @@ the handwriting cut is what the tab bar uses for the same kind of thing."
                    'help-echo (format "mouse-1: dired %s" dir)))))
   "Mode-line construct for header-line row 1 (mode icon / folder / path).")
 
+;; Row 2 of the header line used to compute its crumbs inside the `:eval':
+;; `breadcrumb-imenu-crumbs' builds the imenu index on first use (7.9 ms
+;; measured in an elisp buffer) and the yaml/json path functions parse the
+;; buffer around point, once per window per redisplay (OPTIMIZATIONS.org).
+;; The crumbs are now computed by an idle timer for every visible buffer
+;; whose point or text moved since the last time, stored buffer-locally,
+;; and the `:eval' only reads the cache.  They lag a cursor move by
+;; `zetta-header-line-crumbs-idle' seconds; the lsp branch is a window
+;; parameter lsp-mode maintains itself and stays live.
+(defcustom zetta-header-line-crumbs-idle 0.25
+  "Idle seconds before the header-line crumbs catch up with point."
+  :type 'number :group 'zetta)
+
+(defvar-local zetta-header-line--crumbs nil
+  "The last computed row-2 crumbs of this buffer, a propertized string.")
+(defvar-local zetta-header-line--crumbs-key nil
+  "(POINT CHARS-TICK MAJOR-MODE) the cached crumbs were computed for.")
+
+(defun zetta-header-line--compute-crumbs ()
+  "Row-2 crumbs for the current buffer at point.
+Org outline (breadcrumb's imenu crumbs when available, each with a
+clickable keymap the header line harvests), a json or yaml path, or the
+imenu crumbs of any other mode."
+  (cond
+   ((derived-mode-p 'org-mode)
+    (if (fboundp 'breadcrumb-imenu-crumbs)
+        (concat (ignore-errors (concat (nerd-icons-mdicon "nf-md-format_list_bulleted") " "))
+                ;; crumbs can signal on malformed imenu indexes (e.g.
+                ;; pdf-view outlines)
+                (or (ignore-errors (breadcrumb-imenu-crumbs)) ""))
+      (propertize
+       (or (ignore-errors (org-display-outline-path nil t "/" t)) "/")
+       'face '(:height 0.8))))
+   ((eq major-mode 'jsonian-mode)
+    (ignore-errors (concat (jsonian--display-path (jsonian-path)))))
+   ((memq major-mode '(docker-compose-mode yaml-mode))
+    (ignore-errors (concat (jpt-yaml-path-to-point))))
+   ((fboundp 'breadcrumb-imenu-crumbs)
+    (concat (ignore-errors (concat (nerd-icons-mdicon "nf-md-format_list_bulleted") " "))
+            (or (ignore-errors (breadcrumb-imenu-crumbs)) "")))))
+
+(defun zetta-header-line--refresh-crumbs ()
+  "Recompute the crumbs of every visible buffer whose point or text moved.
+Runs from an idle timer; a changed result re-renders that buffer's bars."
+  (dolist (frame (frame-list))
+    (dolist (win (window-list frame 'no-minibuf))
+      (let ((buf (window-buffer win)))
+        (when (and (buffer-live-p buf)
+                   (not (buffer-local-value 'lsp-mode buf)))
+          (with-current-buffer buf
+            (let ((key (list (window-point win) (buffer-chars-modified-tick) major-mode)))
+              (unless (equal key zetta-header-line--crumbs-key)
+                (setq zetta-header-line--crumbs-key key
+                      zetta-header-line--crumbs
+                      (save-excursion
+                        (goto-char (window-point win))
+                        (zetta-header-line--compute-crumbs)))
+                (force-mode-line-update)))))))))
+
+(defvar zetta-header-line--crumbs-timer
+  (run-with-idle-timer zetta-header-line-crumbs-idle t
+                       #'zetta-header-line--refresh-crumbs)
+  "The idle timer behind `zetta-header-line--refresh-crumbs'.")
+
 (defvar zetta-header-line-svg-line2-format
   '((:eval
-     (cond
-      ((and (boundp 'lsp-mode) lsp-mode)
-       (concat (ignore-errors (concat (nerd-icons-mdicon "nf-md-sitemap") " "))
-               (window-parameter nil 'lsp-headerline--string)))
-      ((derived-mode-p 'org-mode)
-       ;; Prefer breadcrumb's imenu crumbs (each carries a clickable keymap our
-       ;; header-line harvests) over `org-display-outline-path' (no per-crumb
-       ;; keymap, so it would render as plain, non-clickable text).
-       (if (fboundp 'breadcrumb-imenu-crumbs)
-           (concat (ignore-errors (concat (nerd-icons-mdicon "nf-md-format_list_bulleted") " "))
-                   ;; crumbs can signal on malformed imenu indexes (e.g.
-                   ;; pdf-view outlines); never let that escape redisplay
-                   (or (ignore-errors (breadcrumb-imenu-crumbs)) ""))
-         (propertize
-          (or (ignore-errors (org-display-outline-path nil t "/" t)) "/")
-          'face '(:height 0.8))))
-      ((or (equal major-mode 'jsonian-mode))
-       (concat (jsonian--display-path (jsonian-path))))
-      ((or (equal major-mode 'docker-compose-mode)
-           (equal major-mode 'yaml-mode))
-       (concat (jpt-yaml-path-to-point)))
-      (t (when (fboundp 'breadcrumb-imenu-crumbs)
-           (concat (ignore-errors (concat (nerd-icons-mdicon "nf-md-format_list_bulleted") " "))
-                   (or (ignore-errors (breadcrumb-imenu-crumbs)) "")))))))
+     (if (and (boundp 'lsp-mode) lsp-mode)
+         (concat (ignore-errors (concat (nerd-icons-mdicon "nf-md-sitemap") " "))
+                 (window-parameter nil 'lsp-headerline--string))
+       (or zetta-header-line--crumbs ""))))
   "Mode-line construct for header-line row 2 (lsp / org / imenu crumbs).")
 
 (defun zetta-header-line-svg--line1 ()
@@ -1508,13 +1613,13 @@ the space-tree tab-bar lighter, and (visually) svg-margin's org-heading rail."
 
 (defun zetta-modeline-svg--vc-icon ()
   "Git glyph, shown when the file is under git version control."
-  (when (and (buffer-file-name) (fboundp 'vc-git-root) (vc-git-root (buffer-file-name)))
+  (when (and (buffer-file-name) (zetta-git-root))
     (and (featurep 'nerd-icons)
          (zetta-line--glyph (ignore-errors (nerd-icons-devicon "nf-dev-git"))))))
 
 (defun zetta-modeline-svg--branch-icon ()
   "Branch glyph, shown when the file is on a git branch."
-  (when (and (buffer-file-name) (fboundp 'vc-git-root) (vc-git-root (buffer-file-name)))
+  (when (and (buffer-file-name) (zetta-git-root))
     (and (featurep 'nerd-icons)
          (zetta-line--glyph (ignore-errors (nerd-icons-octicon "nf-oct-git_branch"))))))
 

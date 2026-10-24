@@ -31,10 +31,20 @@
     (setq blinker--timer nil)))
 
 (defun blinker-tab-bar ()
-  "Tab-bar format entry for the blinker."
-  `((blinker menu-item ,(concat " " (aref blinker--frames blinker--index) " ") ignore)))
+  "Tab-bar format entry for the blinker; nothing while it is stopped."
+  (when blinker--timer
+    `((blinker menu-item ,(concat " " (aref blinker--frames blinker--index) " ") ignore))))
 
-(blinker-start)
+(defcustom blinker-enabled nil
+  "Non-nil starts the heartbeat when this file loads.
+Each frame is a `force-mode-line-update' -- a full re-render of the SVG
+chrome in every window, 2.5 times a second, to animate a four-frame dot
+(OPTIMIZATIONS.org).  Off by default since 2026-10-23; `M-x blinker-start'
+when you want to watch for a stall."
+  :type 'boolean :group 'zetta)
+
+(when blinker-enabled
+  (blinker-start))
 
 (provide 'blinker)
 ;;; blinker.el ends here
